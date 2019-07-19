@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DBchess Options</title>
+    <link rel="stylesheet" href="options.css"/>
+    <link rel="stylesheet" href="lib/css/matrial-icons.css">
+    <link rel="stylesheet" href="lib/css/materialize.min.css">
+    <script src="lib/js/materialize.min.js"></script>
+    <script src="options.js"></script>
+</head>
+<body>
+
+<header id="head">
+    <nav class="top-nav">
+        <div class="container">
+            <div class="nav-wrapper">
+                <div class="row">
+                    <div class="col s12 m10 offset-m1">
+                        <h1 id="title" class="header"></h1>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <div class="container">
+        <a href="#" data-target="nav-mobile" class="top-nav sidenav-trigger full hide-on-large-only">
+            <i class="material-icons">menu</i>
+        </a>
+    </div>
+    <ul id="nav-mobile" class="sidenav sidenav-fixed">
+        <li class="logo">
+            <a id="logo-container" href="#about" class="menu-item brand-logo">
+                <object id="front-page-logo" type="image/svg+xml" data="res/logo.svg">
+                    Your browser does not support SVG
+                </object>
+            </a>
+        </li>
+        <li class="search">
+            <div class="search-wrapper">
+                <input id="search" placeholder="Search"><i class="material-icons">search</i>
+                <div class="search-results"></div>
+            </div>
+        </li>
+        <li class="bold"><a id="about" href="#about" class="menu-item waves-effect waves-teal">About</a></li>
+        <li class="bold"><a id="getting-started" href="#getting-started" class="menu-item waves-effect waves-teal">Getting Started</a></li>
+        <li class="no-padding">
+            <ul class="collapsible collapsible-accordion">
+                <li class="bold">
+                    <a class="collapsible-header waves-effect waves-teal" tabindex="0">Options</a>
+                    <div class="collapsible-body">
+                        <ul>
+                            <li><a id="performance" href="#performance" class="menu-item">Performance</a></li>
+                            <li><a id="view" href="#view" class="menu-item">View</a></li>
+                        </ul>
+                    </div>
+                </li>
+            </ul>
+        </li>
+        <li class="bold">
+            <a id="themes" href="#themes" class="menu-item waves-effect waves-teal">
+                Themes<span data-badge-caption="updated" class="new badge"></span>
+            </a>
+        </li>
+    </ul>
+</header>
+<main id="content"></main>
+<footer>
+    <div class="docs-footer row">
+        <div class="col s12 m8 offset-m1 xl7 offset-xl1">
+            <div class="footer-copyright">
+                © 2019 Alex Petrusca
+            </div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

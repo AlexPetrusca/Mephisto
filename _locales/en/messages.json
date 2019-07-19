@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "Mephisto Chess Extension",
+    "description": "Chess cheating and autoplay extension for Lichess.org and Chess.com"
+  },
+  "extensionDescription": {
+    "message": "Mephisto Chess Extension",
+    "description": "Chess cheating and autoplay extension for Lichess.org and Chess.com"
+  },
+  "notificationTitle": {
+    "message": "Mephisto Chess Extension",
+    "description": "Chess cheating and autoplay extension for Lichess.org and Chess.com"
+  }
+}
