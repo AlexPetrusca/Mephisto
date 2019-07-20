@@ -1,8 +1,10 @@
-function movefromdiv() {
-    const thisurl = window.location.href;
-    let res = "";
-    if (thisurl.includes('chess.com')) {
-        if (thisurl.includes('puzzles')) {
+function moveFromPage() {
+    let prefix = '';
+    let res = '';
+    const thisUrl = window.location.href;
+    if (thisUrl.includes('chess.com')) {
+        if (thisUrl.includes('puzzles')) {
+            prefix = '***ccpuz***';
             const pieceRegex = /[\w]+\.png/;
             const coordsRegex = /0/g;
 
@@ -14,25 +16,25 @@ function movefromdiv() {
                 const elemImgSrc = document.elementFromPoint(x, y).style['backgroundImage'];
                 if (elemImgSrc) {
                     const turn = (elemImgSrc.match(pieceRegex)[0][0] === 'w') ? 'b' : 'w';
-                    console.log(turn);
                     res += turn + '*****';
                 }
             }
 
-            const pieces = document.getElementsByClassName("piece");
+            const pieces = document.getElementsByClassName('piece');
             for (const piece of pieces) {
-                const pieceType = piece.style["backgroundImage"].match(pieceRegex)[0].replace(".png", "");
-                const pieceCoords = piece.classList[1].substring(7).replace(coordsRegex, "-");
+                const pieceType = piece.style['backgroundImage']
+                    .match(pieceRegex)[0]
+                    .replace('.png', '');
+                const pieceCoords = piece.classList[1]
+                    .substring(7)
+                    .replace(coordsRegex, '-');
                 res += pieceType + pieceCoords + '*****';
             }
-            if (res !== "") {
-                return '***ccpuz***' + res;
-            }
         } else {
-            // console.log(" trying chess.com");
-            let moves = document.getElementsByClassName("move-text-component"); // vs player
+            prefix = '***ccfen***';
+            let moves = document.getElementsByClassName('move-text-component'); // vs player
             if (moves.length === 0) {
-                moves = document.getElementsByClassName("gotomove"); // vs computer
+                moves = document.getElementsByClassName('gotomove'); // vs computer
             }
             for (const move of moves) {
                 res = res + move.innerText + '*****';
@@ -40,51 +42,41 @@ function movefromdiv() {
                     break;
                 }
             }
-            if (res !== "") {
-                return '***ccfen***' + res;
-            }
         }
-    } else if (thisurl.includes('lichess.org')) {
-        // console.log(" trying lichess.com");
-        let moves = document.getElementsByTagName("m2"); // vs player + computer
+    } else if (thisUrl.includes('lichess.org')) {
+        prefix = '***lifen***';
+        let moves = document.getElementsByTagName('m2'); // vs player + computer
         if (moves.length === 0) {
-            moves = document.getElementsByTagName("move"); // vs training
+            moves = document.getElementsByTagName('move'); // vs training
         }
         for (const move of moves) {
-            let innerText = move.innerText.split("\n")[0];
+            let innerText = move.innerText.split('\n')[0];
             res = res + innerText + '*****';
             if (move.classList.contains('active')) {
                 break;
             }
         }
-        if (res !== "") {
-            return '***lifen***' + res;
-        }
     }
-    return res;
+    return prefix + res;
 }
 
-function orientfromdiv(txt) {
-    let orient = 'white';
-    if (txt.includes("***ccfen***") || txt.includes("***ccpuz***")) {
+function orientFromPage(txt) {
+    let blackToMove = true;
+    if (txt.includes('***ccfen***') || txt.includes('***ccpuz***')) {
         let topLeftCoord = document.getElementsByClassName('coords-light')[0];
-        if (topLeftCoord.innerText === '1') {
-            orient = 'black'
-        }
-    } else if (txt.includes("***lifen***")) {
-        let black = document.getElementsByClassName('orientation-black');
-        if (black.length !== 0) {
-            orient = 'black';
-        }
+        blackToMove = topLeftCoord && topLeftCoord.innerText === '1';
+    } else if (txt.includes('***lifen***')) {
+        let fileCoords = document.getElementsByClassName('files')[0];
+        blackToMove = fileCoords && fileCoords.classList.contains('black');
     }
-    return orient;
+    return (blackToMove) ? 'black' : 'white';
 }
 
-console.log("Mephisto is listening!");
+console.log('Mephisto is listening!');
 chrome.extension.onMessage.addListener(response => {
     if (response.queryfen) {
-        let res = movefromdiv();
-        let orient = orientfromdiv(res);
+        let res = moveFromPage();
+        let orient = orientFromPage(res);
         if (res.length < 5) {
             res = 'no';
         }
@@ -93,9 +85,8 @@ chrome.extension.onMessage.addListener(response => {
         console.log(response.move);
         simulateMove(response.move);
     }
-    return Promise.resolve("Dummy");
+    return Promise.resolve('Dummy');
 });
-
 
 // -------------------------------------------------------------------------------------------
 
@@ -115,7 +106,7 @@ function simulateMouseEvent(target, mouseOpts) {
             ctrlKey: false,
             altKey: false,
             shiftKey: false,
-            metaKey: false, // I *think* 'meta' is 'Cmd/Apple' on Mac, and 'Windows key' on Win. Not sure, though!
+            metaKey: false, // I *think* 'meta' is 'Cmd/Apple' on Mac, and 'Windows key' on Win.
             button: 0, // 0 = left, 1 = middle, 2 = right
             relatedTarget: null,
         };
@@ -188,7 +179,7 @@ function simulateMove(move) {
     const thisurl = window.location.href;
     let letterCoords;
     let numberCoords;
-    if (thisurl.includes("chess.com")) {
+    if (thisurl.includes('chess.com')) {
         letterCoords = Array.from(document.getElementsByClassName('letter'));
         numberCoords = Array.from(document.getElementsByClassName('number'));
     } else {
