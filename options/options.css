@@ -2,11 +2,6 @@
     min-height: calc(100vh - 171px);
 }
 
-.sticky-top {
-    position: sticky;
-    top: 0;
-}
-
 .waves-effect {
     position: relative;
     cursor: pointer;

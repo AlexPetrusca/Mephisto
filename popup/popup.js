@@ -1,23 +1,23 @@
 let stockfish;
 let board;
+let fenCache;
 let config;
-let pr = 0;
-let lastfen = '';
-let calculating = 'no';
-let turn = '';
-let fenCache = new LRU(100);
 
-function newpos(fen) {
+let isCalculating = false;
+let prog = 0;
+let lastfen = '';
+let turn = '';
+
+function new_pos(fen) {
     $('#chess').html('Calculstockfishating<br><progress id="progBar" value="2" max="100">');
     stockfish.postMessage("position fen " + fen);
     stockfish.postMessage("go movetime " + config.move_time);
-    // board.position(fen);
+    board.position(fen);
     lastfen = fen;
-    calculating = 'yes';
-    pr = 0;
+    toggle_calculating(true);
 }
 
-function fenfrommoves(txt, orient) {
+function parse_fen_from_response(txt) {
     const prefixMap = {
         lifen: 'Game detected on Lichess.org',
         ccfen: 'Game detected on Chess.com',
@@ -28,7 +28,7 @@ function fenfrommoves(txt, orient) {
     txt = txt.substr(11);
 
     const chess = new Chess();
-    if (prefix.includes("puz")) {
+    if (prefix.includes("puz")) { // chess.com puzzle pages
         chess.clear(); // clear the board so we can place our pieces
         const alphanumeralMap = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
         const [playerTurn, ...pieces] = txt.split("*****");
@@ -40,33 +40,30 @@ function fenfrommoves(txt, orient) {
             const pieceCoords = alphanumeralMap[attributes[1] - 1] + attributes[2];
             chess.put({ type: pieceType, color: pieceColor }, pieceCoords);
         }
-
         chess.setTurn(playerTurn);
         turn = chess.turn();
         return chess.fen();
-    } else {
+    } else { // chess.com and lichess.org pages
         const directHit = fenCache.get(txt);
-        if (directHit) {
+        if (directHit) { // avoid recalculating same position
             console.log('DIRECT');
             return directHit;
         }
-
         const regex = /([\w+!#]+[*]+)$/;
         const lastMove = txt.match(regex)[0].split('*****')[0];
         const cacheKey = txt.replace(regex, "");
         const indirectHit = fenCache.get(cacheKey);
-        if (indirectHit) {
+        if (indirectHit) { // calculate fen by appending newest move
             console.log('INDIRECT');
             chess.load(indirectHit);
             chess.move(lastMove);
-        } else {
+        } else { // calculate fen by performing all moves
             console.log('FULL');
             const moves = txt.split("*****");
             for (let i = 0; i < moves.length; i++) {
                 chess.move(moves[i]);
             }
         }
-
         turn = chess.turn();
         const fen = chess.fen();
         fenCache.set(txt, fen);
@@ -74,13 +71,75 @@ function fenfrommoves(txt, orient) {
     }
 }
 
-function query_for_fen() {
+function on_stockfish_response(event) {
+    let message = event.data;
+    console.log(message);
+    if (message.includes('bestmove')) {
+        const arr = message.split(' ');
+        const best = arr[1];
+        const threat = arr[3];
+        const toplay = (turn === 'w') ? 'White' : 'Black';
+        const next = (turn === 'w') ? 'Black' : 'White';
+        if (message.includes('(none)')) {
+            $('#chess').text(next + ' Wins');
+        } else if (message.includes('ponder')) {
+            $('#chess').text(toplay + ' to play, best move is ' + best + '\n' + 'Best response for ' + next + ' is ' + threat)
+        } else {
+            $('#chess').text(toplay + ' to play, best move is ' + best)
+        }
+        if (config.autoplay && toplay.toLowerCase() === board.orientation()) {
+            request_automove(best);
+        }
+        draw_arrow(best, 'blue', 'overlay1');
+        draw_arrow(threat, 'red', 'overlay2');
+        toggle_calculating(false);
+    } else if (message.includes('score mate')) {
+        const arr = message.split('score mate ');
+        const arr1 = arr[1].split(' ');
+        const mateNum = Math.abs(parseInt(arr1[0]));
+        if (mateNum === 0) {
+            $('#evaluation').text("Checkmate!");
+            clear_arrows();
+        } else {
+            $('#evaluation').text("Checkmate in " + mateNum);
+        }
+        toggle_calculating(false);
+    } else if (message.includes('info depth')) {
+        const color = (turn === 'w') ? 1 : -1;
+        const arr = message.split(" ");
+        const depth = arr[2];
+        const score = color * arr[9];
+        $('#evaluation').text("Score: " + score / 100.0 + " at depth " + depth);
+    }
+    if (isCalculating) {
+        prog++;
+        let progMapping = 100 - 100 * Math.exp(-prog / 30);
+        $('#progBar').attr('value', Math.round(progMapping));
+        clear_arrows();
+    }
+}
+
+function on_content_script_response(response) {
+    if (response.fenresponse === true && response.dom !== 'no') {
+        if (board.orientation() !== response.orient) {
+            board.orientation(response.orient);
+        }
+        let fen = parse_fen_from_response(response.dom);
+        if (lastfen !== fen) {
+            lastfen = fen;
+            new_pos(fen);
+        }
+    }
+    return Promise.resolve("Dummy");
+}
+
+function request_fen() {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, { queryfen: true });
     });
 }
 
-function query_for_automove(move) {
+function request_automove(move) {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, { automove: true, move: move });
     });
@@ -90,8 +149,10 @@ $(window).on('load', function () {
     // load extension configurations
     config = {
         move_time: localStorage.getItem('move_time') || 1000,
-        fen_refresh: localStorage.getItem('fen_refresh') || 100
+        fen_refresh: localStorage.getItem('fen_refresh') || 100,
+        autoplay: JSON.parse(localStorage.getItem('autoplay')) || false
     };
+    console.log(config);
 
     // init chess board
     board = ChessBoard('board', {
@@ -100,79 +161,23 @@ $(window).on('load', function () {
         position: 'start'
     });
 
+    // init fen LRU cache
+    fenCache = new LRU(100);
+
     // init stockfish webworker
     stockfish = new Worker('../js/stockfish.js');
     stockfish.postMessage("ucinewgame");
     stockfish.postMessage("isready");
-    stockfish.onmessage = function (event) {
-        let message = event.data;
-        console.log(message);
-        if (message.includes('bestmove')) {
-            const arr = message.split(' ');
-            const best = arr[1];
-            const threat = arr[3];
-            const toplay = (turn === 'w') ? 'White' : 'Black';
-            const next = (turn === 'w') ? 'Black' : 'White';
-            if (message.includes('(none)')) {
-                $('#chess').text(next + ' Wins');
-            } else if (message.includes('ponder')) {
-                $('#chess').text(toplay + ' to play, best move is ' + best + '\n' + 'Best response for ' + next + ' is ' + threat)
-            } else {
-                $('#chess').text(toplay + ' to play, best move is ' + best)
-            }
-            if (toplay.toLowerCase() === board.orientation()) {
-                query_for_automove(best);
-            }
-            calculating = 'no';
-            // drawarrow(best, 'blue', 'overlay1');
-            // drawarrow(threat, 'red', 'overlay2');
-        } else if (message.includes('score mate')) {
-            const arr = message.split('score mate ');
-            const arr1 = arr[1].split(' ');
-            const mateNum = Math.abs(parseInt(arr1[0]));
-            if (mateNum === 0) {
-                $('#evaluation').text("Checkmate!");
-                clearArrows();
-            } else {
-                $('#evaluation').text("Checkmate in " + mateNum);
-            }
-            calculating = 'no';
-        } else if (message.includes('info depth')) {
-            const color = (turn === 'w') ? 1 : -1;
-            const arr = message.split(" ");
-            const depth = arr[2];
-            const score = color * arr[9];
-            $('#evaluation').text("Score: " + score / 100.0 + " at depth " + depth);
-        }
-        if (calculating === 'yes') {
-            pr = pr + 1;
-            let pro = 100 - 100 * Math.exp(-pr / 30);
-            $('#progBar').attr('value', Math.round(pro));
-            // clearArrows();
-        }
-    };
+    stockfish.onmessage = on_stockfish_response;
 
     // listen to messages from content-script
-    chrome.extension.onMessage.addListener(response => {
-        if (response.fenresponse === true && response.dom !== 'no') {
-            if (board.orientation() !== response.orient) {
-                board.orientation(response.orient);
-            }
-            let fen = fenfrommoves(response.dom, response.orient);
-            if (lastfen !== fen) {
-                lastfen = fen;
-                newpos(fen);
-            }
-        }
-        return Promise.resolve("Dummy");
-    });
+    chrome.extension.onMessage.addListener(on_content_script_response);
 
     // query fen periodically from content-script
-    query_for_fen();
+    request_fen();
     setInterval(function () {
-        query_for_fen();
+        request_fen();
     }, config.fen_refresh);
-    console.log(config.fen_refresh);
 
     // register button click listeners
     $('#analyze').on('click', () => {
@@ -196,7 +201,7 @@ function coord(move) {
         : {slet: 9 - slet, elet: 9 - elet, nums: 9 - nums, nume: 9 - nume};
 }
 
-function drawarrow(move, color, div) {
+function draw_arrow(move, color, div) {
     if (move && move !== '(none)') {
         const co = coord(move);
         const b = 344 / 8;
@@ -226,7 +231,12 @@ function drawarrow(move, color, div) {
     }
 }
 
-function clearArrows() {
+function clear_arrows() {
     $('#overlay1').empty();
     $('#overlay2').empty();
+}
+
+function toggle_calculating(on) {
+    prog = 0;
+    isCalculating = on;
 }

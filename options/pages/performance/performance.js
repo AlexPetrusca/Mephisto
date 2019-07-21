@@ -1,33 +1,32 @@
-let name = 'performance';
-let contentElem = document.getElementById('content');
+registerPageScript(() => {
+    console.log('called');
 
-contentElem.addEventListener('focus', onFocus);
-function onFocus(e) {
-    if (e.value === name) {
-        let moveTimeElem = document.getElementById('move_time_input');
-        let fenRefreshElem = document.getElementById('fen_refresh_input');
-        let resetElem = document.getElementById('reset_btn');
+    const moveTimeInput = document.getElementById('move_time_input');
+    const fenRefreshInput = document.getElementById('fen_refresh_input');
+    const autoplayInput = document.getElementById('autoplay_input');
+    const resetButton = document.getElementById('reset_btn');
+    const applyButton = document.getElementById('apply_btn');
 
-        function refreshValues() {
-            moveTimeElem.value = localStorage.getItem('move_time') || 1000;
-            fenRefreshElem.value = localStorage.getItem('fen_refresh') || 100;
-        }
-
-        refreshValues();
-
-        moveTimeElem.addEventListener('change', e => {
-            localStorage.setItem('move_time', moveTimeElem.value);
-        });
-
-        fenRefreshElem.addEventListener('change', e => {
-            localStorage.setItem('fen_refresh', fenRefreshElem.value);
-        });
-
-        resetElem.addEventListener('click', e => {
-            localStorage.removeItem('fen_refresh');
-            localStorage.removeItem('move_time');
-            refreshValues();
-        });
+    function pullConfigValues() {
+        moveTimeInput.value = localStorage.getItem('move_time') || 1000;
+        fenRefreshInput.value = localStorage.getItem('fen_refresh') || 100;
+        autoplayInput.checked = JSON.parse(localStorage.getItem('autoplay')) || false;
     }
-}
-onFocus({value: name});
+
+    function pushConfigValues() {
+        localStorage.setItem('move_time', moveTimeInput.value);
+        localStorage.setItem('fen_refresh', fenRefreshInput.value);
+        localStorage.setItem('autoplay', autoplayInput.checked);
+    }
+
+    applyButton.addEventListener('click', () => {
+        pushConfigValues();
+    });
+
+    resetButton.addEventListener('click', () => {
+        localStorage.clear();
+        pullConfigValues();
+    });
+
+    pullConfigValues();
+});

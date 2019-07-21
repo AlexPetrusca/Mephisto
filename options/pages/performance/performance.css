@@ -1,0 +1,17 @@
+.sticky-top {
+    position: sticky;
+    top: 0;
+}
+
+.switch-label {
+    margin-bottom: 10px;
+    display: block;
+}
+
+.big-section {
+    padding-bottom: 3rem;
+}
+
+.offset-right-m1 {
+    margin-right: 8.3333333333%;
+}

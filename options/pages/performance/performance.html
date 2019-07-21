@@ -1,20 +1,36 @@
 <div class="container">
     <div class="row">
-        <div class="col s12 m8 offset-m1 xl7 offset-xl1">
-            <div id="move_time" class="section scrollspy">
-                <label>
-                    Move Time:
-                    <input id="move_time_input" type="number">
-                </label>
+        <div class="col s12 m7 offset-m1 xl6 offset-xl1 offset-right-m1">
+            <div class="big-section">
+                <div id="move_time" class="section scrollspy">
+                    <label>
+                        Move Time:
+                        <input id="move_time_input" type="number">
+                    </label>
+                </div>
+                <div id="fen_refresh" class="section scrollspy">
+                    <label>
+                        Fen Refresh:
+                        <input id="fen_refresh_input" type="number">
+                    </label>
+                </div>
+                <div id="autoplay" class="section scrollspy switch">
+                    <label class="switch-label">Autoplay:</label>
+                    <label>
+                        Off
+                        <input id="autoplay_input" type="checkbox">
+                        <span class="lever"></span>
+                        On
+                    </label>
+                </div>
             </div>
-            <div id="fen_refresh" class="section scrollspy">
-                <label>
-                    Fen Refresh:
-                    <input id="fen_refresh_input" type="number">
-                </label>
-            </div>
-            <div class="section">
-                <a id="reset_btn" class="waves-effect waves-light btn">Restore Default Settings</a>
+            <div class="big-section">
+                <div class="section no-pad-bot">
+                    <a id="reset_btn" class="waves-effect waves-light btn">Restore Default Settings</a>
+                </div>
+                <div class="section">
+                    <a id="apply_btn" class="waves-effect waves-light btn">Apply Settings</a>
+                </div>
             </div>
         </div>
         <div class="col hide-on-small-only m3 xl3 offset-xl1 sticky-top">
@@ -25,6 +41,9 @@
                     </li>
                     <li>
                         <a href="#fen_refresh">Fen Refresh</a>
+                    </li>
+                    <li>
+                        <a href="#autoplay">Autoplay</a>
                     </li>
                 </ul>
             </div>
