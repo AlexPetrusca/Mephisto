@@ -63,10 +63,10 @@ function moveFromPage() {
 function orientFromPage(txt) {
     let blackToMove = true;
     if (txt.includes('***ccfen***') || txt.includes('***ccpuz***')) {
-        let topLeftCoord = document.getElementsByClassName('coords-light')[0];
+        const topLeftCoord = document.getElementsByClassName('coords-light')[0];
         blackToMove = topLeftCoord && topLeftCoord.innerText === '1';
     } else if (txt.includes('***lifen***')) {
-        let fileCoords = document.getElementsByClassName('files')[0];
+        const fileCoords = document.getElementsByClassName('files')[0];
         blackToMove = fileCoords && fileCoords.classList.contains('black');
     }
     return (blackToMove) ? 'black' : 'white';
@@ -76,7 +76,7 @@ console.log('Mephisto is listening!');
 chrome.extension.onMessage.addListener(response => {
     if (response.queryfen) {
         let res = moveFromPage();
-        let orient = orientFromPage(res);
+        const orient = orientFromPage(res);
         if (res.length < 5) {
             res = 'no';
         }
@@ -155,56 +155,59 @@ function simulateClick(x, y) {
     });
 }
 
-function simulateElemClick(elem, x, y) {
-    simulateMouseEvent(elem, {
-        type: 'mousedown',
-        clientX: x,
-        clientY: y
-    });
-    simulateMouseEvent(elem, {
-        type: 'mouseup',
-        clientX: x,
-        clientY: y
-    });
-}
-
-function clickSquare(xBounds, yBounds) {
-    const x = xBounds.x + (1 - 1 / 2 * Math.random()) * xBounds.width;
-    const y = yBounds.y + (1 - 1 / 2 * Math.random()) * yBounds.height;
+function simulateClickSquare(xBounds, yBounds, range = 0.8) {
+    const margin = (1 - range) / 2;
+    const x = xBounds.x + (range * Math.random() + margin) * xBounds.width;
+    const y = yBounds.y + (range * Math.random() + margin) * yBounds.height;
     simulateClick(x, y);
 }
 
-
 function simulateMove(move) {
-    const thisurl = window.location.href;
-    let letterCoords;
-    let numberCoords;
-    if (thisurl.includes('chess.com')) {
-        letterCoords = Array.from(document.getElementsByClassName('letter'));
-        numberCoords = Array.from(document.getElementsByClassName('number'));
+    let fileCoords;
+    let rankCoords;
+    const thisUrl = window.location.href;
+    if (thisUrl.includes('chess.com')) {
+        fileCoords = Array.from(document.getElementsByClassName('letter'));
+        rankCoords = Array.from(document.getElementsByClassName('number'));
     } else {
-        letterCoords = Array.from(document.getElementsByClassName('files')[0].children);
-        numberCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
+        fileCoords = Array.from(document.getElementsByClassName('files')[0].children);
+        rankCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
     }
 
-    const x0Elem = letterCoords.find((coords) => {
+    const x0Elem = fileCoords.find((coords) => {
         return coords.innerText.toLowerCase() === move[0];
     });
-    const y0Elem = numberCoords.find((coords) => {
+    const y0Elem = rankCoords.find((coords) => {
         return coords.innerText === move[1];
     });
-    const x1Elem = letterCoords.find((coords) => {
+    const x1Elem = fileCoords.find((coords) => {
         return coords.innerText.toLowerCase() === move[2];
     });
-    const y1Elem = numberCoords.find((coords) => {
+    const y1Elem = rankCoords.find((coords) => {
         return coords.innerText === move[3];
     });
 
     const x0Bounds = x0Elem.getBoundingClientRect();
     const y0Bounds = y0Elem.getBoundingClientRect();
-    clickSquare(x0Bounds, y0Bounds);
+    simulateClickSquare(x0Bounds, y0Bounds);
 
     const x1Bounds = x1Elem.getBoundingClientRect();
     const y1Bounds = y1Elem.getBoundingClientRect();
-    clickSquare(x1Bounds, y1Bounds);
+    simulateClickSquare(x1Bounds, y1Bounds);
+
+    if (move[4]) {
+        simulatePromotion(move[4]);
+    }
+}
+
+function simulatePromotion(promotion) {
+    const promoteMap = { 'q': 0, 'n': 1, 'r': 2, 'b': 3 };
+    const idx = promoteMap[promotion];
+    const thisUrl = window.location.href;
+    if (thisUrl.includes('chess.com')) {
+        // todo: implement click promotion for chess.com
+    } else {
+        const promotionElems = document.getElementById('promotion-choice');
+        promotionElems[idx].click();
+    }
 }
