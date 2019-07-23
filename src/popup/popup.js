@@ -165,7 +165,7 @@ $(window).on('load', function () {
     fenCache = new LRU(100);
 
     // init stockfish webworker
-    stockfish = new Worker('../js/stockfish.js');
+    stockfish = new Worker('/lib/stockfish.js');
     stockfish.postMessage("ucinewgame");
     stockfish.postMessage("isready");
     stockfish.onmessage = on_stockfish_response;

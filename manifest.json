@@ -7,26 +7,26 @@
   "homepage_url": "https://alexpetrusca.github.io/mephisto",
   "author": "Alex Petrusca",
   "icons": {
-    "16": "icons/icon16.png",
-    "19": "icons/icon19.png",
-    "32": "icons/icon32.png",
-    "38": "icons/icon38.png",
-    "48": "icons/icon48.png",
-    "72": "icons/icon72.png",
-    "128": "icons/icon128.png"
+    "16": "res/icons/icon16.png",
+    "19": "res/icons/icon19.png",
+    "32": "res/icons/icon32.png",
+    "38": "res/icons/icon38.png",
+    "48": "res/icons/icon48.png",
+    "72": "res/icons/icon72.png",
+    "128": "res/icons/icon128.png"
   },
   "browser_action": {
     "default_icon": {
-      "16": "icons/icon16.png",
-      "19": "icons/icon19.png",
-      "32": "icons/icon32.png",
-      "38": "icons/icon38.png",
-      "48": "icons/icon48.png",
-      "72": "icons/icon72.png",
-      "128": "icons/icon128.png"
+      "16": "res/icons/icon16.png",
+      "19": "res/icons/icon19.png",
+      "32": "res/icons/icon32.png",
+      "38": "res/icons/icon38.png",
+      "48": "res/icons/icon48.png",
+      "72": "res/icons/icon72.png",
+      "128": "res/icons/icon128.png"
     },
-    "default_popup": "popup/popup.html",
-    "options_page": "options/options.html"
+    "default_popup": "src/popup/popup.html",
+    "options_page": "src/options/options.html"
   },
   "permissions": [
     "tabs",
@@ -35,10 +35,10 @@
   ],
   "background": {
     "scripts": [
-      "js/background-script.js",
-      "js/jquery.js",
-      "js/stockfish.js",
-      "js/chess.min.js"
+      "src/scripts/background-script.js",
+      "lib/jquery.min.js",
+      "lib/stockfish.js",
+      "lib/chess.min.js"
     ],
     "persistent": false
   },
@@ -48,7 +48,7 @@
         "<all_urls>"
       ],
       "js": [
-        "js/content-script.js"
+        "src/scripts/content-script.js"
       ]
     }
   ],
