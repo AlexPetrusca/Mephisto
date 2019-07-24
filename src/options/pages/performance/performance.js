@@ -1,7 +1,12 @@
 registerPageScript(() => {
+    const moveTimeInput = document.getElementById('move_time_input');
+    const fenRefreshInput = document.getElementById('fen_refresh_input');
+    const autoplayInput = document.getElementById('autoplay_input');
+    const resetButton = document.getElementById('reset_btn');
+    const applyButton = document.getElementById('apply_btn');
     let configUniqueifier;
 
-    function getUniquifier() {
+    function getCurrentUniquifier() {
         return JSON.stringify({
             'move_time': moveTimeInput.value,
             'fen_refresh': fenRefreshInput.value,
@@ -10,14 +15,8 @@ registerPageScript(() => {
     }
 
     function updateUniquifier() {
-        configUniqueifier = getUniquifier();
+        configUniqueifier = getCurrentUniquifier();
     }
-
-    const moveTimeInput = document.getElementById('move_time_input');
-    const fenRefreshInput = document.getElementById('fen_refresh_input');
-    const autoplayInput = document.getElementById('autoplay_input');
-    const resetButton = document.getElementById('reset_btn');
-    const applyButton = document.getElementById('apply_btn');
 
     function pullConfigValues() {
         moveTimeInput.value = localStorage.getItem('move_time') || 1000;
@@ -27,29 +26,33 @@ registerPageScript(() => {
     }
 
     function pushConfigValues() {
-        updateUniquifier();
         localStorage.setItem('move_time', moveTimeInput.value);
         localStorage.setItem('fen_refresh', fenRefreshInput.value);
         localStorage.setItem('autoplay', autoplayInput.checked);
+        updateUniquifier();
     }
 
-    function resetConfigValues() {
+    function onApplyConfigValues() {
+        pushConfigValues();
+        onConfigValuesChanged();
+    }
+
+    function onResetConfigValues() {
         localStorage.clear();
         pullConfigValues();
+        onConfigValuesChanged();
     }
 
-    function checkConfigValuesChanged() {
-        console.log(configUniqueifier);
-        console.log(getUniquifier());
-        applyButton.disabled = (configUniqueifier === getUniquifier());
+    function onConfigValuesChanged() {
+        applyButton.disabled = (configUniqueifier === getCurrentUniquifier());
     }
 
-    applyButton.addEventListener('click', pushConfigValues);
-    resetButton.addEventListener('click', resetConfigValues);
-    moveTimeInput.addEventListener('change', checkConfigValuesChanged);
-    fenRefreshInput.addEventListener('change', checkConfigValuesChanged);
-    autoplayInput.addEventListener('change', checkConfigValuesChanged);
+    applyButton.addEventListener('click', onApplyConfigValues);
+    resetButton.addEventListener('click', onResetConfigValues);
+    moveTimeInput.addEventListener('keyup', onConfigValuesChanged);
+    fenRefreshInput.addEventListener('keyup', onConfigValuesChanged);
+    autoplayInput.addEventListener('change', onConfigValuesChanged);
 
     pullConfigValues();
-    checkConfigValuesChanged();
+    onConfigValuesChanged();
 });

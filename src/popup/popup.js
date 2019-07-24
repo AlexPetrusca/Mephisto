@@ -50,11 +50,11 @@ function parse_fen_from_response(txt) {
             return directHit;
         }
         const regex = /([\w+!#]+[*]+)$/;
-        const lastMove = txt.match(regex)[0].split('*****')[0];
         const cacheKey = txt.replace(regex, "");
         const indirectHit = fenCache.get(cacheKey);
         if (indirectHit) { // calculate fen by appending newest move
             console.log('INDIRECT');
+            const lastMove = txt.match(regex)[0].split('*****')[0];
             chess.load(indirectHit);
             chess.move(lastMove);
         } else { // calculate fen by performing all moves

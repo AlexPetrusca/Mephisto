@@ -155,7 +155,7 @@ function simulateClick(x, y) {
     });
 }
 
-function simulateClickSquare(xBounds, yBounds, range = 0.8) {
+function simulateClickSquare(xBounds, yBounds, range = 0.9) {
     const margin = (1 - range) / 2;
     const x = xBounds.x + (range * Math.random() + margin) * xBounds.width;
     const y = yBounds.y + (range * Math.random() + margin) * yBounds.height;
@@ -187,6 +187,8 @@ function simulateMove(move) {
         return coords.innerText === move[3];
     });
 
+    // todo: [big] make clicks more human | add pauses between subsequent clicks
+    // todo: [small] add small pauses between mousedown and mouseup event
     const x0Bounds = x0Elem.getBoundingClientRect();
     const y0Bounds = y0Elem.getBoundingClientRect();
     simulateClickSquare(x0Bounds, y0Bounds);
