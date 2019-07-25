@@ -201,40 +201,39 @@ function simulateMove(move) {
         return config.move_time + (2 * Math.random() - 1) * config.move_variance;
     }
 
+    function promiseTimeout(time) {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve(time);
+            }, time);
+        });
+    }
+
     const x0Bounds = x0Elem.getBoundingClientRect();
     const y0Bounds = y0Elem.getBoundingClientRect();
     const x1Bounds = x1Elem.getBoundingClientRect();
     const y1Bounds = y1Elem.getBoundingClientRect();
 
-    function simulatePromoteClick() {
-        simulatePromotion(move[4]);
-        moving = false;
-    }
-
-    function simulateSecondClick() {
-        simulateClickSquare(x1Bounds, y1Bounds);
-        if (move[4]) { // promotion move
-            setTimeout(simulatePromoteClick, getMoveTime());
-        } else {
+    moving = true;
+    promiseTimeout(getThinkTime())
+        .then(() => {
+            simulateClickSquare(x0Bounds, y0Bounds); // from-square click
+            return promiseTimeout(getMoveTime())
+        })
+        .then(() => {
+            simulateClickSquare(x1Bounds, y1Bounds); // to-square click
+            if (move[4]) return promiseTimeout(getMoveTime())
+        })
+        .then(res => {
+            if (res) simulatePromotion(move[4]); // conditional promotion click
+        })
+        .finally(() => {
             moving = false;
-        }
-    }
-
-    function simulateFirstClick() {
-        simulateClickSquare(x0Bounds, y0Bounds);
-        setTimeout(simulateSecondClick, getMoveTime());
-    }
-
-    function startMoveSimulation() {
-        moving = true;
-        setTimeout(simulateFirstClick, getThinkTime());
-    }
-
-    startMoveSimulation();
+        });
 }
 
 function simulatePromotion(promotion) {
-    const promoteMap = { 'q': 0, 'n': 1, 'r': 2, 'b': 3 };
+    const promoteMap = {'q': 0, 'n': 1, 'r': 2, 'b': 3};
     const idx = promoteMap[promotion];
     const thisUrl = window.location.href;
     if (thisUrl.includes('chess.com')) {
