@@ -1,16 +1,16 @@
 <div class="container">
     <div class="row">
         <div class="col s12 m7 offset-m1 xl6 offset-xl1 offset-right-m1">
-            <div class="big-section">
-                <div id="move_time" class="section scrollspy">
+            <div id="form_container" class="big-section">
+                <div id="compute_time" class="section scrollspy">
                     <label>
-                        Move Time:
-                        <input id="move_time_input" type="number">
+                        Stockfish Compute Time (ms):
+                        <input id="compute_time_input" type="number">
                     </label>
                 </div>
                 <div id="fen_refresh" class="section scrollspy">
                     <label>
-                        Fen Refresh:
+                        Fen Refresh Interval (ms):
                         <input id="fen_refresh_input" type="number">
                     </label>
                 </div>
@@ -21,6 +21,30 @@
                         <input id="autoplay_input" type="checkbox">
                         <span class="lever"></span>
                         On
+                    </label>
+                </div>
+                <div id="think_time" class="section scrollspy">
+                    <label>
+                        Base Simulated Think Time (ms):
+                        <input id="think_time_input" type="number">
+                    </label>
+                </div>
+                <div id="think_variance" class="section scrollspy">
+                    <label>
+                        Simulated Think Time Variance (ms):
+                        <input id="think_variance_input" type="number">
+                    </label>
+                </div>
+                <div id="move_time" class="section scrollspy">
+                    <label>
+                        Base Simulated Move Time (ms):
+                        <input id="move_time_input" type="number">
+                    </label>
+                </div>
+                <div id="move_variance" class="section scrollspy">
+                    <label>
+                        Simulated Move Time Variance (ms):
+                        <input id="move_variance_input" type="number">
                     </label>
                 </div>
             </div>
@@ -37,13 +61,25 @@
             <div class="toc-wrapper pin-top">
                 <ul id="toc" class="section table-of-contents">
                     <li>
-                        <a href="#move_time">Move Time</a>
+                        <a href="#compute_time">Compute Time</a>
                     </li>
                     <li>
                         <a href="#fen_refresh">Fen Refresh</a>
                     </li>
                     <li>
                         <a href="#autoplay">Autoplay</a>
+                    </li>
+                    <li>
+                        <a href="#think_time">Think Time</a>
+                    </li>
+                    <li>
+                        <a href="#think_variance">Think Variance</a>
+                    </li>
+                    <li>
+                        <a href="#move_time">Move Time</a>
+                    </li>
+                    <li>
+                        <a href="#move_variance">Move Variance</a>
                     </li>
                 </ul>
             </div>

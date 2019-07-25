@@ -1,3 +1,6 @@
+let config;
+let moving = false;
+
 function moveFromPage() {
     let prefix = '';
     let res = '';
@@ -81,9 +84,12 @@ chrome.extension.onMessage.addListener(response => {
             res = 'no';
         }
         chrome.runtime.sendMessage({dom: res, orient: orient, fenresponse: true});
-    } else if (response.automove) {
+    } else if (response.automove && !moving) {
         console.log(response.move);
         simulateMove(response.move);
+    } else if (response.pullConfig) {
+        console.log(response.config);
+        config = response.config;
     }
     return Promise.resolve('Dummy');
 });
@@ -187,19 +193,35 @@ function simulateMove(move) {
         return coords.innerText === move[3];
     });
 
-    // todo: [big] make clicks more human | add pauses between subsequent clicks
-    // todo: [small] add small pauses between mousedown and mouseup event
+    function getThinkTime() {
+        return config.think_time + (2 * Math.random() - 1) * config.think_variance;
+    }
+
+    function getMoveTime() {
+        return config.move_time + (2 * Math.random() - 1) * config.move_variance;
+    }
+
     const x0Bounds = x0Elem.getBoundingClientRect();
     const y0Bounds = y0Elem.getBoundingClientRect();
-    simulateClickSquare(x0Bounds, y0Bounds);
-
     const x1Bounds = x1Elem.getBoundingClientRect();
     const y1Bounds = y1Elem.getBoundingClientRect();
-    simulateClickSquare(x1Bounds, y1Bounds);
 
-    if (move[4]) {
-        simulatePromotion(move[4]);
-    }
+    moving = true;
+    setTimeout(() => {
+        simulateClickSquare(x0Bounds, y0Bounds);
+        setTimeout( () => {
+            simulateClickSquare(x1Bounds, y1Bounds);
+            if (move[4]) { // promotion move
+                setTimeout(() => {
+                    simulatePromotion(move[4]);
+                    moving = false;
+                    moving = false;
+                }, getMoveTime());
+            } else {
+                moving = false;
+            }
+        }, getMoveTime());
+    }, getThinkTime());
 }
 
 function simulatePromotion(promotion) {
@@ -209,7 +231,9 @@ function simulatePromotion(promotion) {
     if (thisUrl.includes('chess.com')) {
         // todo: implement click promotion for chess.com
     } else {
-        const promotionElems = document.getElementById('promotion-choice');
-        promotionElems[idx].click();
+        setTimeout(() => {
+            const promotionsModal = document.getElementById('promotion-choice');
+            promotionsModal.children[idx].click()
+        }, 10);
     }
 }

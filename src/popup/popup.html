@@ -1,22 +1,31 @@
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
+    <title>Mephisto</title>
     <link rel="stylesheet" href="popup.min.css"/>
-    <link href="../../lib/chessboard/chessboard.min.css" rel="stylesheet" type="text/css">
-    <script src="../../lib/jquery.min.js"></script>
-    <script src="../../lib/lru.js"></script>
+    <link href="/lib/chessboard/chessboard.min.css" rel="stylesheet" type="text/css">
+    <link href="/lib/materialize/materialize.min.css" rel="stylesheet" type="text/css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" type="text/css">
+    <link href="https://fonts.googleapis.com/css?family=Roboto&display=swap" rel="stylesheet" type="text/css">
+    <script src="/lib/jquery.min.js"></script>
+    <script src="/lib/lru.js"></script>
+    <script src="/lib/stockfish.js"></script>
+    <script src="/lib/chessboard/chessboard.min.js"></script>
+    <script src="/lib/chess.min.js"></script>
+    <script src="/lib/materialize/materialize.min.js"></script>
     <script src="popup.js"></script>
-    <script src="../../lib/stockfish.js"></script>
-    <script src="../../lib/chessboard/chessboard.min.js"></script>
-    <script src="../../lib/chess.min.js"></script>
 </head>
 
 
 <body>
-<button id="config" style="position: absolute;bottom: 2px;right: 2px;">Config</button>
-<button id="analyze" style="position: absolute;bottom: 2px;left: 2px;">Analyze</button>
+<button id="config" class="waves-effect waves-light btn tooltipped" data-position="left" data-tooltip="Settings">
+    <i class="medium material-icons">settings</i>
+</button>
+<button id="analyze" class="waves-effect waves-light btn tooltipped" data-position="right" data-tooltip="Analyze">
+    <i class="medium material-icons">open_in_new</i>
+</button>
 
 <div id="overlay1"></div>
 <div id="overlay2"></div>
@@ -24,7 +33,6 @@
 <div id="gamedetected">No Chess Game Detected</div>
 
 <div id="board" style="width: 350px"></div>
-
 
 <div id="chess">If your chess game is not detected<br>try reloading the page</div>
 <div id="evaluation"></div>

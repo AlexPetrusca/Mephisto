@@ -11,7 +11,7 @@ let turn = '';
 function new_pos(fen) {
     $('#chess').html('Calculstockfishating<br><progress id="progBar" value="2" max="100">');
     stockfish.postMessage("position fen " + fen);
-    stockfish.postMessage("go movetime " + config.move_time);
+    stockfish.postMessage("go movetime " + config.compute_time);
     board.position(fen);
     lastfen = fen;
     toggle_calculating(true);
@@ -60,8 +60,8 @@ function parse_fen_from_response(txt) {
         } else { // calculate fen by performing all moves
             console.log('FULL');
             const moves = txt.split("*****");
-            for (let i = 0; i < moves.length; i++) {
-                chess.move(moves[i]);
+            for (const move of moves) {
+                chess.move(move);
             }
         }
         turn = chess.turn();
@@ -145,14 +145,24 @@ function request_automove(move) {
     });
 }
 
+function request_pull_config() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, { pullConfig: true, config: config });
+    });
+}
+
 $(window).on('load', function () {
     // load extension configurations
     config = {
-        move_time: localStorage.getItem('move_time') || 1000,
-        fen_refresh: localStorage.getItem('fen_refresh') || 100,
-        autoplay: JSON.parse(localStorage.getItem('autoplay')) || false
+        compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
+        fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
+        autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
+        think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
+        think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
+        move_time: JSON.parse(localStorage.getItem('move_time')) || 1000,
+        move_variance: JSON.parse(localStorage.getItem('move_variance')) || 500,
     };
-    console.log(config);
+    request_pull_config();
 
     // init chess board
     board = ChessBoard('board', {
@@ -184,8 +194,11 @@ $(window).on('load', function () {
         window.open('https://lichess.org/analysis?fen=' + lastfen, '_blank');
     });
     $('#config').on('click', () => {
-        window.open('../options/options.html', '_blank');
+        window.open('/src/options/options.html', '_blank');
     });
+
+    //initialize materialize
+    $('.tooltipped').tooltip();
 });
 
 function coord(move) {
@@ -240,3 +253,4 @@ function toggle_calculating(on) {
     prog = 0;
     isCalculating = on;
 }
+
