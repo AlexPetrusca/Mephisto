@@ -206,22 +206,31 @@ function simulateMove(move) {
     const x1Bounds = x1Elem.getBoundingClientRect();
     const y1Bounds = y1Elem.getBoundingClientRect();
 
-    moving = true;
-    setTimeout(() => {
+    function simulatePromoteClick() {
+        simulatePromotion(move[4]);
+        moving = false;
+    }
+
+    function simulateSecondClick() {
+        simulateClickSquare(x1Bounds, y1Bounds);
+        if (move[4]) { // promotion move
+            setTimeout(simulatePromoteClick, getMoveTime());
+        } else {
+            moving = false;
+        }
+    }
+
+    function simulateFirstClick() {
         simulateClickSquare(x0Bounds, y0Bounds);
-        setTimeout( () => {
-            simulateClickSquare(x1Bounds, y1Bounds);
-            if (move[4]) { // promotion move
-                setTimeout(() => {
-                    simulatePromotion(move[4]);
-                    moving = false;
-                    moving = false;
-                }, getMoveTime());
-            } else {
-                moving = false;
-            }
-        }, getMoveTime());
-    }, getThinkTime());
+        setTimeout(simulateSecondClick, getMoveTime());
+    }
+
+    function startMoveSimulation() {
+        moving = true;
+        setTimeout(simulateFirstClick, getThinkTime());
+    }
+
+    startMoveSimulation();
 }
 
 function simulatePromotion(promotion) {
