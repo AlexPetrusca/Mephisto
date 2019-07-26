@@ -1,7 +1,7 @@
 let config;
 let moving = false;
 
-function moveFromPage() {
+function movesFromPage() {
     let prefix = '';
     let res = '';
     const thisUrl = window.location.href;
@@ -76,18 +76,19 @@ function orientFromPage(txt) {
 }
 
 chrome.extension.onMessage.addListener(response => {
+    if (moving) return;
+
     if (response.queryfen) {
-        let res = moveFromPage();
+        const res = movesFromPage();
         const orient = orientFromPage(res);
-        chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
-    } else if (response.automove && !moving) {
+        chrome.runtime.sendMessage({dom: res, orient: orient, fenresponse: true});
+    } else if (response.automove) {
         console.log(response.move);
         simulateMove(response.move);
     } else if (response.pushConfig) {
         console.log(response.config);
         config = response.config;
     }
-    return Promise.resolve('Dummy');
 });
 
 function pullConfig() {

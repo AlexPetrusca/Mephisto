@@ -120,7 +120,7 @@ function on_stockfish_response(event) {
 }
 
 function on_content_script_response(response) {
-    if (response.fenresponse === true && response.dom !== 'no') {
+    if (response.fenresponse && response.dom !== 'no') {
         if (board.orientation() !== response.orient) {
             board.orientation(response.orient);
         }
@@ -132,7 +132,6 @@ function on_content_script_response(response) {
     } else if (response.pullConfig) {
         push_config();
     }
-    return Promise.resolve("Dummy");
 }
 
 function request_fen() {
