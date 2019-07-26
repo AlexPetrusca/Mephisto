@@ -5,7 +5,8 @@ let config;
 
 let isCalculating = false;
 let prog = 0;
-let lastfen = '';
+let lastFen = '';
+let lastPv = '';
 let turn = '';
 
 function new_pos(fen) {
@@ -13,7 +14,7 @@ function new_pos(fen) {
     stockfish.postMessage("position fen " + fen);
     stockfish.postMessage("go movetime " + config.compute_time);
     board.position(fen);
-    lastfen = fen;
+    lastFen = fen;
     toggle_calculating(true);
 }
 
@@ -105,10 +106,11 @@ function on_stockfish_response(event) {
         }
         toggle_calculating(false);
     } else if (message.includes('info depth')) {
-        const color = (turn === 'w') ? 1 : -1;
-        const arr = message.split(" ");
-        const depth = arr[2];
-        const score = color * arr[9];
+        const pvSplit = message.split(" pv ");
+        const info = pvSplit[0].split(" ");
+        lastPv = pvSplit[1];
+        const depth = info[2];
+        const score = ((turn === 'w') ? 1 : -1) * info[9];
         $('#evaluation').text("Score: " + score / 100.0 + " at depth " + depth);
     }
     if (isCalculating) {
@@ -125,8 +127,8 @@ function on_content_script_response(response) {
             board.orientation(response.orient);
         }
         let fen = parse_fen_from_response(response.dom);
-        if (lastfen !== fen) {
-            lastfen = fen;
+        if (lastFen !== fen) {
+            lastFen = fen;
             new_pos(fen);
         }
     } else if (response.pullConfig) {
@@ -141,8 +143,9 @@ function request_fen() {
 }
 
 function request_automove(move) {
+    const message = (config.puzzle_mode) ? { automove: true, pv: lastPv } : { automove: true, move: move };
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, { automove: true, move: move });
+        chrome.tabs.sendMessage(tabs[0].id, message);
     });
 }
 
@@ -162,6 +165,7 @@ $(window).on('load', function () {
         think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
         move_time: JSON.parse(localStorage.getItem('move_time')) || 1000,
         move_variance: JSON.parse(localStorage.getItem('move_variance')) || 500,
+        puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || true  // todo: implement me fully
     };
     push_config();
 
@@ -192,7 +196,7 @@ $(window).on('load', function () {
 
     // register button click listeners
     $('#analyze').on('click', () => {
-        window.open('https://lichess.org/analysis?fen=' + lastfen, '_blank');
+        window.open('https://lichess.org/analysis?fen=' + lastFen, '_blank');
     });
     $('#config').on('click', () => {
         window.open('/src/options/options.html', '_blank');

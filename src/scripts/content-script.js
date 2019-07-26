@@ -83,8 +83,13 @@ chrome.extension.onMessage.addListener(response => {
         const orient = orientFromPage(res);
         chrome.runtime.sendMessage({dom: res, orient: orient, fenresponse: true});
     } else if (response.automove) {
-        console.log(response.move);
-        simulateMove(response.move);
+        if (config.puzzle_mode) {
+            console.log(response.pv);
+            simulatePvMoves(response.pv);
+        } else {
+            console.log(response.move);
+            simulateMove(response.move);
+        }
     } else if (response.pushConfig) {
         console.log(response.config);
         config = response.config;
@@ -182,7 +187,7 @@ function simulateClickSquare(xBounds, yBounds, range = 0.9) {
     simulateClick(x, y);
 }
 
-function simulateMove(move) {
+function simulateMove(move, modifyMoving = true) {
     let fileCoords;
     let rankCoords;
     const thisUrl = window.location.href;
@@ -225,10 +230,43 @@ function simulateMove(move) {
             simulatePromotion(move[4]); // conditional promotion click
         }
     }
+
+    if (modifyMoving) {
+        moving = true;
+        return performSimulatedMoveSequence().finally(() => {
+            moving = false;
+        });
+    } else {
+        return performSimulatedMoveSequence();
+    }
+}
+
+function simulatePvMoves(pvStr) {
+    const pv = pvStr.split(' ');
+    console.log(pv);
+
+    async function confirmResponse() {
+        // todo: implement me
+        return true;
+    }
+
     moving = true;
-    performSimulatedMoveSequence().finally(() => {
-        moving = false;
-    });
+    async function performSimulatedPvMovesSequence() {
+        for (let i = 0; i < pv.length; i++) {
+            let move = pv[i];
+            if (i % 2 === 0) { // even index -> my move
+                await simulateMove(move, false);
+            } else { // odd index -> their move
+                let confirmed = await confirmResponse(move);
+                if (!confirmed) {
+                    moving = false;
+                    return;
+                }
+            }
+        }
+    }
+
+    return performSimulatedPvMovesSequence();
 }
 
 function simulatePromotion(promotion) {
