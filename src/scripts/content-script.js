@@ -60,7 +60,7 @@ function moveFromPage() {
             }
         }
     }
-    return prefix + res;
+    return (res) ? prefix + res : 'no';
 }
 
 function orientFromPage(txt) {
@@ -75,24 +75,29 @@ function orientFromPage(txt) {
     return (blackToMove) ? 'black' : 'white';
 }
 
-console.log('Mephisto is listening!');
 chrome.extension.onMessage.addListener(response => {
     if (response.queryfen) {
         let res = moveFromPage();
         const orient = orientFromPage(res);
-        if (res.length < 5) {
-            res = 'no';
-        }
-        chrome.runtime.sendMessage({dom: res, orient: orient, fenresponse: true});
+        chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
     } else if (response.automove && !moving) {
         console.log(response.move);
         simulateMove(response.move);
-    } else if (response.pullConfig) {
+    } else if (response.pushConfig) {
         console.log(response.config);
         config = response.config;
     }
     return Promise.resolve('Dummy');
 });
+
+function pullConfig() {
+    chrome.runtime.sendMessage({ pullConfig: true });
+}
+
+window.onload = () => {
+    console.log('Mephisto is listening!');
+    pullConfig();
+};
 
 // -------------------------------------------------------------------------------------------
 

@@ -129,6 +129,8 @@ function on_content_script_response(response) {
             lastfen = fen;
             new_pos(fen);
         }
+    } else if (response.pullConfig) {
+        push_config();
     }
     return Promise.resolve("Dummy");
 }
@@ -145,9 +147,9 @@ function request_automove(move) {
     });
 }
 
-function request_pull_config() {
+function push_config() {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, { pullConfig: true, config: config });
+        chrome.tabs.sendMessage(tabs[0].id, { pushConfig: true, config: config });
     });
 }
 
@@ -162,7 +164,7 @@ $(window).on('load', function () {
         move_time: JSON.parse(localStorage.getItem('move_time')) || 1000,
         move_variance: JSON.parse(localStorage.getItem('move_variance')) || 500,
     };
-    request_pull_config();
+    push_config();
 
     // init chess board
     board = ChessBoard('board', {
