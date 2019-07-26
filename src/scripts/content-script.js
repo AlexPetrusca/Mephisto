@@ -96,6 +96,14 @@ chrome.extension.onMessage.addListener(response => {
 
 // -------------------------------------------------------------------------------------------
 
+function promiseTimeout(time) {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve(time);
+        }, time);
+    });
+}
+
 function simulateMouseEvent(target, mouseOpts) {
     let event = target.ownerDocument.createEvent('MouseEvents'),
         options = mouseOpts || {},
@@ -180,56 +188,41 @@ function simulateMove(move) {
         rankCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
     }
 
-    const x0Elem = fileCoords.find((coords) => {
+    const x0Bounds = fileCoords.find((coords) => {
         return coords.innerText.toLowerCase() === move[0];
-    });
-    const y0Elem = rankCoords.find((coords) => {
+    }).getBoundingClientRect();
+    const y0Bounds = rankCoords.find((coords) => {
         return coords.innerText === move[1];
-    });
-    const x1Elem = fileCoords.find((coords) => {
+    }).getBoundingClientRect();
+    const x1Bounds = fileCoords.find((coords) => {
         return coords.innerText.toLowerCase() === move[2];
-    });
-    const y1Elem = rankCoords.find((coords) => {
+    }).getBoundingClientRect();
+    const y1Bounds = rankCoords.find((coords) => {
         return coords.innerText === move[3];
-    });
+    }).getBoundingClientRect();
 
     function getThinkTime() {
-        return config.think_time + (2 * Math.random() - 1) * config.think_variance;
+        return config.think_time + Math.random() * config.think_variance;
     }
 
     function getMoveTime() {
-        return config.move_time + (2 * Math.random() - 1) * config.move_variance;
+        return config.move_time + Math.random() * config.move_variance;
     }
 
-    function promiseTimeout(time) {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve(time);
-            }, time);
-        });
+    async function performSimulatedMoveSequence() {
+        await promiseTimeout(getThinkTime());
+        simulateClickSquare(x0Bounds, y0Bounds); // from-square click
+        await promiseTimeout(getMoveTime());
+        simulateClickSquare(x1Bounds, y1Bounds); // to-square click
+        if (move[4]) {
+            await promiseTimeout(getMoveTime());
+            simulatePromotion(move[4]); // conditional promotion click
+        }
     }
-
-    const x0Bounds = x0Elem.getBoundingClientRect();
-    const y0Bounds = y0Elem.getBoundingClientRect();
-    const x1Bounds = x1Elem.getBoundingClientRect();
-    const y1Bounds = y1Elem.getBoundingClientRect();
-
     moving = true;
-    promiseTimeout(getThinkTime())
-        .then(() => {
-            simulateClickSquare(x0Bounds, y0Bounds); // from-square click
-            return promiseTimeout(getMoveTime())
-        })
-        .then(() => {
-            simulateClickSquare(x1Bounds, y1Bounds); // to-square click
-            if (move[4]) return promiseTimeout(getMoveTime())
-        })
-        .then(res => {
-            if (res) simulatePromotion(move[4]); // conditional promotion click
-        })
-        .finally(() => {
-            moving = false;
-        });
+    performSimulatedMoveSequence().finally(() => {
+        moving = false;
+    });
 }
 
 function simulatePromotion(promotion) {
