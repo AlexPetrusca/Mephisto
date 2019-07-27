@@ -63,12 +63,13 @@ function movesFromPage() {
     return (res) ? prefix + res : 'no';
 }
 
-function orientFromPage(txt) {
+function orientFromPage() {
     let blackToMove = true;
-    if (txt.includes('***ccfen***') || txt.includes('***ccpuz***')) {
+    const thisUrl = window.location.href; // todo thisURL: maybe make this a global that you update
+    if (thisUrl.includes('chess.com')) {
         const topLeftCoord = document.getElementsByClassName('coords-light')[0];
         blackToMove = topLeftCoord && topLeftCoord.innerText === '1';
-    } else if (txt.includes('***lifen***')) {
+    } else if (thisUrl.includes('lichess.org')) {
         const fileCoords = document.getElementsByClassName('files')[0];
         blackToMove = fileCoords && fileCoords.classList.contains('black');
     }
@@ -80,12 +81,12 @@ chrome.extension.onMessage.addListener(response => {
 
     if (response.queryfen) {
         const res = movesFromPage();
-        const orient = orientFromPage(res);
+        const orient = orientFromPage();
         chrome.runtime.sendMessage({dom: res, orient: orient, fenresponse: true});
     } else if (response.automove) {
         if (config.puzzle_mode) {
             console.log(response.pv);
-            simulatePvMoves(response.pv);
+            simulatePvMoves(response.pv.split(' '));
         } else {
             console.log(response.move);
             simulateMove(response.move);
@@ -97,7 +98,7 @@ chrome.extension.onMessage.addListener(response => {
 });
 
 function pullConfig() {
-    chrome.runtime.sendMessage({ pullConfig: true });
+    chrome.runtime.sendMessage({pullConfig: true});
 }
 
 window.onload = () => {
@@ -113,6 +114,20 @@ function promiseTimeout(time) {
             resolve(time);
         }, time);
     });
+}
+
+function getRankFileCoords() {
+    let fileCoords;
+    let rankCoords;
+    const thisUrl = window.location.href;
+    if (thisUrl.includes('chess.com')) {
+        fileCoords = Array.from(document.getElementsByClassName('letter'));
+        rankCoords = Array.from(document.getElementsByClassName('number'));
+    } else {
+        fileCoords = Array.from(document.getElementsByClassName('files')[0].children);
+        rankCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
+    }
+    return [rankCoords, fileCoords];
 }
 
 function simulateMouseEvent(target, mouseOpts) {
@@ -187,17 +202,8 @@ function simulateClickSquare(xBounds, yBounds, range = 0.9) {
     simulateClick(x, y);
 }
 
-function simulateMove(move, modifyMoving = true) {
-    let fileCoords;
-    let rankCoords;
-    const thisUrl = window.location.href;
-    if (thisUrl.includes('chess.com')) {
-        fileCoords = Array.from(document.getElementsByClassName('letter'));
-        rankCoords = Array.from(document.getElementsByClassName('number'));
-    } else {
-        fileCoords = Array.from(document.getElementsByClassName('files')[0].children);
-        rankCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
-    }
+function simulateMove(move, singleMove = true) {
+    const [rankCoords, fileCoords] = getRankFileCoords();
 
     const x0Bounds = fileCoords.find((coords) => {
         return coords.innerText.toLowerCase() === move[0];
@@ -231,7 +237,7 @@ function simulateMove(move, modifyMoving = true) {
         }
     }
 
-    if (modifyMoving) {
+    if (singleMove) {
         moving = true;
         return performSimulatedMoveSequence().finally(() => {
             moving = false;
@@ -241,32 +247,56 @@ function simulateMove(move, modifyMoving = true) {
     }
 }
 
-function simulatePvMoves(pvStr) {
-    const pv = pvStr.split(' ');
-    console.log(pv);
+function simulatePvMoves(pv) {
+    const board = document.getElementsByTagName('cg-board')[0]; // todo: for chess.com too
+    const boardBounds = board.getBoundingClientRect();
 
-    async function confirmResponse() {
-        // todo: implement me
-        return true;
+    function deriveLastMove() {
+        function deriveCoords(square) {
+            const squareBounds = square.getBoundingClientRect();
+            const xIdx = Math.floor(((squareBounds.x + 2) - boardBounds.x) / squareBounds.width);
+            const yIdx = Math.floor(((squareBounds.y + 2) - boardBounds.y) / squareBounds.height);
+
+            return orientFromPage() === 'white'
+                ? String.fromCharCode(97 + xIdx) + ((7 - yIdx) + 1)
+                : String.fromCharCode(97 + (7 - xIdx)) + (yIdx + 1);
+        }
+
+        const [toSquare, fromSquare] = document.getElementsByClassName('last-move'); //todo: for chess.com too
+        return deriveCoords(fromSquare) + deriveCoords(toSquare);
     }
 
-    moving = true;
-    async function performSimulatedPvMovesSequence() {
+    async function confirmResponse(move, lastMove) {
+        let runtime = 0;
+        while (runtime < 10000) { // < 10 seconds
+            runtime += await promiseTimeout(config.fen_refresh);
+            const observedLastMove = deriveLastMove();
+            if (observedLastMove !== lastMove) {
+                return observedLastMove === move;
+            }
+        }
+        return false;
+    }
+
+    async function performSimulatedPvMoveSequence() {
         for (let i = 0; i < pv.length; i++) {
+            let lastMove = pv[i - 1];
             let move = pv[i];
             if (i % 2 === 0) { // even index -> my move
                 await simulateMove(move, false);
             } else { // odd index -> their move
-                let confirmed = await confirmResponse(move);
+                let confirmed = await confirmResponse(move, lastMove);
                 if (!confirmed) {
-                    moving = false;
                     return;
                 }
             }
         }
     }
 
-    return performSimulatedPvMovesSequence();
+    moving = true;
+    return performSimulatedPvMoveSequence().finally(() => {
+        moving = false;
+    });
 }
 
 function simulatePromotion(promotion) {

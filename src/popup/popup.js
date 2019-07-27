@@ -39,7 +39,7 @@ function parse_fen_from_response(txt) {
             const pieceColor = attributes[0][0];
             const pieceType = attributes[0][1];
             const pieceCoords = alphanumeralMap[attributes[1] - 1] + attributes[2];
-            chess.put({ type: pieceType, color: pieceColor }, pieceCoords);
+            chess.put({type: pieceType, color: pieceColor}, pieceCoords);
         }
         chess.setTurn(playerTurn);
         turn = chess.turn();
@@ -94,24 +94,27 @@ function on_stockfish_response(event) {
         draw_arrow(best, 'blue', 'overlay1');
         draw_arrow(threat, 'red', 'overlay2');
         toggle_calculating(false);
-    } else if (message.includes('score mate')) {
-        const arr = message.split('score mate ');
-        const arr1 = arr[1].split(' ');
-        const mateNum = Math.abs(parseInt(arr1[0]));
-        if (mateNum === 0) {
-            $('#evaluation').text("Checkmate!");
-            clear_arrows();
-        } else {
-            $('#evaluation').text("Checkmate in " + mateNum);
-        }
-        toggle_calculating(false);
     } else if (message.includes('info depth')) {
         const pvSplit = message.split(" pv ");
-        const info = pvSplit[0].split(" ");
+        const info = pvSplit[0];
+        if (info.includes('score mate')) {
+            const arr = message.split('score mate ');
+            const mateArr = arr[1].split(' ');
+            const mateNum = Math.abs(parseInt(mateArr[0]));
+            if (mateNum === 0) {
+                $('#evaluation').text("Checkmate!");
+                clear_arrows();
+            } else {
+                $('#evaluation').text("Checkmate in " + mateNum);
+            }
+            toggle_calculating(false);
+        } else if (info.includes('score')) {
+            const infoArr = info.split(" ");
+            const depth = infoArr[2];
+            const score = ((turn === 'w') ? 1 : -1) * infoArr[9];
+            $('#evaluation').text("Score: " + score / 100.0 + " at depth " + depth);
+        }
         lastPv = pvSplit[1];
-        const depth = info[2];
-        const score = ((turn === 'w') ? 1 : -1) * info[9];
-        $('#evaluation').text("Score: " + score / 100.0 + " at depth " + depth);
     }
     if (isCalculating) {
         prog++;
@@ -137,27 +140,31 @@ function on_content_script_response(response) {
 }
 
 function request_fen() {
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, { queryfen: true });
+    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, {queryfen: true});
     });
 }
 
 function request_automove(move) {
-    const message = (config.puzzle_mode) ? { automove: true, pv: lastPv } : { automove: true, move: move };
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    console.log("LAST PV:");
+    console.log(lastPv);
+    const message = (config.puzzle_mode)
+        ? {automove: true, pv: lastPv}
+        : {automove: true, move: move};
+    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, message);
     });
 }
 
 function push_config() {
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, { pushConfig: true, config: config });
+    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, {pushConfig: true, config: config});
     });
 }
 
 $(window).on('load', function () {
     // load extension configurations
-    config = {
+    config = { // todo: allow config values to be set to 0
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
         fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
         autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
@@ -207,7 +214,7 @@ $(window).on('load', function () {
 });
 
 function coord(move) {
-    const alphabet = ["a", "b", "c", "d", "e", "f", "g", "h"];
+    const alphabet = ["a", "b", "c", "d", "e", "f", "g", "h"]; // todo: use String.fromCharCode
     const lets = move.substring(0, 1);
     const lete = move.substring(2, 3);
     const nums = move.substring(1, 2) * 1.0;
