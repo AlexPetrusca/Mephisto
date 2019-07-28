@@ -116,18 +116,47 @@ function promiseTimeout(time) {
     });
 }
 
+function getLastMoveHighlights() {
+    let fromSquare, toSquare;
+    const thisUrl = window.location.href;
+    if (thisUrl.includes('chess.com')) {
+        [fromSquare, toSquare] = Array.from(document.getElementsByClassName('move-square'));
+    } else if (thisUrl.includes('lichess.org')) {
+        [toSquare, fromSquare] = Array.from(document.getElementsByClassName('last-move'));
+    }
+    return [fromSquare, toSquare];
+}
+
 function getRankFileCoords() {
-    let fileCoords;
-    let rankCoords;
+    let fileCoords, rankCoords;
     const thisUrl = window.location.href;
     if (thisUrl.includes('chess.com')) {
         fileCoords = Array.from(document.getElementsByClassName('letter'));
         rankCoords = Array.from(document.getElementsByClassName('number'));
-    } else {
+        if (!fileCoords.length && !rankCoords.length) {
+            const coords = Array.from(document.getElementsByClassName('coords-item'));
+            fileCoords = coords.slice(8);
+            rankCoords = coords.slice(0, 8);
+        }
+    } else if (thisUrl.includes('lichess.org')) {
         fileCoords = Array.from(document.getElementsByClassName('files')[0].children);
         rankCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
     }
     return [rankCoords, fileCoords];
+}
+
+function getBourdBounds() {
+    let board;
+    const thisUrl = window.location.href;
+    if (thisUrl.includes('chess.com')) {
+        board = document.getElementsByClassName('board')[0];
+        if (!board) {
+            board = document.getElementsByClassName('brd')[0];
+        }
+    } else if (thisUrl.includes('lichess.org')) {
+        board = document.getElementsByTagName('cg-board')[0];
+    }
+    return board.getBoundingClientRect();
 }
 
 function simulateMouseEvent(target, mouseOpts) {
@@ -204,7 +233,6 @@ function simulateClickSquare(xBounds, yBounds, range = 0.9) {
 
 function simulateMove(move, singleMove = true) {
     const [rankCoords, fileCoords] = getRankFileCoords();
-
     const x0Bounds = fileCoords.find((coords) => {
         return coords.innerText.toLowerCase() === move[0];
     }).getBoundingClientRect();
@@ -248,21 +276,21 @@ function simulateMove(move, singleMove = true) {
 }
 
 function simulatePvMoves(pv) {
-    const board = document.getElementsByTagName('cg-board')[0]; // todo: for chess.com too
-    const boardBounds = board.getBoundingClientRect();
+    const boardBounds = getBourdBounds();
 
     function deriveLastMove() {
         function deriveCoords(square) {
-            const squareBounds = square.getBoundingClientRect();
-            const xIdx = Math.floor(((squareBounds.x + 2) - boardBounds.x) / squareBounds.width);
-            const yIdx = Math.floor(((squareBounds.y + 2) - boardBounds.y) / squareBounds.height);
+            if (!square) return "no";
 
+            const squareBounds = square.getBoundingClientRect();
+            const xIdx = Math.floor(((squareBounds.x + 1) - boardBounds.x) / squareBounds.width);
+            const yIdx = Math.floor(((squareBounds.y + 1) - boardBounds.y) / squareBounds.height);
             return orientFromPage() === 'white'
                 ? String.fromCharCode(97 + xIdx) + ((7 - yIdx) + 1)
                 : String.fromCharCode(97 + (7 - xIdx)) + (yIdx + 1);
         }
 
-        const [toSquare, fromSquare] = document.getElementsByClassName('last-move'); //todo: for chess.com too
+        const [fromSquare, toSquare] = getLastMoveHighlights();
         return deriveCoords(fromSquare) + deriveCoords(toSquare);
     }
 
@@ -286,9 +314,7 @@ function simulatePvMoves(pv) {
                 await simulateMove(move, false);
             } else { // odd index -> their move
                 let confirmed = await confirmResponse(move, lastMove);
-                if (!confirmed) {
-                    return;
-                }
+                if (!confirmed) return;
             }
         }
     }
