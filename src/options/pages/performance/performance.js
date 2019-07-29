@@ -1,59 +1,59 @@
-class FormElement {
-    // static formContainer = document.getElementById('form_container');
-    // static tocContainer = document.getElementById('toc');
-
-    constructor(name, description, type, defaultValue) {
-        this.name = name;
-        this.desc = description;
-        this.type = type;
-        this.default = defaultValue;
-        this.elem = document.getElementById(`${name}_input`);
-    }
-
-    // injectFormElement() {
-    //     const formElement = document.createElement('div');
-    //     formElement.id = this.name;
-    //     formElement.className = 'section scrollspy';
-    //     if (this.type === 'input') {
-    //         const input = `<input id="${this.name}_input" type="number">`;
-    //         formElement.innerHTML = `<label>${this.desc} ${input}</label>`;
-    //     } else if (this.type === 'checkbox') {
-    //         const input = `<input id="${this.name}_input" type="checkbox">`;
-    //         formElement.innerHTML = `<label>Off${input}<span class="lever"></span>On</label>`;
-    //     }
-    //     FormElement.formContainer.append(formElement);
-    //
-    //     const tocElement = document.createElement('li');
-    //     tocElement.innerHTML = `<a href="#${this.name}">${this.title}</a>`;
-    //     FormElement.tocContainer.append(tocElement);
-    // }
-
-    registerChangeListener(fn) {
-        if (this.type === 'input') {
-            this.elem.addEventListener('keyup', fn);
-        } else if (this.type === 'checkbox') {
-            this.elem.addEventListener('change', fn);
-        }
-    }
-
-    getValue() {
-        if (this.type === 'input') {
-            return this.elem.value;
-        } else if (this.type === 'checkbox') {
-            return this.elem.checked;
-        }
-    }
-
-    setValue(val) {
-        if (this.type === 'input') {
-            this.elem.value = val;
-        } else if (this.type === 'checkbox') {
-            this.elem.checked = val;
-        }
-    }
-}
-
 registerPageScript(() => {
+    class FormElement {
+        // static formContainer = document.getElementById('form_container');
+        // static tocContainer = document.getElementById('toc');
+
+        constructor(name, description, type, defaultValue) {
+            this.name = name;
+            this.desc = description;
+            this.type = type;
+            this.default = defaultValue;
+            this.elem = document.getElementById(`${name}_input`);
+        }
+
+        // injectFormElement() {
+        //     const formElement = document.createElement('div');
+        //     formElement.id = this.name;
+        //     formElement.className = 'section scrollspy';
+        //     if (this.type === 'input') {
+        //         const input = `<input id="${this.name}_input" type="number">`;
+        //         formElement.innerHTML = `<label>${this.desc} ${input}</label>`;
+        //     } else if (this.type === 'checkbox') {
+        //         const input = `<input id="${this.name}_input" type="checkbox">`;
+        //         formElement.innerHTML = `<label>Off${input}<span class="lever"></span>On</label>`;
+        //     }
+        //     FormElement.formContainer.append(formElement);
+        //
+        //     const tocElement = document.createElement('li');
+        //     tocElement.innerHTML = `<a href="#${this.name}">${this.title}</a>`;
+        //     FormElement.tocContainer.append(tocElement);
+        // }
+
+        registerChangeListener(fn) {
+            if (this.type === 'input') {
+                this.elem.addEventListener('keyup', fn);
+            } else if (this.type === 'checkbox') {
+                this.elem.addEventListener('change', fn);
+            }
+        }
+
+        getValue() {
+            if (this.type === 'input') {
+                return this.elem.value;
+            } else if (this.type === 'checkbox') {
+                return this.elem.checked;
+            }
+        }
+
+        setValue(val) {
+            if (this.type === 'input') {
+                this.elem.value = val;
+            } else if (this.type === 'checkbox') {
+                this.elem.checked = val;
+            }
+        }
+    }
+
     const resetButton = document.getElementById('reset_btn');
     const applyButton = document.getElementById('apply_btn');
     const formElements = [];
@@ -73,7 +73,7 @@ registerPageScript(() => {
     // localstorage values push/pull
     function pullConfigValues() {
         formElements.forEach((formElement) => {
-            formElement.setValue(localStorage.getItem(formElement.name) || formElement.default);
+            formElement.setValue(JSON.parse(localStorage.getItem(formElement.name)) || formElement.default);
         });
         updateUniquifier();
     }

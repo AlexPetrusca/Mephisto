@@ -116,6 +116,15 @@ function promiseTimeout(time) {
     });
 }
 
+function getScreenXY(elem) {
+    const topBarHeight = window.outerHeight - window.innerHeight;
+    const offsetX = window.screenX;
+    const offsetY = window.screenY + topBarHeight;
+
+    const elemBounds = elem.getBoundingClientRect();
+    return [elemBounds.x + offsetX, elemBounds.y + offsetY]
+}
+
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
     const thisUrl = window.location.href;
@@ -127,7 +136,7 @@ function getLastMoveHighlights() {
     return [fromSquare, toSquare];
 }
 
-function getRankFileCoords() {
+function getRanksFiles() {
     let fileCoords, rankCoords;
     const thisUrl = window.location.href;
     if (thisUrl.includes('chess.com')) {
@@ -145,7 +154,7 @@ function getRankFileCoords() {
     return [rankCoords, fileCoords];
 }
 
-function getBourdBounds() {
+function getBoardBounds() {
     let board;
     const thisUrl = window.location.href;
     if (thisUrl.includes('chess.com')) {
@@ -232,7 +241,7 @@ function simulateClickSquare(xBounds, yBounds, range = 0.9) {
 }
 
 function simulateMove(move, singleMove = true) {
-    const [rankCoords, fileCoords] = getRankFileCoords();
+    const [rankCoords, fileCoords] = getRanksFiles();
     const x0Bounds = fileCoords.find((coords) => {
         return coords.innerText.toLowerCase() === move[0];
     }).getBoundingClientRect();
@@ -276,7 +285,7 @@ function simulateMove(move, singleMove = true) {
 }
 
 function simulatePvMoves(pv) {
-    const boardBounds = getBourdBounds();
+    const boardBounds = getBoardBounds();
 
     function deriveLastMove() {
         function deriveCoords(square) {
