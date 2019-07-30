@@ -141,16 +141,14 @@ function on_content_script_response(response) {
 
 function request_fen() {
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, {queryfen: true});
+        chrome.tabs.sendMessage(tabs[0].id, { queryfen: true });
     });
 }
 
 function request_automove(move) {
-    console.log("LAST PV:");
-    console.log(lastPv);
     const message = (config.puzzle_mode)
-        ? {automove: true, pv: lastPv}
-        : {automove: true, move: move};
+        ? { automove: true, pv: lastPv || move }
+        : { automove: true, move: move };
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, message);
     });
@@ -172,7 +170,8 @@ $(window).on('load', function () {
         think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
         move_time: JSON.parse(localStorage.getItem('move_time')) || 1000,
         move_variance: JSON.parse(localStorage.getItem('move_variance')) || 500,
-        puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || true  // todo: implement me fully
+        puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || true,  // todo: implement me fully
+        python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')) || true  // todo: implement me fully
     };
     push_config();
 

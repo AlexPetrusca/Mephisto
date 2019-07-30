@@ -1,10 +1,10 @@
-let config;
-let moving = false;
+let thisUrl; // the url that the content-script was loaded on
+let config; // localhost configuration pulled from popup
+let moving = false; // whether the content-script is performing a move
 
 function movesFromPage() {
     let prefix = '';
     let res = '';
-    const thisUrl = window.location.href;
     if (thisUrl.includes('chess.com')) {
         if (thisUrl.includes('puzzles')) {
             prefix = '***ccpuz***';
@@ -65,7 +65,6 @@ function movesFromPage() {
 
 function orientFromPage() {
     let blackToMove = true;
-    const thisUrl = window.location.href; // todo thisURL: maybe make this a global that you update
     if (thisUrl.includes('chess.com')) {
         const topLeftCoord = document.getElementsByClassName('coords-light')[0];
         blackToMove = topLeftCoord && topLeftCoord.innerText === '1';
@@ -103,6 +102,7 @@ function pullConfig() {
 
 window.onload = () => {
     console.log('Mephisto is listening!');
+    thisUrl = window.location.href;
     pullConfig();
 };
 
@@ -116,18 +116,48 @@ function promiseTimeout(time) {
     });
 }
 
-function getScreenXY(elem) {
+function getBrowserOffsetXY() {
     const topBarHeight = window.outerHeight - window.innerHeight;
     const offsetX = window.screenX;
     const offsetY = window.screenY + topBarHeight;
+    return [offsetX, offsetY];
+}
 
-    const elemBounds = elem.getBoundingClientRect();
-    return [elemBounds.x + offsetX, elemBounds.y + offsetY]
+function getRandomSampledXY(elem, range = 0.9) {
+    const bounds = elem.getBoundingClientRect();
+    const margin = (1 - range) / 2;
+    const x = bounds.x + (range * Math.random() + margin) * bounds.width;
+    const y = bounds.y + (range * Math.random() + margin) * bounds.height;
+    return [x, y];
+}
+
+function getRandomSampledXY2(xBounds, yBounds, range = 0.9) {
+    const margin = (1 - range) / 2;
+    const x = xBounds.x + (range * Math.random() + margin) * xBounds.width;
+    const y = yBounds.y + (range * Math.random() + margin) * yBounds.height;
+    return [x, y];
+}
+
+function getScreenXY(elem) {
+    const bounds = elem.getBoundingClientRect();
+    const [offsetX, offsetY] = getBrowserOffsetXY();
+    return [Math.floor(bounds.x + offsetX), Math.floor(bounds.y + offsetY)]
+}
+
+function getRandomSampledScreenXY(elem, range = 0.9) {
+    const [x, y] = getRandomSampledXY(elem, range);
+    const [offsetX, offsetY] = getBrowserOffsetXY();
+    return [Math.floor(x + offsetX), Math.floor(y + offsetY)]
+}
+
+function getRandomSampledScreenXY2(xBounds, yBounds, range = 0.9) {
+    const [x, y] = getRandomSampledXY2(xBounds, yBounds, range);
+    const [offsetX, offsetY] = getBrowserOffsetXY();
+    return [Math.floor(x + offsetX), Math.floor(y + offsetY)]
 }
 
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
-    const thisUrl = window.location.href;
     if (thisUrl.includes('chess.com')) {
         [fromSquare, toSquare] = Array.from(document.getElementsByClassName('move-square'));
     } else if (thisUrl.includes('lichess.org')) {
@@ -138,8 +168,8 @@ function getLastMoveHighlights() {
 
 function getRanksFiles() {
     let fileCoords, rankCoords;
-    const thisUrl = window.location.href;
     if (thisUrl.includes('chess.com')) {
+        // todo: refactor with thisUrl.includes('computer')
         fileCoords = Array.from(document.getElementsByClassName('letter'));
         rankCoords = Array.from(document.getElementsByClassName('number'));
         if (!fileCoords.length && !rankCoords.length) {
@@ -156,7 +186,6 @@ function getRanksFiles() {
 
 function getBoardBounds() {
     let board;
-    const thisUrl = window.location.href;
     if (thisUrl.includes('chess.com')) {
         board = document.getElementsByClassName('board')[0];
         if (!board) {
@@ -166,6 +195,33 @@ function getBoardBounds() {
         board = document.getElementsByTagName('cg-board')[0];
     }
     return board.getBoundingClientRect();
+}
+
+function requestPythonBackendMove(x0, y0, x1, y1) {
+    return fetch('http://localhost:8080/performMove', {
+        method: "POST",
+        credentials: "include",
+        cache: "no-cache",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            x0: x0, y0: y0,
+            x1: x1, y1: y1
+        })
+    })
+}
+
+function requestPythonBackendClick(x, y) {
+    return fetch(`http://localhost:8080/performClick`, {
+        method: "POST",
+        credentials: "include",
+        cache: "no-cache",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ x: x, y: y })
+    })
 }
 
 function simulateMouseEvent(target, mouseOpts) {
@@ -234,14 +290,13 @@ function simulateClick(x, y) {
 }
 
 function simulateClickSquare(xBounds, yBounds, range = 0.9) {
-    const margin = (1 - range) / 2;
-    const x = xBounds.x + (range * Math.random() + margin) * xBounds.width;
-    const y = yBounds.y + (range * Math.random() + margin) * yBounds.height;
+    getRandomSampledXY2(xBounds, yBounds, range);
     simulateClick(x, y);
 }
 
 function simulateMove(move, singleMove = true) {
     const [rankCoords, fileCoords] = getRanksFiles();
+    // todo: rewrite below logic to use board based calculations
     const x0Bounds = fileCoords.find((coords) => {
         return coords.innerText.toLowerCase() === move[0];
     }).getBoundingClientRect();
@@ -263,14 +318,24 @@ function simulateMove(move, singleMove = true) {
         return config.move_time + Math.random() * config.move_variance;
     }
 
+    async function performSimulatedMoveClicks() {
+        if (config.python_autoplay_backend) {
+            const [x0, y0] = getRandomSampledScreenXY2(x0Bounds, y0Bounds);
+            const [x1, y1] = getRandomSampledScreenXY2(x1Bounds, y1Bounds);
+            await requestPythonBackendMove(x0, y0, x1, y1);
+        } else {
+            simulateClickSquare(x0Bounds, y0Bounds);
+            await promiseTimeout(getMoveTime());
+            simulateClickSquare(x1Bounds, y1Bounds);
+        }
+    }
+
     async function performSimulatedMoveSequence() {
         await promiseTimeout(getThinkTime());
-        simulateClickSquare(x0Bounds, y0Bounds); // from-square click
-        await promiseTimeout(getMoveTime());
-        simulateClickSquare(x1Bounds, y1Bounds); // to-square click
+        await performSimulatedMoveClicks();
         if (move[4]) {
             await promiseTimeout(getMoveTime());
-            simulatePromotion(move[4]); // conditional promotion click
+            await simulatePromotionClicks(move[4]); // conditional promotion click
         }
     }
 
@@ -322,8 +387,7 @@ function simulatePvMoves(pv) {
             if (i % 2 === 0) { // even index -> my move
                 await simulateMove(move, false);
             } else { // odd index -> their move
-                let confirmed = await confirmResponse(move, lastMove);
-                if (!confirmed) return;
+                if (!await confirmResponse(move, lastMove)) return;
             }
         }
     }
@@ -334,16 +398,21 @@ function simulatePvMoves(pv) {
     });
 }
 
-function simulatePromotion(promotion) {
+async function simulatePromotionClicks(promotion) {
     const promoteMap = {'q': 0, 'n': 1, 'r': 2, 'b': 3};
     const idx = promoteMap[promotion];
-    const thisUrl = window.location.href;
-    if (thisUrl.includes('chess.com')) {
-        // todo: implement click promotion for chess.com
+    if (config.python_autoplay_backend) {
+        const promotionElem = document.getElementById('promotion-choice').children[idx]; // todo: make work with chess.com
+        const [x, y] = getRandomSampledScreenXY(promotionElem);
+        await requestPythonBackendClick(x, y);
     } else {
-        setTimeout(() => {
-            const promotionsModal = document.getElementById('promotion-choice');
-            promotionsModal.children[idx].click()
-        }, 10);
+        if (thisUrl.includes('chess.com')) {
+            // todo: implement click promotion for chess.com
+        } else {
+            setTimeout(() => {
+                const promotionsModal = document.getElementById('promotion-choice');
+                promotionsModal.children[idx].click();
+            }, 10);
+        }
     }
 }
