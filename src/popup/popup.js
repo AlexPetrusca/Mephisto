@@ -31,15 +31,15 @@ function parse_fen_from_response(txt) {
     const chess = new Chess();
     if (prefix.includes("puz")) { // chess.com puzzle pages
         chess.clear(); // clear the board so we can place our pieces
-        const alphanumeralMap = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
         const [playerTurn, ...pieces] = txt.split("*****");
         pieces.pop(); // remove empty string from split
         for (const piece of pieces) {
             const attributes = piece.split("-");
             const pieceColor = attributes[0][0];
             const pieceType = attributes[0][1];
-            const pieceCoords = alphanumeralMap[attributes[1] - 1] + attributes[2];
-            chess.put({type: pieceType, color: pieceColor}, pieceCoords);
+            const letterCoord = String.fromCharCode(96 + parseInt(attributes[1])); // 96 = 'a' - 1
+            const pieceCoords = letterCoord + attributes[2];
+            chess.put({ type: pieceType, color: pieceColor }, pieceCoords);
         }
         chess.setTurn(playerTurn);
         turn = chess.turn();
@@ -140,7 +140,7 @@ function on_content_script_response(response) {
 }
 
 function request_fen() {
-    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, { queryfen: true });
     });
 }
@@ -149,14 +149,14 @@ function request_automove(move) {
     const message = (config.puzzle_mode)
         ? { automove: true, pv: lastPv || move }
         : { automove: true, move: move };
-    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, message);
     });
 }
 
 function push_config() {
-    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, {pushConfig: true, config: config});
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, { pushConfig: true, config: config });
     });
 }
 
@@ -170,8 +170,8 @@ $(window).on('load', function () {
         think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
         move_time: JSON.parse(localStorage.getItem('move_time')) || 1000,
         move_variance: JSON.parse(localStorage.getItem('move_variance')) || 500,
-        puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || true,  // todo: implement me fully
-        python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')) || true  // todo: implement me fully
+        puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
+        python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')) || false
     };
     push_config();
 
@@ -213,16 +213,15 @@ $(window).on('load', function () {
 });
 
 function coord(move) {
-    const alphabet = ["a", "b", "c", "d", "e", "f", "g", "h"]; // todo: use String.fromCharCode
     const lets = move.substring(0, 1);
     const lete = move.substring(2, 3);
     const nums = move.substring(1, 2) * 1.0;
     const nume = move.substring(3, 4) * 1.0;
-    const slet = alphabet.indexOf(lets) + 1;
-    const elet = alphabet.indexOf(lete) + 1;
+    const slet = lets.charCodeAt(0) - 96; // 96 = 'a' - 1
+    const elet = lete.charCodeAt(0) - 96; // 96 = 'a' - 1
     return (board.orientation() === 'white')
-        ? {slet: slet, elet: elet, nums: nums, nume: nume}
-        : {slet: 9 - slet, elet: 9 - elet, nums: 9 - nums, nume: 9 - nume};
+        ? { slet: slet, elet: elet, nums: nums, nume: nume }
+        : { slet: 9 - slet, elet: 9 - elet, nums: 9 - nums, nume: 9 - nume };
 }
 
 function draw_arrow(move, color, div) {

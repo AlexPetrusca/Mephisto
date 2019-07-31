@@ -30,15 +30,14 @@ function movesFromPage() {
                     .replace('.png', '');
                 const pieceCoords = piece.classList[1]
                     .substring(7)
-                    .replace(coordsRegex, '-');
+                    .replace(coordsRegex, '-'); // todo: (Pri0) decipher pieceCoords from '4445' to 'e4e5' here
                 res += pieceType + pieceCoords + '*****';
             }
         } else {
             prefix = '***ccfen***';
-            let moves = document.getElementsByClassName('move-text-component'); // vs player
-            if (moves.length === 0) {
-                moves = document.getElementsByClassName('gotomove'); // vs computer
-            }
+            let moves = (thisUrl.includes('computer'))
+                ? document.getElementsByClassName('gotomove')
+                : document.getElementsByClassName('move-text-component');
             for (const move of moves) {
                 res = res + move.innerText + '*****';
                 if (move.parentElement.classList.contains('mhl')) {
@@ -59,6 +58,15 @@ function movesFromPage() {
                 break;
             }
         }
+    } else if (thisUrl.includes('blitztactics.com')) {
+        prefix = '***btfen***';
+
+        const pieces = Array.from(document.getElementsByClassName('piece')).slice(0, -4);
+        // piece.parentElement => ref to square its on
+        // piece.temp1.parentElement.id => square coords (ie 'e4')
+        // piece.temp1.classList[1] => type of piece (ie 'br')
+
+        // todo: implement blitztactics
     }
     return (res) ? prefix + res : 'no';
 }
@@ -81,14 +89,15 @@ chrome.extension.onMessage.addListener(response => {
     if (response.queryfen) {
         const res = movesFromPage();
         const orient = orientFromPage();
-        chrome.runtime.sendMessage({dom: res, orient: orient, fenresponse: true});
+        chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
     } else if (response.automove) {
+        toggleMoving();
         if (config.puzzle_mode) {
             console.log(response.pv);
-            simulatePvMoves(response.pv.split(' '));
+            simulatePvMoves(response.pv.split(' ')).finally(toggleMoving);
         } else {
             console.log(response.move);
-            simulateMove(response.move);
+            simulateMove(response.move).finally(toggleMoving);
         }
     } else if (response.pushConfig) {
         console.log(response.config);
@@ -96,8 +105,12 @@ chrome.extension.onMessage.addListener(response => {
     }
 });
 
+function toggleMoving() {
+    moving = !moving;
+}
+
 function pullConfig() {
-    chrome.runtime.sendMessage({pullConfig: true});
+    chrome.runtime.sendMessage({ pullConfig: true });
 }
 
 window.onload = () => {
@@ -169,13 +182,13 @@ function getLastMoveHighlights() {
 function getRanksFiles() {
     let fileCoords, rankCoords;
     if (thisUrl.includes('chess.com')) {
-        // todo: refactor with thisUrl.includes('computer')
-        fileCoords = Array.from(document.getElementsByClassName('letter'));
-        rankCoords = Array.from(document.getElementsByClassName('number'));
-        if (!fileCoords.length && !rankCoords.length) {
+        if (thisUrl.includes('computer')) {
             const coords = Array.from(document.getElementsByClassName('coords-item'));
             fileCoords = coords.slice(8);
             rankCoords = coords.slice(0, 8);
+        } else {
+            fileCoords = Array.from(document.getElementsByClassName('letter'));
+            rankCoords = Array.from(document.getElementsByClassName('number'));
         }
     } else if (thisUrl.includes('lichess.org')) {
         fileCoords = Array.from(document.getElementsByClassName('files')[0].children);
@@ -187,9 +200,10 @@ function getRanksFiles() {
 function getBoardBounds() {
     let board;
     if (thisUrl.includes('chess.com')) {
-        board = document.getElementsByClassName('board')[0];
-        if (!board) {
+        if (thisUrl.includes('computer')) {
             board = document.getElementsByClassName('brd')[0];
+        } else {
+            board = document.getElementsByClassName('board')[0];
         }
     } else if (thisUrl.includes('lichess.org')) {
         board = document.getElementsByTagName('cg-board')[0];
@@ -197,31 +211,43 @@ function getBoardBounds() {
     return board.getBoundingClientRect();
 }
 
-function requestPythonBackendMove(x0, y0, x1, y1) {
-    return fetch('http://localhost:8080/performMove', {
+function getPromotionSelection(idx) {
+    let promotions;
+    if (thisUrl.includes('chess.com')) {
+        if (thisUrl.includes('computer')) {
+            const promotionModal = document.getElementById('chessboard_promotionarea_content');
+            if (promotionModal) promotions = promotionModal.children;
+        } else {
+            const promotionElems = document.getElementsByClassName('promotion-piece');
+            if (promotionElems.length) promotions = promotionElems;
+        }
+    } else if (thisUrl.includes('lichess.org')) {
+        const promotionModal = document.getElementById('promotion-choice');
+        if (promotionModal) promotions = promotionModal.children;
+    }
+    return (promotions) ? promotions[idx] : undefined;
+}
+
+// -------------------------------------------------------------------------------------------
+
+function callPythonBackend(url, data) {
+    return fetch(url, {
         method: "POST",
         credentials: "include",
         cache: "no-cache",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-            x0: x0, y0: y0,
-            x1: x1, y1: y1
-        })
-    })
+        body: JSON.stringify(data)
+    });
+}
+
+function requestPythonBackendMove(x0, y0, x1, y1) {
+    return callPythonBackend('http://localhost:8080/performMove', { x0: x0, y0: y0, x1: x1, y1: y1 });
 }
 
 function requestPythonBackendClick(x, y) {
-    return fetch(`http://localhost:8080/performClick`, {
-        method: "POST",
-        credentials: "include",
-        cache: "no-cache",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ x: x, y: y })
-    })
+    return callPythonBackend(`http://localhost:8080/performClick`, { x: x, y: y });
 }
 
 function simulateMouseEvent(target, mouseOpts) {
@@ -290,11 +316,11 @@ function simulateClick(x, y) {
 }
 
 function simulateClickSquare(xBounds, yBounds, range = 0.9) {
-    getRandomSampledXY2(xBounds, yBounds, range);
+    const [x, y] = getRandomSampledXY2(xBounds, yBounds, range);
     simulateClick(x, y);
 }
 
-function simulateMove(move, singleMove = true) {
+function simulateMove(move) {
     const [rankCoords, fileCoords] = getRanksFiles();
     // todo: rewrite below logic to use board based calculations
     const x0Bounds = fileCoords.find((coords) => {
@@ -339,14 +365,7 @@ function simulateMove(move, singleMove = true) {
         }
     }
 
-    if (singleMove) {
-        moving = true;
-        return performSimulatedMoveSequence().finally(() => {
-            moving = false;
-        });
-    } else {
-        return performSimulatedMoveSequence();
-    }
+    return performSimulatedMoveSequence();
 }
 
 function simulatePvMoves(pv) {
@@ -392,27 +411,23 @@ function simulatePvMoves(pv) {
         }
     }
 
-    moving = true;
-    return performSimulatedPvMoveSequence().finally(() => {
-        moving = false;
-    });
+    return performSimulatedPvMoveSequence();
 }
 
 async function simulatePromotionClicks(promotion) {
-    const promoteMap = {'q': 0, 'n': 1, 'r': 2, 'b': 3};
+    const promoteMap = { 'q': 0, 'n': 1, 'r': 2, 'b': 3 };
     const idx = promoteMap[promotion];
+    const promotionChoice = getPromotionSelection(idx);
+
+    if (!promotionChoice) return;
+
     if (config.python_autoplay_backend) {
-        const promotionElem = document.getElementById('promotion-choice').children[idx]; // todo: make work with chess.com
-        const [x, y] = getRandomSampledScreenXY(promotionElem);
+        const [x, y] = getRandomSampledScreenXY(promotionChoice);
         await requestPythonBackendClick(x, y);
     } else {
-        if (thisUrl.includes('chess.com')) {
-            // todo: implement click promotion for chess.com
-        } else {
-            setTimeout(() => {
-                const promotionsModal = document.getElementById('promotion-choice');
-                promotionsModal.children[idx].click();
-            }, 10);
-        }
+        // todo: figure out for chess.com live mode / current solution is set true 'always promote to queen'
+        setTimeout(() => {
+            promotionChoice.click();
+        }, 10);
     }
 }

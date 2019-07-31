@@ -114,6 +114,8 @@ registerPageScript(() => {
     registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 500);
     registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 100);
     registerFormElement('autoplay', 'Autoplay:', 'checkbox', false);
+    registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
+    registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
     registerFormElement('think_time', 'Simulated Think Time (ms):', 'input', 1000);
     registerFormElement('think_variance', 'Simulated Think Variance (ms):', 'input', 500);
     registerFormElement('move_time', 'Simulated Move Time (ms):', 'input', 200);
