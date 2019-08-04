@@ -20,26 +20,23 @@ function new_pos(fen) {
 
 function parse_fen_from_response(txt) {
     const prefixMap = {
-        lifen: 'Game detected on Lichess.org',
-        ccfen: 'Game detected on Chess.com',
-        ccpuz: 'Game detected on Chess.com'
+        li: 'Game detected on Lichess.org',
+        cc: 'Game detected on Chess.com',
+        bt: 'Game detected on BlitzTactics.com'
     };
-    const prefix = txt.substr(3, 5);
+    const metaTag = txt.substr(3, 5); // todo: think of better way to express this
+    const prefix = metaTag.substr(3, 2);
     $('#gamedetected').text(prefixMap[prefix]);
     txt = txt.substr(11);
 
     const chess = new Chess();
-    if (prefix.includes("puz")) { // chess.com puzzle pages
+    if (metaTag.includes("puz")) { // chess.com & blitztactics.com puzzle pages
         chess.clear(); // clear the board so we can place our pieces
-        const [playerTurn, ...pieces] = txt.split("*****");
-        pieces.pop(); // remove empty string from split
+        const [playerTurn, ...pieces] = txt.split("*****").slice(0, -1);
+        console.log(txt);
         for (const piece of pieces) {
             const attributes = piece.split("-");
-            const pieceColor = attributes[0][0];
-            const pieceType = attributes[0][1];
-            const letterCoord = String.fromCharCode(96 + parseInt(attributes[1])); // 96 = 'a' - 1
-            const pieceCoords = letterCoord + attributes[2];
-            chess.put({ type: pieceType, color: pieceColor }, pieceCoords);
+            chess.put({ type: attributes[1], color: attributes[0] }, attributes[2]);
         }
         chess.setTurn(playerTurn);
         turn = chess.turn();
