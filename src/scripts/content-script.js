@@ -103,6 +103,8 @@ chrome.extension.onMessage.addListener(response => {
     } else if (response.pushConfig) {
         console.log(response.config);
         config = response.config;
+    } else if (response.consoleMessage) {
+        console.log(response.consoleMessage);
     }
 });
 

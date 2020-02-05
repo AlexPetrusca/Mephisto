@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <title>Mephisto</title>
-    <link rel="stylesheet" href="popup.min.css"/>
+    <link rel="stylesheet" href="popup.css"/>
     <link href="/lib/chessboard/chessboard.min.css" rel="stylesheet" type="text/css">
     <link href="/lib/materialize/materialize.min.css" rel="stylesheet" type="text/css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" type="text/css">
@@ -34,7 +34,10 @@
 
 <div id="board" style="width: 350px"></div>
 
-<div id="chess">If your chess game is not detected<br>try reloading the page</div>
+<div id="chess">
+    <div id="chess_line_1">If your chess game is not detected<br>try reloading the page</div>
+    <div id="chess_line_2"></div>
+</div>
 <div id="evaluation"></div>
 </body>
 

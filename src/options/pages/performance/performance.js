@@ -73,7 +73,12 @@ registerPageScript(() => {
     // localstorage values push/pull
     function pullConfigValues() {
         formElements.forEach((formElement) => {
-            formElement.setValue(JSON.parse(localStorage.getItem(formElement.name)) || formElement.default);
+            const localStorageVal = localStorage.getItem(formElement.name);
+            if (localStorageVal) {
+                formElement.setValue(JSON.parse(localStorageVal));
+            } else{
+                formElement.setValue(formElement.default);
+            }
         });
         updateUniquifier();
     }
@@ -113,6 +118,7 @@ registerPageScript(() => {
 
     registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 500);
     registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 100);
+    registerFormElement('simon_says_mode', '"Simon Says" Mode:', 'checkbox', false);
     registerFormElement('autoplay', 'Autoplay:', 'checkbox', false);
     registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
     registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
