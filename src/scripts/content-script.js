@@ -38,7 +38,7 @@ function getMovesFromPage() {
         }
     } else if (thisUrl.includes('lichess.org')) {
         prefix = '***lifen***';
-        let moves = document.getElementsByTagName('m2'); // vs player + computer
+        let moves = document.getElementsByTagName('u8t'); // vs player + computer
         if (moves.length === 0) {
             moves = document.getElementsByTagName('move'); // vs training
         }
