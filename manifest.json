@@ -1,6 +1,6 @@
 {
   "update_url": "https://clients2.google.com/service/update2/crx",
-  "manifest_version": 2,
+  "manifest_version": 1,
   "name": "Mephisto Chess Extension",
   "description": "Chess Next Move Extension for Chess.com and Lichess.org",
   "version": "1.0.0",
