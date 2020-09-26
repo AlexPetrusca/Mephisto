@@ -45,7 +45,7 @@ function getMovesFromPage() {
         for (const move of moves) {
             let innerText = move.innerText.split('\n')[0];
             res = res + innerText + '*****';
-            if (move.classList.contains('active')) {
+            if (move.classList.contains('a1t')) {
                 break;
             }
         }
