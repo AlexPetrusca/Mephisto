@@ -33,8 +33,8 @@ function parse_fen_from_response(txt) {
         cc: 'Game detected on Chess.com',
         bt: 'Game detected on BlitzTactics.com'
     };
-    const metaTag = txt.substr(3, 5); // todo: think of better way to express this
-    const prefix = metaTag.substr(3, 2);
+    const metaTag = txt.substr(3, 5);
+    const prefix = metaTag.substr(0, 2);
     $('#gamedetected').text(prefixMap[prefix]);
     txt = txt.substr(11);
 
@@ -106,9 +106,10 @@ function on_stockfish_response(event) {
             if (message.includes('(none)')) {
                 $('#chess_line_1').text(next + ' Wins');
             } else if (message.includes('ponder')) {
-                $('#chess_line_1').text(toplay + ' to play, best move is ' + best + '\n' + 'Best response for ' + next + ' is ' + threat)
+                $('#chess_line_1').text(toplay + ' to play, best move is ' + best);
+                $('#chess_line_2').text('Best response for ' + next + ' is ' + threat);
             } else {
-                $('#chess_line_1').text(toplay + ' to play, best move is ' + best)
+                $('#chess_line_1').text(toplay + ' to play, best move is ' + best);
             }
         }
         if (toplay.toLowerCase() === board.orientation()) {

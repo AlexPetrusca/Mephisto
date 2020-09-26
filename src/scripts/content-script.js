@@ -51,7 +51,6 @@ function getMovesFromPage() {
         }
     } else if (thisUrl.includes('blitztactics.com')) {
         prefix = '***btpuz***';
-
         const [_, toSquare] = getLastMoveHighlights();
         if (toSquare) {
             const lastMoveColor = toSquare.querySelector('.piece').classList[2];
