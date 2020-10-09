@@ -323,17 +323,25 @@ function simulateMouseEvent(target, mouseOpts) {
 }
 
 function simulateClick(x, y) {
-    let elem = document.elementFromPoint(x, y);
-    simulateMouseEvent(elem, {
-        type: 'mousedown',
-        clientX: x,
-        clientY: y
-    });
-    simulateMouseEvent(elem, {
-        type: 'mouseup',
-        clientX: x,
-        clientY: y
-    });
+    if (thisUrl.includes('lichess.org')) {
+        chrome.runtime.sendMessage({
+            click: true,
+            x: x,
+            y: y
+        });
+    } else {
+        let elem = document.elementFromPoint(x, y);
+        simulateMouseEvent(elem, {
+            type: 'mousedown',
+            clientX: x,
+            clientY: y
+        });
+        simulateMouseEvent(elem, {
+            type: 'mouseup',
+            clientX: x,
+            clientY: y
+        });
+    }
 }
 
 function simulateClickSquare(xBounds, yBounds, range = 0.9) {

@@ -31,7 +31,8 @@
   "permissions": [
     "tabs",
     "activeTab",
-    "storage"
+    "storage",
+    "debugger"
   ],
   "background": {
     "scripts": [

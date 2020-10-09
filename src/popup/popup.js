@@ -184,6 +184,8 @@ function on_content_script_response(response) {
         }
     } else if (response.pullConfig) {
         push_config();
+    } else if (response.click) {
+        dispatchClickEvent(response.x, response.y);
     }
 }
 
@@ -337,3 +339,29 @@ function toggle_calculating(on) {
     isCalculating = on;
 }
 
+async function dispatchMouseEvent(debugee, mouseEvent, mouseEventOpts) {
+    return new Promise(resolve => {
+        chrome.debugger.sendCommand(debugee, mouseEvent, mouseEventOpts, resolve);
+    });
+}
+
+async function dispatchClickEvent(x, y) {
+    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        const debugee = {tabId: tabs[0].id};
+        chrome.debugger.attach(debugee, "1.3", async () => {
+            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
+                type: 'mousePressed',
+                button: 'left',
+                x: x,
+                y: y
+            });
+            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
+                type: 'mouseReleased',
+                button: 'left',
+                x: x,
+                y: y
+            });
+            chrome.debugger.detach(debugee);
+        });
+    });
+}
