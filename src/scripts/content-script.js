@@ -2,7 +2,37 @@ let thisUrl; // the url that the content-script was loaded on
 let config; // localhost configuration pulled from popup
 let moving = false; // whether the content-script is performing a move
 
-function getMovesFromPage() {
+window.onload = () => {
+    console.log('Mephisto is listening!');
+    thisUrl = window.location.href;
+    pullConfig();
+};
+
+chrome.extension.onMessage.addListener(response => {
+    if (moving) return;
+
+    if (response.queryfen) {
+        const res = getMovesFromPage(config.simon_says_mode);
+        const orient = getOrientation();
+        chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
+    } else if (response.automove) {
+        toggleMoving();
+        if (config.puzzle_mode) {
+            console.log(response.pv);
+            simulatePvMoves(response.pv.split(' ')).finally(toggleMoving);
+        } else {
+            console.log(response.move);
+            simulateMove(response.move).finally(toggleMoving);
+        }
+    } else if (response.pushConfig) {
+        console.log(response.config);
+        config = response.config;
+    } else if (response.consoleMessage) {
+        console.log(response.consoleMessage);
+    }
+});
+
+function getMovesFromPage(getAllMoves) {
     let prefix = '';
     let res = '';
     if (thisUrl.includes('chess.com')) {
@@ -31,7 +61,7 @@ function getMovesFromPage() {
                 : document.getElementsByClassName('move-text-component');
             for (const move of moves) {
                 res = res + move.innerText + '*****';
-                if (move.parentElement.classList.contains('mhl')) {
+                if (!getAllMoves && move.parentElement.classList.contains('mhl')) {
                     break;
                 }
             }
@@ -45,7 +75,7 @@ function getMovesFromPage() {
         for (const move of moves) {
             let innerText = move.innerText.split('\n')[0];
             res = res + innerText + '*****';
-            if (move.classList.contains('a1t')) {
+            if (!getAllMoves && move.classList.contains('a1t')) {
                 break;
             }
         }
@@ -83,30 +113,6 @@ function getOrientation() {
     return (orientedBlack) ? 'black' : 'white';
 }
 
-chrome.extension.onMessage.addListener(response => {
-    if (moving) return;
-
-    if (response.queryfen) {
-        const res = getMovesFromPage();
-        const orient = getOrientation();
-        chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
-    } else if (response.automove) {
-        toggleMoving();
-        if (config.puzzle_mode) {
-            console.log(response.pv);
-            simulatePvMoves(response.pv.split(' ')).finally(toggleMoving);
-        } else {
-            console.log(response.move);
-            simulateMove(response.move).finally(toggleMoving);
-        }
-    } else if (response.pushConfig) {
-        console.log(response.config);
-        config = response.config;
-    } else if (response.consoleMessage) {
-        console.log(response.consoleMessage);
-    }
-});
-
 function toggleMoving() {
     moving = !moving;
 }
@@ -114,12 +120,6 @@ function toggleMoving() {
 function pullConfig() {
     chrome.runtime.sendMessage({ pullConfig: true });
 }
-
-window.onload = () => {
-    console.log('Mephisto is listening!');
-    thisUrl = window.location.href;
-    pullConfig();
-};
 
 // -------------------------------------------------------------------------------------------
 

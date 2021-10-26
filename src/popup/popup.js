@@ -11,6 +11,89 @@ let lastScore = '';
 let lastBestMove = '';
 let turn = '';
 
+$(window).on('load', function () {
+    try {
+        // load extension configurations from localStorage
+        config = {
+            compute_time: JSON.parse(localStorage.getItem('compute_time')),
+            fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')),
+            think_time: JSON.parse(localStorage.getItem('think_time')),
+            think_variance: JSON.parse(localStorage.getItem('think_variance')),
+            move_time: JSON.parse(localStorage.getItem('move_time')),
+            move_variance: JSON.parse(localStorage.getItem('move_variance')),
+            simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')),
+            autoplay: JSON.parse(localStorage.getItem('autoplay')),
+            puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')),
+            python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend'))
+        };
+    } catch {
+        // resort to defaults if can't load
+        config = {
+            compute_time: 500,
+            fen_refresh: 100,
+            think_time: 1000,
+            think_variance: 500,
+            move_time: 1000,
+            move_variance: 500,
+            simon_says_mode: false,
+            autoplay: false,
+            puzzle_mode: false,
+            python_autoplay_backend: false
+        };
+    }
+    push_config();
+
+    // init chess board
+    board = ChessBoard('board', {
+        draggable: false,
+        moveSpeed: 'fast',
+        position: 'start'
+    });
+
+    // init fen LRU cache
+    fenCache = new LRU(100);
+
+    // init stockfish webworker
+    stockfish = new Worker('/lib/stockfish.js');
+    stockfish.postMessage("ucinewgame");
+    stockfish.postMessage("isready");
+    stockfish.onmessage = on_stockfish_response;
+
+    // listen to messages from content-script
+    chrome.extension.onMessage.addListener(function (response) {
+        if (response.fenresponse && response.dom !== 'no') {
+            if (board.orientation() !== response.orient) {
+                board.orientation(response.orient);
+            }
+            let fen = parse_fen_from_response(response.dom);
+            if (lastFen !== fen) {
+                new_pos(fen);
+            }
+        } else if (response.pullConfig) {
+            push_config();
+        } else if (response.click) {
+            dispatchClickEvent(response.x, response.y);
+        }
+    });
+
+    // query fen periodically from content-script
+    request_fen();
+    setInterval(function () {
+        request_fen();
+    }, config.fen_refresh);
+
+    // register button click listeners
+    $('#analyze').on('click', () => {
+        window.open('https://lichess.org/analysis?fen=' + lastFen, '_blank');
+    });
+    $('#config').on('click', () => {
+        window.open('/src/options/options.html', '_blank');
+    });
+
+    // initialize materialize
+    $('.tooltipped').tooltip();
+});
+
 function new_pos(fen) {
     $('#chess_line_1').html('<div>Calcu-stockfish-ating...<div><progress id="progBar" value="2" max="100">');
     stockfish.postMessage("position fen " + fen);
@@ -20,9 +103,9 @@ function new_pos(fen) {
     if (config.simon_says_mode) {
         draw_arrow(lastBestMove, 'blue', 'overlay1');
         request_console_log(`Best Move: ${lastBestMove}`);
-        const bestMoveMessage = lastBestMove ? `Best Move: ${lastBestMove}` : '';
-        $('#chess_line_2').text(bestMoveMessage);
-        $('#chess_line_2').hide();
+        // const bestMoveMessage = lastBestMove ? `Best Move: ${lastBestMove}` : '';
+        // $('#chess_line_2').text(bestMoveMessage);
+        // $('#chess_line_2').hide();
     }
     toggle_calculating(true);
 }
@@ -173,22 +256,6 @@ function on_stockfish_response(event) {
     }
 }
 
-function on_content_script_response(response) {
-    if (response.fenresponse && response.dom !== 'no') {
-        if (board.orientation() !== response.orient) {
-            board.orientation(response.orient);
-        }
-        let fen = parse_fen_from_response(response.dom);
-        if (lastFen !== fen) {
-            new_pos(fen);
-        }
-    } else if (response.pullConfig) {
-        push_config();
-    } else if (response.click) {
-        dispatchClickEvent(response.x, response.y);
-    }
-}
-
 function request_fen() {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, { queryfen: true });
@@ -215,75 +282,6 @@ function push_config() {
         chrome.tabs.sendMessage(tabs[0].id, { pushConfig: true, config: config });
     });
 }
-
-$(window).on('load', function () {
-    try {
-        // load extension configurations from localStorage
-        config = {
-            compute_time: JSON.parse(localStorage.getItem('compute_time')),
-            fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')),
-            think_time: JSON.parse(localStorage.getItem('think_time')),
-            think_variance: JSON.parse(localStorage.getItem('think_variance')),
-            move_time: JSON.parse(localStorage.getItem('move_time')),
-            move_variance: JSON.parse(localStorage.getItem('move_variance')),
-            simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')),
-            autoplay: JSON.parse(localStorage.getItem('autoplay')),
-            puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')),
-            python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend'))
-        };
-    } catch {
-        // resort to defaults if can't load
-        config = {
-            compute_time: 500,
-            fen_refresh: 100,
-            think_time: 1000,
-            think_variance: 500,
-            move_time: 1000,
-            move_variance: 500,
-            simon_says_mode: false,
-            autoplay: false,
-            puzzle_mode: false,
-            python_autoplay_backend: false
-        };
-    }
-    push_config();
-
-    // init chess board
-    board = ChessBoard('board', {
-        draggable: false,
-        moveSpeed: 'fast',
-        position: 'start'
-    });
-
-    // init fen LRU cache
-    fenCache = new LRU(100);
-
-    // init stockfish webworker
-    stockfish = new Worker('/lib/stockfish.js');
-    stockfish.postMessage("ucinewgame");
-    stockfish.postMessage("isready");
-    stockfish.onmessage = on_stockfish_response;
-
-    // listen to messages from content-script
-    chrome.extension.onMessage.addListener(on_content_script_response);
-
-    // query fen periodically from content-script
-    request_fen();
-    setInterval(function () {
-        request_fen();
-    }, config.fen_refresh);
-
-    // register button click listeners
-    $('#analyze').on('click', () => {
-        window.open('https://lichess.org/analysis?fen=' + lastFen, '_blank');
-    });
-    $('#config').on('click', () => {
-        window.open('/src/options/options.html', '_blank');
-    });
-
-    //initialize materialize
-    $('.tooltipped').tooltip();
-});
 
 function coord(move) {
     const lets = move.substring(0, 1);
