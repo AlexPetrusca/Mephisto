@@ -67,16 +67,44 @@ function getMovesFromPage(getAllMoves) {
             }
         }
     } else if (thisUrl.includes('lichess.org')) {
-        prefix = '***lifen***';
         let moves = document.getElementsByTagName('u8t'); // vs player + computer
         if (moves.length === 0) {
             moves = document.getElementsByTagName('move'); // vs training
         }
-        for (const move of moves) {
-            let innerText = move.innerText.split('\n')[0];
-            res = res + innerText + '*****';
-            if (!getAllMoves && move.classList.contains('a1t')) {
-                break;
+        if (moves[0].innerText.match(/^[a-zA-Z0-9-+]+$/g)) {
+            prefix = '***lifen***';
+            for (const move of moves) {
+                let innerText = move.innerText.split('\n')[0];
+                res = res + innerText + '*****';
+                if (!getAllMoves && (move.classList.contains('a1t') || move.classList.contains('active'))) {
+                    break;
+                }
+            }
+        } else {
+            prefix = '***lipuz***';
+            const [_, toSquare] = getLastMoveHighlights();
+            if (!toSquare) { return 'no'; }
+
+            const pieces = Array.from(document.querySelectorAll('.main-board piece'))
+                .filter(piece => !!piece.classList[1]);
+            const toPiece = pieces.find(piece => piece.style.transform === toSquare.style.transform);
+            if (!toPiece) { return 'no' }
+
+            const turn = (toPiece.classList.contains('white')) ? 'b' : 'w';
+            res += turn + '*****';
+            for (const piece of pieces) {
+                const transform = piece.style.transform;
+                const xyCoords = transform.substring(transform.indexOf('(') + 1, transform.length - 1)
+                    .replaceAll('px', '').replace(' ', '').split(",")
+                    .map(num => Number(num) / piece.getClientRects()[0].width + 1);
+                const coords = (getOrientation() === 'black')
+                    ? String.fromCharCode(105 - xyCoords[0]) + xyCoords[1]
+                    : String.fromCharCode(96 + xyCoords[0]) + (9 - xyCoords[1]);
+                if (piece.classList[0] !== "ghost") {
+                    res += `${colorMap[piece.classList[0]]}-${typeMap[piece.classList[1]]}-${coords}*****`;
+                } else if (piece.style.visibility === "visible") {
+                    res += `${colorMap[piece.classList[1]]}-${typeMap[piece.classList[2]]}-${coords}*****`;
+                }
             }
         }
     } else if (thisUrl.includes('blitztactics.com')) {
@@ -179,6 +207,12 @@ function getLastMoveHighlights() {
         [fromSquare, toSquare] = Array.from(document.getElementsByClassName('move-square'));
     } else if (thisUrl.includes('lichess.org')) {
         [toSquare, fromSquare] = Array.from(document.getElementsByClassName('last-move'));
+        const pieces = Array.from(document.querySelectorAll('.main-board piece'))
+            .filter(piece => !!piece.classList[1]);
+        const toPiece = pieces.find(piece => piece.style.transform === toSquare.style.transform);
+        if (!toPiece) {
+            [toSquare, fromSquare] = [fromSquare, toSquare];
+        }
     }  else if (thisUrl.includes('blitztactics.com')) {
         const board = getBoard();
         [fromSquare, toSquare] = [board.querySelector('[data-from]'), board.querySelector('[data-to]')];
@@ -456,4 +490,17 @@ async function simulatePromotionClicks(promotion) {
             }, 10);
         }
     }
+}
+
+const colorMap = {
+    white: 'w',
+    black: 'b'
+}
+const typeMap = {
+    pawn: 'p',
+    rook: 'r',
+    knight: 'n',
+    bishop: 'b',
+    queen: 'q',
+    king: 'k'
 }
