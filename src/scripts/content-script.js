@@ -170,6 +170,13 @@ function promiseTimeout(time) {
     });
 }
 
+function getChessCoordsCorrectionXY() {
+    if (thisUrl.includes('blitztactics.com')) {
+        return [-21, -4];
+    }
+    return [0, 0];
+}
+
 function getBrowserOffsetXY() {
     const topBarHeight = window.outerHeight - window.innerHeight;
     const offsetX = window.screenX;
@@ -182,32 +189,35 @@ function getRandomSampledXY(elem, range = 0.9) {
     const margin = (1 - range) / 2;
     const x = bounds.x + (range * Math.random() + margin) * bounds.width;
     const y = bounds.y + (range * Math.random() + margin) * bounds.height;
-    return [x, y];
+    const [correctX, correctY] = getChessCoordsCorrectionXY();
+    return [x + correctX, y + correctY];
 }
 
 function getRandomSampledXY2(xBounds, yBounds, range = 0.9) {
     const margin = (1 - range) / 2;
     const x = xBounds.x + (range * Math.random() + margin) * xBounds.width;
     const y = yBounds.y + (range * Math.random() + margin) * yBounds.height;
-    return [x, y];
+    const [correctX, correctY] = getChessCoordsCorrectionXY();
+    console.log([x + correctX, y + correctY]);
+    return [x + correctX, y + correctY];
 }
 
 function getScreenXY(elem) {
     const bounds = elem.getBoundingClientRect();
     const [offsetX, offsetY] = getBrowserOffsetXY();
-    return [Math.floor(bounds.x + offsetX), Math.floor(bounds.y + offsetY)]
+    return [Math.floor(bounds.x + offsetX), Math.floor(bounds.y + offsetY)];
 }
 
 function getRandomSampledScreenXY(elem, range = 0.9) {
     const [x, y] = getRandomSampledXY(elem, range);
     const [offsetX, offsetY] = getBrowserOffsetXY();
-    return [Math.floor(x + offsetX), Math.floor(y + offsetY)]
+    return [Math.floor(x + offsetX), Math.floor(y + offsetY)];
 }
 
 function getRandomSampledScreenXY2(xBounds, yBounds, range = 0.9) {
     const [x, y] = getRandomSampledXY2(xBounds, yBounds, range);
     const [offsetX, offsetY] = getBrowserOffsetXY();
-    return [Math.floor(x + offsetX), Math.floor(y + offsetY)]
+    return [Math.floor(x + offsetX), Math.floor(y + offsetY)];
 }
 
 // -------------------------------------------------------------------------------------------
