@@ -96,7 +96,7 @@ function getMovesFromPage(getAllMoves) {
                 const transform = piece.style.transform;
                 const xyCoords = transform.substring(transform.indexOf('(') + 1, transform.length - 1)
                     .replaceAll('px', '').replace(' ', '').split(",")
-                    .map(num => Number(num) / piece.getClientRects()[0].width + 1);
+                    .map(num => Number(num) / piece.getBoundingClientRect().width + 1);
                 const coords = (getOrientation() === 'black')
                     ? String.fromCharCode(105 - xyCoords[0]) + xyCoords[1]
                     : String.fromCharCode(96 + xyCoords[0]) + (9 - xyCoords[1]);
@@ -123,7 +123,7 @@ function getMovesFromPage(getAllMoves) {
             const transform = piece.style.transform;
             const xyCoords = transform.substring(transform.indexOf('(') + 1, transform.length - 1)
                 .replaceAll('px', '').replace(' ', '').split(",")
-                .map(num => Number(num) / piece.getClientRects()[0].width + 1);
+                .map(num => Number(num) / piece.getBoundingClientRect().width + 1);
             const coords = (getOrientation() === 'black')
                 ? String.fromCharCode(105 - xyCoords[0]) + xyCoords[1]
                 : String.fromCharCode(96 + xyCoords[0]) + (9 - xyCoords[1]);
