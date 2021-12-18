@@ -110,16 +110,27 @@ function getMovesFromPage(getAllMoves) {
     } else if (thisUrl.includes('blitztactics.com')) {
         prefix = '***btpuz***';
         const [_, toSquare] = getLastMoveHighlights();
-        if (toSquare) {
-            const lastMoveColor = toSquare.querySelector('.piece').classList[2];
-            const turn = (lastMoveColor === 'w') ? 'b' : 'w';
-            res += turn + '*****';
+        if (!toSquare) { return 'no'; }
 
-            const pieces = Array.from(document.getElementsByClassName('piece')).slice(0, -4);
-            for (const piece of pieces) {
-                const [color, type] = piece.classList[1];
-                const coords = piece.parentElement.id;
-                res += `${color}-${type}-${coords}*****`;
+        const pieces = Array.from(document.querySelectorAll('.board-area piece'))
+            .filter(piece => !!piece.classList[1]);
+        const toPiece = pieces.find(piece => piece.style.transform === toSquare.style.transform);
+        if (!toPiece) { return 'no' }
+
+        const turn = (toPiece.classList.contains('white')) ? 'b' : 'w';
+        res += turn + '*****';
+        for (const piece of pieces) {
+            const transform = piece.style.transform;
+            const xyCoords = transform.substring(transform.indexOf('(') + 1, transform.length - 1)
+                .replaceAll('px', '').replace(' ', '').split(",")
+                .map(num => Number(num) / piece.getClientRects()[0].width + 1);
+            const coords = (getOrientation() === 'black')
+                ? String.fromCharCode(105 - xyCoords[0]) + xyCoords[1]
+                : String.fromCharCode(96 + xyCoords[0]) + (9 - xyCoords[1]);
+            if (piece.classList[0] !== "ghost") {
+                res += `${colorMap[piece.classList[0]]}-${typeMap[piece.classList[1]]}-${coords}*****`;
+            } else if (piece.style.visibility === "visible") {
+                res += `${colorMap[piece.classList[1]]}-${typeMap[piece.classList[2]]}-${coords}*****`;
             }
         }
     }
@@ -135,8 +146,8 @@ function getOrientation() {
         const fileCoords = document.getElementsByClassName('files')[0];
         orientedBlack = fileCoords && fileCoords.classList.contains('black');
     } else if (thisUrl.includes('blitztactics.com')) {
-        const topLeftCoord = document.getElementsByClassName('row')[0];
-        orientedBlack = topLeftCoord && topLeftCoord.innerText === '1';
+        const fileCoords = document.getElementsByClassName('files')[0];
+        orientedBlack = fileCoords && fileCoords.classList.contains('black');
     }
     return (orientedBlack) ? 'black' : 'white';
 }
@@ -215,7 +226,7 @@ function getLastMoveHighlights() {
         }
     }  else if (thisUrl.includes('blitztactics.com')) {
         const board = getBoard();
-        [fromSquare, toSquare] = [board.querySelector('[data-from]'), board.querySelector('[data-to]')];
+        [fromSquare, toSquare] = [board.querySelector('.move-from'), board.querySelector('.move-to')];
     }
     return [fromSquare, toSquare];
 }
@@ -235,8 +246,8 @@ function getRanksFiles() {
         fileCoords = Array.from(document.getElementsByClassName('files')[0].children);
         rankCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
     }  else if (thisUrl.includes('blitztactics.com')) {
-        fileCoords = Array.from(document.getElementsByClassName('col'));
-        rankCoords = Array.from(document.getElementsByClassName('row'));
+        fileCoords = Array.from(document.getElementsByClassName('files')[0].children);
+        rankCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
     }
     return [rankCoords, fileCoords];
 }
@@ -252,7 +263,7 @@ function getBoard() {
     } else if (thisUrl.includes('lichess.org')) {
         board = document.getElementsByTagName('cg-board')[0];
     } else if (thisUrl.includes('blitztactics.com')) {
-        board = document.getElementsByClassName('chessboard')[0];
+        board = document.getElementsByTagName('cg-board')[0];
     }
     return board;
 }
@@ -357,7 +368,7 @@ function simulateMouseEvent(target, mouseOpts) {
 }
 
 function simulateClick(x, y) {
-    if (thisUrl.includes('lichess.org')) {
+    if (thisUrl.includes('lichess.org') || thisUrl.includes('blitztactics.com')) {
         chrome.runtime.sendMessage({
             click: true,
             x: x,

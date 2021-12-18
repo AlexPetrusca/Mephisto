@@ -359,7 +359,6 @@ async function dispatchClickEvent(x, y) {
                 x: x,
                 y: y
             });
-            chrome.debugger.detach(debugee);
         });
     });
 }
