@@ -58,10 +58,10 @@ function getMovesFromPage(getAllMoves) {
             prefix = '***ccfen***';
             let moves = (thisUrl.includes('computer'))
                 ? document.getElementsByClassName('gotomove')
-                : document.getElementsByClassName('move-text-component');
+                : document.getElementsByClassName('node');
             for (const move of moves) {
                 res = res + move.innerText + '*****';
-                if (!getAllMoves && move.parentElement.classList.contains('mhl')) {
+                if (!getAllMoves && move.classList.contains('selected')) {
                     break;
                 }
             }
@@ -101,8 +101,8 @@ function getMovesFromPage(getAllMoves) {
 function getOrientation() {
     let orientedBlack = true;
     if (thisUrl.includes('chess.com')) {
-        const topLeftCoord = document.getElementsByClassName('coords-light')[0];
-        orientedBlack = topLeftCoord && topLeftCoord.innerText === '1';
+        const topLeftCoord = document.getElementsByClassName('coordinate-light')[0];
+        orientedBlack = topLeftCoord && topLeftCoord.innerHTML === '1';
     } else if (thisUrl.includes('lichess.org')) {
         const fileCoords = document.getElementsByClassName('files')[0];
         orientedBlack = fileCoords && fileCoords.classList.contains('black');
