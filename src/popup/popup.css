@@ -84,32 +84,6 @@ html, body {
     top: 20px
 }
 
-#fb_icon {
-    position: absolute;
-    opacity: .7;
-    top: 155px;
-    left: 5px;
-    background-image: url(facebookicon.png);
-    width: 40px;
-    height: 40px;
-    background-size: 100%;
-    background-repeat: no-repeat;
-    z-index: 0
-}
-
-#tw_icon {
-    position: absolute;
-    opacity: .7;
-    top: 155px;
-    left: 183px;
-    background-image: url(twitter.png);
-    width: 40px;
-    height: 40px;
-    background-size: 100%;
-    background-repeat: no-repeat;
-    z-index: 0
-}
-
 #container {
     display: none;
     width: 350px;
@@ -316,32 +290,6 @@ html, body {
 
 .linker:hover {
     text-decoration: underline
-}
-
-#tl_icon {
-    position: absolute;
-    opacity: .7;
-    bottom: 2px;
-    right: 2px;
-    background-image: url(../icons/TLicon_32.png);
-    width: 20px;
-    height: 20px;
-    background-size: 100%;
-    background-repeat: no-repeat;
-    z-index: 0
-}
-
-#tlbig_icon {
-    margin: 0 auto;
-    opacity: .8;
-    top: 100px;
-    left: 150px;
-    background-image: url(../icons/TLicon_72.png);
-    width: 72px;
-    height: 72px;
-    background-size: 100%;
-    background-repeat: no-repeat;
-    z-index: 0
 }
 
 #localmessage {
