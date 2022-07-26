@@ -1,6 +1,6 @@
 {
   "update_url": "https://clients2.google.com/service/update2/crx",
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Mephisto Chess Extension",
   "description": "Chess Next Move Extension for Chess.com and Lichess.org",
   "version": "1.0.0",
@@ -15,7 +15,7 @@
     "72": "res/icons/icon72.png",
     "128": "res/icons/icon128.png"
   },
-  "browser_action": {
+  "action": {
     "default_icon": {
       "16": "res/icons/icon16.png",
       "19": "res/icons/icon19.png",
@@ -35,13 +35,7 @@
     "debugger"
   ],
   "background": {
-    "scripts": [
-      "src/scripts/background-script.js",
-      "lib/jquery.min.js",
-      "lib/stockfish.js",
-      "lib/chess.min.js"
-    ],
-    "persistent": false
+    "service_worker": "src/scripts/background-script.js"
   },
   "content_scripts": [
     {
