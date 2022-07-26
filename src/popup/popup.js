@@ -60,7 +60,7 @@ $(window).on('load', function () {
     stockfish.onmessage = on_stockfish_response;
 
     // listen to messages from content-script
-    chrome.extension.onMessage.addListener(function (response) {
+    chrome.runtime.onMessage.addListener(function (response) {
         if (response.fenresponse && response.dom !== 'no') {
             if (board.orientation() !== response.orient) {
                 board.orientation(response.orient);

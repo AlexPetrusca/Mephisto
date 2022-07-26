@@ -8,7 +8,7 @@ window.onload = () => {
     pullConfig();
 };
 
-chrome.extension.onMessage.addListener(response => {
+chrome.runtime.onMessage.addListener(response => {
     if (moving) return;
 
     if (response.queryfen) {
