@@ -38,20 +38,22 @@ function getMovesFromPage(getAllMoves) {
     if (thisUrl.includes('chess.com')) {
         if (thisUrl.includes('puzzles')) {
             prefix = '***ccpuz***';
-            const pieceRegex = /[\w]+\.png/;
-
             const [_, toSquare] = getLastMoveHighlights();
-            const pieceColor = toSquare.style['backgroundImage'].match(pieceRegex)[0][0];
-            const turn = (pieceColor === 'w') ? 'b' : 'w';
+            const hlPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
+            let [hlColorTypeClass, hlCoordsClass] = [hlPiece.classList[1], hlPiece.classList[2]];
+            if (!hlCoordsClass.includes('square')) {
+                [hlColorTypeClass, hlCoordsClass] = [hlCoordsClass, hlColorTypeClass];
+            }
+            const turn = (hlColorTypeClass[0] === 'w') ? 'b' : 'w';
             res += turn + '*****';
-
-            const pieces = document.getElementsByClassName('piece');
-            for (const piece of pieces) {
-                const [color, type] = piece.style['backgroundImage']
-                    .match(pieceRegex)[0]
-                    .replace('.png', '');
-                const coordsStr = piece.classList[1].substring(7);
-                const coords = String.fromCharCode(96 + parseInt(coordsStr[1])) + coordsStr[3]; // 96 = 'a' - 1;
+            for (const piece of document.querySelectorAll('.piece')) {
+                let [colorTypeClass, coordsClass] = [piece.classList[1], piece.classList[2]];
+                if (!coordsClass.includes('square')) {
+                    [colorTypeClass, coordsClass] = [coordsClass, colorTypeClass];
+                }
+                const [color, type] = colorTypeClass;
+                const coordsStr = coordsClass.substring(7);
+                const coords = String.fromCharCode('a'.charCodeAt(0) + parseInt(coordsStr[0]) - 1) + coordsStr[1];
                 res += `${color}-${type}-${coords}*****`;
             }
         } else {
@@ -225,7 +227,11 @@ function getRandomSampledScreenXY2(xBounds, yBounds, range = 0.9) {
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
     if (thisUrl.includes('chess.com')) {
-        [fromSquare, toSquare] = Array.from(document.getElementsByClassName('move-square'));
+        [fromSquare, toSquare] = Array.from(document.getElementsByClassName('highlight'));
+        const toPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
+        if (!toPiece) {
+            [fromSquare, toSquare] = [toSquare, fromSquare];
+        }
     } else if (thisUrl.includes('lichess.org')) {
         [toSquare, fromSquare] = Array.from(document.getElementsByClassName('last-move'));
         const pieces = Array.from(document.querySelectorAll('.main-board piece'))
