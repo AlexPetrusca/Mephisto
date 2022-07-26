@@ -58,11 +58,17 @@ function getMovesFromPage(getAllMoves) {
             }
         } else {
             prefix = '***ccfen***';
-            let moves = (thisUrl.includes('computer'))
-                ? document.getElementsByClassName('gotomove')
+            const figurineRegex = /<span.*data-figurine="(\w)".*span>/;
+            const moves = (thisUrl.includes('analysis'))
+                ? document.getElementsByClassName('move-text')
                 : document.getElementsByClassName('node');
             for (const move of moves) {
-                res = res + move.innerText + '*****';
+                if (move.childElementCount) {
+                    const [figurineHTML, figurinePiece] = move.innerHTML.match(figurineRegex);
+                    res += move.innerHTML.replace(figurineHTML, figurinePiece) + '*****';
+                } else {
+                    res += move.innerText + '*****';
+                }
                 if (!getAllMoves && move.classList.contains('selected')) {
                     break;
                 }
