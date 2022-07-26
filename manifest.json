@@ -34,6 +34,9 @@
     "storage",
     "debugger"
   ],
+  "background": {
+    "service_worker": "src/scripts/background-script.js"
+  },
   "content_scripts": [
     {
       "matches": [
