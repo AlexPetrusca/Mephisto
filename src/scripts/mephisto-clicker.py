@@ -31,18 +31,14 @@ def perform_move(x0, y0, x1, y1):
 @app.route('/performClick', methods=['POST'])
 def perform_click_api():
     data = request.get_json()
-
     perform_click(data.get('x'), data.get('y'))
-
     return 'OK'
 
 
 @app.route('/performMove', methods=['POST'])
 def perform_move_api():
     data = request.get_json()
-
     perform_move(data.get('x0'), data.get('y0'), data.get('x1'), data.get('y1'))
-
     return 'OK'
 
 
