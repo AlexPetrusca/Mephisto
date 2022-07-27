@@ -10,7 +10,6 @@ window.onload = () => {
 
 chrome.runtime.onMessage.addListener(response => {
     if (moving) return;
-
     if (response.queryfen) {
         const res = getMovesFromPage(config.simon_says_mode);
         const orient = getOrientation();
@@ -79,7 +78,7 @@ function getMovesFromPage(getAllMoves) {
         if (moves.length === 0) {
             moves = document.getElementsByTagName('move'); // vs training
         }
-        if (moves[0].innerText.match(/^[a-zA-Z0-9-+]+$/g)) {
+        if (moves.length && moves[0].innerText.match(/^[a-zA-Z0-9-+]+$/g)) {
             prefix = '***lifen***';
             for (const move of moves) {
                 let innerText = move.innerText.split('\n')[0];
