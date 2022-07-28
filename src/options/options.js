@@ -107,7 +107,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     registerPageScript = (pageScript) => {
-        console.log(pageScript);
         pageScript();
     };
 

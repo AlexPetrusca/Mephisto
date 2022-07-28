@@ -30,18 +30,6 @@ main > .container, nav > .container {
     margin-bottom: 32px;
 }
 
-@media only screen and (min-width: 601px) {
-    .container {
-        width:85%
-    }
-}
-
-@media only screen and (min-width: 993px) {
-    .container {
-        width:70%
-    }
-}
-
 /* side nav */
 
 .sidenav.sidenav-fixed {
