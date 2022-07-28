@@ -1,8 +1,5 @@
 registerPageScript(() => {
     class FormElement {
-        // static formContainer = document.getElementById('form_container');
-        // static tocContainer = document.getElementById('toc');
-
         constructor(name, description, type, defaultValue) {
             this.name = name;
             this.desc = description;
@@ -10,24 +7,6 @@ registerPageScript(() => {
             this.default = defaultValue;
             this.elem = document.getElementById(`${name}_input`);
         }
-
-        // injectFormElement() {
-        //     const formElement = document.createElement('div');
-        //     formElement.id = this.name;
-        //     formElement.className = 'section scrollspy';
-        //     if (this.type === 'input') {
-        //         const input = `<input id="${this.name}_input" type="number">`;
-        //         formElement.innerHTML = `<label>${this.desc} ${input}</label>`;
-        //     } else if (this.type === 'checkbox') {
-        //         const input = `<input id="${this.name}_input" type="checkbox">`;
-        //         formElement.innerHTML = `<label>Off${input}<span class="lever"></span>On</label>`;
-        //     }
-        //     FormElement.formContainer.append(formElement);
-        //
-        //     const tocElement = document.createElement('li');
-        //     tocElement.innerHTML = `<a href="#${this.name}">${this.title}</a>`;
-        //     FormElement.tocContainer.append(tocElement);
-        // }
 
         registerChangeListener(fn) {
             if (this.type === 'input') {
@@ -118,7 +97,7 @@ registerPageScript(() => {
 
     registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 500);
     registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 100);
-    registerFormElement('simon_says_mode', '"Simon Says" Mode:', 'checkbox', false);
+    registerFormElement('simon_says_mode', '"Hand and Brain" Mode:', 'checkbox', false);
     registerFormElement('autoplay', 'Autoplay:', 'checkbox', false);
     registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
     registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);

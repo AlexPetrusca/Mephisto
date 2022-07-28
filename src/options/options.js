@@ -1,14 +1,14 @@
 let registerPageScript;
 
 document.addEventListener('DOMContentLoaded', function () {
-    let activeTab;
     let activeScrollspies;
 
     // init materialize
-    const elemsCollapse = document.querySelectorAll('.collapsible');
-    M.Collapsible.init(elemsCollapse, {});
-    const elemsSidenav = document.querySelectorAll('.sidenav');
-    M.Sidenav.init(elemsSidenav, {});
+    const mCollapsible = M.Collapsible.init(document.querySelectorAll('.collapsible'), {
+        onOpenStart: elem => elem.classList.add('open'),
+        onCloseStart: elem => elem.classList.remove('open')
+    });
+    const mSidenav = M.Sidenav.init(document.querySelectorAll('.sidenav'), {});
 
     // page injection logic
     let contentElem = document.getElementById('content');
@@ -16,22 +16,41 @@ document.addEventListener('DOMContentLoaded', function () {
     const headElem = document.getElementById('head');
     const stylesheetsElem = document.getElementsByTagName('HEAD').item(0);
 
-    function updateActiveTab(elem) {
-        if (activeTab) {
-            activeTab.classList.remove('active');
+    function onClick(e) {
+        injectHTML(e.target);
+        if (e.target.id === 'logo-container') {
+            e.target.parentElement.classList.remove('active');
+            document.getElementById('about').parentElement.classList.add('active');
         }
-        activeTab = elem.parentElement;
-        activeTab.classList.add('active');
+    }
+
+    function updateActiveTab(elem) {
+        location.hash = elem.hash;
+        document.querySelectorAll('#nav-mobile li').forEach(elem => {
+            if (!elem.classList.contains('open')) {
+                elem.classList.remove('active');
+            }
+        });
+        while (elem.id !== 'nav-mobile') {
+            if (elem.tagName === 'LI') {
+                elem.classList.add('active');
+            } else if (elem.classList.contains('collapsible') && !elem.children[0].classList.contains('open')) {
+                elem.M_Collapsible.close();
+                elem.M_Collapsible.open();
+            }
+            elem = elem.parentElement;
+        }
     }
 
     function injectHTML(elem) {
-        const title = elem.href.split('#')[1];
-        if (title === titleElem.innerText.toLowerCase()) {
-            return;
-        }
+        updateActiveTab(elem);
+        const hash = elem.hash.substring(1);
+        const title = hash.substring(hash.lastIndexOf('/') + 1);
+        const path = hash.substring(0, hash.lastIndexOf('/') + 1) + title;
+        const componentPath = `pages/${path}/${title}`;
 
         const xhr = new XMLHttpRequest();
-        xhr.open('GET', `pages/${title}/${title}.html`, true);
+        xhr.open('GET', `${componentPath}.html`, true);
         xhr.onreadystatechange = function () {
             if (this.readyState !== 4) return;
             if (this.status !== 200) return;
@@ -66,7 +85,7 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 const stylesheet = document.createElement('link');
                 stylesheet.rel = 'stylesheet';
-                stylesheet.href = `pages/${title}/${title}.css`;
+                stylesheet.href = `${componentPath}.css`;
                 stylesheet.id = `${title}-stylesheet`;
                 stylesheet.className = 'page-stylesheet';
                 stylesheetsElem.appendChild(stylesheet);
@@ -75,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // inject js
             let script = document.createElement("script");
             script.type = "text/javascript";
-            script.src = `pages/${title}/${title}.js`;
+            script.src = `${componentPath}.js`;
             script.id = `${title}-script`;
             script.name = `${title}`;
             contentElem.appendChild(script);
@@ -83,20 +102,15 @@ document.addEventListener('DOMContentLoaded', function () {
         xhr.send();
     }
 
-    window.onclick = function (e) {
-        const elem = e.target;
-        if (elem.nodeName === 'A' && elem.classList.contains('menu-item')) {
-            updateActiveTab(elem);
-            injectHTML(elem);
-        }
-    };
+    document.querySelectorAll('#nav-mobile a.menu-item').forEach(elem => {
+        elem.addEventListener('click', e => onClick(e));
+    });
 
-    registerPageScript = function(pageScript) {
+    registerPageScript = (pageScript) => {
+        console.log(pageScript);
         pageScript();
     };
 
-    const page = location.hash.substring(1) || 'about';
-    const elem = document.getElementById(page);
-    updateActiveTab(elem);
-    injectHTML(elem);
+    const pagePath = location.hash.substring(1) || 'settings/general';
+    injectHTML(document.getElementById(pagePath));
 });
