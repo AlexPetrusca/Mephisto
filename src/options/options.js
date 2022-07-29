@@ -11,13 +11,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const mSidenav = M.Sidenav.init(document.querySelectorAll('.sidenav'), {});
 
     // page injection logic
-    let contentElem = document.getElementById('content');
+    const contentElem = document.querySelector('#content .container');
     const titleElem = document.getElementById('title');
-    const headElem = document.getElementById('head');
-    const stylesheetsElem = document.getElementsByTagName('HEAD').item(0);
+    const headElem = document.getElementById('header');
+    const stylesheetsElem = document.querySelector('head');
 
     function onClick(e) {
-        injectHTML(e.target);
+        injectPage(e.target.hash.substring(1));
         if (e.target.id === 'logo-container') {
             e.target.parentElement.classList.remove('active');
             document.getElementById('about').parentElement.classList.add('active');
@@ -42,74 +42,45 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function injectHTML(elem) {
-        updateActiveTab(elem);
-        const hash = elem.hash.substring(1);
-        const title = hash.substring(hash.lastIndexOf('/') + 1);
-        const path = hash.substring(0, hash.lastIndexOf('/') + 1) + title;
+    async function injectPage(pagePath) {
+        updateActiveTab(document.getElementById(pagePath));
+        const title = pagePath.substring(pagePath.lastIndexOf('/') + 1);
+        const path = pagePath.substring(0, pagePath.lastIndexOf('/') + 1) + title;
         const componentPath = `pages/${path}/${title}`;
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', `${componentPath}.html`, true);
-        xhr.onreadystatechange = function () {
-            if (this.readyState !== 4) return;
-            if (this.status !== 200) return;
+        // inject page title
+        titleElem.innerText = `-${title}`.replace(/-[a-z]/g, (match) => {
+            return ` ${match.toUpperCase().substring(1)}`;
+        });
 
-            // inject page title
-            const pretitle = '-' + title;
-            titleElem.innerText = pretitle.replace(/-[a-z]/g, (match) => {
-                return ' ' + match.toUpperCase().substring(1);
-            });
+        // inject html
+        const pageBody = await require(componentPath, 'html');
+        contentElem.innerHTML = pageBody.innerHTML;
+        activeScrollspies?.forEach(scrollspy => scrollspy.destroy());
+        activeScrollspies = M.ScrollSpy.init(document.querySelectorAll('.scrollspy'), {});
+        headElem.scrollIntoView(true);
 
-            // inject html
-            contentElem.innerHTML = this.responseText;
-            if (activeScrollspies) {
-                activeScrollspies.forEach(scrollspy => {
-                    scrollspy.destroy();
-                });
-            }
-            const elemsScrollspy = document.querySelectorAll('.scrollspy');
-            activeScrollspies = M.ScrollSpy.init(elemsScrollspy, {});
-            headElem.scrollIntoView(true);
+        // disable cached stylesheets
+        Array.from(document.getElementsByClassName('page-stylesheet'))
+            .forEach((stylesheet) => stylesheet.disabled = true);
 
-            // disable cached stylesheets
-            const loadedStylesheets = document.getElementsByClassName('page-stylesheet');
-            Array.from(loadedStylesheets).forEach((stylesheet) => {
-                stylesheet.disabled = true;
-            });
+        // inject css OR re-enable cached css
+        const pageStylesheet = document.getElementById(`${path}-stylesheet`);
+        if (pageStylesheet) {
+            pageStylesheet.disabled = false;
+        } else {
+            const pageStyle = await require(componentPath, 'css');
+            stylesheetsElem.appendChild(pageStyle);
+        }
 
-            // inject css OR re-enable cached css
-            const pageStylesheet = document.getElementById(`${title}-stylesheet`);
-            if (pageStylesheet) {
-                pageStylesheet.disabled = false;
-            } else {
-                const stylesheet = document.createElement('link');
-                stylesheet.rel = 'stylesheet';
-                stylesheet.href = `${componentPath}.css`;
-                stylesheet.id = `${title}-stylesheet`;
-                stylesheet.className = 'page-stylesheet';
-                stylesheetsElem.appendChild(stylesheet);
-            }
-
-            // inject js
-            let script = document.createElement("script");
-            script.type = "text/javascript";
-            script.src = `${componentPath}.js`;
-            script.id = `${title}-script`;
-            script.name = `${title}`;
-            contentElem.appendChild(script);
-        };
-        xhr.send();
+        // inject js
+        const pageObj = await require(componentPath);
+        pageObj.onInit();
     }
 
     document.querySelectorAll('#nav-mobile a.menu-item').forEach(elem => {
         elem.addEventListener('click', e => onClick(e));
     });
 
-    registerPageScript = (pageScript) => {
-        pageScript();
-    };
-
-    const pagePath = location.hash.substring(1) || 'settings/general';
-    injectHTML(document.getElementById(pagePath));
+    injectPage(location.hash.substring(1) || 'settings/general');
 });

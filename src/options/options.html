@@ -7,11 +7,13 @@
     <link rel="stylesheet" href="/lib/materialize/material-icons.min.css">
     <link rel="stylesheet" href="/lib/materialize/materialize.min.css">
     <script src="/lib/materialize/materialize.min.js"></script>
+    <script type="module" src="util/FormElement.js"></script>
+    <script src="framework/require.js"></script>
     <script src="options.js"></script>
 </head>
 <body>
 
-<header id="head">
+<header id="header">
     <nav class="top-nav">
         <div class="container">
             <div class="nav-wrapper">
@@ -54,7 +56,9 @@
         <li class="bold"><a id="about" href="#about" class="menu-item waves-effect waves-pink">About</a></li>
     </ul>
 </header>
-<main id="content"></main>
+<main id="content">
+    <div class="container"></div>
+</main>
 <footer>
     <div class="docs-footer row">
         <div class="col s12 m8 offset-m1 xl7 offset-xl1">

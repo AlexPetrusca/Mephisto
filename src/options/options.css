@@ -78,6 +78,7 @@ ul.sidenav.sidenav-fixed li {
 }
 
 ul.sidenav.sidenav-fixed li a {
+    outline: none;
     font-size: 13px;
     line-height: 44px;
     height: 44px;

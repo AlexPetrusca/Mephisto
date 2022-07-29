@@ -1,3 +1,3 @@
-registerPageScript(() => {
-    console.log('THIS IS MAIN, BITCH!')
-});
+define({
+    onInit: () => console.log('hi')
+})

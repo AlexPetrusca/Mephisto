@@ -87,7 +87,7 @@ $(window).on('load', function () {
         window.open('https://lichess.org/analysis?fen=' + lastFen, '_blank');
     });
     $('#config').on('click', () => {
-        window.open('/src/settings/settings.html', '_blank');
+        window.open('/src/options/options.html', '_blank');
     });
 
     // initialize materialize

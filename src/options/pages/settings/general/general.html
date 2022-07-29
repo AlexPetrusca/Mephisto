@@ -1,106 +1,104 @@
-<div class="container">
-    <div class="row">
-        <div class="col s12 m7 offset-m1 xl6 offset-xl1 offset-right-m1">
-            <div id="form_container" class="big-section">
-                <div id="engine" class="scrollspy">
-                    <h3 class="header">Engine</h3>
-                    <div class="section">
-                        <label>
-                            Stockfish Compute Time (ms):
-                            <input id="compute_time_input" type="number">
-                        </label>
-                    </div>
-                    <div class="section">
-                        <label>
-                            Fen Refresh Interval (ms):
-                            <input id="fen_refresh_input" type="number">
-                        </label>
-                    </div>
-                    <div class="section switch">
-                        <label class="switch-label">"Hand and Brain" Mode:</label>
-                        <label>
-                            Off
-                            <input id="simon_says_mode_input" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                </div>
-                <div id="autoplay" class="scrollspy">
-                    <h3 class="header">Autoplay</h3>
-                    <div class="section switch">
-                        <label class="switch-label">Autoplay:</label>
-                        <label>
-                            Off
-                            <input id="autoplay_input" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                    <div class="section switch">
-                        <label class="switch-label">Puzzle Mode:</label>
-                        <label>
-                            Off
-                            <input id="puzzle_mode_input" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                    <div class="section switch">
-                        <label class="switch-label">Python Autoplay Backend:</label>
-                        <label>
-                            Off
-                            <input id="python_autoplay_backend_input" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                    <div class="section">
-                        <label>
-                            Base Simulated Think Time (ms):
-                            <input id="think_time_input" type="number">
-                        </label>
-                    </div>
-                    <div class="section">
-                        <label>
-                            Simulated Think Time Variance (ms):
-                            <input id="think_variance_input" type="number">
-                        </label>
-                    </div>
-                    <div class="section">
-                        <label>
-                            Base Simulated Move Time (ms):
-                            <input id="move_time_input" type="number">
-                        </label>
-                    </div>
-                    <div class="section">
-                        <label>
-                            Simulated Move Time Variance (ms):
-                            <input id="move_variance_input" type="number">
-                        </label>
-                    </div>
-                </div>
-            </div>
-            <div class="big-section">
-                <div class="section no-pad">
-                    <button id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
+<div class="row">
+    <div class="col s12 m7 offset-m1 xl6 offset-xl1 offset-right-m1">
+        <div id="form_container" class="big-section">
+            <div id="engine" class="scrollspy">
+                <h3 class="header">Engine</h3>
+                <div class="section">
+                    <label>
+                        Stockfish Compute Time (ms):
+                        <input id="compute_time_input" type="number">
+                    </label>
                 </div>
                 <div class="section">
-                    <button id="apply_btn" class="waves-effect waves-light btn">Apply</button>
+                    <label>
+                        Fen Refresh Interval (ms):
+                        <input id="fen_refresh_input" type="number">
+                    </label>
+                </div>
+                <div class="section switch">
+                    <label class="switch-label">"Hand and Brain" Mode:</label>
+                    <label>
+                        Off
+                        <input id="simon_says_mode_input" type="checkbox">
+                        <span class="lever"></span>
+                        On
+                    </label>
+                </div>
+            </div>
+            <div id="autoplay" class="scrollspy">
+                <h3 class="header">Autoplay</h3>
+                <div class="section switch">
+                    <label class="switch-label">Autoplay:</label>
+                    <label>
+                        Off
+                        <input id="autoplay_input" type="checkbox">
+                        <span class="lever"></span>
+                        On
+                    </label>
+                </div>
+                <div class="section switch">
+                    <label class="switch-label">Puzzle Mode:</label>
+                    <label>
+                        Off
+                        <input id="puzzle_mode_input" type="checkbox">
+                        <span class="lever"></span>
+                        On
+                    </label>
+                </div>
+                <div class="section switch">
+                    <label class="switch-label">Python Autoplay Backend:</label>
+                    <label>
+                        Off
+                        <input id="python_autoplay_backend_input" type="checkbox">
+                        <span class="lever"></span>
+                        On
+                    </label>
+                </div>
+                <div class="section">
+                    <label>
+                        Base Simulated Think Time (ms):
+                        <input id="think_time_input" type="number">
+                    </label>
+                </div>
+                <div class="section">
+                    <label>
+                        Simulated Think Time Variance (ms):
+                        <input id="think_variance_input" type="number">
+                    </label>
+                </div>
+                <div class="section">
+                    <label>
+                        Base Simulated Move Time (ms):
+                        <input id="move_time_input" type="number">
+                    </label>
+                </div>
+                <div class="section">
+                    <label>
+                        Simulated Move Time Variance (ms):
+                        <input id="move_variance_input" type="number">
+                    </label>
                 </div>
             </div>
         </div>
-        <div class="col hide-on-small-only m3 xl3 offset-xl1 sticky-top">
-            <div class="toc-wrapper pin-top">
-                <ul id="toc" class="section table-of-contents">
-                    <li>
-                        <a href="#engine">Engine</a>
-                    </li>
-                    <li>
-                        <a href="#autoplay">Autoplay</a>
-                    </li>
-                </ul>
+        <div class="big-section">
+            <div class="section no-pad">
+                <button id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
             </div>
+            <div class="section">
+                <button id="apply_btn" class="waves-effect waves-light btn">Apply</button>
+            </div>
+        </div>
+    </div>
+    <div class="col hide-on-small-only m3 xl3 offset-xl1 sticky-top">
+        <div class="toc-wrapper pin-top">
+            <ul id="toc" class="section table-of-contents">
+                <li>
+                    <a href="#engine">Engine</a>
+                </li>
+                <li>
+                    <a href="#autoplay">Autoplay</a>
+                </li>
+            </ul>
         </div>
     </div>
 </div>
