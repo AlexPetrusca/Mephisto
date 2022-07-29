@@ -15,7 +15,7 @@ export default class FormElement {
 
     registerChangeListener(fn) {
         if (this.type === 'input') {
-            this.elem.addEventListener('keyup', fn);
+            this.elem.addEventListener('input', fn);
         } else if (this.type === 'checkbox') {
             this.elem.addEventListener('change', fn);
         }

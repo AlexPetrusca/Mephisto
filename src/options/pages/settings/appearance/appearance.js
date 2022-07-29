@@ -1,3 +1,6 @@
 define({
-    onInit: () => console.log('hi')
-})
+    title: 'Appearance',
+    page: {
+        onInit: () => console.log('hi')
+    }
+});

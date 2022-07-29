@@ -12,20 +12,26 @@ async function require(path, type = 'js') {
 }
 
 async function requirejs(path) {
+    if (moduleMap[path]) return moduleMap[path];
     queue.push(path);
     let script = document.createElement('script');
     script.id = `${path}-script`;
     script.type = 'module';
     script.src = `${path}.js`;
     script.className = 'page-script';
-    document.head.appendChild(script);
-    async function poll() {
+    document.body.appendChild(script);
+    let retries = 0;
+    async function pollModule() {
         if (moduleMap[path]) {
             return moduleMap[path];
+        } else if (retries > 10) {
+            define(null);
+            return null;
         }
-        return timeout(poll, 4);
+        retries++;
+        return timeout(pollModule, 4);
     }
-    return poll();
+    return pollModule();
 }
 
 async function requirecss(path) {

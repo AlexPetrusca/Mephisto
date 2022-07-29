@@ -48,11 +48,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const path = pagePath.substring(0, pagePath.lastIndexOf('/') + 1) + title;
         const componentPath = `pages/${path}/${title}`;
 
-        // inject page title
-        titleElem.innerText = `-${title}`.replace(/-[a-z]/g, (match) => {
-            return ` ${match.toUpperCase().substring(1)}`;
-        });
-
         // inject html
         const pageBody = await require(componentPath, 'html');
         contentElem.innerHTML = pageBody.innerHTML;
@@ -65,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .forEach((stylesheet) => stylesheet.disabled = true);
 
         // inject css OR re-enable cached css
-        const pageStylesheet = document.getElementById(`${path}-stylesheet`);
+        const pageStylesheet = document.getElementById(`${componentPath}-stylesheet`);
         if (pageStylesheet) {
             pageStylesheet.disabled = false;
         } else {
@@ -74,8 +69,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // inject js
-        const pageObj = await require(componentPath);
-        pageObj.onInit();
+        const pageModule = await require(componentPath);
+        pageModule.page?.onInit();
+
+        // inject page title
+        titleElem.innerText = pageModule.title;
     }
 
     document.querySelectorAll('#nav-mobile a.menu-item').forEach(elem => {

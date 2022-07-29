@@ -7,15 +7,15 @@ class GeneralSettings {
     configUniqueifier;
 
     constructor() {
-        this.applyButton = document.getElementById('apply_btn');
-        this.applyButton.addEventListener('click', this.onApplyConfigValues);
         this.formElements = [];
         this.configUniqueifier = '';
     }
 
     onInit() {
+        this.applyButton = document.getElementById('apply_btn');
+        this.applyButton.addEventListener('click', () => this.onApplyConfigValues());
         this.resetButton = document.getElementById('reset_btn');
-        this.resetButton.addEventListener('click', this.onResetConfigValues);
+        this.resetButton.addEventListener('click', () => this.onResetConfigValues());
 
         this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 500);
         this.registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 100);
@@ -66,7 +66,7 @@ class GeneralSettings {
     // register form element
     registerFormElement(name, description, type, defaultValue) {
         const formElement = new FormElement(name, description, type, defaultValue);
-        formElement.registerChangeListener(this.onConfigValuesChanged);
+        formElement.registerChangeListener(() => this.onConfigValuesChanged());
         this.formElements.push(formElement);
     }
 
@@ -87,4 +87,7 @@ class GeneralSettings {
     }
 }
 
-define(new GeneralSettings());
+define({
+    title: 'General Settings',
+    page: new GeneralSettings()
+});
