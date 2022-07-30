@@ -78,11 +78,10 @@ function getMovesFromPage(getAllMoves) {
         if (moves.length === 0) {
             moves = document.getElementsByTagName('move'); // vs training
         }
-        if (moves.length && moves[0].innerText.match(/^[a-zA-Z0-9-+]+$/g)) {
+        if (moves.length && moves[0].innerText.match(/^[a-zA-Z0-9-+#]+$/g)) {
             prefix = '***lifen***';
             for (const move of moves) {
-                let innerText = move.innerText.split('\n')[0];
-                res = res + innerText + '*****';
+                res += move.innerText + '*****';
                 if (!getAllMoves && (move.classList.contains('a1t') || move.classList.contains('active'))) {
                     break;
                 }
@@ -141,7 +140,7 @@ function getMovesFromPage(getAllMoves) {
             }
         }
     }
-    return (res) ? prefix + res : 'no';
+    return (res) ? prefix + res.replace(/[^a-zA-Z0-9-+#*]/g, '') : 'no';
 }
 
 function getOrientation() {
