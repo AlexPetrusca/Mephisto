@@ -2,9 +2,10 @@ let site; // the site that the content-script was loaded on (lichess, chess.com,
 let config; // localhost configuration pulled from popup
 let moving = false; // whether the content-script is performing a move
 
-const colorMap = {
-    white: 'w',
-    black: 'b'
+const siteMap = {
+    'lichess.org': 'lichess',
+    'www.chess.com': 'chesscom',
+    'blitztactics.com': 'blitztactics'
 }
 
 const pieceMap = {
@@ -16,16 +17,14 @@ const pieceMap = {
     king: 'k'
 }
 
-const siteMap = {
-    'lichess.org': 'lichess',
-    'www.chess.com': 'chesscom',
-    'blitztactics.com': 'blitztactics'
+const colorMap = {
+    white: 'w',
+    black: 'b'
 }
 
 window.onload = () => {
     console.log('Mephisto is listening!');
     site = siteMap[window.location.hostname];
-    console.log(site);
     pullConfig();
 };
 
