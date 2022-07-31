@@ -17,7 +17,7 @@ this, right click the pinned icon and click 'Inspect Popup'.
 
 NOTE: This will keep the popup open until either the inspect window is closed or the current tab is changed/closed.
 
-###Further Analysis
+### Further Analysis
 In Mephisto's popup window, you can click the button in the bottom-left corner to open the current position in 
 Lichess's analysis board for in-depth analysis. This page will be opened in a new tab.
 
