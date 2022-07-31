@@ -209,9 +209,9 @@ function getMoveRecords() {
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
     if (site === 'chesscom') {
-        let highlights = document.getElementsByClassName('highlight');
+        let highlights = document.querySelectorAll('.highlight');
         if (highlights.length === 0) {
-            highlights = document.getElementsByClassName('move-square');
+            highlights = document.querySelectorAll('.move-square');
         }
         [fromSquare, toSquare] = Array.from(highlights);
         const toPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
@@ -219,7 +219,7 @@ function getLastMoveHighlights() {
             [fromSquare, toSquare] = [toSquare, fromSquare];
         }
     } else if (site === 'lichess') {
-        [toSquare, fromSquare] = Array.from(document.getElementsByClassName('last-move'));
+        [toSquare, fromSquare] = Array.from(document.querySelectorAll('.last-move'));
         const toPiece = Array.from(document.querySelectorAll('.main-board piece'))
             .filter(piece => !!piece.classList[1])
             .find(piece => piece.style.transform === toSquare.style.transform);
@@ -236,18 +236,11 @@ function getTurn() {
     let turn;
     const [_, toSquare] = getLastMoveHighlights();
     if (site === 'chesscom') {
-        // todo: rewrite to remove duplicate code
         const hlPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
-        if (document.querySelector('chess-board')) {
-            let [hlColorType, hlCoords] = [hlPiece.classList[1], hlPiece.classList[2]];
-            if (!hlCoords.includes('square')) {
-                [hlColorType, hlCoords] = [hlCoords, hlColorType];
-            }
-            turn = (hlColorType[0] === 'w') ? 'b' : 'w';
-        } else {
-            const hlColorType = hlPiece.style.backgroundImage.match(/(\w+)\.png/)[1];
-            turn = (hlColorType[0] === 'w') ? 'b' : 'w';
-        }
+        const hlColorType = (document.querySelector('chess-board'))
+            ? Array.from(hlPiece.classList).find(c => c.match(/[wb][prnbkq]/))
+            : hlPiece.style.backgroundImage.match(/(\w+)\.png/)[1];
+        turn = (hlColorType[0] === 'w') ? 'b' : 'w';
     } else if (site === 'lichess') {
         const toPiece = Array.from(document.querySelectorAll('.main-board piece'))
             .filter(piece => !!piece.classList[1])
@@ -269,15 +262,15 @@ function getRanksFiles() {
         fileCoords = coords.slice(8);
         rankCoords = coords.slice(0, 8);
         if (fileCoords.length === 0 || rankCoords.length === 0) {
-            fileCoords = Array.from(document.getElementsByClassName('letter'));
-            rankCoords = Array.from(document.getElementsByClassName('number'));
+            fileCoords = Array.from(document.querySelectorAll('.letter'));
+            rankCoords = Array.from(document.querySelectorAll('.number'));
         }
     } else if (site === 'lichess') {
-        fileCoords = Array.from(document.getElementsByClassName('files')[0].children);
-        rankCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
+        fileCoords = Array.from(document.querySelector('.files').children);
+        rankCoords = Array.from(document.querySelector('.ranks').children);
     }  else if (site === 'blitztactics') {
-        fileCoords = Array.from(document.getElementsByClassName('files')[0].children);
-        rankCoords = Array.from(document.getElementsByClassName('ranks')[0].children);
+        fileCoords = Array.from(document.querySelector('.files').children);
+        rankCoords = Array.from(document.querySelector('.ranks').children);
     }
     return [rankCoords, fileCoords];
 }
@@ -297,13 +290,13 @@ function getBoard() {
 function getPromotionSelection(promotion) {
     let promotions;
     if (site === 'chesscom') {
-        const promotionElems = document.getElementsByClassName('promotion-piece');
+        const promotionElems = document.querySelectorAll('.promotion-piece');
         if (promotionElems.length) promotions = promotionElems;
     } else if (site === 'lichess') {
-        const promotionModal = document.getElementById('promotion-choice');
+        const promotionModal = document.querySelector('#promotion-choice');
         if (promotionModal) promotions = promotionModal.children;
     }  else if (site === 'blitztactics') {
-        promotions = document.getElementsByClassName('pieces')[0].children;
+        promotions = document.querySelector('.pieces').children;
     }
 
     const promoteMap = (site === 'blitztactics')
