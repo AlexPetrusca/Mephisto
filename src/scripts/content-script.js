@@ -179,7 +179,7 @@ function getSelectedMoveRecord() {
     if (site === 'chesscom') {
         selectedMove = document.querySelector('.node.selected') // vs player + computer (new)
             || document.querySelector('.move-node-highlighted .move-text-component') // vs player + computer (old)
-            || document.querySelector('.move-text.selected'); // analysis
+            || document.querySelector('.move-node.selected .move-text'); // analysis
     } else if (site === 'lichess') {
         selectedMove = document.querySelector('u8t.a1t')
             || document.querySelector('move.active');
@@ -335,19 +335,10 @@ function getBrowserOffsetXY() {
     return [offsetX, offsetY];
 }
 
-function getRandomSampledXY(elem, range = 0.9) {
-    const bounds = elem.getBoundingClientRect();
+function getRandomSampledXY(bounds, range = 0.8) {
     const margin = (1 - range) / 2;
     const x = bounds.x + (range * Math.random() + margin) * bounds.width;
     const y = bounds.y + (range * Math.random() + margin) * bounds.height;
-    const [correctX, correctY] = getOffsetCorrectionXY();
-    return [x + correctX, y + correctY];
-}
-
-function getRandomSampledXY2(xBounds, yBounds, range = 0.9) {
-    const margin = (1 - range) / 2;
-    const x = xBounds.x + (range * Math.random() + margin) * xBounds.width;
-    const y = yBounds.y + (range * Math.random() + margin) * yBounds.height;
     const [correctX, correctY] = getOffsetCorrectionXY();
     return [x + correctX, y + correctY];
 }
@@ -363,26 +354,22 @@ function dispatchSimulateClick(x, y) {
     });
 }
 
-function simulateClickSquare(xBounds, yBounds, range = 0.9) {
-    const [x, y] = getRandomSampledXY2(xBounds, yBounds, range);
+function simulateClickSquare(bounds, range = 0.8) {
+    const [x, y] = getRandomSampledXY(bounds, range);
     dispatchSimulateClick(x, y);
 }
 
 function simulateMove(move) {
-    const [rankCoords, fileCoords] = getRanksFiles();
-    // todo: rewrite below logic to use board based calculations
-    const x0Bounds = fileCoords.find((coords) => {
-        return coords.innerHTML.trim().toLowerCase() === move[0];
-    }).getBoundingClientRect();
-    const y0Bounds = rankCoords.find((coords) => {
-        return coords.innerHTML.trim() === move[1];
-    }).getBoundingClientRect();
-    const x1Bounds = fileCoords.find((coords) => {
-        return coords.innerHTML.trim().toLowerCase() === move[2];
-    }).getBoundingClientRect();
-    const y1Bounds = rankCoords.find((coords) => {
-        return coords.innerHTML.trim() === move[3];
-    }).getBoundingClientRect();
+    const boardBounds = getBoard().getBoundingClientRect();
+    const orientation = getOrientation();
+
+    function getBoundsFromCoords(coords) {
+        const squareSide = boardBounds.width / 8;
+        const [xIdx, yIdx] = (orientation === 'white')
+            ? [coords[0].charCodeAt(0) - 'a'.charCodeAt(0), 8 - parseInt(coords[1])]
+            : ['h'.charCodeAt(0) - coords[0].charCodeAt(0), parseInt(coords[1]) - 1];
+        return new DOMRect(boardBounds.x + xIdx * squareSide, boardBounds.y + yIdx * squareSide, squareSide, squareSide);
+    }
 
     function getThinkTime() {
         return config.think_time + Math.random() * config.think_variance;
@@ -393,14 +380,9 @@ function simulateMove(move) {
     }
 
     async function performSimulatedMoveClicks() {
-        // if (config.python_autoplay_backend) {
-            // const [x0, y0] = getRandomSampledScreenXY2(x0Bounds, y0Bounds);
-            // const [x1, y1] = getRandomSampledScreenXY2(x1Bounds, y1Bounds);
-            // await requestPythonBackendMove(x0, y0, x1, y1);
-        // }
-        simulateClickSquare(x0Bounds, y0Bounds);
+        simulateClickSquare(getBoundsFromCoords(move.substring(0, 2)));
         await promiseTimeout(getMoveTime());
-        simulateClickSquare(x1Bounds, y1Bounds);
+        simulateClickSquare(getBoundsFromCoords(move.substring(2)));
     }
 
     async function performSimulatedMoveSequence() {
@@ -421,13 +403,12 @@ function simulatePvMoves(pv) {
     function deriveLastMove() {
         function deriveCoords(square) {
             if (!square) return "no";
-
             const squareBounds = square.getBoundingClientRect();
             const xIdx = Math.floor(((squareBounds.x + 1) - boardBounds.x) / squareBounds.width);
             const yIdx = Math.floor(((squareBounds.y + 1) - boardBounds.y) / squareBounds.height);
             return getOrientation() === 'white'
-                ? String.fromCharCode('a'.charCodeAt(0) + xIdx) + ((7 - yIdx) + 1)
-                : String.fromCharCode('a'.charCodeAt(0) + (7 - xIdx)) + (yIdx + 1);
+                ? String.fromCharCode('a'.charCodeAt(0) + xIdx) + (8 - yIdx)
+                : String.fromCharCode('h'.charCodeAt(0) - xIdx) + (yIdx + 1);
         }
 
         const [fromSquare, toSquare] = getLastMoveHighlights();
@@ -465,7 +446,6 @@ function simulatePvMoves(pv) {
 async function simulatePromotionClicks(promotion) {
     const promotionChoice = getPromotionSelection(promotion);
     if (promotionChoice) {
-        const [x, y] = getRandomSampledXY(promotionChoice);
-        dispatchSimulateClick(x, y);
+        simulateClickSquare(promotionChoice.getBoundingClientRect())
     }
 }
