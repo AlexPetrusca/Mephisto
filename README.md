@@ -61,18 +61,23 @@ Thank you for your interest in contributing to Mephisto! There are many ways to 
 
 
 ## Technical Overview
-Mephisto's central mechanism is the interplay between its content script and popup script:
-- The content script runs in the context of the page and has access to the page's DOM tree. It scrapes the page for 
-  information about the current chess position to send back to the popup script. It also handles sending calls to 
-  either the Python backend or popup script to simulate mouse actions.
-- The popup script runs in the context of the popup window and therefore has no direct access to the page. The popup
-  script is responsible for syncing the UI with the current chess position, computing the next best move, and 
-  simulating click actions. It reads information passed from the content script, converts it into a FEN string, and
-  passes the string to a JavaScript port of Stockfish for analysis. Once the next best move is calculated, the move is
-  displayed on the UI. 
-  - If autoplay is enabled, the move is sent back to the content script, where additional scraping will be performed 
-    to convert the move to its corresponding XY coordinates and click events will be orchestrated to simulate the move.
-    The content script receives these click events and invokes the chrome.debugger API to simulate clicks.
+Mephisto's central mechanism is the interplay between its content script and popup script.
+
+### Content Script
+The content script runs in the context of the page and has access to the page's DOM tree. It scrapes the page for 
+information about the current chess position to send back to the popup script. It also handles sending calls to 
+either the Python backend or popup script to simulate mouse actions.
+
+### Popup Script
+The popup script runs in the context of the popup window and therefore has no direct access to the page. The popup
+script is responsible for syncing the UI with the current chess position, computing the next best move, and 
+simulating click actions. It reads information passed from the content script, converts it into a FEN string, and
+passes the string to a JavaScript port of Stockfish for analysis. Once the next best move is calculated, the move is
+displayed on the UI. 
+
+If autoplay is enabled, the move is sent back to the content script, where additional scraping will be performed 
+to convert the move to its corresponding XY coordinates and click events will be orchestrated to simulate the move.
+The content script receives these click events and invokes the chrome.debugger API to simulate clicks.
 
 
 ## How to Develop Locally
