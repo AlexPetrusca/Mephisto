@@ -11,6 +11,15 @@ let lastScore = '';
 let lastBestMove = '';
 let turn = '';
 
+const pieceNameMap = {
+    'P': 'Pawn',
+    'R': 'Rook',
+    'N': 'Knight',
+    'B': 'Bishop',
+    'Q': 'Queen',
+    'K': 'King',
+};
+
 $(window).on('load', function () {
     try {
         // load extension configurations from localStorage
@@ -175,14 +184,6 @@ function on_stockfish_response(event) {
             const startPiece = board.position()[startSquare];
             const startPieceType = (startPiece) ? startPiece.substr(1) : null;
             if (startPieceType) {
-                const pieceNameMap = {
-                    'P': 'Pawn',
-                    'R': 'Rook',
-                    'N': 'Knight',
-                    'B': 'Bishop',
-                    'Q': 'Queen',
-                    'K': 'King',
-                };
                 $('#chess_line_1').text(pieceNameMap[startPieceType])
             }
         } else {
@@ -200,14 +201,6 @@ function on_stockfish_response(event) {
             if (config.simon_says_mode) {
                 const startSquare = best.substr(0, 2);
                 const startPiece = board.position()[startSquare].substr(1);
-                const pieceNameMap = {
-                    'P': 'Pawn',
-                    'R': 'Rook',
-                    'N': 'Knight',
-                    'B': 'Bishop',
-                    'Q': 'Queen',
-                    'K': 'King',
-                };
                 request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
             }
             if (config.autoplay) {

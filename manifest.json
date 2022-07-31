@@ -2,7 +2,7 @@
   "update_url": "https://clients2.google.com/service/update2/crx",
   "manifest_version": 3,
   "name": "Mephisto Chess Extension",
-  "description": "Chess Next Move Extension for Chess.com and Lichess.org",
+  "description": "Chess next best move and autoplay extension for Lichess and Chess.com",
   "version": "1.0.0",
   "homepage_url": "https://alexpetrusca.github.io/mephisto",
   "author": "Alex Petrusca",
