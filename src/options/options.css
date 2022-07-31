@@ -30,6 +30,15 @@ main > .container, nav > .container {
     margin-bottom: 32px;
 }
 
+.sticky-top {
+    position: sticky;
+    top: 0;
+}
+
+.big-section {
+    padding-bottom: 2rem !important;
+}
+
 /* side nav */
 
 .sidenav.sidenav-fixed {

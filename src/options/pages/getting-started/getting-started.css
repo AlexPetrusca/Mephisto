@@ -1,0 +1,7 @@
+.section {
+    padding-bottom: 0;
+}
+
+.section p:last-child {
+    margin-bottom: 0;
+}
