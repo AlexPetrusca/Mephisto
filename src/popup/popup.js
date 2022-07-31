@@ -330,37 +330,49 @@ function toggle_calculating(on) {
     isCalculating = on;
 }
 
+async function dispatchClickEvent(x, y) {
+    if (config.python_autoplay_backend) {
+        await requestPythonBackendClick(x, y);
+    } else {
+        await requestDebuggerClick();
+    }
+}
+
+async function requestDebuggerClick(x, y) {
+    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        const debugee = {tabId: tabs[0].id};
+        chrome.debugger.attach(debugee, "1.3", async () => {
+            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
+                type: 'mousePressed',
+                button: 'left',
+                x: x,
+                y: y
+            });
+            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
+                type: 'mouseReleased',
+                button: 'left',
+                x: x,
+                y: y
+            });
+        });
+    });
+}
+
 async function dispatchMouseEvent(debugee, mouseEvent, mouseEventOpts) {
     return new Promise(resolve => {
         chrome.debugger.sendCommand(debugee, mouseEvent, mouseEventOpts, resolve);
     });
 }
 
-async function dispatchClickEvent(x, y) {
-    if (config.python_autoplay_backend) {
-        await requestPythonBackendClick(x, y);
-    } else {
-        chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-            const debugee = {tabId: tabs[0].id};
-            chrome.debugger.attach(debugee, "1.3", async () => {
-                await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
-                    type: 'mousePressed',
-                    button: 'left',
-                    x: x,
-                    y: y
-                });
-                await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
-                    type: 'mouseReleased',
-                    button: 'left',
-                    x: x,
-                    y: y
-                });
-            });
-        });
-    }
+async function requestPythonBackendClick(x, y) {
+    return callPythonBackend(`http://localhost:8080/performClick`, { x: x, y: y });
 }
 
-function callPythonBackend(url, data) {
+async function requestPythonBackendMove(x0, y0, x1, y1) {
+    return callPythonBackend('http://localhost:8080/performMove', { x0: x0, y0: y0, x1: x1, y1: y1 });
+}
+
+async function callPythonBackend(url, data) {
     return fetch(url, {
         method: "POST",
         credentials: "include",
@@ -370,12 +382,4 @@ function callPythonBackend(url, data) {
         },
         body: JSON.stringify(data)
     });
-}
-
-function requestPythonBackendMove(x0, y0, x1, y1) {
-    return callPythonBackend('http://localhost:8080/performMove', { x0: x0, y0: y0, x1: x1, y1: y1 });
-}
-
-function requestPythonBackendClick(x, y) {
-    return callPythonBackend(`http://localhost:8080/performClick`, { x: x, y: y });
 }
