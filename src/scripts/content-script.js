@@ -172,66 +172,6 @@ function pullConfig() {
 
 // -------------------------------------------------------------------------------------------
 
-function promiseTimeout(time) {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve(time);
-        }, time);
-    });
-}
-
-function getChessCoordsCorrectionXY() {
-    if (site === 'blitztactics') {
-        return [-21, -4];
-    }
-    return [0, 0];
-}
-
-function getBrowserOffsetXY() {
-    const topBarHeight = window.outerHeight - window.innerHeight;
-    const offsetX = window.screenX;
-    const offsetY = window.screenY + topBarHeight;
-    return [offsetX, offsetY];
-}
-
-function getRandomSampledXY(elem, range = 0.9) {
-    const bounds = elem.getBoundingClientRect();
-    const margin = (1 - range) / 2;
-    const x = bounds.x + (range * Math.random() + margin) * bounds.width;
-    const y = bounds.y + (range * Math.random() + margin) * bounds.height;
-    const [correctX, correctY] = getChessCoordsCorrectionXY();
-    return [x + correctX, y + correctY];
-}
-
-function getRandomSampledXY2(xBounds, yBounds, range = 0.9) {
-    const margin = (1 - range) / 2;
-    const x = xBounds.x + (range * Math.random() + margin) * xBounds.width;
-    const y = yBounds.y + (range * Math.random() + margin) * yBounds.height;
-    const [correctX, correctY] = getChessCoordsCorrectionXY();
-    console.log([x + correctX, y + correctY]);
-    return [x + correctX, y + correctY];
-}
-
-function getScreenXY(elem) {
-    const bounds = elem.getBoundingClientRect();
-    const [offsetX, offsetY] = getBrowserOffsetXY();
-    return [Math.floor(bounds.x + offsetX), Math.floor(bounds.y + offsetY)];
-}
-
-function getRandomSampledScreenXY(elem, range = 0.9) {
-    const [x, y] = getRandomSampledXY(elem, range);
-    const [offsetX, offsetY] = getBrowserOffsetXY();
-    return [Math.floor(x + offsetX), Math.floor(y + offsetY)];
-}
-
-function getRandomSampledScreenXY2(xBounds, yBounds, range = 0.9) {
-    const [x, y] = getRandomSampledXY2(xBounds, yBounds, range);
-    const [offsetX, offsetY] = getBrowserOffsetXY();
-    return [Math.floor(x + offsetX), Math.floor(y + offsetY)];
-}
-
-// -------------------------------------------------------------------------------------------
-
 function getSelectedMoveRecord() {
     let selectedMove;
     if (site === 'chesscom') {
@@ -372,29 +312,51 @@ function getPromotionSelection(promotion) {
 
 // -------------------------------------------------------------------------------------------
 
-function callPythonBackend(url, data) {
-    return fetch(url, {
-        method: "POST",
-        credentials: "include",
-        cache: "no-cache",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(data)
+function promiseTimeout(time) {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve(time);
+        }, time);
     });
 }
 
-function requestPythonBackendMove(x0, y0, x1, y1) {
-    return callPythonBackend('http://localhost:8080/performMove', { x0: x0, y0: y0, x1: x1, y1: y1 });
+function getChessCoordsCorrectionXY() {
+    if (config.python_autoplay_backend) {
+        return getBrowserOffsetXY();
+    } else if (site === 'blitztactics') {
+        return [-21, -4];
+    }
+    return [0, 0];
 }
 
-function requestPythonBackendClick(x, y) {
-    return callPythonBackend(`http://localhost:8080/performClick`, { x: x, y: y });
+function getBrowserOffsetXY() {
+    const topBarHeight = window.outerHeight - window.innerHeight;
+    const offsetX = window.screenX;
+    const offsetY = window.screenY + topBarHeight;
+    return [offsetX, offsetY];
+}
+
+function getRandomSampledXY(elem, range = 0.9) {
+    const bounds = elem.getBoundingClientRect();
+    const margin = (1 - range) / 2;
+    const x = bounds.x + (range * Math.random() + margin) * bounds.width;
+    const y = bounds.y + (range * Math.random() + margin) * bounds.height;
+    const [correctX, correctY] = getChessCoordsCorrectionXY();
+    return [x + correctX, y + correctY];
+}
+
+function getRandomSampledXY2(xBounds, yBounds, range = 0.9) {
+    const margin = (1 - range) / 2;
+    const x = xBounds.x + (range * Math.random() + margin) * xBounds.width;
+    const y = yBounds.y + (range * Math.random() + margin) * yBounds.height;
+    const [correctX, correctY] = getChessCoordsCorrectionXY();
+    console.log([x + correctX, y + correctY]);
+    return [x + correctX, y + correctY];
 }
 
 // -------------------------------------------------------------------------------------------
 
-function simulateClick(x, y) {
+function dispatchSimulateClick(x, y) {
     chrome.runtime.sendMessage({
         click: true,
         x: x,
@@ -404,7 +366,7 @@ function simulateClick(x, y) {
 
 function simulateClickSquare(xBounds, yBounds, range = 0.9) {
     const [x, y] = getRandomSampledXY2(xBounds, yBounds, range);
-    simulateClick(x, y);
+    dispatchSimulateClick(x, y);
 }
 
 function simulateMove(move) {
@@ -432,15 +394,14 @@ function simulateMove(move) {
     }
 
     async function performSimulatedMoveClicks() {
-        if (config.python_autoplay_backend) {
-            const [x0, y0] = getRandomSampledScreenXY2(x0Bounds, y0Bounds);
-            const [x1, y1] = getRandomSampledScreenXY2(x1Bounds, y1Bounds);
-            await requestPythonBackendMove(x0, y0, x1, y1);
-        } else {
-            simulateClickSquare(x0Bounds, y0Bounds);
-            await promiseTimeout(getMoveTime());
-            simulateClickSquare(x1Bounds, y1Bounds);
-        }
+        // if (config.python_autoplay_backend) {
+            // const [x0, y0] = getRandomSampledScreenXY2(x0Bounds, y0Bounds);
+            // const [x1, y1] = getRandomSampledScreenXY2(x1Bounds, y1Bounds);
+            // await requestPythonBackendMove(x0, y0, x1, y1);
+        // }
+        simulateClickSquare(x0Bounds, y0Bounds);
+        await promiseTimeout(getMoveTime());
+        simulateClickSquare(x1Bounds, y1Bounds);
     }
 
     async function performSimulatedMoveSequence() {
@@ -501,17 +462,11 @@ function simulatePvMoves(pv) {
     return performSimulatedPvMoveSequence();
 }
 
+// todo: needs to be rewritten to work with debugger click and python backend
 async function simulatePromotionClicks(promotion) {
     const promotionChoice = getPromotionSelection(promotion);
     if (promotionChoice) {
-        if (config.python_autoplay_backend) {
-            const [x, y] = getRandomSampledScreenXY(promotionChoice);
-            await requestPythonBackendClick(x, y);
-        } else {
-            // todo: figure out for chess.com live mode / current solution is set true 'always promote to queen'
-            setTimeout(() => {
-                promotionChoice.click();
-            }, 10);
-        }
+        const [x, y] = getRandomSampledXY(promotionChoice);
+        dispatchSimulateClick(x, y);
     }
 }
