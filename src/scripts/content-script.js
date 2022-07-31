@@ -1,5 +1,3 @@
-// noinspection CssInvalidHtmlTagReference
-
 let site; // the site that the content-script was loaded on (lichess, chess.com,)
 let config; // localhost configuration pulled from popup
 let moving = false; // whether the content-script is performing a move
