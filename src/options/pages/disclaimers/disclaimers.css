@@ -8,7 +8,7 @@
 
 ul.list {
     list-style-type: disc;
-    margin-left: 40px;
+    padding-inline-start: 40px;
     margin-bottom: 0;
 }
 

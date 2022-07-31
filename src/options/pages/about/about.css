@@ -1,3 +1,16 @@
+img {
+    max-width: 500px;
+}
+
+ol.list {
+    list-style-type: decimal;
+    margin-bottom: 0;
+}
+
+ol.list li {
+    list-style-type: decimal;
+}
+
 .section {
     padding-bottom: 0;
 }
