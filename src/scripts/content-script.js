@@ -1,3 +1,5 @@
+// noinspection CssInvalidHtmlTagReference
+
 let site; // the site that the content-script was loaded on (lichess, chess.com,)
 let config; // localhost configuration pulled from popup
 let moving = false; // whether the content-script is performing a move
@@ -113,8 +115,8 @@ function getMoves(getAllMoves) {
                     .replaceAll('px', '').replace(' ', '').split(",")
                     .map(num => Number(num) / piece.getBoundingClientRect().width + 1);
                 const coords = (getOrientation() === 'black')
-                    ? String.fromCharCode(105 - xyCoords[0]) + xyCoords[1]
-                    : String.fromCharCode(96 + xyCoords[0]) + (9 - xyCoords[1]);
+                    ? String.fromCharCode('h'.charCodeAt(0) - xyCoords[0] + 1) + xyCoords[1]
+                    : String.fromCharCode('a'.charCodeAt(0) + xyCoords[0] - 1) + (9 - xyCoords[1]);
                 if (piece.classList[0] !== "ghost") {
                     res += `${colorMap[piece.classList[0]]}-${pieceMap[piece.classList[1]]}-${coords}*****`;
                 } else if (piece.style.visibility === "visible") {
@@ -133,8 +135,8 @@ function getMoves(getAllMoves) {
                 .replaceAll('px', '').replace(' ', '').split(",")
                 .map(num => Number(num) / piece.getBoundingClientRect().width + 1);
             const coords = (getOrientation() === 'black')
-                ? String.fromCharCode(105 - xyCoords[0]) + xyCoords[1]
-                : String.fromCharCode(96 + xyCoords[0]) + (9 - xyCoords[1]);
+                ? String.fromCharCode('h'.charCodeAt(0) - xyCoords[0] + 1) + xyCoords[1]
+                : String.fromCharCode('a'.charCodeAt(0) + xyCoords[0] - 1) + (9 - xyCoords[1]);
             if (piece.classList[0] !== "ghost") {
                 res += `${colorMap[piece.classList[0]]}-${pieceMap[piece.classList[1]]}-${coords}*****`;
             } else if (piece.style.visibility === "visible") {
@@ -234,6 +236,7 @@ function getTurn() {
     let turn;
     const [_, toSquare] = getLastMoveHighlights();
     if (site === 'chesscom') {
+        // todo: rewrite to remove duplicate code
         const hlPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
         if (document.querySelector('chess-board')) {
             let [hlColorType, hlCoords] = [hlPiece.classList[1], hlPiece.classList[2]];
@@ -314,17 +317,13 @@ function getPromotionSelection(promotion) {
 
 function promiseTimeout(time) {
     return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve(time);
-        }, time);
+        setTimeout(() => resolve(time), time);
     });
 }
 
-function getChessCoordsCorrectionXY() {
+function getOffsetCorrectionXY() {
     if (config.python_autoplay_backend) {
         return getBrowserOffsetXY();
-    } else if (site === 'blitztactics') {
-        return [-21, -4];
     }
     return [0, 0];
 }
@@ -341,7 +340,7 @@ function getRandomSampledXY(elem, range = 0.9) {
     const margin = (1 - range) / 2;
     const x = bounds.x + (range * Math.random() + margin) * bounds.width;
     const y = bounds.y + (range * Math.random() + margin) * bounds.height;
-    const [correctX, correctY] = getChessCoordsCorrectionXY();
+    const [correctX, correctY] = getOffsetCorrectionXY();
     return [x + correctX, y + correctY];
 }
 
@@ -349,14 +348,14 @@ function getRandomSampledXY2(xBounds, yBounds, range = 0.9) {
     const margin = (1 - range) / 2;
     const x = xBounds.x + (range * Math.random() + margin) * xBounds.width;
     const y = yBounds.y + (range * Math.random() + margin) * yBounds.height;
-    const [correctX, correctY] = getChessCoordsCorrectionXY();
-    console.log([x + correctX, y + correctY]);
+    const [correctX, correctY] = getOffsetCorrectionXY();
     return [x + correctX, y + correctY];
 }
 
 // -------------------------------------------------------------------------------------------
 
 function dispatchSimulateClick(x, y) {
+    console.log([x, y]);
     chrome.runtime.sendMessage({
         click: true,
         x: x,
@@ -427,8 +426,8 @@ function simulatePvMoves(pv) {
             const xIdx = Math.floor(((squareBounds.x + 1) - boardBounds.x) / squareBounds.width);
             const yIdx = Math.floor(((squareBounds.y + 1) - boardBounds.y) / squareBounds.height);
             return getOrientation() === 'white'
-                ? String.fromCharCode(97 + xIdx) + ((7 - yIdx) + 1)
-                : String.fromCharCode(97 + (7 - xIdx)) + (yIdx + 1);
+                ? String.fromCharCode('a'.charCodeAt(0) + xIdx) + ((7 - yIdx) + 1)
+                : String.fromCharCode('a'.charCodeAt(0) + (7 - xIdx)) + (yIdx + 1);
         }
 
         const [fromSquare, toSquare] = getLastMoveHighlights();
