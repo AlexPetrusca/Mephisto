@@ -54,9 +54,12 @@ $(window).on('load', function () {
 
     // init chess board
     board = ChessBoard('board', {
-        draggable: false,
+        position: 'start',
+        pieceTheme: '/res/chesspieces/standard/{piece}.svg',
+        appearSpeed: 'fast',
         moveSpeed: 'fast',
-        position: 'start'
+        showNotation: false,
+        draggable: false
     });
 
     // init fen LRU cache
@@ -81,6 +84,7 @@ $(window).on('load', function () {
         } else if (response.pullConfig) {
             push_config();
         } else if (response.click) {
+            console.log(response);
             dispatchClickEvent(response.x, response.y);
         }
     });
@@ -334,7 +338,7 @@ async function dispatchClickEvent(x, y) {
     if (config.python_autoplay_backend) {
         await requestPythonBackendClick(x, y);
     } else {
-        await requestDebuggerClick();
+        await requestDebuggerClick(x, y);
     }
 }
 
