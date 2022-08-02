@@ -1,19 +1,57 @@
 <div class="row">
     <div class="col s12 m7 offset-m1 xl6 offset-xl1 offset-right-m1">
-        <div class="big-section">
-            <div id="move_time" class="section scrollspy">
-                <label>
-                    Move Time:
-                    <input id="move_time_input" type="number">
-                </label>
+        <div id="form-container" class="big-section">
+            <div id="board_and_pieces" class="scrollspy">
+                <h3 class="header">Board and Pieces</h3>
+                <div class="section">
+                    <label>
+                        Pieces:
+                        <select name="pieces" id="pieces_select">
+                            <option value="wikipedia.svg" data-icon="/res/chesspieces/wikipedia/wN.svg">Wikipedia</option>
+                            <option value="neo.png" data-icon="/res/chesspieces/neo/wN.png">Neo</option>
+                            <option value="alpha.png" data-icon="/res/chesspieces/alpha/wN.png">Alpha</option>
+                            <option value="classic.png" data-icon="/res/chesspieces/classic/wN.png">Classic</option>
+                            <option value="vintage.png" data-icon="/res/chesspieces/vintage/wN.png">Vintage</option>
+                            <option value="bases.png" data-icon="/res/chesspieces/bases/wN.png">Bases</option>
+                            <option value="book.png" data-icon="/res/chesspieces/book/wN.png">Book</option>
+                            <option value="staunty.svg" data-icon="/res/chesspieces/staunty/wN.svg">Staunty</option>
+                            <option value="riohacha.svg" data-icon="/res/chesspieces/riohacha/wN.svg">Riohacha</option>
+                            <option value="newspaper.png" data-icon="/res/chesspieces/newspaper/wN.png">Newspaper</option>
+                            <option value="wood.png" data-icon="/res/chesspieces/wood/wN.png">Wood</option>
+                            <option value="neo-wood.png" data-icon="/res/chesspieces/neo-wood/wN.png">Neo-Wood</option>
+                            <option value="8-bit.png" data-icon="/res/chesspieces/8-bit/wN.png">8-Bit</option>
+                            <option value="three-dee.png" data-icon="/res/chesspieces/three-dee/wN.png">Three-Dee</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="section">
+                    <label>
+                        Board:
+                        <select name="board" id="board_select">
+                            <option value="brown">Brown</option>
+                            <option value="red">Red</option>
+                            <option value="orange">Orange</option>
+                            <option value="tan">Tan</option>
+                            <option value="green">Green</option>
+                            <option value="sky">Sky</option>
+                            <option value="blue">Blue</option>
+                            <option value="purple">Purple</option>
+                            <option value="grey">Grey</option>
+                            <option value="wood">Wood</option>
+                            <option value="marble">Marble</option>
+                            <option value="newspaper">Newspaper</option>
+                            <option value="_8-bit">8-Bit</option>
+                        </select>
+                    </label>
+                </div>
             </div>
         </div>
         <div class="big-section">
-            <div class="section no-pad-bot">
-                <a id="reset_btn" class="waves-effect waves-light btn">Restore Default Settings</a>
+            <div class="section no-pad">
+                <button id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
             </div>
             <div class="section">
-                <a id="apply_btn" class="waves-effect waves-light btn">Apply Settings</a>
+                <button id="apply_btn" class="waves-effect waves-light btn">Apply</button>
             </div>
         </div>
     </div>
@@ -21,7 +59,7 @@
         <div class="toc-wrapper pin-top">
             <ul id="toc" class="section table-of-contents">
                 <li>
-                    <a>Example</a>
+                    <a href="#board_and_pieces">Board and Pieces</a>
                 </li>
             </ul>
         </div>

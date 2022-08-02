@@ -33,7 +33,9 @@ $(window).on('load', function () {
             simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')),
             autoplay: JSON.parse(localStorage.getItem('autoplay')),
             puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')),
-            python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend'))
+            python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')),
+            pieces: JSON.parse(localStorage.getItem('pieces')),
+            board: JSON.parse(localStorage.getItem('board'))
         };
     } catch {
         // resort to defaults if can't load
@@ -42,20 +44,25 @@ $(window).on('load', function () {
             fen_refresh: 100,
             think_time: 1000,
             think_variance: 500,
-            move_time: 1000,
-            move_variance: 500,
+            move_time: 500,
+            move_variance: 250,
             simon_says_mode: false,
             autoplay: false,
             puzzle_mode: false,
-            python_autoplay_backend: false
+            python_autoplay_backend: false,
+            pieces: 'standard.svg',
+            board: 'brown'
         };
     }
     push_config();
 
     // init chess board
+    document.querySelector('#board').classList.add(config.board);
+    const [pieceSet, ext] = config.pieces.split('.')
     board = ChessBoard('board', {
         position: 'start',
-        pieceTheme: '/res/chesspieces/standard/{piece}.svg',
+        class: config.board,
+        pieceTheme: `/res/chesspieces/${pieceSet}/{piece}.${ext}`,
         appearSpeed: 'fast',
         moveSpeed: 'fast',
         showNotation: false,
@@ -131,7 +138,7 @@ function parse_fen_from_response(txt) {
     };
     const metaTag = txt.substr(3, 5);
     const prefix = metaTag.substr(0, 2);
-    $('#gamedetected').text(prefixMap[prefix]);
+    $('#game-detection').text(prefixMap[prefix]);
     txt = txt.substr(11);
 
     const chess = new Chess();
@@ -324,8 +331,8 @@ function draw_arrow(move, color, div) {
 
 function clear_arrows() {
     if (!config.simon_says_mode) {
-        $('#overlay1').empty();
-        $('#overlay2').empty();
+        $('#move-arrow').empty();
+        $('#response-arrow').empty();
     }
 }
 

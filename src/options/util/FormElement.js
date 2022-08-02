@@ -3,6 +3,7 @@ export default class FormElement {
     desc;
     type;
     default;
+    valueType;
     elem;
 
     constructor(name, description, type, defaultValue) {
@@ -10,13 +11,16 @@ export default class FormElement {
         this.desc = description;
         this.type = type;
         this.default = defaultValue;
-        this.elem = document.getElementById(`${name}_input`);
+        this.valueType = typeof defaultValue;
+        this.elem = document.getElementById(`${name}_${type}`);
     }
 
     registerChangeListener(fn) {
         if (this.type === 'input') {
             this.elem.addEventListener('input', fn);
         } else if (this.type === 'checkbox') {
+            this.elem.addEventListener('change', fn);
+        } else if (this.type === 'select') {
             this.elem.addEventListener('change', fn);
         }
     }
@@ -26,6 +30,8 @@ export default class FormElement {
             return this.elem.value;
         } else if (this.type === 'checkbox') {
             return this.elem.checked;
+        } else if (this.type === 'select') {
+            return this.elem.value;
         }
     }
 
@@ -34,6 +40,10 @@ export default class FormElement {
             this.elem.value = val;
         } else if (this.type === 'checkbox') {
             this.elem.checked = val;
+        } else if (this.type === 'select') {
+            this.elem.value = val;
+            this.elem.parentElement.querySelector('input').value =
+                this.elem.querySelector(`option[value="${val}"]`).innerText;
         }
     }
 }

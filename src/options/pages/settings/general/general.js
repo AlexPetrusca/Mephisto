@@ -1,5 +1,6 @@
 import FormElement from "./../../../util/FormElement.js";
 
+// todo: remove duplicated code, here and in Appearance Settings
 class GeneralSettings {
     resetButton;
     applyButton;
@@ -25,8 +26,8 @@ class GeneralSettings {
         this.registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
         this.registerFormElement('think_time', 'Simulated Think Time (ms):', 'input', 1000);
         this.registerFormElement('think_variance', 'Simulated Think Variance (ms):', 'input', 500);
-        this.registerFormElement('move_time', 'Simulated Move Time (ms):', 'input', 200);
-        this.registerFormElement('move_variance', 'Simulated Move Variance (ms):', 'input', 100);
+        this.registerFormElement('move_time', 'Simulated Move Time (ms):', 'input', 500);
+        this.registerFormElement('move_variance', 'Simulated Move Variance (ms):', 'input', 250);
 
         this.pullConfigValues();
         this.onConfigValuesChanged();
@@ -58,7 +59,10 @@ class GeneralSettings {
 
     pushConfigValues() {
         this.formElements.forEach((formElement) => {
-            localStorage.setItem(formElement.name, formElement.getValue())
+            const formValue = (formElement.valueType === 'string')
+                ? `"${formElement.getValue()}"`
+                : formElement.getValue();
+            localStorage.setItem(formElement.name, formValue);
         });
         this.updateUniquifier();
     }
@@ -77,7 +81,6 @@ class GeneralSettings {
     }
 
     onResetConfigValues() {
-        localStorage.clear();
         this.pullConfigValues();
         this.onConfigValuesChanged();
     }

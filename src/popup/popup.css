@@ -1,30 +1,200 @@
 html, body {
-    width: 350px;
+    width: 348px;
     height: 470px;
-    float: left;
-    font: 20px Source Sans Pro, Arial, Helvetica;
-    text-decoration: none;
-    color: #666;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, .8);
-    line-height: 35px;
-    text-overflow: clip;
-    white-space: nowrap;
     overflow: hidden;
+    background-color: rgb(235, 235, 235);
+    color: #666666;
+    font: 20px 'Roboto', sans-serif;
+    line-height: 35px;
+    text-decoration: none;
+    text-overflow: clip;
     text-align: center;
-    background-color: #ddd;
-    background: rgba(221, 221, 221, 1);
-    background: -moz-linear-gradient(left, rgba(221, 221, 221, 1) 0%, rgba(238, 238, 238, 1) 41%, rgba(238, 238, 238, 1) 100%);
-    background: -webkit-gradient(left top, right top, color-stop(0%, rgba(221, 221, 221, 1)), color-stop(41%, rgba(238, 238, 238, 1)), color-stop(100%, rgba(238, 238, 238, 1)));
-    background: -webkit-linear-gradient(left, rgba(221, 221, 221, 1) 0%, rgba(238, 238, 238, 1) 41%, rgba(238, 238, 238, 1) 100%);
-    background: -o-linear-gradient(left, rgba(221, 221, 221, 1) 0%, rgba(238, 238, 238, 1) 41%, rgba(238, 238, 238, 1) 100%);
-    background: -ms-linear-gradient(left, rgba(221, 221, 221, 1) 0%, rgba(238, 238, 238, 1) 41%, rgba(238, 238, 238, 1) 100%);
-    background: linear-gradient(to right, rgba(221, 221, 221, 1) 0%, rgba(238, 238, 238, 1) 41%, rgba(238, 238, 238, 1) 100%);
-    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#dddddd', endColorstr='#eeeeee', GradientType=1);
-    margin: 1px
+    white-space: nowrap;
 }
 
-.material-tooltip {
-    top: 429px !important;
+#board.brown .white-1e1d7 {
+    background-color: #efdab5;
+    color: #b58863;
+}
+
+#board.brown .black-3c85d {
+    background-color: #b58863;
+    color: #efdab5;
+}
+
+#board.green .white-1e1d7 {
+    background-color: #eeedd2;
+    color: #759656;
+}
+
+#board.green .black-3c85d {
+    background-color: #759656;
+    color: #eeedd2;
+}
+
+#board.blue .white-1e1d7 {
+    background-color: #eae9d2;
+    color: #4a7399;
+}
+
+#board.blue .black-3c85d {
+    background-color: #4a7399;
+    color: #eae9d2;
+}
+
+#board.grey .white-1e1d7 {
+    background-color: #dcdcdc;
+    color: #ababab;
+}
+
+#board.grey .black-3c85d {
+    background-color: #ababab;
+    color: #dcdcdc;
+}
+
+#board.orange .white-1e1d7 {
+    background-color: #fce4b2;
+    color: #cf8b19;
+}
+
+#board.orange .black-3c85d {
+    background-color: #cf8b19;
+    color: #fce4b2;
+}
+
+#board.purple .white-1e1d7 {
+    background-color: #efefef;
+    color: #8877b7;
+}
+
+#board.purple .black-3c85d {
+    background-color: #8877b7;
+    color: #efefef;
+}
+
+#board.red .white-1e1d7 {
+    background-color: #f0d9bf;
+    color: #b95646;
+}
+
+#board.red .black-3c85d {
+    background-color: #b95646;
+    color: #f0d9bf;
+}
+
+#board.tan .white-1e1d7 {
+    background-color: #edc8a2;
+    color: #d3a36a;
+}
+
+#board.tan .black-3c85d {
+    background-color: #d3a36a;
+    color: #edc8a2;
+}
+
+#board.sky .white-1e1d7 {
+    background-color: #efefef;
+    color: #c2d6e2;
+}
+
+#board.sky .black-3c85d {
+    background-color: #c2d6e2;
+    color: #efefef;
+}
+
+#board._8-bit .white-1e1d7 {
+    background-color: #eef0ee;
+    color: #6a9b41;
+}
+
+#board._8-bit .black-3c85d {
+    background-color: #6a9b41;
+    color: #eef0ee;
+}
+
+#board.wood .board-b72b1 {
+    background-image: url("/res/chessboards/wood.jpeg");
+    background-size: contain;
+}
+
+#board.marble .board-b72b1 {
+    background-image: url("/res/chessboards/marble.jpeg");
+    background-size: contain;
+}
+
+#board.newspaper .board-b72b1 {
+    background-image: url("/res/chessboards/newspaper.jpeg");
+    background-size: contain;
+}
+
+#board.wood .white-1e1d7 {
+    background-color: transparent;
+    color: black;
+}
+
+#board.wood .black-3c85d {
+    background-color: transparent;
+    color: white;
+}
+
+#board.marble .white-1e1d7 {
+    background-color: transparent;
+    color: black;
+}
+
+#board.marble .black-3c85d {
+    background-color: transparent;
+    color: white;
+}
+
+#board.newspaper .white-1e1d7 {
+    background-color: transparent;
+    color: black;
+}
+
+#board.newspaper .black-3c85d {
+    background-color: transparent;
+    color: white;
+}
+
+#move-arrow {
+    position: absolute;
+    z-index: 51;
+    opacity: 0.4;
+    top: 20px
+}
+
+#response-arrow {
+    position: absolute;
+    z-index: 50;
+    opacity: 0.4;
+    top: 20px
+}
+
+#moves {
+    width: 350px;
+    height: 45px;
+    font: 16px 'Roboto', sans-serif;
+    line-height: 22px;
+    z-index: 5;
+    margin: 10px 0 0 0;
+}
+
+#evaluation {
+    width: 350px;
+    height: 22px;
+    font: 16px 'Roboto', sans-serif;
+    line-height: 22px;
+    z-index: 5;
+    margin: 15px 0 0 0;
+}
+
+#game-detection {
+    width: 350px;
+    height: 20px;
+    font: 14px 'Roboto', sans-serif;
+    line-height: 18px;
+    text-align: center;
 }
 
 #config {
@@ -39,259 +209,6 @@ html, body {
     left: 5px;
 }
 
-#fen {
-    font-size: 20px;
-    line-height: 24px;
-    width: 350px;
-    height: 100px;
-    z-index: 5
-}
-
-#fen a {
-    font: 16px Source Sans Pro, Arial, Helvetica;
-    text-decoration: none;
-    color: #666;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, .8)
-}
-
-#fenleft {
-    font-size: 16px;
-    line-height: 85px;
-    width: 50%;
-    height: 100%;
-    float: left
-}
-
-#fenright {
-    font-size: 16px;
-    line-height: 85px;
-    width: 50%;
-    height: 100%;
-    float: right
-}
-
-#overlay1 {
-    position: absolute;
-    z-index: 51;
-    opacity: .4;
-    top: 20px
-}
-
-#overlay2 {
-    position: absolute;
-    z-index: 50;
-    opacity: .4;
-    top: 20px
-}
-
-#container {
-    display: none;
-    width: 350px;
-    height: 300px;
-    z-index: 5
-}
-
-#chess {
-    font-family: 'Roboto', sans-serif;
-    font-size: 16px;
-    line-height: 22px;
-    width: 350px;
-    height: 45px;
-    z-index: 5;
-    margin: 10px 0 0 0;
-}
-
-#evaluation {
-    font-family: 'Roboto', sans-serif;
-    font-size: 16px;
-    line-height: 22px;
-    width: 350px;
-    height: 22px;
-    z-index: 5;
-    margin: 15px 0 0 0;
-}
-
-#gamedetected {
-    font-family: 'Roboto', sans-serif;
-    font-size: 14px;
-    line-height: 18px;
-    width: 350px;
-    height: 20px;
-    text-align: center;
-}
-
-#local {
-    display: none;
-    width: 350px;
-    height: 300px;
-    z-index: 5;
-    padding: 60px 0 0 0
-}
-
-.box {
-    width: 100%;
-    height: 45px;
-    margin: 1px 0 0 0
-}
-
-.title_text {
-    height: 25px;
-    vertical-align: middle
-}
-
-.title_img {
-    margin: 0 5px 0 0;
-    vertical-align: middle
-}
-
-#circle {
-    width: 25px;
-    height: 25px;
-    float: left;
-    opacity: .5;
-    margin: 3px 0 0 20px
-}
-
-#tlrank {
-    width: 100px
-}
-
-#tlrank_left {
-    width: 40%;
-    text-align: right;
-    float: left
-}
-
-#tlrank_mid {
-    width: 20%;
-    float: left
-}
-
-#tlrank_right {
-    width: 38%;
-    text-align: left;
-    float: right
-}
-
-#title {
-    font-size: 17px
-}
-
-#owner_title {
-    font-size: 14px;
-    width: 100%;
-    height: 20px;
-    margin: 3px 0 0 0;
-    text-align: center;
-    line-height: 24px
-}
-
-#owner {
-    white-space: normal;
-    font-size: 18px;
-    line-height: 25px
-}
-
-#trafik {
-    height: 46px;
-    margin: 0 0 0 0
-}
-
-#trafik_left {
-    width: 50%;
-    text-align: center;
-    float: left;
-    border-top: solid #ccc 1px;
-    border-right: solid #ccc 1px;
-    line-height: 47px;
-    height: 45px;
-    margin: 0 0 0 0
-}
-
-#trafik_right {
-    width: 49.5%;
-    text-align: center;
-    float: left;
-    border-top: solid #ccc 1px;
-    line-height: 47px;
-    height: 45px;
-    margin: 0 0 0 0
-}
-
-#socmed {
-    height: auto;
-    margin: 0 0 0 0;
-    height: 51px;
-    z-index: 5
-}
-
-#socmed_left {
-    height: 50px;
-    width: 50%;
-    float: left;
-    border-top: solid #ccc 1px;
-    border-right: solid #ccc 1px;
-    border-bottom: solid #ccc 1px;
-    line-height: 47px;
-    margin: 0 0 0 0;
-    z-index: 5
-}
-
-#socmed_left_in {
-    float: right;
-    width: 135px
-}
-
-#socmed_right {
-    height: 50px;
-    width: 49.5%;
-    float: left;
-    border-top: solid #ccc 1px;
-    border-bottom: solid #ccc 1px;
-    line-height: 47px;
-    margin: 0 0 0 0;
-    z-index: 5
-}
-
-#socmed_right_in {
-    float: right;
-    width: 135px
-}
-
-.small {
-    font-size: 13px
-}
-
-#gotodep {
-    position: absolute;
-    opacity: 1;
-    bottom: 2px;
-    right: 18px;
-    width: 180px;
-    height: 20px;
-    font-size: 13px;
-    line-height: 20px
-}
-
-#goto2dep {
-    position: absolute;
-    opacity: 1;
-    bottom: 2px;
-    right: 18px;
-    width: 180px;
-    height: 20px;
-    font-size: 13px;
-    line-height: 20px
-}
-
-.linker {
-    cursor: pointer
-}
-
-.linker:hover {
-    text-decoration: underline
-}
-
-#localmessage {
-    margin: 30px 0 0 0
+.material-tooltip {
+    top: 429px !important;
 }
