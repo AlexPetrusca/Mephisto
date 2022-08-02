@@ -1,8 +1,8 @@
 html, body {
-    width: 348px;
+    width: 354px;
     height: 470px;
     overflow: hidden;
-    background-color: rgb(235, 235, 235);
+    background-color: rgb(240, 240, 240);
     color: #666666;
     font: 20px 'Roboto', sans-serif;
     line-height: 35px;
@@ -10,6 +10,17 @@ html, body {
     text-overflow: clip;
     text-align: center;
     white-space: nowrap;
+}
+
+#board {
+    width: 350px !important;
+    background: none !important;
+    margin-left: 5px;
+}
+
+#board .board-b72b1{
+    box-shadow: 0 2px 2px 0 rgb(0 0 0 / 14%), 0 3px 1px -2px rgb(0 0 0 / 20%), 0 1px 5px 0 rgb(0 0 0 / 12%);
+    border: none;
 }
 
 #board.brown .white-1e1d7 {

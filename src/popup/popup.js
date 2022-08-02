@@ -21,39 +21,21 @@ const pieceNameMap = {
 };
 
 $(window).on('load', function () {
-    try {
-        // load extension configurations from localStorage
-        config = {
-            compute_time: JSON.parse(localStorage.getItem('compute_time')),
-            fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')),
-            think_time: JSON.parse(localStorage.getItem('think_time')),
-            think_variance: JSON.parse(localStorage.getItem('think_variance')),
-            move_time: JSON.parse(localStorage.getItem('move_time')),
-            move_variance: JSON.parse(localStorage.getItem('move_variance')),
-            simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')),
-            autoplay: JSON.parse(localStorage.getItem('autoplay')),
-            puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')),
-            python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')),
-            pieces: JSON.parse(localStorage.getItem('pieces')),
-            board: JSON.parse(localStorage.getItem('board'))
-        };
-    } catch {
-        // resort to defaults if can't load
-        config = {
-            compute_time: 500,
-            fen_refresh: 100,
-            think_time: 1000,
-            think_variance: 500,
-            move_time: 500,
-            move_variance: 250,
-            simon_says_mode: false,
-            autoplay: false,
-            puzzle_mode: false,
-            python_autoplay_backend: false,
-            pieces: 'standard.svg',
-            board: 'brown'
-        };
-    }
+    // load extension configurations from localStorage
+    config = {
+        compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
+        fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
+        think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
+        think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
+        move_time: JSON.parse(localStorage.getItem('move_time')) || 500,
+        move_variance: JSON.parse(localStorage.getItem('move_variance')) || 250,
+        simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')) || false,
+        autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
+        puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
+        python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')) || false,
+        pieces: JSON.parse(localStorage.getItem('pieces')) || 'wikipedia.svg',
+        board: JSON.parse(localStorage.getItem('board')) || 'brown',
+    };
     push_config();
 
     // init chess board

@@ -20,7 +20,7 @@ class AppearanceSettings {
         this.resetButton = document.getElementById('reset_btn');
         this.resetButton.addEventListener('click', () => this.onResetConfigValues());
 
-        this.registerFormElement('pieces', 'Pieces:', 'select', 'standard');
+        this.registerFormElement('pieces', 'Pieces:', 'select', 'wikipedia.svg');
         this.registerFormElement('board', 'Board:', 'select', 'brown');
 
         this.pullConfigValues();
@@ -28,19 +28,26 @@ class AppearanceSettings {
     }
 
     // form uniqueifier
-    getCurrentUniquifier() {
+    createUniquifier() {
         return this.formElements.reduce((acc, formElement) => {
             return acc + formElement.name + ':' + formElement.getValue() + ' ';
         }, '');
     }
 
     updateUniquifier() {
-        this.configUniqueifier = this.getCurrentUniquifier();
+        this.configUniqueifier = this.createUniquifier();
+    }
+
+    clearConfigValues() {
+        this.formElements.forEach(formElement => {
+            localStorage.removeItem(formElement.name);
+        });
+        this.updateUniquifier();
     }
 
     // localstorage values push/pull
     pullConfigValues() {
-        this.formElements.forEach((formElement) => {
+        this.formElements.forEach(formElement => {
             const localStorageVal = localStorage.getItem(formElement.name);
             if (localStorageVal) {
                 formElement.setValue(JSON.parse(localStorageVal));
@@ -52,7 +59,7 @@ class AppearanceSettings {
     }
 
     pushConfigValues() {
-        this.formElements.forEach((formElement) => {
+        this.formElements.forEach(formElement => {
             const formValue = (formElement.valueType === 'string')
                 ? `"${formElement.getValue()}"`
                 : formElement.getValue();
@@ -75,12 +82,13 @@ class AppearanceSettings {
     }
 
     onResetConfigValues() {
+        this.clearConfigValues();
         this.pullConfigValues();
         this.onConfigValuesChanged();
     }
 
     onConfigValuesChanged() {
-        this.applyButton.disabled = (this.configUniqueifier === this.getCurrentUniquifier());
+        this.applyButton.disabled = (this.configUniqueifier === this.createUniquifier());
     }
 }
 
