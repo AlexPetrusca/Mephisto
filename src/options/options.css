@@ -26,8 +26,15 @@ main > .container, nav > .container {
 }
 
 #logo-container {
-    height: 120px;
-    margin-bottom: 32px;
+    padding: 25px 0;
+}
+
+#logo-link {
+    height: 150px;
+}
+
+#logo {
+    height: 150px;
 }
 
 .sticky-top {
@@ -45,13 +52,12 @@ main > .container, nav > .container {
     transform: none !important;
 }
 
-ul.sidenav.sidenav-fixed li.logo:hover, ul.sidenav.sidenav-fixed li.logo #logo-container:hover {
+ul.sidenav.sidenav-fixed li#logo-container:hover, ul.sidenav.sidenav-fixed li#logo-container #logo-link:hover {
     background-color: transparent;
 }
 
-ul.sidenav.sidenav-fixed li.logo {
+ul.sidenav.sidenav-fixed li#logo-container {
     text-align: center;
-    margin-top: 16px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.14);
 }
 
