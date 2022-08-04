@@ -310,7 +310,7 @@ function draw_arrow(move, color, overlay) {
                     <path d="M1,5.75 L3,7 L1,8.25" fill="${color}" />
                 </marker>
             </defs>
-            <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${color}" fill=${color}" stroke-width="0.2" 
+            <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${color}" fill=${color}" stroke-width="0.225" 
                 marker-end="url(#arrow-${color})"/>
         </svg>
     `;

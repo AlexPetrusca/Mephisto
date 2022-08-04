@@ -8,21 +8,15 @@
   "author": "Alex Petrusca",
   "icons": {
     "16": "res/icons/icon16.png",
-    "19": "res/icons/icon19.png",
     "32": "res/icons/icon32.png",
-    "38": "res/icons/icon38.png",
     "48": "res/icons/icon48.png",
-    "72": "res/icons/icon72.png",
     "128": "res/icons/icon128.png"
   },
   "action": {
     "default_icon": {
       "16": "res/icons/icon16.png",
-      "19": "res/icons/icon19.png",
       "32": "res/icons/icon32.png",
-      "38": "res/icons/icon38.png",
       "48": "res/icons/icon48.png",
-      "72": "res/icons/icon72.png",
       "128": "res/icons/icon128.png"
     },
     "default_popup": "src/popup/popup.html",
