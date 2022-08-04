@@ -147,7 +147,7 @@ function parse_fen_from_response(txt) {
             turn = directHit.charAt(directHit.indexOf(' ') + 1);
             return directHit;
         }
-        const lastMoveRegex = /([a-zA-Z0-9-+#]+[*]+)$/;
+        const lastMoveRegex = /([\w-+=#]+[*]+)$/;
         const cacheKey = txt.replace(lastMoveRegex, "");
         const indirectHit = fenCache.get(cacheKey);
         if (indirectHit) { // calculate fen by appending newest move
@@ -310,8 +310,8 @@ function draw_arrow(move, color, overlay) {
                     <path d="M1,5.75 L3,7 L1,8.25" fill="${color}" />
                 </marker>
             </defs>
-            <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${color}" fill=${color}" stroke-width="0.2"
-                stroke-linecap="round" marker-end="url(#arrow-${color})"/>
+            <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${color}" fill=${color}" stroke-width="0.2" 
+                marker-end="url(#arrow-${color})"/>
         </svg>
     `;
 }

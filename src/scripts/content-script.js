@@ -56,7 +56,7 @@ function getMoves(getAllMoves) {
     let res = '';
     if (site === 'chesscom') {
         const moves = getMoveRecords();
-        if (moves.length && moves[0].innerText.match(/^[a-zA-Z0-9-+#]+$/g)) {
+        if (moves.length && moves[0].innerText.match(/^[\w-+=#]+$/g)) {
             prefix = '***ccfen***';
             const figurineRegex = /<span.*data-figurine="(\w)".*span>/;
             const selectedMove = getSelectedMoveRecord();
@@ -93,11 +93,12 @@ function getMoves(getAllMoves) {
         }
     } else if (site === 'lichess') {
         const moves = getMoveRecords();
-        if (moves.length && moves[0].innerText.match(/^[a-zA-Z0-9-+#]+$/g)) {
+        if (moves.length && moves[0].innerText.match(/^[\w-+=#]+$/g)) {
             prefix = '***lifen***';
+            const evalRegex = /<span.*data-figurine="(\w)".*span>/;
             const selectedMove = getSelectedMoveRecord();
             for (const move of moves) {
-                res += move.innerText + '*****';
+                res += move.innerHTML.match(/^[\w-+=#]+/)[0] + '*****';
                 if (!getAllMoves && move === selectedMove) {
                     break;
                 }
@@ -142,8 +143,8 @@ function getMoves(getAllMoves) {
             }
         }
     }
-    console.log((res) ? prefix + res.replace(/[^a-zA-Z0-9-+#*]/g, '') : 'no');
-    return (res) ? prefix + res.replace(/[^a-zA-Z0-9-+#*]/g, '') : 'no';
+    console.log((res) ? prefix + res.replace(/[^\w-+#*]/g, '') : 'no');
+    return (res) ? prefix + res.replace(/[^\w-+=#*]/g, '') : 'no';
 }
 
 function getOrientation() {

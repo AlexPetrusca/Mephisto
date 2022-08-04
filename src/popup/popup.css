@@ -186,14 +186,14 @@ html, body {
 #move-arrow {
     position: absolute;
     z-index: 51;
-    opacity: 0.5;
+    opacity: 0.4;
     top: 20px
 }
 
 #response-arrow {
     position: absolute;
     z-index: 50;
-    opacity: 0.5;
+    opacity: 0.4;
     top: 20px
 }
 
