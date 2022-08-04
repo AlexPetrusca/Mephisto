@@ -20,7 +20,7 @@ const pieceNameMap = {
     'K': 'King',
 };
 
-$(window).on('load', function () {
+document.addEventListener('DOMContentLoaded', function() {
     // load extension configurations from localStorage
     config = {
         // general settings
@@ -42,7 +42,7 @@ $(window).on('load', function () {
     push_config();
 
     // init chess board
-    document.querySelector('#board').classList.add(config.board);
+    document.getElementById('board').classList.add(config.board);
     const [pieceSet, ext] = config.pieces.split('.');
     board = ChessBoard('board', {
         position: 'start',
@@ -58,8 +58,8 @@ $(window).on('load', function () {
 
     // init stockfish webworker
     stockfish = new Worker('/lib/stockfish.min.js');
-    stockfish.postMessage("ucinewgame");
-    stockfish.postMessage("isready");
+    stockfish.postMessage('ucinewgame');
+    stockfish.postMessage('isready');
     stockfish.onmessage = on_stockfish_response;
 
     // listen to messages from content-script
@@ -87,26 +87,32 @@ $(window).on('load', function () {
     }, config.fen_refresh);
 
     // register button click listeners
-    $('#analyze').on('click', () => {
+    document.getElementById('analyze').addEventListener('click', () => {
         window.open(`https://lichess.org/analysis?fen=${lastFen}`, '_blank');
     });
-    $('#config').on('click', () => {
+    document.getElementById('config').addEventListener('click', () => {
         window.open('/src/options/options.html', '_blank');
     });
 
     // initialize materialize
-    $('.tooltipped').tooltip();
+    const instances = M.Tooltip.init(document.querySelectorAll('.tooltipped'), {});
 });
 
 function new_pos(fen) {
-    $('#chess_line_1').html('<div>Calcu-stockfish-ating...<div><progress id="progBar" value="2" max="100">');
-    stockfish.postMessage("position fen " + fen);
-    stockfish.postMessage("go movetime " + config.compute_time);
+    document.getElementById('chess_line_1').innerHTML = `
+        <div>Calculating...<div>
+        <progress id="progBar" value="2" max="100">
+    `;
+    document.getElementById('chess_line_2').innerText = '';
+    stockfish.postMessage(`position fen ${fen}`);
+    stockfish.postMessage(`go movetime ${config.compute_time}`);
     board.position(fen);
     lastFen = fen;
     if (config.simon_says_mode) {
-        draw_arrow(lastBestMove, 'blue', 'move-arrow');
+        draw_arrow(lastBestMove, 'blue', document.getElementById('move-arrow'));
         request_console_log(`Best Move: ${lastBestMove}`);
+    } else {
+        clear_arrows();
     }
     toggle_calculating(true);
 }
@@ -119,7 +125,7 @@ function parse_fen_from_response(txt) {
     };
     const metaTag = txt.substring(3, 8);
     const prefix = metaTag.substring(0, 2);
-    $('#game-detection').text(prefixMap[prefix]);
+    document.getElementById('game-detection').innerText = prefixMap[prefix];
     txt = txt.substring(11);
 
     const chess = new Chess();
@@ -138,14 +144,15 @@ function parse_fen_from_response(txt) {
         const directHit = fenCache.get(txt);
         if (directHit) { // avoid recalculating same position
             console.log('DIRECT');
+            turn = directHit.charAt(directHit.indexOf(' ') + 1);
             return directHit;
         }
-        const regex = /([\w+!#]+[*]+)$/;
-        const cacheKey = txt.replace(regex, "");
+        const lastMoveRegex = /([a-zA-Z0-9-+#]+[*]+)$/;
+        const cacheKey = txt.replace(lastMoveRegex, "");
         const indirectHit = fenCache.get(cacheKey);
         if (indirectHit) { // calculate fen by appending newest move
             console.log('INDIRECT');
-            const lastMove = txt.match(regex)[0].split('*****')[0];
+            const lastMove = txt.match(lastMoveRegex)[0].split('*****')[0];
             chess.load(indirectHit);
             chess.move(lastMove);
         } else { // calculate fen by performing all moves
@@ -176,17 +183,17 @@ function on_stockfish_response(event) {
             const startPiece = board.position()[startSquare];
             const startPieceType = (startPiece) ? startPiece.substring(1) : null;
             if (startPieceType) {
-                $('#chess_line_1').text(pieceNameMap[startPieceType])
+                document.getElementById('chess_line_1').innerText = pieceNameMap[startPieceType];
             }
         } else {
-            if (message.includes('(none)')) {
-                $('#chess_line_1').text(next + ' Wins');
-            } else if (message.includes('ponder')) {
-                $('#chess_line_1').text(toplay + ' to play, best move is ' + best);
-                $('#chess_line_2').text('Best response for ' + next + ' is ' + threat);
+            if (best === '(none)') {
+                document.getElementById('chess_line_1').innerText = `${next} Wins`;
+            } else if (threat && threat !== '(none)') {
+                document.getElementById('chess_line_1').innerText = `${toplay} to play, best move is ${best}`;
+                document.getElementById('chess_line_2').innerText = `Best response for ${next} is ${threat}`;
             } else {
-                $('#chess_line_1').text(toplay + ' to play, best move is ' + best);
-                $('#chess_line_2').empty();
+                document.getElementById('chess_line_1').innerText = `${toplay} to play, best move is ${best}`;
+                document.getElementById('chess_line_2').innerText = '';
             }
         }
         if (toplay.toLowerCase() === board.orientation()) {
@@ -201,8 +208,8 @@ function on_stockfish_response(event) {
             }
         }
         if (!config.simon_says_mode) {
-            draw_arrow(best, 'blue', 'move-arrow');
-            draw_arrow(threat, 'red', 'response-arrow');
+            draw_arrow(best, 'blue', document.getElementById('move-arrow'));
+            draw_arrow(threat, 'red', document.getElementById('response-arrow'));
         }
         toggle_calculating(false);
     } else if (message.includes('info depth')) {
@@ -213,32 +220,25 @@ function on_stockfish_response(event) {
             const mateArr = arr[1].split(' ');
             const mateNum = Math.abs(parseInt(mateArr[0]));
             if (mateNum === 0) {
-                $('#evaluation').text("Checkmate!");
-                $('#chess_line_2').empty();
-                $('#progBar').empty();
-                isCalculating = false;
-                clear_arrows();
+                document.getElementById('evaluation').innerText = 'Checkmate!';
+                document.getElementById('chess_line_2').innerText = '';
             } else {
-                $('#evaluation').text("Checkmate in " + mateNum);
+                document.getElementById('evaluation').innerText = `Checkmate in ${mateNum}`;
             }
             toggle_calculating(false);
         } else if (info.includes('score')) {
             const infoArr = info.split(" ");
             const depth = infoArr[2];
             const score = ((turn === 'w') ? 1 : -1) * infoArr[9];
-            $('#evaluation').text("Score: " + score / 100.0 + " at depth " + depth);
+            document.getElementById('evaluation').innerText = `Score: ${score / 100.0} at depth ${depth}`;
             lastScore = score / 100.0;
         }
         lastPv = pvSplit[1];
     }
     if (isCalculating) {
         prog++;
-        let progMapping = 100 - 100 * Math.exp(-prog / 30);
-        $('#progBar').attr('value', Math.round(progMapping));
-        $('#chess_line_2').hide();
-        clear_arrows();
-    } else {
-        $('#chess_line_2').show();
+        let progMapping = 100 * (1 - Math.exp(-prog / 30));
+        document.getElementById('progBar').setAttribute('value', `${Math.round(progMapping)}`);
     }
 }
 
@@ -279,9 +279,10 @@ function getCoords(move) {
         : { x0: 9 - x0, y0: 9 - y0, x1: 9 - x1, y1: 9 - y1 };
 }
 
-function draw_arrow(move, color, overlay_id) {
+function draw_arrow(move, color, overlay) {
     if (!move || move === '(none)') {
-        return $(`#${overlay_id}`).empty();
+        overlay.firstChild?.remove();
+        return;
     }
 
     const bodyWidth = document.body.clientWidth;
@@ -302,7 +303,7 @@ function draw_arrow(move, color, overlay_id) {
     x1 = x1 - 0.4 * ((x1 - x0) / d);
     y1 = y1 - 0.4 * (dy / d);
 
-    $(`#${overlay_id}`).html(`
+    overlay.innerHTML = `
         <svg width="${boardSide}" height="${boardSide}" viewBox="0, 0, 8, 8" style="margin-left: ${marginLeft}px">
             <defs>
                 <marker id="arrow-${color}" markerWidth="13" markerHeight="13" refX="1" refY="7" orient="auto">
@@ -312,13 +313,13 @@ function draw_arrow(move, color, overlay_id) {
             <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${color}" fill=${color}" stroke-width="0.2"
                 stroke-linecap="round" marker-end="url(#arrow-${color})"/>
         </svg>
-    `);
+    `;
 }
 
 function clear_arrows() {
     if (!config.simon_says_mode) {
-        $('#move-arrow').empty();
-        $('#response-arrow').empty();
+        document.getElementById('move-arrow').firstChild?.remove();
+        document.getElementById('response-arrow').firstChild?.remove();
     }
 }
 
