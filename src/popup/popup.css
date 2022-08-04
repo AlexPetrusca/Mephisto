@@ -23,6 +23,21 @@ html, body {
     border: none;
 }
 
+#board .notation-322f9 {
+    font-family: 'Roboto', sans-serif;
+    font-size: 10px;
+}
+
+#board .numeric-fc462 {
+    top: -11px;
+    left: 2px;
+}
+
+#board .alpha-d2270 {
+    bottom: -11px;
+    right: 2px;
+}
+
 #board.brown .white-1e1d7 {
     background-color: #efdab5;
     color: #b58863;

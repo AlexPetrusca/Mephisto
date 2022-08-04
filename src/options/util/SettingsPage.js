@@ -30,7 +30,6 @@ export default class SettingsPage {
         this.onConfigValuesChanged();
     }
 
-
     // form uniqueifier
     createUniquifier() {
         return this.formElements.reduce((acc, formElement) => {

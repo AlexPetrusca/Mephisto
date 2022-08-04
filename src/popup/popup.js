@@ -23,6 +23,7 @@ const pieceNameMap = {
 $(window).on('load', function () {
     // load extension configurations from localStorage
     config = {
+        // general settings
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
         fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
         think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
@@ -33,21 +34,22 @@ $(window).on('load', function () {
         autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
         puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
         python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')) || false,
+        // appearance settings
         pieces: JSON.parse(localStorage.getItem('pieces')) || 'wikipedia.svg',
         board: JSON.parse(localStorage.getItem('board')) || 'brown',
+        coordinates: JSON.parse(localStorage.getItem('coordinates')) || false,
     };
     push_config();
 
     // init chess board
     document.querySelector('#board').classList.add(config.board);
-    const [pieceSet, ext] = config.pieces.split('.')
+    const [pieceSet, ext] = config.pieces.split('.');
     board = ChessBoard('board', {
         position: 'start',
-        class: config.board,
         pieceTheme: `/res/chesspieces/${pieceSet}/{piece}.${ext}`,
         appearSpeed: 'fast',
         moveSpeed: 'fast',
-        showNotation: false,
+        showNotation: config.coordinates,
         draggable: false
     });
 

@@ -5,6 +5,7 @@ class AppearanceSettings extends SettingsPage {
         M.FormSelect.init(document.querySelectorAll('select'), {});
         this.registerFormElement('pieces', 'Pieces:', 'select', 'wikipedia.svg');
         this.registerFormElement('board', 'Board:', 'select', 'brown');
+        this.registerFormElement('coordinates', 'Coordinates:', 'checkbox', false);
     }
 }
 
