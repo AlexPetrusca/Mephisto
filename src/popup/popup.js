@@ -283,7 +283,7 @@ function getCoords(move) {
 
 function draw_arrow(move, color, overlay) {
     if (!move || move === '(none)') {
-        overlay.firstChild?.remove();
+        overlay.lastElementChild?.remove();
         return;
     }
 
@@ -320,8 +320,8 @@ function draw_arrow(move, color, overlay) {
 
 function clear_arrows() {
     if (!config.simon_says_mode) {
-        document.getElementById('move-arrow').firstChild?.remove();
-        document.getElementById('response-arrow').firstChild?.remove();
+        document.getElementById('move-arrow').lastElementChild?.remove();
+        document.getElementById('response-arrow').lastElementChild?.remove();
     }
 }
 
