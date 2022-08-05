@@ -1,4 +1,4 @@
-# Mephisto
+![alt text](https://raw.githubusercontent.com/AlexPetrusca/Mephisto/master/res/mephisto_banner_lowercase.png)
 
 Mephisto is a browser extension that enables next best move calculation and automated gameplay on Chess.com and Lichess.
 
@@ -13,7 +13,7 @@ Find "Mephisto Chess Extension" and click the pin icon to the right of it.
 
 ### Keeping Mephisto Open
 You may notice that when you click outside of Mephisto's popup window, the popup will lose focus and close. To prevent
-this, right click the pinned icon and click 'Inspect Popup'.
+this, right-click the pinned icon and click 'Inspect Popup'.
 
 NOTE: This will keep the popup open until either the inspect window is closed or the current tab is changed/closed.
 
