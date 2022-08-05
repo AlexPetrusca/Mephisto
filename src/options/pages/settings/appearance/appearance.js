@@ -1,4 +1,4 @@
-import SettingsPage from "../../../util/SettingsPage.js";
+import { SettingsPage } from "../../../util/SettingsPage.js";
 
 class AppearanceSettings extends SettingsPage {
     init() {

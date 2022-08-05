@@ -1,3 +1,5 @@
+import { Chess } from "../../lib/chess.min.js";
+
 let stockfish;
 let board;
 let fenCache;

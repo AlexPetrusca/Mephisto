@@ -1,4 +1,4 @@
-export default class FormElement {
+export class FormElement {
     name;
     desc;
     type;

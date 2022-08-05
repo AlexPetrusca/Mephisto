@@ -1,6 +1,6 @@
-import FormElement from "./FormElement.js";
+import { FormElement } from "./FormElement.js";
 
-export default class SettingsPage {
+export class SettingsPage {
     resetButton;
     applyButton;
     formElements;
