@@ -9,7 +9,7 @@ header, main, footer {
     padding-left: 300px;
 }
 
-main > .container, nav > .container {
+main > .container, nav > .container, footer > .container {
     width: 100% !important;
 }
 
@@ -17,24 +17,22 @@ main > .container, nav > .container {
     padding-bottom: 22px;
 }
 
-#front-page-logo {
-    pointer-events: none;
-}
-
 #content {
     min-height: calc(100vh - 171px);
 }
 
 #logo-container {
-    padding: 25px 0;
+    padding: 35px;
 }
 
 #logo-link {
-    height: 150px;
+    height: 200px;
+    padding: 0;
 }
 
 #logo {
-    height: 150px;
+    height: 100%;
+    pointer-events: none;
 }
 
 .sticky-top {
