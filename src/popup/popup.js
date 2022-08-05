@@ -345,14 +345,16 @@ async function requestDebuggerClick(x, y) {
             await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
                 type: 'mousePressed',
                 button: 'left',
+                clickCount: 1,
                 x: x,
-                y: y
+                y: y,
             });
             await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
                 type: 'mouseReleased',
                 button: 'left',
+                clickCount: 1,
                 x: x,
-                y: y
+                y: y,
             });
         });
     });

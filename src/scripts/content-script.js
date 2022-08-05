@@ -95,10 +95,9 @@ function getMoves(getAllMoves) {
         const moves = getMoveRecords();
         if (moves.length && moves[0].innerText.match(/^[\w-+=#]+$/g)) {
             prefix = '***lifen***';
-            const evalRegex = /<span.*data-figurine="(\w)".*span>/;
             const selectedMove = getSelectedMoveRecord();
             for (const move of moves) {
-                res += move.innerHTML.match(/^[\w-+=#]+/)[0] + '*****';
+                res += move.innerText.replace('\n', '') + '*****';
                 if (!getAllMoves && move === selectedMove) {
                     break;
                 }
@@ -434,10 +433,9 @@ function simulatePvMoves(pv) {
     return performSimulatedPvMoveSequence();
 }
 
-// todo: needs to be rewritten to work with debugger click and python backend
 async function simulatePromotionClicks(promotion) {
     const promotionChoice = getPromotionSelection(promotion);
     if (promotionChoice) {
-        simulateClickSquare(promotionChoice.getBoundingClientRect())
+        await simulateClickSquare(promotionChoice.getBoundingClientRect())
     }
 }
