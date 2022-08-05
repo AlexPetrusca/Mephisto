@@ -218,6 +218,8 @@ html, body {
 #game-detection {
     width: 350px;
     height: 20px;
+    margin-top: 4px;
+    margin-bottom: 2px;
     font: 14px 'Roboto', sans-serif;
     line-height: 18px;
     text-align: center;
