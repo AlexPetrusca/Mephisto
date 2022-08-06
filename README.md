@@ -15,11 +15,11 @@ Find "Mephisto Chess Extension" and click the pin icon to the right of it.
 You may notice that when you click outside of Mephisto's popup window, the popup will lose focus and close. To prevent
 this, right-click the pinned icon and click 'Inspect Popup'.
 
-Check out [Wiki: Getting Started](Getting-Started) for more information.
+For more information, check out [Wiki: Getting Started](Getting-Started).
 
 
 ## How to Contribute
-Thank you for your interest in contributing to Mephisto! There are many ways to contribute, and I appreciate all of them.
+Thank you for your interest in contributing to Mephisto! There are many ways to contribute, and we appreciate all of them.
 
 ### Ways to Contribute
 - Help contribute ideas to Mephisto
