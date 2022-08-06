@@ -56,7 +56,7 @@ function getMoves(getAllMoves) {
     let res = '';
     if (site === 'chesscom') {
         const moves = getMoveRecords();
-        if (moves.length && moves[0].innerText.match(/^[\w-+=#]+$/g)) {
+        if (moves && moves.length) {
             prefix = '***ccfen***';
             const figurineRegex = /<span.*data-figurine="(\w)".*span>/;
             const selectedMove = getSelectedMoveRecord();
@@ -93,11 +93,11 @@ function getMoves(getAllMoves) {
         }
     } else if (site === 'lichess') {
         const moves = getMoveRecords();
-        if (moves.length && moves[0].innerText.match(/^[\w-+=#]+$/g)) {
+        if (moves && moves.length) {
             prefix = '***lifen***';
             const selectedMove = getSelectedMoveRecord();
             for (const move of moves) {
-                res += move.innerText.replace('\n', '') + '*****';
+                res += move.innerText.replace(/\n.*/, '') + '*****';
                 if (!getAllMoves && move === selectedMove) {
                     break;
                 }
@@ -297,9 +297,11 @@ function getPromotionSelection(promotion) {
         promotions = document.querySelector('.pieces').children;
     }
 
-    const promoteMap = (site === 'blitztactics')
-        ? { 'q': 0, 'r': 1, 'n': 2, 'b': 3 }
-        : { 'q': 0, 'n': 1, 'r': 2, 'b': 3 };
+    const promoteMap = (site === 'chesscom')
+        ? { 'b': 0, 'n': 1, 'q': 2, 'r': 3 }
+        : (site === 'lichess')
+            ? { 'q': 0, 'n': 1, 'r': 2, 'b': 3 }
+            : { 'q': 0, 'r': 1, 'n': 2, 'b': 3 };
     const idx = promoteMap[promotion];
     return (promotions) ? promotions[idx] : undefined;
 }
