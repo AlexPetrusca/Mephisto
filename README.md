@@ -51,7 +51,7 @@ puzzles as possible in a fixed timeframe.
 
 
 ## How to Contribute
-Thank you for your interest in contributing to Mephisto! There are many ways to contribute, and I appreciate all of them.
+Thank you for your interest in contributing to Mephisto! There are many ways to contribute, and we appreciate all of them.
 
 ### Ways to Contribute
 - Help contribute ideas to Mephisto
