@@ -3,8 +3,8 @@
 Mephisto is a browser extension that enables next best move calculation and automated gameplay on Chess.com and Lichess.
 
 
-## Usage
-Clicking Mephisto's icon will open its popup window and automatically scrape the current page for a chess position to 
+## Getting Started
+Click Mephisto's icon to open its popup window and automatically scrape the current page for a chess position to 
 analyze.
 
 ### Pinning Mephisto
@@ -15,39 +15,7 @@ Find "Mephisto Chess Extension" and click the pin icon to the right of it.
 You may notice that when you click outside of Mephisto's popup window, the popup will lose focus and close. To prevent
 this, right-click the pinned icon and click 'Inspect Popup'.
 
-NOTE: This will keep the popup open until either the inspect window is closed or the current tab is changed/closed.
-
-### Further Analysis
-In Mephisto's popup window, you can click the button in the bottom-left corner to open the current position in 
-Lichess's analysis board for in-depth analysis. This page will be opened in a new tab.
-
-
-## Configuration
-Mephisto supports several modes of operation.
-
-### Best Move
-This is the default mode. Mephisto presents the best move, the opponent's best response to the best move, and the 
-Stockfish evaluation for the position. The best move is displayed as a blue arrow whereas the opponent's best response 
-is displayed as a red arrow.
-
-### Hand & Brain
-Mephisto presents the Stockfish evaluation for the position and acts as the "Brain", telling you the type of the piece 
-to move. From there, it is your job as the "Hand" to find and play the best move given the hint.
-
-### Autoplay
-Mephisto calculates the next best move and simulates clicks to play it over the board. By default, the simulated clicks
-are generated directly in browser.
-
-#### Python Autoplay Backend
-Click and drag events are performed outside the browser from a Python backend. Simulated mouse actions are generated
-using PyAutoGUI. For this mode to work, users must run mephisto-clicker.py locally.
-
-NOTE: This script will take control of the mouse when activated by Mephisto.
-
-#### Puzzle Mode
-Mephisto optimizes for efficiently solving and automating puzzles. This should be enabled when autoplaying puzzle 
-minigames, like Chess.com's Puzzle Rush and Lichess's Puzzle Storm, where a player's score depends on solving as many
-puzzles as possible in a fixed timeframe.
+Check out [Wiki: Getting Started](Getting-Started) for more information.
 
 
 ## How to Contribute
