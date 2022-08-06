@@ -15,7 +15,7 @@ Find "Mephisto Chess Extension" and click the pin icon to the right of it.
 You may notice that when you click outside of Mephisto's popup window, the popup will lose focus and close. To prevent
 this, right-click the pinned icon and click 'Inspect Popup'.
 
-For more information, check out [Wiki: Getting Started](https://github.com/AlexPetrusca/Mephisto/wiki/Getting-Started).
+For more information, see [Getting Started](https://github.com/AlexPetrusca/Mephisto/wiki/Getting-Started).
 
 
 ## How to Contribute
@@ -42,7 +42,7 @@ Test a code change:
 3. Reload the webpage you want to test on
 4. Test the changes
 
-For technical details, check out [Wiki: Technical Overview](https://github.com/AlexPetrusca/Mephisto/wiki/Technical-Overview).
+For technical details, see [Technical Overview](https://github.com/AlexPetrusca/Mephisto/wiki/Technical-Overview).
 
 
 ## How to Run Python Autoplay Backend
