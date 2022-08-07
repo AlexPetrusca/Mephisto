@@ -23,9 +23,6 @@
     "options_page": "src/options/options.html"
   },
   "permissions": [
-    "tabs",
-    "activeTab",
-    "storage",
     "debugger"
   ],
   "background": {
