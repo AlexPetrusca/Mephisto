@@ -38,7 +38,7 @@ For technical details, see [Technical Overview](https://github.com/AlexPetrusca/
 ## How to Contribute
 Thank you for your interest in contributing to Mephisto! There are many ways to contribute, and we appreciate all of them.
 
-### Ways to Contribute
+Ways to Contribute
 - Help contribute ideas to Mephisto
 - Help identify and document bugs with Mephisto
 - Implement requested features through PRs
