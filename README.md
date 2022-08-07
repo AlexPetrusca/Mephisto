@@ -13,9 +13,7 @@ Find "Mephisto Chess Extension" and click the pin icon to the right of it.
 
 ### Keeping Mephisto Open
 You may notice that when you click outside of Mephisto's popup window, the popup will lose focus and close. To prevent
-this, right-click the pinned icon and click 'Inspect Popup'.
-
-For more information, see [Getting Started](https://github.com/AlexPetrusca/Mephisto/wiki/Getting-Started).
+this, right-click the pinned icon and click 'Inspect Popup'. For more information, see [Getting Started](https://github.com/AlexPetrusca/Mephisto/wiki/Getting-Started).
 
 
 ## How to Develop Locally
