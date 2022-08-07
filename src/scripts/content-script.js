@@ -314,26 +314,11 @@ function promiseTimeout(time) {
     });
 }
 
-function getOffsetCorrectionXY() {
-    if (config.python_autoplay_backend) {
-        return getBrowserOffsetXY();
-    }
-    return [0, 0];
-}
-
-function getBrowserOffsetXY() {
-    const topBarHeight = window.outerHeight - window.innerHeight;
-    const offsetX = window.screenX;
-    const offsetY = window.screenY + topBarHeight;
-    return [offsetX, offsetY];
-}
-
 function getRandomSampledXY(bounds, range = 0.8) {
     const margin = (1 - range) / 2;
     const x = bounds.x + (range * Math.random() + margin) * bounds.width;
     const y = bounds.y + (range * Math.random() + margin) * bounds.height;
-    const [correctX, correctY] = getOffsetCorrectionXY();
-    return [x + correctX, y + correctY];
+    return [x, y];
 }
 
 // -------------------------------------------------------------------------------------------

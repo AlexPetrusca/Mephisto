@@ -35,7 +35,6 @@ document.addEventListener('DOMContentLoaded', function() {
         simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')) || false,
         autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
         puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
-        python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')) || false,
         // appearance settings
         pieces: JSON.parse(localStorage.getItem('pieces')) || 'wikipedia.svg',
         board: JSON.parse(localStorage.getItem('board')) || 'brown',
@@ -331,11 +330,7 @@ function toggle_calculating(on) {
 }
 
 async function dispatchClickEvent(x, y) {
-    if (config.python_autoplay_backend) {
-        await requestPythonBackendClick(x, y);
-    } else {
-        await requestDebuggerClick(x, y);
-    }
+    await requestDebuggerClick(x, y);
 }
 
 async function requestDebuggerClick(x, y) {
@@ -363,25 +358,5 @@ async function requestDebuggerClick(x, y) {
 async function dispatchMouseEvent(debugee, mouseEvent, mouseEventOpts) {
     return new Promise(resolve => {
         chrome.debugger.sendCommand(debugee, mouseEvent, mouseEventOpts, resolve);
-    });
-}
-
-async function requestPythonBackendClick(x, y) {
-    return callPythonBackend(`http://localhost:8080/performClick`, { x: x, y: y });
-}
-
-async function requestPythonBackendMove(x0, y0, x1, y1) {
-    return callPythonBackend('http://localhost:8080/performMove', { x0: x0, y0: y0, x1: x1, y1: y1 });
-}
-
-async function callPythonBackend(url, data) {
-    return fetch(url, {
-        method: "POST",
-        credentials: "include",
-        cache: "no-cache",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(data)
     });
 }
