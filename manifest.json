@@ -3,7 +3,7 @@
   "manifest_version": 3,
   "name": "Mephisto Chess Extension",
   "description": "Chess next best move and autoplay extension for Lichess and Chess.com",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "homepage_url": "https://github.com/AlexPetrusca/Mephisto",
   "author": "Alex Petrusca",
   "icons": {
