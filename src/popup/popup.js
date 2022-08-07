@@ -122,7 +122,6 @@ function parse_fen_from_response(txt) {
     const prefixMap = {
         li: 'Game detected on Lichess.org',
         cc: 'Game detected on Chess.com',
-        bt: 'Game detected on BlitzTactics.com'
     };
     const metaTag = txt.substring(3, 8);
     const prefix = metaTag.substring(0, 2);
@@ -130,7 +129,7 @@ function parse_fen_from_response(txt) {
     txt = txt.substring(11);
 
     const chess = new Chess();
-    if (metaTag.includes("puz")) { // chess.com & blitztactics.com puzzle pages
+    if (metaTag.includes("puz")) { // chess.com puzzle pages
         chess.clear(); // clear the board so we can place our pieces
         const [playerTurn, ...pieces] = txt.split("*****").slice(0, -1);
         console.log(txt);

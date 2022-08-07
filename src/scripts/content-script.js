@@ -5,7 +5,6 @@ let moving = false; // whether the content-script is performing a move
 const siteMap = {
     'lichess.org': 'lichess',
     'www.chess.com': 'chesscom',
-    'blitztactics.com': 'blitztactics'
 }
 
 const pieceMap = {
@@ -122,25 +121,6 @@ function getMoves(getAllMoves) {
                 }
             }
         }
-    } else if (site === 'blitztactics') {
-        prefix = '***btpuz***';
-        res += getTurn() + '*****';
-        const pieces = Array.from(document.querySelectorAll('.board-area piece'))
-            .filter(piece => !!piece.classList[1]);
-        for (const piece of pieces) {
-            const transform = piece.style.transform;
-            const xyCoords = transform.substring(transform.indexOf('(') + 1, transform.length - 1)
-                .replaceAll('px', '').replace(' ', '').split(",")
-                .map(num => Number(num) / piece.getBoundingClientRect().width + 1);
-            const coords = (getOrientation() === 'black')
-                ? String.fromCharCode('h'.charCodeAt(0) - xyCoords[0] + 1) + xyCoords[1]
-                : String.fromCharCode('a'.charCodeAt(0) + xyCoords[0] - 1) + (9 - xyCoords[1]);
-            if (piece.classList[0] !== "ghost") {
-                res += `${colorMap[piece.classList[0]]}-${pieceMap[piece.classList[1]]}-${coords}*****`;
-            } else if (piece.style.visibility === "visible") {
-                res += `${colorMap[piece.classList[1]]}-${pieceMap[piece.classList[2]]}-${coords}*****`;
-            }
-        }
     }
     console.log((res) ? prefix + res.replace(/[^\w-+#*]/g, '') : 'no');
     return (res) ? prefix + res.replace(/[^\w-+=#*]/g, '') : 'no';
@@ -153,9 +133,6 @@ function getOrientation() {
             || document.querySelector('.coords-light');
         orientedBlack = topLeftCoord && topLeftCoord.innerHTML === '1';
     } else if (site === 'lichess') {
-        const topLeftCoord = document.querySelector('.files');
-        orientedBlack = topLeftCoord && topLeftCoord.classList.contains('black');
-    } else if (site === 'blitztactics') {
         const topLeftCoord = document.querySelector('.files');
         orientedBlack = topLeftCoord && topLeftCoord.classList.contains('black');
     }
@@ -224,8 +201,6 @@ function getLastMoveHighlights() {
         if (!toPiece) {
             [toSquare, fromSquare] = [fromSquare, toSquare];
         }
-    }  else if (site === 'blitztactics') {
-        [fromSquare, toSquare] = [document.querySelector('.move-from'), document.querySelector('.move-to')];
     }
     return [fromSquare, toSquare];
 }
@@ -241,11 +216,6 @@ function getTurn() {
         turn = (hlColorType[0] === 'w') ? 'b' : 'w';
     } else if (site === 'lichess') {
         const toPiece = Array.from(document.querySelectorAll('.main-board piece'))
-            .filter(piece => !!piece.classList[1])
-            .find(piece => piece.style.transform === toSquare.style.transform);
-        turn = (toPiece.classList.contains('white')) ? 'b' : 'w';
-    } else if (site === 'blitztactics') {
-        const toPiece = Array.from(document.querySelectorAll('.board-area piece'))
             .filter(piece => !!piece.classList[1])
             .find(piece => piece.style.transform === toSquare.style.transform);
         turn = (toPiece.classList.contains('white')) ? 'b' : 'w';
@@ -266,9 +236,6 @@ function getRanksFiles() {
     } else if (site === 'lichess') {
         fileCoords = Array.from(document.querySelector('.files').children);
         rankCoords = Array.from(document.querySelector('.ranks').children);
-    }  else if (site === 'blitztactics') {
-        fileCoords = Array.from(document.querySelector('.files').children);
-        rankCoords = Array.from(document.querySelector('.ranks').children);
     }
     return [rankCoords, fileCoords];
 }
@@ -278,8 +245,6 @@ function getBoard() {
     if (site === 'chesscom') {
         board = document.querySelector('.board');
     } else if (site === 'lichess') {
-        board = document.querySelector('cg-board');
-    } else if (site === 'blitztactics') {
         board = document.querySelector('cg-board');
     }
     return board;
@@ -293,8 +258,6 @@ function getPromotionSelection(promotion) {
     } else if (site === 'lichess') {
         const promotionModal = document.querySelector('#promotion-choice');
         if (promotionModal) promotions = promotionModal.children;
-    }  else if (site === 'blitztactics') {
-        promotions = document.querySelector('.pieces').children;
     }
 
     const promoteMap = (site === 'chesscom')

@@ -34,9 +34,8 @@
   "content_scripts": [
     {
       "matches": [
-        "*://www.chess.com/*",
-        "*://lichess.org/*",
-        "*://blitztactics.com/*"
+        "https://www.chess.com/*",
+        "https://lichess.org/*"
       ],
       "js": [
         "src/scripts/content-script.js"
