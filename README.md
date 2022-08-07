@@ -1,6 +1,6 @@
 ![alt text](https://raw.githubusercontent.com/AlexPetrusca/Mephisto/master/res/mephisto_banner_lowercase.png)
 
-Mephisto is a browser extension that enables next best move calculation and automated gameplay on Chess.com and Lichess.
+Mephisto is a browser extension that enables next best move analysis and automated gameplay on Chess.com and Lichess.
 
 
 ## Getting Started
