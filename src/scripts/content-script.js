@@ -58,12 +58,10 @@ function getMoves(getAllMoves) {
         const moves = getMoveRecords();
         if (moves && moves.length) {
             prefix = '***ccfen***';
-            const figurineRegex = /<span.*data-figurine="(\w)".*span>/;
             const selectedMove = getSelectedMoveRecord();
             for (const move of moves) {
-                if (move.childElementCount) {
-                    const [figurineHTML, figurinePiece] = move.innerHTML.match(figurineRegex);
-                    res += move.innerHTML.replace(figurineHTML, figurinePiece) + '*****';
+                if (move.lastElementChild?.classList.contains('icon-font-chess')) {
+                    res += move.lastElementChild.getAttribute('data-figurine') + move.innerText + '*****';
                 } else {
                     res += move.innerText + '*****';
                 }
