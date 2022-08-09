@@ -1,7 +1,6 @@
-const queue = [];
 const moduleMap = {};
 
-async function require(path, type = 'js') {
+export async function require(path, type = 'js') {
     if (type === 'js') {
         return requirejs(path);
     } else if (type === 'css') {
@@ -11,27 +10,26 @@ async function require(path, type = 'js') {
     }
 }
 
+export function define(module) {
+    moduleMap.latest = module;
+}
+
 async function requirejs(path) {
     if (moduleMap[path]) return moduleMap[path];
-    queue.push(path);
-    let script = document.createElement('script');
-    script.id = `${path}-script`;
-    script.type = 'module';
-    script.src = `${path}.js`;
-    script.className = 'page-script';
-    document.body.appendChild(script);
-    let retries = 0;
-    async function pollModule() {
-        if (moduleMap[path]) {
-            return moduleMap[path];
-        } else if (retries > 10) {
-            define(null);
-            return null;
+    return new Promise(resolve => {
+        const script = document.createElement('script');
+        script.id = `${path}-script`;
+        script.src = `${path}.js`;
+        script.type = 'module';
+        script.className = 'page-script';
+        script.setAttribute('async', '');
+        script.setAttribute('defer', '');
+        script.onload = () => {
+            moduleMap[path] = moduleMap.latest;
+            resolve(moduleMap[path]);
         }
-        retries++;
-        return timeout(pollModule, 4);
-    }
-    return pollModule();
+        document.body.appendChild(script);
+    });
 }
 
 async function requirecss(path) {
@@ -49,15 +47,4 @@ async function requirehtml(path) {
     body.innerHTML = await fetch(`${path}.html`).then(response => response.text());
     body.className = 'page-body';
     return body;
-}
-
-function define(module) {
-    const path = queue.shift();
-    moduleMap[path] = module;
-}
-
-async function timeout(fn, t) {
-    return new Promise(resolve => {
-        setTimeout(() => resolve(fn()), t);
-    });
 }

@@ -1,3 +1,4 @@
+import { define } from "../../../framework/require.js";
 import { SettingsPage } from "../../../util/SettingsPage.js";
 
 class GeneralSettings extends SettingsPage {
