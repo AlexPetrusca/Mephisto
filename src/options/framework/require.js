@@ -1,12 +1,15 @@
 const moduleMap = {};
 
 export async function require(path, type = 'js') {
-    if (type === 'js') {
-        return requirejs(path);
-    } else if (type === 'css') {
-        return requirecss(path)
-    } else {
-        return requirehtml(path)
+    switch (type) {
+        case 'js':
+            return requirejs(path);
+        case 'css':
+            return requirecss(path)
+        case 'html':
+            return requirehtml(path)
+        default:
+            return undefined;
     }
 }
 
