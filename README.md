@@ -2,6 +2,9 @@
 
 Mephisto is a browser extension that enables next best move analysis and automated gameplay on Chess.com and Lichess. 
 
+<a href="https://chrome.google.com/webstore/detail/mephisto-chess-extension/ihpdlpgcjepplokoncjelcbbcedgnanp" style="border: 1px solid white">
+  <img src="https://storage.googleapis.com/web-dev-uploads/image/WlD8wC6g8khYWPJUsQceQkhXSlv1/mPGKYBIR2uCP0ApchDXE.png" />
+</a>
 
 ## Getting Started
 Click Mephisto's icon to open its popup window and automatically scrape the current page for a chess position to 
