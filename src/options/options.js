@@ -1,3 +1,5 @@
+import { require } from "./framework/require.js";
+
 let registerPageScript;
 
 document.addEventListener('DOMContentLoaded', function () {
