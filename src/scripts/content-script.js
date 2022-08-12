@@ -22,11 +22,9 @@ const colorMap = {
     black: 'b'
 }
 
-window.onload = () => {
-    console.log('Mephisto is listening!');
-    site = siteMap[window.location.hostname];
-    pullConfig();
-};
+console.log('Mephisto is listening!');
+site = siteMap[window.location.hostname];
+pullConfig();
 
 chrome.runtime.onMessage.addListener(response => {
     if (moving) return;
