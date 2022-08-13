@@ -203,7 +203,7 @@ function on_stockfish_response(event) {
                 const startPiece = board.position()[startSquare].substring(1);
                 request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
             }
-            if (config.autoplay) {
+            if (config.python_autoplay_backend) {
                 request_automove(best);
             }
         }

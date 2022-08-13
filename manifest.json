@@ -1,5 +1,4 @@
 {
-  "update_url": "https://clients2.google.com/service/update2/crx",
   "manifest_version": 2,
   "name": "Mephisto Chess Extension",
   "description": "Next best move analysis for your favorite chess websites",
@@ -19,11 +18,10 @@
       "48": "res/icons/icon48.png",
       "128": "res/icons/icon128.png"
     },
-    "default_popup": "src/popup/popup.html",
-    "options_page": "src/options/options.html"
+    "default_popup": "src/popup/popup.html"
   },
   "permissions": [
-    "debugger"
+    "http://localhost/*"
   ],
   "background": {
     "scripts": [
