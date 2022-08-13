@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function() {
             push_config();
         } else if (response.click) {
             console.log(response);
-            dispatchClickEvent(response.x, response.y);
+            requestPythonBackendClick(response.x, response.y);
         }
     });
 
@@ -327,38 +327,6 @@ function clear_arrows() {
 function toggle_calculating(on) {
     prog = 0;
     isCalculating = on;
-}
-
-async function dispatchClickEvent(x, y) {
-    await requestPythonBackendClick(x, y);
-}
-
-async function requestDebuggerClick(x, y) {
-    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-        const debugee = {tabId: tabs[0].id};
-        chrome.debugger.attach(debugee, "1.3", async () => {
-            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
-                type: 'mousePressed',
-                button: 'left',
-                clickCount: 1,
-                x: x,
-                y: y,
-            });
-            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
-                type: 'mouseReleased',
-                button: 'left',
-                clickCount: 1,
-                x: x,
-                y: y,
-            });
-        });
-    });
-}
-
-async function dispatchMouseEvent(debugee, mouseEvent, mouseEventOpts) {
-    return new Promise(resolve => {
-        chrome.debugger.sendCommand(debugee, mouseEvent, mouseEventOpts, resolve);
-    });
 }
 
 async function requestPythonBackendClick(x, y) {
