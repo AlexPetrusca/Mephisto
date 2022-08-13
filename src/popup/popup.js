@@ -28,13 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // general settings
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
         fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
-        think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
-        think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
-        move_time: JSON.parse(localStorage.getItem('move_time')) || 500,
-        move_variance: JSON.parse(localStorage.getItem('move_variance')) || 250,
         simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')) || false,
-        autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
-        puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
         // appearance settings
         pieces: JSON.parse(localStorage.getItem('pieces')) || 'wikipedia.svg',
         board: JSON.parse(localStorage.getItem('board')) || 'brown',
@@ -75,9 +69,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } else if (response.pullConfig) {
             push_config();
-        } else if (response.click) {
-            console.log(response);
-            dispatchClickEvent(response.x, response.y);
         }
     });
 
@@ -203,9 +194,6 @@ function on_stockfish_response(event) {
                 const startPiece = board.position()[startSquare].substring(1);
                 request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
             }
-            if (config.python_autoplay_backend) {
-                request_automove(best);
-            }
         }
         if (!config.simon_says_mode) {
             draw_arrow(best, 'blue', document.getElementById('move-arrow'));
@@ -245,15 +233,6 @@ function on_stockfish_response(event) {
 function request_fen() {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, { queryfen: true });
-    });
-}
-
-function request_automove(move) {
-    const message = (config.puzzle_mode)
-        ? { automove: true, pv: lastPv || move }
-        : { automove: true, move: move };
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, message);
     });
 }
 
@@ -326,36 +305,4 @@ function clear_arrows() {
 function toggle_calculating(on) {
     prog = 0;
     isCalculating = on;
-}
-
-async function dispatchClickEvent(x, y) {
-    await requestDebuggerClick(x, y);
-}
-
-async function requestDebuggerClick(x, y) {
-    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-        const debugee = {tabId: tabs[0].id};
-        chrome.debugger.attach(debugee, "1.3", async () => {
-            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
-                type: 'mousePressed',
-                button: 'left',
-                clickCount: 1,
-                x: x,
-                y: y,
-            });
-            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
-                type: 'mouseReleased',
-                button: 'left',
-                clickCount: 1,
-                x: x,
-                y: y,
-            });
-        });
-    });
-}
-
-async function dispatchMouseEvent(debugee, mouseEvent, mouseEventOpts) {
-    return new Promise(resolve => {
-        chrome.debugger.sendCommand(debugee, mouseEvent, mouseEventOpts, resolve);
-    });
 }
