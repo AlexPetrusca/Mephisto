@@ -311,10 +311,7 @@ function promiseTimeout(time) {
 }
 
 function getOffsetCorrectionXY() {
-    if (config.python_autoplay_backend) {
-        return getBrowserOffsetXY();
-    }
-    return [0, 0];
+    return getBrowserOffsetXY();
 }
 
 function getBrowserOffsetXY() {

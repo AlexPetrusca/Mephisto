@@ -33,9 +33,8 @@ document.addEventListener('DOMContentLoaded', function() {
         move_time: JSON.parse(localStorage.getItem('move_time')) || 500,
         move_variance: JSON.parse(localStorage.getItem('move_variance')) || 250,
         simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')) || false,
-        autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
-        puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
         python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')) || false,
+        puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
         // appearance settings
         pieces: JSON.parse(localStorage.getItem('pieces')) || 'wikipedia.svg',
         board: JSON.parse(localStorage.getItem('board')) || 'brown',
@@ -205,7 +204,7 @@ function on_stockfish_response(event) {
                 const startPiece = board.position()[startSquare].substring(1);
                 request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
             }
-            if (config.autoplay) {
+            if (config.python_autoplay_backend) {
                 request_automove(best);
             }
         }
@@ -331,11 +330,7 @@ function toggle_calculating(on) {
 }
 
 async function dispatchClickEvent(x, y) {
-    if (config.python_autoplay_backend) {
-        await requestPythonBackendClick(x, y);
-    } else {
-        await requestDebuggerClick(x, y);
-    }
+    await requestPythonBackendClick(x, y);
 }
 
 async function requestDebuggerClick(x, y) {
