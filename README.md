@@ -3,10 +3,11 @@
 Mephisto is a browser extension that enables next best move analysis and automated gameplay on Chess.com and Lichess. 
 
 <a href="https://chrome.google.com/webstore/detail/mephisto-chess-extension/ihpdlpgcjepplokoncjelcbbcedgnanp" style="border: 1px solid white">
-  <img src="https://storage.googleapis.com/web-dev-uploads/image/WlD8wC6g8khYWPJUsQceQkhXSlv1/mPGKYBIR2uCP0ApchDXE.png" align="center" />
+  <img src="https://github.com/AlexPetrusca/Mephisto/blob/master/res/chrome-web-store.png" align="center" height="66px" />
 </a>
+&nbsp;&nbsp;&nbsp;&nbsp;
 <a href="https://addons.mozilla.org/en-US/firefox/addon/mephisto-chess-extension">
-  <img src="https://addons.mozilla.org/static-frontend/459ebe418a9783cd0b80bdd8b98e5faa.svg" align="center" height="66px" />
+  <img src="https://github.com/AlexPetrusca/Mephisto/blob/master/res/firefox_web_store.png" align="center" height="66px" />
 </a>
 
 ## Getting Started
