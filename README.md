@@ -4,7 +4,6 @@ Mephisto is a browser extension that enables next best move analysis and automat
 
 ## Getting Started
 
-
 <a href="https://chrome.google.com/webstore/detail/mephisto-chess-extension/ihpdlpgcjepplokoncjelcbbcedgnanp" style="border: 1px solid white">
   <img src="https://github.com/AlexPetrusca/Mephisto/blob/master/res/chrome-web-store.png" align="center" height="66px" />
 </a>
