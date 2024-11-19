@@ -59,7 +59,8 @@ function getMoves(getAllMoves) {
         if (moves && moves.length) {
             prefix = '***ccfen***';
             const selectedMove = getSelectedMoveRecord();
-            for (const move of moves) {
+            for (const moveWrapper of moves) {
+                const move = moveWrapper.lastElementChild
                 if (move.lastElementChild?.classList.contains('icon-font-chess')) {
                     res += move.lastElementChild.getAttribute('data-figurine') + move.innerText + '*****';
                 } else {
