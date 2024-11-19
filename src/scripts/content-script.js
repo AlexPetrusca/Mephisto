@@ -74,18 +74,12 @@ function getMoves(getAllMoves) {
             prefix = '***ccpuz***';
             res += getTurn() + '*****';
             for (const piece of document.querySelectorAll('.piece')) {
-                let color, type, coordsStr;
-                if (document.querySelector('chess-board')) {
-                    let [colorTypeClass, coordsClass] = [piece.classList[1], piece.classList[2]];
-                    if (!coordsClass.includes('square')) {
-                        [colorTypeClass, coordsClass] = [coordsClass, colorTypeClass];
-                    }
-                    [color, type] = colorTypeClass;
-                    coordsStr = coordsClass.split('-')[1];
-                } else {
-                    [color, type] = piece.style.backgroundImage.match(/(\w+)\.png/)[1];
-                    coordsStr = piece.classList[1].split('-')[1].replaceAll('0', '');
+                let [colorTypeClass, coordsClass] = [piece.classList[1], piece.classList[2]];
+                if (!coordsClass.includes('square')) {
+                    [colorTypeClass, coordsClass] = [coordsClass, colorTypeClass];
                 }
+                const [color, type] = colorTypeClass;
+                const coordsStr = coordsClass.split('-')[1];
                 const coords = String.fromCharCode('a'.charCodeAt(0) + parseInt(coordsStr[0]) - 1) + coordsStr[1];
                 res += `${color}-${type}-${coords}*****`;
             }
@@ -234,9 +228,7 @@ function getTurn() {
     const [_, toSquare] = getLastMoveHighlights();
     if (site === 'chesscom') {
         const hlPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
-        const hlColorType = (document.querySelector('chess-board'))
-            ? Array.from(hlPiece.classList).find(c => c.match(/[wb][prnbkq]/))
-            : hlPiece.style.backgroundImage.match(/(\w+)\.png/)[1];
+        const hlColorType = Array.from(hlPiece.classList).find(c => c.match(/[wb][prnbkq]/));
         turn = (hlColorType[0] === 'w') ? 'b' : 'w';
     } else if (site === 'lichess') {
         const toPiece = Array.from(document.querySelectorAll('.main-board piece'))
