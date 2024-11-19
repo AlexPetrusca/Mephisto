@@ -177,7 +177,7 @@ function getSelectedMoveRecord() {
             || document.querySelector('.move-node-highlighted .move-text-component') // vs player + computer (old)
             || document.querySelector('.move-node.selected .move-text'); // analysis
     } else if (site === 'lichess') {
-        selectedMove = document.querySelector('u8t.a1t')
+        selectedMove = document.querySelector('kwdb.a1t')
             || document.querySelector('move.active');
     }
     return selectedMove;
@@ -194,7 +194,7 @@ function getMoveRecords() {
             moves = document.querySelectorAll('.move-text'); // analysis
         }
     } else if (site === 'lichess') {
-        moves = document.querySelectorAll('u8t'); // vs player + computer
+        moves = document.querySelectorAll('kwdb'); // vs player + computer
         if (moves.length === 0) {
             moves = document.querySelectorAll('move'); // vs training
         }
