@@ -40,6 +40,10 @@
       ]
     }
   ],
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
   "host_permissions": [
     "http://localhost:8080/*"
   ],
