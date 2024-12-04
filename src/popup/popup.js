@@ -1,6 +1,6 @@
 import { Chess } from "../../lib/chess.min.js";
 
-let stockfish;
+let engine;
 let board;
 let fenCache;
 let config;
@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // load extension configurations from localStorage
     config = {
         // general settings
-        engine: JSON.parse(localStorage.getItem('engine')) || 'stockfish-js-16/stockfish-nnue-16.js',
+        engine: JSON.parse(localStorage.getItem('engine')) || 'stockfish-16-nnue',
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
         fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
         think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
@@ -61,11 +61,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // init fen LRU cache
     fenCache = new LRU(100);
 
-    // init stockfish webworker
-    stockfish = new Worker(`/lib/engine/${config.engine}`);
-    stockfish.postMessage('ucinewgame');
-    stockfish.postMessage('isready');
-    stockfish.onmessage = on_stockfish_response;
+    // init engine webworker
+    const engineMap = {
+        "stockfish-16-nnue": "stockfish-js-16/stockfish.js",
+        "stockfish-11": "stockfish-js-11/stockfish.js",
+        "stockfish-6": "stockfish-js-6/stockfish.js",
+    }
+    const enginePath = engineMap[config.engine];
+    if (config.engine === "stockfish-16-nnue" || config.engine === "stockfish-11" || config.engine === "stockfish-6") {
+        engine = new Worker(`/lib/engine/${enginePath}`);
+        engine.postMessage('ucinewgame');
+        engine.postMessage('isready');
+        engine.onmessage = (event) => on_engine_response(event.data);
+    }
 
     // listen to messages from content-script
     chrome.runtime.onMessage.addListener(function (response) {
@@ -100,7 +108,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // initialize materialize
-    const instances = M.Tooltip.init(document.querySelectorAll('.tooltipped'), {});
+    M.Tooltip.init(document.querySelectorAll('.tooltipped'), {});
 });
 
 function new_pos(fen) {
@@ -109,8 +117,8 @@ function new_pos(fen) {
         <progress id="progBar" value="2" max="100">
     `;
     document.getElementById('chess_line_2').innerText = '';
-    stockfish.postMessage(`position fen ${fen}`);
-    stockfish.postMessage(`go movetime ${config.compute_time}`);
+    engine.postMessage(`position fen ${fen}`);
+    engine.postMessage(`go movetime ${config.compute_time}`);
     board.position(fen);
     lastFen = fen;
     if (config.simon_says_mode) {
@@ -189,9 +197,8 @@ function update_best_move(line1, line2) {
     }
 }
 
-function on_stockfish_response(event) {
-    let message = event.data;
-    console.log('on_stockfish_response', message);
+function on_engine_response(message) {
+    console.log('on_engine_response', message);
     if (message.includes('bestmove')) {
         const arr = message.split(' ');
         const best = arr[1];

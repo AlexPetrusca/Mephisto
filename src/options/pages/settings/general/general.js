@@ -4,7 +4,7 @@ import { SettingsPage } from "../../../util/SettingsPage.js";
 class GeneralSettings extends SettingsPage {
     init() {
         M.FormSelect.init(document.querySelectorAll('select'), {});
-        this.registerFormElement('engine', 'Engine:', 'select', 'stockfish-js-16/stockfish-nnue-16.js');
+        this.registerFormElement('engine', 'Engine:', 'select', 'stockfish-16-nnue');
         this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 500);
         this.registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 100);
         this.registerFormElement('computer_evaluation', 'Show Computer Evaluation:', 'checkbox', true);
