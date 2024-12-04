@@ -5,6 +5,8 @@ class GeneralSettings extends SettingsPage {
     init() {
         this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 500);
         this.registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 100);
+        this.registerFormElement('computer_evaluation', 'Show Computer Evaluation:', 'checkbox', true);
+        this.registerFormElement('threat_analysis', 'Show Threat Analysis', 'checkbox', true);
         this.registerFormElement('simon_says_mode', '"Hand and Brain" Mode:', 'checkbox', false);
         this.registerFormElement('autoplay', 'Autoplay:', 'checkbox', false);
         this.registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);

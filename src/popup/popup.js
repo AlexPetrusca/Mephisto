@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', function() {
         think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
         move_time: JSON.parse(localStorage.getItem('move_time')) || 500,
         move_variance: JSON.parse(localStorage.getItem('move_variance')) || 250,
+        computer_evaluation: JSON.parse(localStorage.getItem('computer_evaluation')) || false,
+        threat_analysis: JSON.parse(localStorage.getItem('threat_analysis')) || false,
         simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')) || false,
         autoplay: JSON.parse(localStorage.getItem('autoplay')) || false,
         puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
@@ -171,6 +173,21 @@ function parse_fen_from_response(txt) {
     }
 }
 
+function update_evaluation(eval_string) {
+    if (eval_string && config.computer_evaluation) {
+        document.getElementById('evaluation').innerText = eval_string;
+    }
+}
+
+function update_best_move(line1, line2) {
+    if (line1 != null) {
+        document.getElementById('chess_line_1').innerText = line1;
+    }
+    if (line2 != null) {
+        document.getElementById('chess_line_2').innerText = line2;
+    }
+}
+
 function on_stockfish_response(event) {
     let message = event.data;
     console.log('on_stockfish_response', message);
@@ -185,17 +202,15 @@ function on_stockfish_response(event) {
             const startPiece = board.position()[startSquare];
             const startPieceType = (startPiece) ? startPiece.substring(1) : null;
             if (startPieceType) {
-                document.getElementById('chess_line_1').innerText = pieceNameMap[startPieceType];
+                update_best_move(pieceNameMap[startPieceType]);
             }
         } else {
             if (best === '(none)') {
-                document.getElementById('chess_line_1').innerText = `${next} Wins`;
+                update_best_move(`${next} Wins`, '');
             } else if (threat && threat !== '(none)') {
-                document.getElementById('chess_line_1').innerText = `${toplay} to play, best move is ${best}`;
-                document.getElementById('chess_line_2').innerText = `Best response for ${next} is ${threat}`;
+                update_best_move(`${toplay} to play, best move is ${best}`, `Best response for ${next} is ${threat}`);
             } else {
-                document.getElementById('chess_line_1').innerText = `${toplay} to play, best move is ${best}`;
-                document.getElementById('chess_line_2').innerText = '';
+                update_best_move(`${toplay} to play, best move is ${best}`, '');
             }
         }
         if (toplay.toLowerCase() === board.orientation()) {
@@ -204,6 +219,9 @@ function on_stockfish_response(event) {
                 const startSquare = best.substring(0, 2);
                 const startPiece = board.position()[startSquare].substring(1);
                 request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
+                if (config.threat_analysis) {
+                    draw_arrow(threat, 'red', document.getElementById('response-arrow'));
+                }
             }
             if (config.autoplay) {
                 request_automove(best);
@@ -211,8 +229,11 @@ function on_stockfish_response(event) {
         }
         if (!config.simon_says_mode) {
             draw_arrow(best, 'blue', document.getElementById('move-arrow'));
-            draw_arrow(threat, 'red', document.getElementById('response-arrow'));
+            if (config.threat_analysis) {
+                draw_arrow(threat, 'red', document.getElementById('response-arrow'));
+            }
         }
+
         toggle_calculating(false);
     } else if (message.includes('info depth')) {
         const pvSplit = message.split(" pv ");
@@ -222,17 +243,18 @@ function on_stockfish_response(event) {
             const mateArr = arr[1].split(' ');
             const mateNum = Math.abs(parseInt(mateArr[0]));
             if (mateNum === 0) {
-                document.getElementById('evaluation').innerText = 'Checkmate!';
+                update_evaluation('Checkmate!');
+                update_best_move('', '');
                 document.getElementById('chess_line_2').innerText = '';
             } else {
-                document.getElementById('evaluation').innerText = `Checkmate in ${mateNum}`;
+                update_evaluation(`Checkmate in ${mateNum}`);
             }
             toggle_calculating(false);
         } else if (info.includes('score')) {
             const infoArr = info.split(" ");
             const depth = infoArr[2];
             const score = ((turn === 'w') ? 1 : -1) * infoArr[9];
-            document.getElementById('evaluation').innerText = `Score: ${score / 100.0} at depth ${depth}`;
+            update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
             lastScore = score / 100.0;
         }
         lastPv = pvSplit[1];
