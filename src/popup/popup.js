@@ -61,7 +61,8 @@ document.addEventListener('DOMContentLoaded', function() {
     fenCache = new LRU(100);
 
     // init stockfish webworker
-    stockfish = new Worker('/lib/stockfish.min.js');
+    // stockfish = new Worker('/lib/engine/stockfish-6.js');
+    stockfish = new Worker('/lib/engine/stockfish-js/stockfish-nnue-16.js');
     stockfish.postMessage('ucinewgame');
     stockfish.postMessage('isready');
     stockfish.onmessage = on_stockfish_response;
