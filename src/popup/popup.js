@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // load extension configurations from localStorage
     config = {
         // general settings
+        engine: JSON.parse(localStorage.getItem('engine')) || 'stockfish-js-16/stockfish-nnue-16.js',
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
         fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
         think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
@@ -61,8 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
     fenCache = new LRU(100);
 
     // init stockfish webworker
-    // stockfish = new Worker('/lib/engine/stockfish-6.js');
-    stockfish = new Worker('/lib/engine/stockfish-js/stockfish-nnue-16.js');
+    stockfish = new Worker(`/lib/engine/${config.engine}`);
     stockfish.postMessage('ucinewgame');
     stockfish.postMessage('isready');
     stockfish.onmessage = on_stockfish_response;
