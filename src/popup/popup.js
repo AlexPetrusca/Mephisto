@@ -22,11 +22,11 @@ const pieceNameMap = {
     'K': 'King',
 };
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     // load extension configurations from localStorage
     config = {
         // general settings
-        engine: JSON.parse(localStorage.getItem('engine')) || 'stockfish-16-nnue',
+        engine: JSON.parse(localStorage.getItem('engine')) || 'stockfish-16-nnue-7',
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
         fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
         think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
@@ -59,21 +59,41 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // init fen LRU cache
-    fenCache = new LRU(100);
+    fenCache = new LRU(1000);
 
     // init engine webworker
     const engineMap = {
-        "stockfish-16-nnue": "stockfish-js-16/stockfish.js",
-        "stockfish-11": "stockfish-js-11/stockfish.js",
-        "stockfish-6": "stockfish-js-6/stockfish.js",
+        "stockfish-17-nnue-79": "stockfish-17-79/sf17-79.js",
+        "stockfish-16-nnue-40": "stockfish-16-40/stockfish.js",
+        "stockfish-16-nnue-7": "stockfish-16-7/sf16-7.js",
+        "fairy-stockfish-14-nnue": "fairy-stockfish-14/fsf14.js",
+        "stockfish-hce": "stockfish-hce/sfhce.js",
+        "stockfish-11": "stockfish-11/stockfish.js",
+        "stockfish-6": "stockfish-6/stockfish.js",
     }
-    const enginePath = engineMap[config.engine];
-    if (config.engine === "stockfish-16-nnue" || config.engine === "stockfish-11" || config.engine === "stockfish-6") {
-        engine = new Worker(`/lib/engine/${enginePath}`);
-        engine.postMessage('ucinewgame');
-        engine.postMessage('isready');
+    const enginePath = `/lib/engine/${engineMap[config.engine]}`;
+    const engineBasePath = enginePath.substring(0, enginePath.lastIndexOf('/'));
+    if (["stockfish-16-nnue-40", "stockfish-11", "stockfish-6"].includes(config.engine)) {
+        engine = new Worker(enginePath);
         engine.onmessage = (event) => on_engine_response(event.data);
+    } else if (["stockfish-17-nnue-79", "stockfish-16-nnue-7", "fairy-stockfish-14-nnue", "stockfish-hce"].includes(config.engine)) {
+        const module = await import(enginePath);
+        engine = await module.default();
+        if (config.engine.includes("nnue")) {
+            const nnues = [];
+            for (let i = 0; ; i++) {
+                let nnue = engine.getRecommendedNnue(i);
+                if (!nnue || nnues.includes(nnue)) break;
+                nnues.push(nnue);
+            }
+            const nnue_responses = await Promise.all(nnues.map(nnue => fetch(`${engineBasePath}/${nnue}`)));
+            const nnue_models = await Promise.all(nnue_responses.map(res => res.arrayBuffer()));
+            nnue_models.forEach((model, i) => engine.setNnueBuffer(new Uint8Array(model), i));
+        }
+        engine.listen = (message) => on_engine_response(message);
     }
+    send_engine_uci('ucinewgame');
+    send_engine_uci('isready');
 
     // listen to messages from content-script
     chrome.runtime.onMessage.addListener(function (response) {
@@ -111,14 +131,98 @@ document.addEventListener('DOMContentLoaded', function() {
     M.Tooltip.init(document.querySelectorAll('.tooltipped'), {});
 });
 
+function send_engine_uci(message) {
+    if (engine instanceof Worker) {
+        engine.postMessage(message);
+    } else if (engine.hasOwnProperty('uci')) {
+        engine.uci(message);
+    }
+}
+
+function on_engine_response(message) {
+    console.log('on_engine_response', message);
+    if (message.includes('bestmove')) {
+        const arr = message.split(' ');
+        const best = arr[1];
+        const threat = arr[3];
+        const toplay = (turn === 'w') ? 'White' : 'Black';
+        const next = (turn === 'w') ? 'Black' : 'White';
+        if (config.simon_says_mode) {
+            const startSquare = best.substring(0, 2);
+            const startPiece = board.position()[startSquare];
+            const startPieceType = (startPiece) ? startPiece.substring(1) : null;
+            if (startPieceType) {
+                update_best_move(pieceNameMap[startPieceType]);
+            }
+        } else {
+            if (best === '(none)') {
+                update_best_move(`${next} Wins`, '');
+            } else if (threat && threat !== '(none)') {
+                update_best_move(`${toplay} to play, best move is ${best}`, `Best response for ${next} is ${threat}`);
+            } else {
+                update_best_move(`${toplay} to play, best move is ${best}`, '');
+            }
+        }
+        if (toplay.toLowerCase() === board.orientation()) {
+            lastBestMove = best;
+            if (config.simon_says_mode) {
+                const startSquare = best.substring(0, 2);
+                const startPiece = board.position()[startSquare].substring(1);
+                request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
+                if (config.threat_analysis) {
+                    draw_arrow(threat, 'red', document.getElementById('response-arrow'));
+                }
+            }
+            if (config.autoplay) {
+                request_automove(best);
+            }
+        }
+        if (!config.simon_says_mode) {
+            draw_arrow(best, 'blue', document.getElementById('move-arrow'));
+            if (config.threat_analysis) {
+                draw_arrow(threat, 'red', document.getElementById('response-arrow'));
+            }
+        }
+        toggle_calculating(false);
+    } else if (message.includes('info depth')) {
+        const pvSplit = message.split(" pv ");
+        const info = pvSplit[0];
+        if (info.includes('score mate')) {
+            const arr = message.split('score mate ');
+            const mateArr = arr[1].split(' ');
+            const mateNum = Math.abs(parseInt(mateArr[0]));
+            if (mateNum === 0) {
+                update_evaluation('Checkmate!');
+                update_best_move('', '');
+                document.getElementById('chess_line_2').innerText = '';
+            } else {
+                update_evaluation(`Checkmate in ${mateNum}`);
+            }
+            toggle_calculating(false);
+        } else if (info.includes('score')) {
+            const infoArr = info.split(" ");
+            const depth = infoArr[2];
+            const score = ((turn === 'w') ? 1 : -1) * infoArr[9];
+            update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
+            lastScore = score / 100.0;
+        }
+        lastPv = pvSplit[1];
+    }
+    if (isCalculating) {
+        prog++;
+        let progMapping = 100 * (1 - Math.exp(-prog / 30));
+        document.getElementById('progBar').setAttribute('value', `${Math.round(progMapping)}`);
+    }
+}
+
 function new_pos(fen) {
     document.getElementById('chess_line_1').innerHTML = `
         <div>Calculating...<div>
         <progress id="progBar" value="2" max="100">
     `;
     document.getElementById('chess_line_2').innerText = '';
-    engine.postMessage(`position fen ${fen}`);
-    engine.postMessage(`go movetime ${config.compute_time}`);
+    send_engine_uci(`position fen ${fen}`);
+    send_engine_uci(`go movetime ${config.compute_time}`);
     board.position(fen);
     lastFen = fen;
     if (config.simon_says_mode) {
@@ -194,83 +298,6 @@ function update_best_move(line1, line2) {
     }
     if (line2 != null) {
         document.getElementById('chess_line_2').innerText = line2;
-    }
-}
-
-function on_engine_response(message) {
-    console.log('on_engine_response', message);
-    if (message.includes('bestmove')) {
-        const arr = message.split(' ');
-        const best = arr[1];
-        const threat = arr[3];
-        const toplay = (turn === 'w') ? 'White' : 'Black';
-        const next = (turn === 'w') ? 'Black' : 'White';
-        if (config.simon_says_mode) {
-            const startSquare = best.substring(0, 2);
-            const startPiece = board.position()[startSquare];
-            const startPieceType = (startPiece) ? startPiece.substring(1) : null;
-            if (startPieceType) {
-                update_best_move(pieceNameMap[startPieceType]);
-            }
-        } else {
-            if (best === '(none)') {
-                update_best_move(`${next} Wins`, '');
-            } else if (threat && threat !== '(none)') {
-                update_best_move(`${toplay} to play, best move is ${best}`, `Best response for ${next} is ${threat}`);
-            } else {
-                update_best_move(`${toplay} to play, best move is ${best}`, '');
-            }
-        }
-        if (toplay.toLowerCase() === board.orientation()) {
-            lastBestMove = best;
-            if (config.simon_says_mode) {
-                const startSquare = best.substring(0, 2);
-                const startPiece = board.position()[startSquare].substring(1);
-                request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
-                if (config.threat_analysis) {
-                    draw_arrow(threat, 'red', document.getElementById('response-arrow'));
-                }
-            }
-            if (config.autoplay) {
-                request_automove(best);
-            }
-        }
-        if (!config.simon_says_mode) {
-            draw_arrow(best, 'blue', document.getElementById('move-arrow'));
-            if (config.threat_analysis) {
-                draw_arrow(threat, 'red', document.getElementById('response-arrow'));
-            }
-        }
-
-        toggle_calculating(false);
-    } else if (message.includes('info depth')) {
-        const pvSplit = message.split(" pv ");
-        const info = pvSplit[0];
-        if (info.includes('score mate')) {
-            const arr = message.split('score mate ');
-            const mateArr = arr[1].split(' ');
-            const mateNum = Math.abs(parseInt(mateArr[0]));
-            if (mateNum === 0) {
-                update_evaluation('Checkmate!');
-                update_best_move('', '');
-                document.getElementById('chess_line_2').innerText = '';
-            } else {
-                update_evaluation(`Checkmate in ${mateNum}`);
-            }
-            toggle_calculating(false);
-        } else if (info.includes('score')) {
-            const infoArr = info.split(" ");
-            const depth = infoArr[2];
-            const score = ((turn === 'w') ? 1 : -1) * infoArr[9];
-            update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
-            lastScore = score / 100.0;
-        }
-        lastPv = pvSplit[1];
-    }
-    if (isCalculating) {
-        prog++;
-        let progMapping = 100 * (1 - Math.exp(-prog / 30));
-        document.getElementById('progBar').setAttribute('value', `${Math.round(progMapping)}`);
     }
 }
 
