@@ -22,7 +22,7 @@ const pieceNameMap = {
     'K': 'King',
 };
 
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', async function () {
     // load extension configurations from localStorage
     config = {
         // general settings
@@ -145,13 +145,8 @@ async function initialize_engine() {
         }
 
         window.onmessage = event => on_engine_response(event.data);
-        engine.postMessage({
-            type: "weights",
-            data: {
-                name: "9155.txt.gz",
-                weights: await fetch(`${engineBasePath}/9155.txt.gz`).then(res => res.arrayBuffer())
-            }
-        }, "*");
+        let weights = await fetch(`${engineBasePath}/9155.txt.gz`).then(res => res.arrayBuffer());
+        engine.postMessage({type: "weights", data: {name: "9155.txt.gz", weights: weights}}, "*");
     }
     send_engine_uci('ucinewgame');
     send_engine_uci('isready');
@@ -280,7 +275,7 @@ function parse_fen_from_response(txt) {
         console.log(txt);
         for (const piece of pieces) {
             const attributes = piece.split("-");
-            chess.put({ type: attributes[1], color: attributes[0] }, attributes[2]);
+            chess.put({type: attributes[1], color: attributes[0]}, attributes[2]);
         }
         chess.setTurn(playerTurn);
         turn = chess.turn();
@@ -330,29 +325,29 @@ function update_best_move(line1, line2) {
 }
 
 function request_fen() {
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, { queryfen: true });
+    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, {queryfen: true});
     });
 }
 
 function request_automove(move) {
     const message = (config.puzzle_mode)
-        ? { automove: true, pv: lastPv || move }
-        : { automove: true, move: move };
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        ? {automove: true, pv: lastPv || move}
+        : {automove: true, move: move};
+    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, message);
     });
 }
 
 function request_console_log(message) {
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, { consoleMessage: message });
+    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, {consoleMessage: message});
     });
 }
 
 function push_config() {
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, { pushConfig: true, config: config });
+    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, {pushConfig: true, config: config});
     });
 }
 
@@ -362,8 +357,8 @@ function getCoords(move) {
     const x1 = move[2].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
     const y1 = parseInt(move.substring(3, 4));
     return (board.orientation() === 'white')
-        ? { x0: x0, y0: y0, x1: x1, y1: y1 }
-        : { x0: 9 - x0, y0: 9 - y0, x1: 9 - x1, y1: 9 - y1 };
+        ? {x0: x0, y0: y0, x1: x1, y1: y1}
+        : {x0: 9 - x0, y0: 9 - y0, x1: 9 - x1, y1: 9 - y1};
 }
 
 function draw_arrow(move, color, overlay) {
@@ -452,11 +447,11 @@ async function dispatchMouseEvent(debugee, mouseEvent, mouseEventOpts) {
 }
 
 async function requestPythonBackendClick(x, y) {
-    return callPythonBackend(`http://localhost:8080/performClick`, { x: x, y: y });
+    return callPythonBackend(`http://localhost:8080/performClick`, {x: x, y: y});
 }
 
 async function requestPythonBackendMove(x0, y0, x1, y1) {
-    return callPythonBackend('http://localhost:8080/performMove', { x0: x0, y0: y0, x1: x1, y1: y1 });
+    return callPythonBackend('http://localhost:8080/performMove', {x0: x0, y0: y0, x1: x1, y1: y1});
 }
 
 async function callPythonBackend(url, data) {
