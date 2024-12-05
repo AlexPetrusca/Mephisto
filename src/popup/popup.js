@@ -62,6 +62,45 @@ document.addEventListener('DOMContentLoaded', async function() {
     fenCache = new LRU(1000);
 
     // init engine webworker
+    await initialize_engine();
+
+    // listen to messages from content-script
+    chrome.runtime.onMessage.addListener(function (response) {
+        if (response.fenresponse && response.dom !== 'no') {
+            if (board.orientation() !== response.orient) {
+                board.orientation(response.orient);
+            }
+            let fen = parse_fen_from_response(response.dom);
+            if (lastFen !== fen) {
+                new_pos(fen);
+            }
+        } else if (response.pullConfig) {
+            push_config();
+        } else if (response.click) {
+            console.log(response);
+            dispatchClickEvent(response.x, response.y);
+        }
+    });
+
+    // query fen periodically from content-script
+    request_fen();
+    setInterval(function () {
+        request_fen();
+    }, config.fen_refresh);
+
+    // register button click listeners
+    document.getElementById('analyze').addEventListener('click', () => {
+        window.open(`https://lichess.org/analysis?fen=${lastFen}`, '_blank');
+    });
+    document.getElementById('config').addEventListener('click', () => {
+        window.open('/src/options/options.html', '_blank');
+    });
+
+    // initialize materialize
+    M.Tooltip.init(document.querySelectorAll('.tooltipped'), {});
+});
+
+async function initialize_engine() {
     const engineMap = {
         "stockfish-17-nnue-79": "stockfish-17-79/sf17-79.js",
         "stockfish-16-nnue-40": "stockfish-16-40/stockfish.js",
@@ -112,42 +151,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     send_engine_uci('ucinewgame');
     send_engine_uci('isready');
-
-    // listen to messages from content-script
-    chrome.runtime.onMessage.addListener(function (response) {
-        if (response.fenresponse && response.dom !== 'no') {
-            if (board.orientation() !== response.orient) {
-                board.orientation(response.orient);
-            }
-            let fen = parse_fen_from_response(response.dom);
-            if (lastFen !== fen) {
-                new_pos(fen);
-            }
-        } else if (response.pullConfig) {
-            push_config();
-        } else if (response.click) {
-            console.log(response);
-            dispatchClickEvent(response.x, response.y);
-        }
-    });
-
-    // query fen periodically from content-script
-    request_fen();
-    setInterval(function () {
-        request_fen();
-    }, config.fen_refresh);
-
-    // register button click listeners
-    document.getElementById('analyze').addEventListener('click', () => {
-        window.open(`https://lichess.org/analysis?fen=${lastFen}`, '_blank');
-    });
-    document.getElementById('config').addEventListener('click', () => {
-        window.open('/src/options/options.html', '_blank');
-    });
-
-    // initialize materialize
-    M.Tooltip.init(document.querySelectorAll('.tooltipped'), {});
-});
+}
 
 function send_engine_uci(message) {
     if (config.engine === "lc0") {
