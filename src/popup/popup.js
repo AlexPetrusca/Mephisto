@@ -136,11 +136,15 @@ async function initialize_engine() {
         lc0Frame.src = `${engineBasePath}/lc0.html`;
         lc0Frame.style.display = 'none';
         document.body.appendChild(lc0Frame);
-
-        await promiseTimeout(1000);
-        window.onmessage = event => on_engine_response(event.data);
         engine = lc0Frame.contentWindow;
-        console.log(engine);
+
+        let poll_startup = true
+        window.onmessage = () => poll_startup = false;
+        while (poll_startup) {
+            await promiseTimeout(100);
+        }
+
+        window.onmessage = event => on_engine_response(event.data);
         engine.postMessage({
             type: "weights",
             data: {
@@ -155,8 +159,6 @@ async function initialize_engine() {
 
 function send_engine_uci(message) {
     if (config.engine === "lc0") {
-        if (message.includes("movetime"))
-            message += '0';
         engine.postMessage(message, '*');
     } else if (engine instanceof Worker) {
         engine.postMessage(message);
