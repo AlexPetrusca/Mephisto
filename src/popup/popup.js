@@ -1,4 +1,4 @@
-import { Chess } from "../../lib/chess.min.js";
+import {Chess} from "../../lib/chess.min.js";
 
 let engine;
 let board;
@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         "stockfish-hce": "stockfish-hce/sfhce.js",
         "stockfish-11": "stockfish-11/stockfish.js",
         "stockfish-6": "stockfish-6/stockfish.js",
+        "lc0": "lc0/lc0.js",
     }
     const enginePath = `/lib/engine/${engineMap[config.engine]}`;
     const engineBasePath = enginePath.substring(0, enginePath.lastIndexOf('/'));
@@ -91,6 +92,23 @@ document.addEventListener('DOMContentLoaded', async function() {
             nnue_models.forEach((model, i) => engine.setNnueBuffer(new Uint8Array(model), i));
         }
         engine.listen = (message) => on_engine_response(message);
+    } else if (["lc0"].includes(config.engine)) {
+        const lc0Frame = document.createElement('iframe');
+        lc0Frame.src = `${engineBasePath}/lc0.html`;
+        lc0Frame.style.display = 'none';
+        document.body.appendChild(lc0Frame);
+
+        await promiseTimeout(1000);
+        window.onmessage = event => on_engine_response(event.data);
+        engine = lc0Frame.contentWindow;
+        console.log(engine);
+        engine.postMessage({
+            type: "weights",
+            data: {
+                name: "9155.txt.gz",
+                weights: await fetch(`${engineBasePath}/9155.txt.gz`).then(res => res.arrayBuffer())
+            }
+        }, "*");
     }
     send_engine_uci('ucinewgame');
     send_engine_uci('isready');
@@ -132,7 +150,11 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 function send_engine_uci(message) {
-    if (engine instanceof Worker) {
+    if (config.engine === "lc0") {
+        if (message.includes("movetime"))
+            message += '0';
+        engine.postMessage(message, '*');
+    } else if (engine instanceof Worker) {
         engine.postMessage(message);
     } else if (engine.hasOwnProperty('uci')) {
         engine.uci(message);
@@ -202,7 +224,7 @@ function on_engine_response(message) {
         } else if (info.includes('score')) {
             const infoArr = info.split(" ");
             const depth = infoArr[2];
-            const score = ((turn === 'w') ? 1 : -1) * infoArr[9];
+            const score = ((turn === 'w') ? 1 : -1) * (config.engine === "lc0") ? infoArr[11] : infoArr[9];
             update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
             lastScore = score / 100.0;
         }
@@ -440,5 +462,11 @@ async function callPythonBackend(url, data) {
             "Content-Type": "application/json"
         },
         body: JSON.stringify(data)
+    });
+}
+
+function promiseTimeout(time) {
+    return new Promise((resolve) => {
+        setTimeout(() => resolve(time), time);
     });
 }

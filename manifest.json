@@ -40,6 +40,9 @@
       ]
     }
   ],
+  "sandbox": {
+    "pages": ["lib/engine/lc0/lc0.html"]
+  },
   "options_ui": {
     "page": "src/options/options.html",
     "open_in_tab": true
