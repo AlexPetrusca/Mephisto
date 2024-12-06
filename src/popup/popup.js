@@ -105,10 +105,10 @@ async function initialize_engine() {
         "stockfish-17-nnue-79": "stockfish-17-79/sf17-79.js",
         "stockfish-16-nnue-40": "stockfish-16-40/stockfish.js",
         "stockfish-16-nnue-7": "stockfish-16-7/sf16-7.js",
-        "fairy-stockfish-14-nnue": "fairy-stockfish-14/fsf14.js",
-        "stockfish-hce": "stockfish-hce/sfhce.js",
+        "stockfish-11-hce": "stockfish-11-hce/sfhce.js",
         "stockfish-11": "stockfish-11/stockfish.js",
         "stockfish-6": "stockfish-6/stockfish.js",
+        "fairy-stockfish-14-nnue": "fairy-stockfish-14/fsf14.js",
         "lc0": "lc0/lc0.js",
     }
     const enginePath = `/lib/engine/${engineMap[config.engine]}`;
@@ -145,8 +145,8 @@ async function initialize_engine() {
         }
 
         window.onmessage = event => on_engine_response(event.data);
-        let weights = await fetch(`${engineBasePath}/9155.txt.gz`).then(res => res.arrayBuffer());
-        engine.postMessage({type: "weights", data: {name: "9155.txt.gz", weights: weights}}, "*");
+        let weights = await fetch(`${engineBasePath}/weights/weights_11248.dat.gz`).then(res => res.arrayBuffer());
+        engine.postMessage({type: "weights", data: {name: "weights_11248.dat.gz", weights: weights}}, "*");
     }
     send_engine_uci('ucinewgame');
     send_engine_uci('isready');
