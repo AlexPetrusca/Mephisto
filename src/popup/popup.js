@@ -145,8 +145,8 @@ async function initialize_engine() {
         }
 
         window.onmessage = event => on_engine_response(event.data);
-        let weights = await fetch(`${engineBasePath}/weights/weights_11248.dat.gz`).then(res => res.arrayBuffer());
-        engine.postMessage({type: "weights", data: {name: "weights_11248.dat.gz", weights: weights}}, "*");
+        let weights = await fetch(`${engineBasePath}/weights/weights_32195.dat.gz`).then(res => res.arrayBuffer());
+        engine.postMessage({type: "weights", data: {name: "weights_32195.dat.gz", weights: weights}}, "*");
     }
     send_engine_uci('ucinewgame');
     send_engine_uci('isready');
