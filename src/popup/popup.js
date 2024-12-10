@@ -101,6 +101,10 @@ document.addEventListener('DOMContentLoaded', async function () {
 });
 
 async function initialize_engine() {
+    if (config.engine === "remote") {
+        return;
+    }
+
     const engineMap = {
         "stockfish-17-nnue-79": "stockfish-17-79/sf17-79.js",
         "stockfish-16-nnue-40": "stockfish-16-40/stockfish.js",
@@ -162,51 +166,77 @@ function send_engine_uci(message) {
     }
 }
 
-function on_engine_response(message) {
-    console.log('on_engine_response', message);
-    if (message.includes('bestmove')) {
-        const arr = message.split(' ');
-        const best = arr[1];
-        const threat = arr[3];
-        const toplay = (turn === 'w') ? 'White' : 'Black';
-        const next = (turn === 'w') ? 'Black' : 'White';
+function on_engine_best_move(best, threat) {
+    const toplay = (turn === 'w') ? 'White' : 'Black';
+    const next = (turn === 'w') ? 'Black' : 'White';
+    if (config.simon_says_mode) {
+        const startSquare = best.substring(0, 2);
+        const startPiece = board.position()[startSquare];
+        const startPieceType = (startPiece) ? startPiece.substring(1) : null;
+        if (startPieceType) {
+            update_best_move(pieceNameMap[startPieceType]);
+        }
+    } else {
+        if (best === '(none)') {
+            update_best_move(`${next} Wins`, '');
+        } else if (threat && threat !== '(none)') {
+            update_best_move(`${toplay} to play, best move is ${best}`, `Best response for ${next} is ${threat}`);
+        } else {
+            update_best_move(`${toplay} to play, best move is ${best}`, '');
+        }
+    }
+    if (toplay.toLowerCase() === board.orientation()) {
+        lastBestMove = best;
         if (config.simon_says_mode) {
             const startSquare = best.substring(0, 2);
-            const startPiece = board.position()[startSquare];
-            const startPieceType = (startPiece) ? startPiece.substring(1) : null;
-            if (startPieceType) {
-                update_best_move(pieceNameMap[startPieceType]);
-            }
-        } else {
-            if (best === '(none)') {
-                update_best_move(`${next} Wins`, '');
-            } else if (threat && threat !== '(none)') {
-                update_best_move(`${toplay} to play, best move is ${best}`, `Best response for ${next} is ${threat}`);
-            } else {
-                update_best_move(`${toplay} to play, best move is ${best}`, '');
-            }
-        }
-        if (toplay.toLowerCase() === board.orientation()) {
-            lastBestMove = best;
-            if (config.simon_says_mode) {
-                const startSquare = best.substring(0, 2);
-                const startPiece = board.position()[startSquare].substring(1);
-                request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
-                if (config.threat_analysis) {
-                    draw_arrow(threat, 'red', document.getElementById('response-arrow'));
-                }
-            }
-            if (config.autoplay) {
-                request_automove(best);
-            }
-        }
-        if (!config.simon_says_mode) {
-            draw_arrow(best, 'blue', document.getElementById('move-arrow'));
+            const startPiece = board.position()[startSquare].substring(1);
+            request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
             if (config.threat_analysis) {
                 draw_arrow(threat, 'red', document.getElementById('response-arrow'));
             }
         }
-        toggle_calculating(false);
+        if (config.autoplay) {
+            request_automove(best);
+        }
+    }
+    if (!config.simon_says_mode) {
+        draw_arrow(best, 'blue', document.getElementById('move-arrow'));
+        if (config.threat_analysis) {
+            draw_arrow(threat, 'red', document.getElementById('response-arrow'));
+        }
+    }
+    toggle_calculating(false);
+}
+
+function on_engine_mate(mateNum) {
+    if (mateNum === 0) {
+        update_evaluation('Checkmate!');
+        update_best_move('', '');
+        document.getElementById('chess_line_2').innerText = '';
+    } else {
+        update_evaluation(`Checkmate in ${mateNum}`);
+    }
+    toggle_calculating(false);
+}
+
+function on_engine_score(score, depth) {
+    update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
+}
+
+function on_engine_response(message) {
+    console.log('on_engine_response', message);
+    if (config.engine === "remote") {
+        on_engine_best_move(message['move'], message['ponder']);
+        if (message['score']['is_mate']) {
+            on_engine_mate(message['score'].value)
+        } else {
+            on_engine_score(message['score'].value, message['score'].depth)
+        }
+    } else if (message.includes('bestmove')) {
+        const arr = message.split(' ');
+        const best = arr[1];
+        const threat = arr[3];
+        on_engine_best_move(best, threat);
     } else if (message.includes('info depth')) {
         const pvSplit = message.split(" pv ");
         const info = pvSplit[0];
@@ -214,19 +244,12 @@ function on_engine_response(message) {
             const arr = message.split('score mate ');
             const mateArr = arr[1].split(' ');
             const mateNum = Math.abs(parseInt(mateArr[0]));
-            if (mateNum === 0) {
-                update_evaluation('Checkmate!');
-                update_best_move('', '');
-                document.getElementById('chess_line_2').innerText = '';
-            } else {
-                update_evaluation(`Checkmate in ${mateNum}`);
-            }
-            toggle_calculating(false);
+            on_engine_mate(mateNum);
         } else if (info.includes('score')) {
             const infoArr = info.split(" ");
             const depth = infoArr[2];
             const score = ((turn === 'w') ? 1 : -1) * (config.engine === "lc0") ? infoArr[11] : infoArr[9];
-            update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
+            on_engine_score(score, depth);
             lastScore = score / 100.0;
         }
         lastPv = pvSplit[1];
@@ -244,8 +267,12 @@ function new_pos(fen) {
         <progress id="progBar" value="2" max="100">
     `;
     document.getElementById('chess_line_2').innerText = '';
-    send_engine_uci(`position fen ${fen}`);
-    send_engine_uci(`go movetime ${config.compute_time}`);
+    if (config.engine === "remote") {
+        requestAnalyseFen(fen, config.compute_time).then(on_engine_response);
+    } else {
+        send_engine_uci(`position fen ${fen}`);
+        send_engine_uci(`go movetime ${config.compute_time}`);
+    }
     board.position(fen);
     lastFen = fen;
     if (config.simon_says_mode) {
@@ -447,14 +474,19 @@ async function dispatchMouseEvent(debugee, mouseEvent, mouseEventOpts) {
 }
 
 async function requestPythonBackendClick(x, y) {
-    return callPythonBackend(`http://localhost:8080/performClick`, {x: x, y: y});
+    return callBackend(`http://localhost:8080/performClick`, {x: x, y: y});
 }
 
 async function requestPythonBackendMove(x0, y0, x1, y1) {
-    return callPythonBackend('http://localhost:8080/performMove', {x0: x0, y0: y0, x1: x1, y1: y1});
+    return callBackend('http://localhost:8080/performMove', {x0: x0, y0: y0, x1: x1, y1: y1});
 }
 
-async function callPythonBackend(url, data) {
+async function requestAnalyseFen(fen, time) {
+    return callBackend('http://localhost:9090/analyse', {fen: fen, time: time})
+        .then(res => res.json());
+}
+
+async function callBackend(url, data) {
     return fetch(url, {
         method: "POST",
         credentials: "include",
