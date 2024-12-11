@@ -2,18 +2,18 @@ import {Chess} from "../../lib/chess.min.js";
 
 let engine;
 let board;
-let fenCache;
+let fen_cache;
 let config;
 
-let isCalculating = false;
+let is_calculating = false;
 let prog = 0;
-let lastFen = '';
-let lastPv = '';
-let lastScore = '';
-let lastBestMove = '';
+let last_fen = '';
+let last_pv = '';
+let last_score = '';
+let last_best_move = '';
 let turn = '';
 
-const pieceNameMap = {
+const piece_name_map = {
     'P': 'Pawn',
     'R': 'Rook',
     'N': 'Knight',
@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
 
     // init fen LRU cache
-    fenCache = new LRU(1000);
+    fen_cache = new LRU(1000);
 
     // init engine webworker
     await initialize_engine();
@@ -75,14 +75,14 @@ document.addEventListener('DOMContentLoaded', async function () {
                 board.orientation(response.orient);
             }
             let fen = parse_fen_from_response(response.dom);
-            if (lastFen !== fen) {
-                new_pos(fen);
+            if (last_fen !== fen) {
+                on_new_pos(fen);
             }
         } else if (response.pullConfig) {
             push_config();
         } else if (response.click) {
             console.log(response);
-            dispatchClickEvent(response.x, response.y);
+            dispatch_click_event(response.x, response.y);
         }
     });
 
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // register button click listeners
     document.getElementById('analyze').addEventListener('click', () => {
-        window.open(`https://lichess.org/analysis?fen=${lastFen}`, '_blank');
+        window.open(`https://lichess.org/analysis?fen=${last_fen}`, '_blank');
     });
     document.getElementById('config').addEventListener('click', () => {
         window.open('/src/options/options.html', '_blank');
@@ -149,7 +149,7 @@ async function initialize_engine() {
         let poll_startup = true
         window.onmessage = () => poll_startup = false;
         while (poll_startup) {
-            await promiseTimeout(100);
+            await promise_timeout(100);
         }
 
         window.onmessage = event => on_engine_response(event.data);
@@ -184,7 +184,7 @@ function on_engine_best_move(best, threat) {
         const startPiece = board.position()[startSquare];
         const startPieceType = (startPiece) ? startPiece.substring(1) : null;
         if (startPieceType) {
-            update_best_move(pieceNameMap[startPieceType]);
+            update_best_move(piece_name_map[startPieceType]);
         }
     } else {
         if (best === '(none)') {
@@ -196,11 +196,11 @@ function on_engine_best_move(best, threat) {
         }
     }
     if (toplay.toLowerCase() === board.orientation()) {
-        lastBestMove = best;
+        last_best_move = best;
         if (config.simon_says_mode) {
             const startSquare = best.substring(0, 2);
             const startPiece = board.position()[startSquare].substring(1);
-            request_console_log(`${pieceNameMap[startPiece]} ==> ${lastScore}`);
+            request_console_log(`${piece_name_map[startPiece]} ==> ${last_score}`);
             if (config.threat_analysis) {
                 draw_arrow(threat, 'red', document.getElementById('response-arrow'));
             }
@@ -260,34 +260,34 @@ function on_engine_response(message) {
             const depth = infoArr[2];
             const score = ((turn === 'w') ? 1 : -1) * (config.engine === "lc0") ? infoArr[11] : infoArr[9];
             on_engine_score(score, depth);
-            lastScore = score / 100.0;
+            last_score = score / 100.0;
         }
-        lastPv = pvSplit[1];
+        last_pv = pvSplit[1];
     }
-    if (isCalculating) {
+    if (is_calculating) {
         prog++;
         let progMapping = 100 * (1 - Math.exp(-prog / 30));
         document.getElementById('progBar').setAttribute('value', `${Math.round(progMapping)}`);
     }
 }
 
-function new_pos(fen) {
+function on_new_pos(fen) {
     document.getElementById('chess_line_1').innerHTML = `
         <div>Calculating...<div>
         <progress id="progBar" value="2" max="100">
     `;
     document.getElementById('chess_line_2').innerText = '';
     if (config.engine === "remote") {
-        requestAnalyseFen(fen, config.compute_time).then(on_engine_response);
+        request_analyse_fen(fen, config.compute_time).then(on_engine_response);
     } else {
         send_engine_uci(`position fen ${fen}`);
         send_engine_uci(`go movetime ${config.compute_time}`);
     }
     board.position(fen);
-    lastFen = fen;
+    last_fen = fen;
     if (config.simon_says_mode) {
-        draw_arrow(lastBestMove, 'blue', document.getElementById('move-arrow'));
-        request_console_log(`Best Move: ${lastBestMove}`);
+        draw_arrow(last_best_move, 'blue', document.getElementById('move-arrow'));
+        request_console_log(`Best Move: ${last_best_move}`);
     } else {
         clear_arrows();
     }
@@ -318,7 +318,7 @@ function parse_fen_from_response(txt) {
         turn = chess.turn();
         return chess.fen();
     } else { // chess.com and lichess.org pages
-        const directHit = fenCache.get(txt);
+        const directHit = fen_cache.get(txt);
         if (directHit) { // avoid recalculating same position
             console.log('DIRECT');
             turn = directHit.charAt(directHit.indexOf(' ') + 1);
@@ -326,7 +326,7 @@ function parse_fen_from_response(txt) {
         }
         const lastMoveRegex = /([\w-+=#]+[*]+)$/;
         const cacheKey = txt.replace(lastMoveRegex, "");
-        const indirectHit = fenCache.get(cacheKey);
+        const indirectHit = fen_cache.get(cacheKey);
         if (indirectHit) { // calculate fen by appending newest move
             console.log('INDIRECT');
             const lastMove = txt.match(lastMoveRegex)[0].split('*****')[0];
@@ -341,7 +341,7 @@ function parse_fen_from_response(txt) {
         }
         turn = chess.turn();
         const fen = chess.fen();
-        fenCache.set(txt, fen);
+        fen_cache.set(txt, fen);
         return fen;
     }
 }
@@ -369,7 +369,7 @@ function request_fen() {
 
 function request_automove(move) {
     const message = (config.puzzle_mode)
-        ? {automove: true, pv: lastPv || move}
+        ? {automove: true, pv: last_pv || move}
         : {automove: true, move: move};
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, message);
@@ -388,7 +388,7 @@ function push_config() {
     });
 }
 
-function getCoords(move) {
+function get_coords(move) {
     const x0 = move[0].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
     const y0 = parseInt(move.substring(1, 2));
     const x1 = move[2].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
@@ -408,7 +408,7 @@ function draw_arrow(move, color, overlay) {
     const boardSide = document.querySelector('#board .board-b72b1').clientWidth;
     const marginLeft = (bodyWidth - boardSide) / 2;
 
-    const coords = getCoords(move);
+    const coords = get_coords(move);
     let x0 = 0.5 + (coords.x0 - 1);
     let y0 = 8 - (0.5 + (coords.y0 - 1));
     let x1 = 0.5 + (coords.x1 - 1);
@@ -444,29 +444,29 @@ function clear_arrows() {
 
 function toggle_calculating(on) {
     prog = 0;
-    isCalculating = on;
+    is_calculating = on;
 }
 
-async function dispatchClickEvent(x, y) {
+async function dispatch_click_event(x, y) {
     if (config.python_autoplay_backend) {
-        await requestPythonBackendClick(x, y);
+        await request_backend_click(x, y);
     } else {
-        await requestDebuggerClick(x, y);
+        await request_debugger_click(x, y);
     }
 }
 
-async function requestDebuggerClick(x, y) {
+async function request_debugger_click(x, y) {
     chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
         const debugee = {tabId: tabs[0].id};
         chrome.debugger.attach(debugee, "1.3", async () => {
-            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
+            await dispatch_mouse_event(debugee, "Input.dispatchMouseEvent", {
                 type: 'mousePressed',
                 button: 'left',
                 clickCount: 1,
                 x: x,
                 y: y,
             });
-            await dispatchMouseEvent(debugee, "Input.dispatchMouseEvent", {
+            await dispatch_mouse_event(debugee, "Input.dispatchMouseEvent", {
                 type: 'mouseReleased',
                 button: 'left',
                 clickCount: 1,
@@ -477,26 +477,25 @@ async function requestDebuggerClick(x, y) {
     });
 }
 
-async function dispatchMouseEvent(debugee, mouseEvent, mouseEventOpts) {
+async function dispatch_mouse_event(debugee, mouseEvent, mouseEventOpts) {
     return new Promise(resolve => {
         chrome.debugger.sendCommand(debugee, mouseEvent, mouseEventOpts, resolve);
     });
 }
 
-async function requestPythonBackendClick(x, y) {
-    return callBackend(`http://localhost:8080/performClick`, {x: x, y: y});
+async function request_backend_click(x, y) {
+    return call_backend(`http://localhost:8080/performClick`, {x: x, y: y});
 }
 
-async function requestPythonBackendMove(x0, y0, x1, y1) {
-    return callBackend('http://localhost:8080/performMove', {x0: x0, y0: y0, x1: x1, y1: y1});
+async function request_backend_move(x0, y0, x1, y1) {
+    return call_backend('http://localhost:8080/performMove', {x0: x0, y0: y0, x1: x1, y1: y1});
 }
 
-async function requestAnalyseFen(fen, time) {
-    return callBackend('http://localhost:9090/analyse', {fen: fen, time: time})
-        .then(res => res.json());
+async function request_analyse_fen(fen, time) {
+    return call_backend('http://localhost:9090/analyse', {fen: fen, time: time}).then(res => res.json());
 }
 
-async function callBackend(url, data) {
+async function call_backend(url, data) {
     return fetch(url, {
         method: "POST",
         credentials: "include",
@@ -508,7 +507,7 @@ async function callBackend(url, data) {
     });
 }
 
-function promiseTimeout(time) {
+function promise_timeout(time) {
     return new Promise((resolve) => {
         setTimeout(() => resolve(time), time);
     });
