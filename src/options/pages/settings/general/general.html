@@ -21,7 +21,7 @@
                 </div>
                 <div class="section">
                     <label>
-                        Compute Time (ms):
+                        Search Time (ms):
                         <input id="compute_time_input" type="number">
                     </label>
                 </div>
@@ -29,6 +29,30 @@
                     <label>
                         Fen Refresh Interval (ms):
                         <input id="fen_refresh_input" type="number">
+                    </label>
+                </div>
+                <div class="section">
+                    <label>
+                        Multiple Lines (<span class="value">5</span>):
+                        <p class="range-field">
+                            <input id="multiple_lines_range" type="range" min="1" max="5" step="1">
+                        </p>
+                    </label>
+                </div>
+                <div class="section">
+                    <label>
+                        Threads (<span class="value">11</span>):
+                        <p class="range-field">
+                            <input id="threads_range" type="range" min="1" max="32" step="1">
+                        </p>
+                    </label>
+                </div>
+                <div class="section">
+                    <label>
+                        Memory (<span class="value">512</span> MB):
+                        <p class="range-field">
+                            <input id="memory_range" type="range" min="32" max="512" step="32">
+                        </p>
                     </label>
                 </div>
                 <div class="section switch">

@@ -16,7 +16,7 @@ export class FormElement {
     }
 
     registerChangeListener(fn) {
-        if (this.type === 'input') {
+        if (this.type === 'input' || this.type === 'range') {
             this.elem.addEventListener('input', fn);
         } else if (this.type === 'checkbox') {
             this.elem.addEventListener('change', fn);
@@ -26,7 +26,7 @@ export class FormElement {
     }
 
     getValue() {
-        if (this.type === 'input') {
+        if (this.type === 'input' || this.type === 'range') {
             return this.elem.value;
         } else if (this.type === 'checkbox') {
             return this.elem.checked;
@@ -36,14 +36,17 @@ export class FormElement {
     }
 
     setValue(val) {
-        if (this.type === 'input') {
+        if (this.type === 'input' || this.type === 'range') {
             this.elem.value = val;
+            this.elem.dispatchEvent(new Event('input'));
         } else if (this.type === 'checkbox') {
             this.elem.checked = val;
+            this.elem.dispatchEvent(new Event('change'));
         } else if (this.type === 'select') {
             this.elem.value = val;
             this.elem.parentElement.querySelector('input').value =
                 this.elem.querySelector(`option[value="${val}"]`).innerText;
+            this.elem.dispatchEvent(new Event('change'));
         }
     }
 }

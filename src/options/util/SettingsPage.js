@@ -76,6 +76,7 @@ export class SettingsPage {
         const formElement = new FormElement(name, description, type, defaultValue);
         formElement.registerChangeListener(() => this.onConfigValuesChanged());
         this.formElements.push(formElement);
+        return formElement;
     }
 
     // on event callbacks

@@ -1,3 +1,11 @@
+.range-field {
+    margin-bottom: 0;
+}
+
+.section .value {
+    color: initial;
+}
+
 .switch-label {
     margin-bottom: 10px;
     display: block;
