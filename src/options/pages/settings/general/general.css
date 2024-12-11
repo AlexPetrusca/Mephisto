@@ -6,6 +6,10 @@
     color: initial;
 }
 
+.hidden {
+    display: none;
+}
+
 .switch-label {
     margin-bottom: 10px;
     display: block;

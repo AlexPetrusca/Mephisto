@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     config = {
         // general settings
         engine: JSON.parse(localStorage.getItem('engine')) || 'stockfish-16-nnue-7',
+        variant: JSON.parse(localStorage.getItem('variant')) || 'chess',
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
         fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
         multiple_lines: JSON.parse(localStorage.getItem('multiple_lines')) || 1,
@@ -160,6 +161,9 @@ async function initialize_engine() {
     send_engine_uci(`setoption name Hash value ${config.memory}`);
     send_engine_uci(`setoption name Threads value ${config.threads}`);
     send_engine_uci(`setoption name MultiPV value ${config.multiple_lines}`);
+    if (config.engine === 'fairy-stockfish-14-nnue') {
+        send_engine_uci(`setoption name UCI_Variant value ${config.variant}`);
+    }
 }
 
 function send_engine_uci(message) {
