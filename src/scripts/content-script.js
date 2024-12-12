@@ -31,7 +31,7 @@ window.onload = () => {
 chrome.runtime.onMessage.addListener(response => {
     if (moving) return;
     if (response.queryfen) {
-        const res = getMoves(config.simon_says_mode);
+        const res = scrapePosition();
         const orient = getOrientation();
         chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
     } else if (response.automove) {
@@ -51,75 +51,78 @@ chrome.runtime.onMessage.addListener(response => {
     }
 });
 
-function getMoves(getAllMoves) {
+function scrapePosition() {
     let prefix = '';
-    let res = '';
     if (site === 'chesscom') {
-        const moves = getMoveRecords();
-        if (moves && moves.length) {
-            prefix = '***ccfen***';
-            const selectedMove = getSelectedMoveRecord();
-            for (const moveWrapper of moves) {
-                const move = moveWrapper.lastElementChild
-                if (move.lastElementChild?.classList.contains('icon-font-chess')) {
-                    res += move.lastElementChild.getAttribute('data-figurine') + move.innerText + '*****';
-                } else {
-                    res += move.innerText + '*****';
-                }
-                if (!getAllMoves && move === selectedMove) {
-                    break;
-                }
+        prefix += "***cc"
+    } else if (site === 'lichess') {
+        prefix += "***li"
+    } else if (site === 'blitztactics') {
+        prefix += "***bt"
+    }
+
+    let res;
+    const moves = getMoveRecords();
+    if (moves && moves.length) {
+        prefix += 'fen***';
+        res = scrapePositionFen(moves);
+    } else {
+        prefix += 'puz***';
+        res = scrapePositionPuz();
+    }
+
+    console.log((res) ? prefix + res.replace(/[^\w-+#*]/g, '') : 'no');
+    return (res) ? prefix + res.replace(/[^\w-+=#*]/g, '') : 'no';
+}
+
+function scrapePositionFen(moves) {
+    let res = "";
+    if (site === 'chesscom') {
+        const selectedMove = getSelectedMoveRecord();
+        for (const moveWrapper of moves) {
+            const move = moveWrapper.lastElementChild
+            if (move.lastElementChild?.classList.contains('icon-font-chess')) {
+                res += move.lastElementChild.getAttribute('data-figurine') + move.innerText + '*****';
+            } else {
+                res += move.innerText + '*****';
             }
-        } else {
-            prefix = '***ccpuz***';
-            res += getTurn() + '*****';
-            for (const piece of document.querySelectorAll('.piece')) {
-                let [colorTypeClass, coordsClass] = [piece.classList[1], piece.classList[2]];
-                if (!coordsClass.includes('square')) {
-                    [colorTypeClass, coordsClass] = [coordsClass, colorTypeClass];
-                }
-                const [color, type] = colorTypeClass;
-                const coordsStr = coordsClass.split('-')[1];
-                const coords = String.fromCharCode('a'.charCodeAt(0) + parseInt(coordsStr[0]) - 1) + coordsStr[1];
-                res += `${color}-${type}-${coords}*****`;
+            if (!config.simon_says_mode && move === selectedMove) {
+                break;
             }
         }
     } else if (site === 'lichess') {
-        const moves = getMoveRecords();
-        if (moves && moves.length) {
-            prefix = '***lifen***';
-            const selectedMove = getSelectedMoveRecord();
-            for (const move of moves) {
-                res += move.innerText.replace(/\n.*/, '') + '*****';
-                if (!getAllMoves && move === selectedMove) {
-                    break;
-                }
-            }
-        } else {
-            prefix = '***lipuz***';
-            res += getTurn() + '*****';
-            const pieces = Array.from(document.querySelectorAll('.main-board piece'))
-                .filter(piece => !!piece.classList[1]);
-            for (const piece of pieces) {
-                const transform = piece.style.transform;
-                const xyCoords = transform.substring(transform.indexOf('(') + 1, transform.length - 1)
-                    .replaceAll('px', '').replace(' ', '').split(",")
-                    .map(num => Number(num) / piece.getBoundingClientRect().width + 1);
-                const coords = (getOrientation() === 'black')
-                    ? String.fromCharCode('h'.charCodeAt(0) - xyCoords[0] + 1) + xyCoords[1]
-                    : String.fromCharCode('a'.charCodeAt(0) + xyCoords[0] - 1) + (9 - xyCoords[1]);
-                if (piece.classList[0] !== "ghost") {
-                    res += `${colorMap[piece.classList[0]]}-${pieceMap[piece.classList[1]]}-${coords}*****`;
-                } else if (piece.style.visibility === "visible") {
-                    res += `${colorMap[piece.classList[1]]}-${pieceMap[piece.classList[2]]}-${coords}*****`;
-                }
+        const selectedMove = getSelectedMoveRecord();
+        for (const move of moves) {
+            res += move.innerText.replace(/\n.*/, '') + '*****';
+            if (!config.simon_says_mode && move === selectedMove) {
+                break;
             }
         }
-    } else if (site === 'blitztactics') {
-        prefix = '***btpuz***';
-        res += getTurn() + '*****';
-        const pieces = Array.from(document.querySelectorAll('.board-area piece'))
-            .filter(piece => !!piece.classList[1]);
+    }
+    return res;
+}
+
+function scrapePositionPuz() {
+    let res = getTurn() + '*****';
+    if (site === 'chesscom') {
+        for (const piece of document.querySelectorAll('.piece')) {
+            let [colorTypeClass, coordsClass] = [piece.classList[1], piece.classList[2]];
+            if (!coordsClass.includes('square')) {
+                [colorTypeClass, coordsClass] = [coordsClass, colorTypeClass];
+            }
+            const [color, type] = colorTypeClass;
+            const coordsStr = coordsClass.split('-')[1];
+            const coords = String.fromCharCode('a'.charCodeAt(0) + parseInt(coordsStr[0]) - 1) + coordsStr[1];
+            res += `${color}-${type}-${coords}*****`;
+        }
+    } else {
+        let pieceSelector;
+        if (site === 'lichess') {
+            pieceSelector = '.main-board piece';
+        } else if (site === 'blitztactics') {
+            pieceSelector = '.board-area piece';
+        }
+        const pieces = Array.from(document.querySelectorAll(pieceSelector)).filter(piece => !!piece.classList[1]);
         for (const piece of pieces) {
             const transform = piece.style.transform;
             const xyCoords = transform.substring(transform.indexOf('(') + 1, transform.length - 1)
@@ -135,8 +138,7 @@ function getMoves(getAllMoves) {
             }
         }
     }
-    console.log((res) ? prefix + res.replace(/[^\w-+#*]/g, '') : 'no');
-    return (res) ? prefix + res.replace(/[^\w-+=#*]/g, '') : 'no';
+    return res;
 }
 
 function getOrientation() {
