@@ -30,6 +30,5 @@ def analyse():
 
 if __name__ == '__main__':
     engine_binary = "stockfish"
-    # engine_binary = "lc0"
     engine = chess.engine.SimpleEngine.popen_uci(engine_binary)
     app.run(port=args.port)
