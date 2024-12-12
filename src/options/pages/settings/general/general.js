@@ -40,6 +40,7 @@ class GeneralSettings extends SettingsPage {
                 section.classList.remove('hidden');
             } else {
                 section.classList.add('hidden');
+                variant_select.setValue('chess');
             }
         })
     }
