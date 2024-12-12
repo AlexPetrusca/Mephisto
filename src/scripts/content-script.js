@@ -61,22 +61,35 @@ function scrapePosition() {
         prefix += "***bt"
     }
 
-    let res;
+    let res = '';
     const moves = getMoveRecords();
-    if (moves && moves.length) {
-        prefix += 'fen***';
-        res = scrapePositionFen(moves);
+    if (config.variant === 'chess') {
+        if (moves && moves.length) {
+            prefix += 'fen***';
+            res = scrapePositionFen(moves);
+        } else {
+            prefix += 'puz***';
+            res = scrapePositionPuz();
+        }
     } else {
-        prefix += 'puz***';
-        res = scrapePositionPuz();
+        // todo: incomplete finish me
+        prefix += 'var***';
+        // res += scrapePositionPuz(moves);
+        if (moves && moves.length) {
+            res += '&*****';
+            if (config.variant === 'fischerandom') {
+                res += getChess960StartPosition() + '*****';
+            }
+            res += scrapePositionFen(moves);
+        }
     }
 
-    console.log((res) ? prefix + res.replace(/[^\w-+#*]/g, '') : 'no');
-    return (res) ? prefix + res.replace(/[^\w-+=#*]/g, '') : 'no';
+    console.log((res) ? prefix + res.replace(/[^\w-+#*&]/g, '') : 'no');
+    return (res) ? prefix + res.replace(/[^\w-+=#*&]/g, '') : 'no';
 }
 
 function scrapePositionFen(moves) {
-    let res = "";
+    let res = '';
     if (site === 'chesscom') {
         const selectedMove = getSelectedMoveRecord();
         for (const moveWrapper of moves) {
@@ -219,7 +232,7 @@ function getLastMoveHighlights() {
         if (!toPiece) {
             [toSquare, fromSquare] = [fromSquare, toSquare];
         }
-    }  else if (site === 'blitztactics') {
+    } else if (site === 'blitztactics') {
         [fromSquare, toSquare] = [document.querySelector('.move-from'), document.querySelector('.move-to')];
     }
     return [fromSquare, toSquare];
@@ -259,7 +272,7 @@ function getRanksFiles() {
     } else if (site === 'lichess') {
         fileCoords = Array.from(document.querySelector('.files').children);
         rankCoords = Array.from(document.querySelector('.ranks').children);
-    }  else if (site === 'blitztactics') {
+    } else if (site === 'blitztactics') {
         fileCoords = Array.from(document.querySelector('.files').children);
         rankCoords = Array.from(document.querySelector('.ranks').children);
     }
@@ -286,7 +299,7 @@ function getPromotionSelection(promotion) {
     } else if (site === 'lichess') {
         const promotionModal = document.querySelector('#promotion-choice');
         if (promotionModal) promotions = promotionModal.children;
-    }  else if (site === 'blitztactics') {
+    } else if (site === 'blitztactics') {
         promotions = document.querySelector('.pieces').children;
     }
 
@@ -297,6 +310,14 @@ function getPromotionSelection(promotion) {
             : { 'q': 0, 'r': 1, 'n': 2, 'b': 3 };
     const idx = promoteMap[promotion];
     return (promotions) ? promotions[idx] : undefined;
+}
+
+// todo: this doesnt work for chess.com
+function getChess960StartPosition() {
+    if (site === 'lichess') {
+        let posElem = document.querySelector('.game__meta section:last-child a');
+        return parseInt(posElem.innerText);
+    }
 }
 
 // -------------------------------------------------------------------------------------------

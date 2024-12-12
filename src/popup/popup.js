@@ -1,4 +1,4 @@
-import {Chess} from "../../lib/chess.min.js";
+import {Chess} from "../../lib/chess.js";
 
 let engine;
 let board;
@@ -300,24 +300,35 @@ function parse_fen_from_response(txt) {
         cc: 'Game detected on Chess.com',
         bt: 'Game detected on BlitzTactics.com'
     };
-    const metaTag = txt.substring(3, 8);
-    const prefix = metaTag.substring(0, 2);
-    document.getElementById('game-detection').innerText = prefixMap[prefix];
-    txt = txt.substring(11);
 
-    const chess = new Chess();
-    if (metaTag.includes("puz")) { // chess.com & blitztactics.com puzzle pages
-        chess.clear(); // clear the board so we can place our pieces
-        const [playerTurn, ...pieces] = txt.split("*****").slice(0, -1);
-        console.log(txt);
-        for (const piece of pieces) {
-            const attributes = piece.split("-");
-            chess.put({type: attributes[1], color: attributes[0]}, attributes[2]);
+    // todo: move me into chess.js
+    function replay_move(chess, move) {
+        if (config.variant === 'atomic') {
+            const moveRecord = chess.move(move);
+            // console.log(move, '=>', moveRecord);
+            // console.log(chess.ascii());
+            if (!moveRecord.captured) return;
+            chess.remove(moveRecord.to);
+            const [file, rank] = moveRecord.to;
+            for (let y = -1; y <= 1; y++) {
+                for (let x = -1; x <= 1; x++) {
+                    const adjFile = String.fromCharCode(file.charCodeAt(0) + x);
+                    const adjRank = String.fromCharCode(rank.charCodeAt(0) + y);
+                    if (adjFile >= 'a' && adjFile <= 'h' && adjRank >= '1' && adjRank <= '8') {
+                        const adjSquare = adjFile + adjRank
+                        const adjPiece = chess.get(adjSquare);
+                        if (adjPiece && adjPiece.type !== 'p') {
+                            chess.remove(adjSquare);
+                        }
+                    }
+                }
+            }
+        } else {
+            chess.move(move);
         }
-        chess.setTurn(playerTurn);
-        turn = chess.turn();
-        return chess.fen();
-    } else { // chess.com and lichess.org pages
+    }
+
+    function parse_fen_from_moves(chess, txt) {
         const directHit = fen_cache.get(txt);
         if (directHit) { // avoid recalculating same position
             console.log('DIRECT');
@@ -331,18 +342,50 @@ function parse_fen_from_response(txt) {
             console.log('INDIRECT');
             const lastMove = txt.match(lastMoveRegex)[0].split('*****')[0];
             chess.load(indirectHit);
-            chess.move(lastMove);
+            replay_move(chess, lastMove);
         } else { // calculate fen by performing all moves
             console.log('FULL');
-            const moves = txt.split("*****");
+            const moves = txt.split("*****").slice(0, -1);
             for (const move of moves) {
-                chess.move(move);
+                replay_move(chess, move);
             }
         }
         turn = chess.turn();
         const fen = chess.fen();
+        console.log("FEN:", fen);
         fen_cache.set(txt, fen);
         return fen;
+    }
+
+    function parse_fen_from_pieces(chess, txt) {
+        chess.clear(); // clear the board so we can place our pieces
+        const [playerTurn, ...pieces] = txt.split("*****").slice(0, -1);
+        console.log(txt);
+        for (const piece of pieces) {
+            const attributes = piece.split("-");
+            chess.put({type: attributes[1], color: attributes[0]}, attributes[2]);
+        }
+        chess.setTurn(playerTurn);
+        turn = chess.turn();
+        return chess.fen();
+    }
+
+    const metaTag = txt.substring(3, 8);
+    const prefix = metaTag.substring(0, 2);
+    document.getElementById('game-detection').innerText = prefixMap[prefix];
+    txt = txt.substring(11);
+
+    const chess = new Chess(config.variant);
+    if (metaTag.includes("var")) {
+        // todo: incomplete - finish me
+        const puzTxt = txt.substring(0, txt.indexOf('&') - 5);
+        const fenTxt = txt.substring(txt.indexOf('&') + 6);
+        chess.load(getStartingPosition());
+        return parse_fen_from_moves(chess, fenTxt);
+    } else if (metaTag.includes("puz")) { // chess.com & blitztactics.com puzzle pages
+        return parse_fen_from_pieces(chess, txt);
+    } else { // chess.com and lichess.org pages
+        return parse_fen_from_moves(chess, txt);
     }
 }
 
@@ -511,4 +554,63 @@ function promise_timeout(time) {
     return new Promise((resolve) => {
         setTimeout(() => resolve(time), time);
     });
+}
+
+// todo: PERHAPS DELETE ME LATER
+function getStartingPosition(chess960id) {
+    if (config.variant === 'horde') {
+        return 'rnbqkbnr/pppppppp/8/1PP2PP1/PPPPPPPP/PPPPPPPP/PPPPPPPP/PPPPPPPP w kq - 0 1';
+    } else if (config.variant === 'fischerandom') {
+        function placeAtEmptyIndex(arr, i, val) {
+            for (let j = 0; j < arr.length; j++) {
+                if (arr[j]) continue;
+                if (i === 0) {
+                    arr[j] = val;
+                    break;
+                }
+                i--;
+            }
+        }
+
+        function generateFile(n) {
+            const file = Array(8);
+
+            const n2 = Math.floor(n / 4);
+            const b1 = n % 4;
+            file[2 * b1 + 1] = 'b';
+
+            const n3 = Math.floor(n2 / 4);
+            const b2 = n2 % 4;
+            file[2 * b2] = 'b';
+
+            const n4 = Math.floor(n3 / 6);
+            let q = n3 % 6;
+            placeAtEmptyIndex(file, q, 'q');
+
+            let n5 = n4;
+            let d = 4;
+            while (n5 >= d) {
+                n5 -= d;
+                d--;
+            }
+
+            let k1 = 4 - d;
+            placeAtEmptyIndex(file, k1, 'n');
+
+            let k2 = k1 + n5;
+            placeAtEmptyIndex(file, k2, 'n');
+
+            placeAtEmptyIndex(file, 0, 'r');
+            placeAtEmptyIndex(file, 0, 'k');
+            placeAtEmptyIndex(file, 0, 'r');
+
+            return file.join('');
+        }
+
+        const black_file = generateFile(chess960id);
+        const white_file = black_file.toUpperCase();
+        return `${black_file}/pppppppp/8/8/8/8/PPPPPPPP/${white_file} w KQkq - 0 1`
+    } else {
+        return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    }
 }
