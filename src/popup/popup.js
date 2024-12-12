@@ -301,33 +301,6 @@ function parse_fen_from_response(txt) {
         bt: 'Game detected on BlitzTactics.com'
     };
 
-    // todo: move me into chess.js
-    function replay_move(chess, move) {
-        if (config.variant === 'atomic') {
-            const moveRecord = chess.move(move);
-            // console.log(move, '=>', moveRecord);
-            // console.log(chess.ascii());
-            if (!moveRecord.captured) return;
-            chess.remove(moveRecord.to);
-            const [file, rank] = moveRecord.to;
-            for (let y = -1; y <= 1; y++) {
-                for (let x = -1; x <= 1; x++) {
-                    const adjFile = String.fromCharCode(file.charCodeAt(0) + x);
-                    const adjRank = String.fromCharCode(rank.charCodeAt(0) + y);
-                    if (adjFile >= 'a' && adjFile <= 'h' && adjRank >= '1' && adjRank <= '8') {
-                        const adjSquare = adjFile + adjRank
-                        const adjPiece = chess.get(adjSquare);
-                        if (adjPiece && adjPiece.type !== 'p') {
-                            chess.remove(adjSquare);
-                        }
-                    }
-                }
-            }
-        } else {
-            chess.move(move);
-        }
-    }
-
     function parse_fen_from_moves(chess, txt) {
         const directHit = fen_cache.get(txt);
         if (directHit) { // avoid recalculating same position
@@ -342,12 +315,12 @@ function parse_fen_from_response(txt) {
             console.log('INDIRECT');
             const lastMove = txt.match(lastMoveRegex)[0].split('*****')[0];
             chess.load(indirectHit);
-            replay_move(chess, lastMove);
+            chess.move(lastMove);
         } else { // calculate fen by performing all moves
             console.log('FULL');
             const moves = txt.split("*****").slice(0, -1);
             for (const move of moves) {
-                replay_move(chess, move);
+                chess.move(move);
             }
         }
         turn = chess.turn();
