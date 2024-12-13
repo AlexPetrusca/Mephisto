@@ -74,9 +74,9 @@ document.addEventListener('DOMContentLoaded', async function () {
             if (board.orientation() !== response.orient) {
                 board.orientation(response.orient);
             }
-            let fen = parse_fen_from_response(response.dom);
+            const {fen, startFen, moves} = parse_position_from_response(response.dom);
             if (last_fen !== fen) {
-                on_new_pos(fen);
+                on_new_pos(fen, startFen, moves);
             }
         } else if (response.pullConfig) {
             push_config();
@@ -271,16 +271,21 @@ function on_engine_response(message) {
     }
 }
 
-function on_new_pos(fen) {
+function on_new_pos(fen, startFen, moves) {
     document.getElementById('chess_line_1').innerHTML = `
         <div>Calculating...<div>
         <progress id="progBar" value="2" max="100">
     `;
     document.getElementById('chess_line_2').innerText = '';
     if (config.engine === "remote") {
+        // todo: need a way to pass startFen+moves directive to remote engine
         request_analyse_fen(fen, config.compute_time).then(on_engine_response);
     } else {
-        send_engine_uci(`position fen ${fen}`);
+        if (moves) {
+            send_engine_uci(`position fen ${startFen} moves ${moves}`);
+        } else {
+            send_engine_uci(`position fen ${fen}`);
+        }
         send_engine_uci(`go movetime ${config.compute_time}`);
     }
     board.position(fen);
@@ -294,43 +299,49 @@ function on_new_pos(fen) {
     toggle_calculating(true);
 }
 
-function parse_fen_from_response(txt) {
+function parse_position_from_response(txt) {
     const prefixMap = {
         li: 'Game detected on Lichess.org',
         cc: 'Game detected on Chess.com',
         bt: 'Game detected on BlitzTactics.com'
     };
 
-    function parse_fen_from_moves(chess, txt) {
+    function parse_position_from_moves(chess, txt) {
         const directHit = fen_cache.get(txt);
-        if (directHit) { // avoid recalculating same position
+        if (directHit) { // reuse position
             console.log('DIRECT');
-            turn = directHit.charAt(directHit.indexOf(' ') + 1);
+            turn = directHit.fen.charAt(directHit.fen.indexOf(' ') + 1);
             return directHit;
         }
+
+        let record;
         const lastMoveRegex = /([\w-+=#]+[*]+)$/;
         const cacheKey = txt.replace(lastMoveRegex, "");
         const indirectHit = fen_cache.get(cacheKey);
-        if (indirectHit) { // calculate fen by appending newest move
+        if (indirectHit) { // append newest move
             console.log('INDIRECT');
-            const lastMove = txt.match(lastMoveRegex)[0].split('*****')[0];
-            chess.load(indirectHit);
-            chess.move(lastMove);
-        } else { // calculate fen by performing all moves
+            chess.load(indirectHit.fen);
+            const moveReceipt = chess.move(txt.match(lastMoveRegex)[0].split('*****')[0]);
+            record = {fen: chess.fen(), startFen: indirectHit.startFen, moves: indirectHit.moves + ' ' + moveReceipt.lan}
+        } else { // perform all moves
             console.log('FULL');
-            const moves = txt.split("*****").slice(0, -1);
-            for (const move of moves) {
-                chess.move(move);
+            let startFen = getStartingPosition();
+            chess.load(startFen);
+            let moves = '';
+            for (const san of txt.split("*****").slice(0, -1)) {
+                const moveReceipt = chess.move(san);
+                moves += moveReceipt.lan + ' ';
             }
+            record = {fen: chess.fen(), startFen, moves: moves.trim()};
         }
+
         turn = chess.turn();
-        const fen = chess.fen();
-        console.log("FEN:", fen);
-        fen_cache.set(txt, fen);
-        return fen;
+        fen_cache.set(txt, record);
+        return record;
     }
 
-    function parse_fen_from_pieces(chess, txt) {
+    function parse_position_from_pieces(chess, txt) {
+        // todo: use fen cache here as well?
         chess.clear(); // clear the board so we can place our pieces
         const [playerTurn, ...pieces] = txt.split("*****").slice(0, -1);
         console.log(txt);
@@ -353,12 +364,11 @@ function parse_fen_from_response(txt) {
         // todo: incomplete - finish me
         const puzTxt = txt.substring(0, txt.indexOf('&') - 5);
         const fenTxt = txt.substring(txt.indexOf('&') + 6);
-        chess.load(getStartingPosition());
-        return parse_fen_from_moves(chess, fenTxt);
+        return parse_position_from_moves(chess, fenTxt);
     } else if (metaTag.includes("puz")) { // chess.com & blitztactics.com puzzle pages
-        return parse_fen_from_pieces(chess, txt);
+        return {fen: parse_position_from_pieces(chess, txt)};
     } else { // chess.com and lichess.org pages
-        return parse_fen_from_moves(chess, txt);
+        return parse_position_from_moves(chess, txt);
     }
 }
 
