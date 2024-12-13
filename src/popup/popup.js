@@ -188,6 +188,7 @@ async function initialize_engine() {
     if (config.engine === 'fairy-stockfish-14-nnue') {
         send_engine_uci(`setoption name UCI_Variant value ${config.variant}`);
     }
+    console.log("Engine ready!", engine);
 }
 
 function send_engine_uci(message) {
@@ -564,10 +565,13 @@ function promise_timeout(time) {
     });
 }
 
-// todo: PERHAPS DELETE ME LATER
 function getStartingPosition(chess960id) {
     if (config.variant === 'horde') {
         return 'rnbqkbnr/pppppppp/8/1PP2PP1/PPPPPPPP/PPPPPPPP/PPPPPPPP/PPPPPPPP w kq - 0 1';
+    } else if (config.variant === '3check') {
+        return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 +0+0';
+    } else if (config.variant === 'racingkings') {
+        return '8/8/8/8/8/8/krbnNBRK/qrbnNBRQ w - - 0 1';
     } else if (config.variant === 'fischerandom') {
         function placeAtEmptyIndex(arr, i, val) {
             for (let j = 0; j < arr.length; j++) {
@@ -617,7 +621,7 @@ function getStartingPosition(chess960id) {
 
         const black_file = generateFile(chess960id);
         const white_file = black_file.toUpperCase();
-        return `${black_file}/pppppppp/8/8/8/8/PPPPPPPP/${white_file} w KQkq - 0 1`
+        return `${black_file}/pppppppp/8/8/8/8/PPPPPPPP/${white_file} w KQkq - 0 1`;
     } else {
         return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     }
