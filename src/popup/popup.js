@@ -128,15 +128,39 @@ async function initialize_engine() {
         const module = await import(enginePath);
         engine = await module.default();
         if (config.engine.includes("nnue")) {
-            const nnues = [];
-            for (let i = 0; ; i++) {
-                let nnue = engine.getRecommendedNnue(i);
-                if (!nnue || nnues.includes(nnue)) break;
-                nnues.push(nnue);
+            async function fetchNnueModels(engine, engineBasePath) {
+                if (config.engine !== "fairy-stockfish-14-nnue") {
+                    const nnues = [];
+                    for (let i = 0; ; i++) {
+                        let nnue = engine.getRecommendedNnue(i);
+                        if (!nnue || nnues.includes(nnue)) break;
+                        nnues.push(nnue);
+                    }
+                    const nnue_responses = await Promise.all(nnues.map(nnue => fetch(`${engineBasePath}/${nnue}`)));
+                    return await Promise.all(nnue_responses.map(res => res.arrayBuffer()));
+                } else {
+                    // todo: try using https://github.com/fairy-stockfish/fairy-stockfish.wasm
+                    const variantNnueMap = {
+                        'chess': 'nn-46832cfbead3.nnue',
+                        'fischerandom': 'nn-46832cfbead3.nnue',
+                        'crazyhouse': 'crazyhouse-8ebf84784ad2.nnue',
+                        'kingofthehill': 'kingofthehill-978b86d0e6a4.nnue',
+                        '3check': '3check-cb5f517c228b.nnue',
+                        'antichess': 'antichess-dd3cbe53cd4e.nnue', // BAD_NNUE
+                        'atomic': 'atomic-2cf13ff256cc.nnue',
+                        'horde': 'horde-28173ddccabe.nnue', // BAD_NNUE
+                        'racingkings': 'racingkings-636b95f085e3.nnue',
+                    };
+                    const variantNnue = variantNnueMap[config.variant];
+                    console.log("Attempting fetch: ", `${engineBasePath}/nnue/${variantNnue}`)
+                    const nnue_response = await fetch(`${engineBasePath}/nnue/${variantNnue}`);
+                    const buffer = await nnue_response.arrayBuffer()
+                    console.log("Buffer", buffer);
+                    return [buffer];
+                }
             }
-            const nnue_responses = await Promise.all(nnues.map(nnue => fetch(`${engineBasePath}/${nnue}`)));
-            const nnue_models = await Promise.all(nnue_responses.map(res => res.arrayBuffer()));
-            nnue_models.forEach((model, i) => engine.setNnueBuffer(new Uint8Array(model), i));
+            const nnues = await fetchNnueModels(engine, engineBasePath);
+            nnues.forEach((model, i) => engine.setNnueBuffer(new Uint8Array(model), i))
         }
         engine.listen = (message) => on_engine_response(message);
     } else if (["lc0"].includes(config.engine)) {
@@ -188,6 +212,7 @@ function on_engine_best_move(best, threat) {
         }
     } else {
         if (best === '(none)') {
+            // todo: add stalemate detection here
             update_best_move(`${next} Wins`, '');
         } else if (threat && threat !== '(none)') {
             update_best_move(`${toplay} to play, best move is ${best}`, `Best response for ${next} is ${threat}`);
@@ -253,7 +278,7 @@ function on_engine_response(message) {
         if (info.includes('score mate')) {
             const arr = message.split('score mate ');
             const mateArr = arr[1].split(' ');
-            const mateNum = Math.abs(parseInt(mateArr[0]));
+            const mateNum = parseInt(mateArr[0]);
             on_engine_mate(mateNum);
         } else if (info.includes('score')) {
             const infoArr = info.split(" ");
