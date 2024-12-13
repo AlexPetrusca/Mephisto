@@ -361,6 +361,7 @@ function parse_position_from_response(txt) {
             record = {fen: chess.fen(), startFen, moves: moves.trim()};
         }
 
+        console.log("NEW POSITION:", chess);
         turn = chess.turn();
         fen_cache.set(txt, record);
         return record;
@@ -385,7 +386,7 @@ function parse_position_from_response(txt) {
     document.getElementById('game-detection').innerText = prefixMap[prefix];
     txt = txt.substring(11);
 
-    const chess = new Chess(config.variant);
+    const chess = new Chess(config.variant); // todo: we dont need to create this on DIRECT hits
     if (metaTag.includes("var")) {
         // todo: incomplete - finish me
         const puzTxt = txt.substring(0, txt.indexOf('&') - 5);
