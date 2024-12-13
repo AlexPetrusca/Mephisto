@@ -566,6 +566,7 @@ function promise_timeout(time) {
     });
 }
 
+// todo: move into chess.js?
 function getStartingPosition(chess960id) {
     if (config.variant === 'horde') {
         return 'rnbqkbnr/pppppppp/8/1PP2PP1/PPPPPPPP/PPPPPPPP/PPPPPPPP/PPPPPPPP w kq - 0 1';
@@ -573,6 +574,8 @@ function getStartingPosition(chess960id) {
         return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 +0+0';
     } else if (config.variant === 'racingkings') {
         return '8/8/8/8/8/8/krbnNBRK/qrbnNBRQ w - - 0 1';
+    } else if (config.variant === 'antichess') {
+        return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1';
     } else if (config.variant === 'fischerandom') {
         function placeAtEmptyIndex(arr, i, val) {
             for (let j = 0; j < arr.length; j++) {
