@@ -347,6 +347,7 @@ function parse_position_from_response(txt) {
         if (indirectHit) { // append newest move
             console.log('INDIRECT');
             chess.load(indirectHit.fen);
+            console.log(chess);
             const moveReceipt = chess.move(txt.match(lastMoveRegex)[0].split('*****')[0]);
             record = {fen: chess.fen(), startFen: indirectHit.startFen, moves: indirectHit.moves + ' ' + moveReceipt.lan}
         } else { // perform all moves
