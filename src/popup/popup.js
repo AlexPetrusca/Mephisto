@@ -11,7 +11,7 @@ let last_fen = '';
 let last_pv = '';
 let last_score = '';
 let last_best_move = '';
-let turn = '';
+let turn = ''; // 'w' | 'b'
 
 const piece_name_map = {
     'P': 'Pawn',
@@ -228,7 +228,7 @@ function on_engine_best_move(best, threat) {
             const startPiece = board.position()[startSquare].substring(1);
             request_console_log(`${piece_name_map[startPiece]} ==> ${last_score}`);
             if (config.threat_analysis) {
-                draw_arrow(threat, 'red', document.getElementById('response-arrow'));
+                draw_move_annotation(threat, 'red', document.getElementById('response-arrow'));
             }
         }
         if (config.autoplay) {
@@ -236,9 +236,9 @@ function on_engine_best_move(best, threat) {
         }
     }
     if (!config.simon_says_mode) {
-        draw_arrow(best, 'blue', document.getElementById('move-arrow'));
+        draw_move_annotation(best, 'blue', document.getElementById('move-arrow'));
         if (config.threat_analysis) {
-            draw_arrow(threat, 'red', document.getElementById('response-arrow'));
+            draw_move_annotation(threat, 'red', document.getElementById('response-arrow'));
         }
     }
     toggle_calculating(false);
@@ -317,7 +317,7 @@ function on_new_pos(fen, startFen, moves) {
     board.position(fen);
     last_fen = fen;
     if (config.simon_says_mode) {
-        draw_arrow(last_best_move, 'blue', document.getElementById('move-arrow'));
+        draw_move_annotation(last_best_move, 'blue', document.getElementById('move-arrow'));
         request_console_log(`Best Move: ${last_best_move}`);
     } else {
         clear_arrows();
@@ -347,7 +347,6 @@ function parse_position_from_response(txt) {
         if (indirectHit) { // append newest move
             console.log('INDIRECT');
             chess.load(indirectHit.fen);
-            console.log(chess);
             const moveReceipt = chess.move(txt.match(lastMoveRegex)[0].split('*****')[0]);
             record = {fen: chess.fen(), startFen: indirectHit.startFen, moves: indirectHit.moves + ' ' + moveReceipt.lan}
         } else { // perform all moves
@@ -362,7 +361,7 @@ function parse_position_from_response(txt) {
             record = {fen: chess.fen(), startFen, moves: moves.trim()};
         }
 
-        console.log("NEW POSITION:", chess);
+        // console.log("NEW POSITION:", chess);
         turn = chess.turn();
         fen_cache.set(txt, record);
         return record;
@@ -442,51 +441,69 @@ function push_config() {
     });
 }
 
-function get_coords(move) {
-    const x0 = move[0].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
-    const y0 = parseInt(move.substring(1, 2));
-    const x1 = move[2].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
-    const y1 = parseInt(move.substring(3, 4));
-    return (board.orientation() === 'white')
-        ? {x0: x0, y0: y0, x1: x1, y1: y1}
-        : {x0: 9 - x0, y0: 9 - y0, x1: 9 - x1, y1: 9 - y1};
-}
-
-function draw_arrow(move, color, overlay) {
+function draw_move_annotation(move, color, overlay) {
     if (!move || move === '(none)') {
         overlay.lastElementChild?.remove();
         return;
     }
 
-    const bodyWidth = document.body.clientWidth;
-    const boardSide = document.querySelector('#board .board-b72b1').clientWidth;
-    const marginLeft = (bodyWidth - boardSide) / 2;
+    function get_coord(square) {
+        const x = square[0].charCodeAt(0) - 'a'.charCodeAt(0) + 1;
+        const y = parseInt(square[1]);
+        return (board.orientation() === 'white') ? {x, y} : {x: 9 - x, y: 9 - y};
+    }
 
-    const coords = get_coords(move);
-    let x0 = 0.5 + (coords.x0 - 1);
-    let y0 = 8 - (0.5 + (coords.y0 - 1));
-    let x1 = 0.5 + (coords.x1 - 1);
-    let y1 = 8 - (0.5 + (coords.y1 - 1));
+    function get_coords(move) {
+        const {x: x0, y: y0} = get_coord(move.substring(0, 2));
+        const {x: x1, y: y1} = get_coord(move.substring(2));
+        return {x0, y0, x1, y1}
+    }
 
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const d = Math.sqrt(dx * dx + dy * dy);
-    x0 = x0 + 0.1 * ((x1 - x0) / d);
-    y0 = y0 + 0.1 * (dy / d);
-    x1 = x1 - 0.4 * ((x1 - x0) / d);
-    y1 = y1 - 0.4 * (dy / d);
+    if (move.includes('@')) {
+        const coord = get_coord(move.substring(2));
+        const x = 0.5 + (coord.x - 1);
+        const y = 8 - (0.5 + (coord.y - 1));
+        const imgX = 43 * (coord.x - 1);
+        const imgY = 43 * (8 - coord.y);
 
-    overlay.innerHTML = `
-        <svg width="${boardSide}" height="${boardSide}" viewBox="0, 0, 8, 8" style="margin-left: ${marginLeft}px">
-            <defs>
-                <marker id="arrow-${color}" markerWidth="13" markerHeight="13" refX="1" refY="7" orient="auto">
-                    <path d="M1,5.75 L3,7 L1,8.25" fill="${color}" />
-                </marker>
-            </defs>
-            <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${color}" fill=${color}" stroke-width="0.225" 
-                marker-end="url(#arrow-${color})"/>
-        </svg>
-    `;
+        const pieceIdentifier = turn + move[0];
+        const [pieceSet, ext] = config.pieces.split('.');
+        const piecePath = `/res/chesspieces/${pieceSet}/${pieceIdentifier}.${ext}`
+
+        overlay.innerHTML = `
+            <img style="position: absolute; z-index: -1; left: ${imgX}px; top: ${imgY}px;" width="43px" height="43px" 
+                src="${piecePath}" alt="${pieceIdentifier}">
+            <svg width="344px" height="344px" viewBox="0, 0, 8, 8">
+                <circle cx="${x}" cy="${y}" r="0.45" fill="transparent" stroke="${color}" stroke-width="0.1" />
+            </svg>
+        `;
+    } else {
+        const coords = get_coords(move);
+        const x0 = 0.5 + (coords.x0 - 1);
+        const y0 = 8 - (0.5 + (coords.y0 - 1));
+        const x1 = 0.5 + (coords.x1 - 1);
+        const y1 = 8 - (0.5 + (coords.y1 - 1));
+
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        const ax0 = x0 + 0.1 * ((x1 - x0) / d);
+        const ay0 = y0 + 0.1 * (dy / d);
+        const ax1 = x1 - 0.4 * ((x1 - x0) / d);
+        const ay1 = y1 - 0.4 * (dy / d);
+
+        overlay.innerHTML = `
+            <svg width="344px" height="344px" viewBox="0, 0, 8, 8">
+                <defs>
+                    <marker id="arrow-${color}" markerWidth="13" markerHeight="13" refX="1" refY="7" orient="auto">
+                        <path d="M1,5.75 L3,7 L1,8.25" fill="${color}" />
+                    </marker>
+                </defs>
+                <line x1="${ax0}" y1="${ay0}" x2="${ax1}" y2="${ay1}" stroke="${color}" fill=${color}" stroke-width="0.225"
+                    marker-end="url(#arrow-${color})"/>
+            </svg>
+        `;
+    }
 }
 
 function clear_arrows() {

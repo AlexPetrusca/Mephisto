@@ -187,18 +187,23 @@ html, body {
     position: absolute;
     z-index: 51;
     opacity: 0.4;
-    top: 26px
+    top: 26px;
+    left: 5px;
+    width: 344px;
+    height: 344px;
 }
 
 #response-arrow {
     position: absolute;
     z-index: 50;
     opacity: 0.4;
-    top: 26px
+    top: 26px;
+    left: 5px;
+    width: 344px;
+    height: 344px;
 }
 
 #moves {
-    width: 350px;
     height: 45px;
     font: 16px 'Roboto', sans-serif;
     line-height: 22px;
@@ -207,7 +212,6 @@ html, body {
 }
 
 #evaluation {
-    width: 350px;
     height: 22px;
     font: 16px 'Roboto', sans-serif;
     line-height: 22px;
@@ -216,7 +220,6 @@ html, body {
 }
 
 #game-detection {
-    width: 350px;
     height: 20px;
     margin-top: 4px;
     margin-bottom: 2px;
