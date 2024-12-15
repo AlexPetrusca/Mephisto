@@ -159,6 +159,10 @@ async function initialize_engine() {
                     return [buffer];
                 }
             }
+
+            if (config.engine === 'fairy-stockfish-14-nnue') {
+                send_engine_uci(`setoption name UCI_Variant value ${config.variant}`);
+            }
             const nnues = await fetchNnueModels(engine, engineBasePath);
             nnues.forEach((model, i) => engine.setNnueBuffer(new Uint8Array(model), i))
         }
@@ -180,14 +184,11 @@ async function initialize_engine() {
         let weights = await fetch(`${engineBasePath}/weights/weights_32195.dat.gz`).then(res => res.arrayBuffer());
         engine.postMessage({type: "weights", data: {name: "weights_32195.dat.gz", weights: weights}}, "*");
     }
-    send_engine_uci('ucinewgame');
-    send_engine_uci('isready');
     send_engine_uci(`setoption name Hash value ${config.memory}`);
     send_engine_uci(`setoption name Threads value ${config.threads}`);
     send_engine_uci(`setoption name MultiPV value ${config.multiple_lines}`);
-    if (config.engine === 'fairy-stockfish-14-nnue') {
-        send_engine_uci(`setoption name UCI_Variant value ${config.variant}`);
-    }
+    send_engine_uci('ucinewgame');
+    send_engine_uci('isready');
     console.log("Engine ready!", engine);
 }
 
