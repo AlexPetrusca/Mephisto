@@ -361,7 +361,8 @@ function parse_position_from_response(txt) {
             record = {fen: chess.fen(), startFen, moves: moves.trim()};
         }
 
-        // console.log("NEW POSITION:", chess);
+        console.log("NEW POSITION:", chess);
+
         turn = chess.turn();
         fen_cache.set(txt, record);
         return record;

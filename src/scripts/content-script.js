@@ -84,8 +84,8 @@ function scrapePosition() {
         }
     }
 
-    console.log((res) ? prefix + res.replace(/[^\w-+#*&]/g, '') : 'no');
-    return (res) ? prefix + res.replace(/[^\w-+=#*&]/g, '') : 'no';
+    console.log((res) ? prefix + res.replace(/[^\w-+#*@&]/g, '') : 'no');
+    return (res) ? prefix + res.replace(/[^\w-+=#*@&]/g, '') : 'no';
 }
 
 function scrapePositionFen(moves) {
