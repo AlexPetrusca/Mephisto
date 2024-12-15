@@ -510,8 +510,14 @@ function draw_move_annotation(move, color, overlay) {
 
 function clear_arrows() {
     if (!config.simon_says_mode) {
-        document.getElementById('move-arrow').lastElementChild?.remove();
-        document.getElementById('response-arrow').lastElementChild?.remove();
+        let move_annotation = document.getElementById('move-arrow');
+        while (move_annotation.childElementCount) {
+            move_annotation.lastElementChild.remove();
+        }
+        let response_annotation = document.getElementById('response-arrow');
+        while (response_annotation.childElementCount) {
+            response_annotation.lastElementChild.remove();
+        }
     }
 }
 
