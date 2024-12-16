@@ -3,6 +3,7 @@ import {SettingsPage} from "../../../util/SettingsPage.js";
 
 class GeneralSettings extends SettingsPage {
     init() {
+        // todo: set default number of threads to `navigator.hardwareConcurrency - 1`
         M.FormSelect.init(document.querySelectorAll('select'), {});
         M.Range.init(document.querySelectorAll('input[type=range]'), {});
         const engine_select = this.registerFormElement('engine', 'Engine:', 'select', 'stockfish-16-nnue-7');
