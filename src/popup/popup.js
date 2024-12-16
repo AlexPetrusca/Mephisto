@@ -223,6 +223,8 @@ function on_engine_best_move(best, threat) {
     if (toplay.toLowerCase() === board.orientation()) {
         last_best_move = best;
         if (config.simon_says_mode) {
+            // todo: why does this break?
+            // Uncaught TypeError: Cannot read properties of undefined (reading 'substring')
             const startSquare = best.substring(0, 2);
             const startPiece = board.position()[startSquare].substring(1);
             request_console_log(`${piece_name_map[startPiece]} ==> ${last_score}`);
