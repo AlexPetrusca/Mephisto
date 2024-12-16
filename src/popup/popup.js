@@ -180,6 +180,7 @@ async function initialize_engine() {
         let weights = await fetch(`${engineBasePath}/weights/weights_32195.dat.gz`).then(res => res.arrayBuffer());
         engine.postMessage({type: "weights", data: {name: "weights_32195.dat.gz", weights: weights}}, "*");
     }
+
     send_engine_uci(`setoption name Hash value ${config.memory}`);
     send_engine_uci(`setoption name Threads value ${config.threads}`);
     send_engine_uci(`setoption name MultiPV value ${config.multiple_lines}`);
@@ -249,7 +250,6 @@ function on_engine_mate(mateNum) {
     } else {
         update_evaluation(`Checkmate in ${mateNum}`);
     }
-    toggle_calculating(false);
 }
 
 function on_engine_score(score, depth) {
@@ -411,7 +411,7 @@ function parse_position_from_response(txt) {
 function update_evaluation(eval_string) {
     if (eval_string && config.computer_evaluation) {
         document.getElementById('evaluation').innerHTML = eval_string;
-        if (eval_string.includes('Checkmate') || eval_string.includes('Stalemate')) {
+        if (eval_string === 'Checkmate!' || eval_string === 'Stalemate!') {
             update_best_move('', '');
         }
     }
