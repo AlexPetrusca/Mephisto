@@ -203,7 +203,10 @@ function send_engine_uci(message) {
 function on_engine_best_move(best, threat) {
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
-    if (config.simon_says_mode) {
+
+    if (best === '(none)') {
+        update_best_move(`${next} Wins`, '');
+    } else if (config.simon_says_mode) {
         const startSquare = best.substring(0, 2);
         const startPiece = board.position()[startSquare];
         const startPieceType = (startPiece) ? startPiece.substring(1) : null;
@@ -211,10 +214,7 @@ function on_engine_best_move(best, threat) {
             update_best_move(piece_name_map[startPieceType]);
         }
     } else {
-        if (best === '(none)') {
-            // todo: add stalemate detection here
-            update_best_move(`${next} Wins`, '');
-        } else if (threat && threat !== '(none)') {
+        if (threat && threat !== '(none)') {
             update_best_move(`${toplay} to play, best move is ${best}`, `Best response for ${next} is ${threat}`);
         } else {
             update_best_move(`${toplay} to play, best move is ${best}`, '');
@@ -249,7 +249,6 @@ function on_engine_mate(mateNum) {
     if (mateNum === 0) {
         update_evaluation('Checkmate!');
         update_best_move('', '');
-        document.getElementById('chess_line_2').innerText = '';
     } else {
         update_evaluation(`Checkmate in ${mateNum}`);
     }
@@ -257,7 +256,11 @@ function on_engine_mate(mateNum) {
 }
 
 function on_engine_score(score, depth) {
-    update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
+    if (score) {
+        update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
+    } else {
+        update_evaluation('Stalemate!');
+    }
 }
 
 function on_engine_response(message) {
@@ -285,7 +288,7 @@ function on_engine_response(message) {
         } else if (info.includes('score')) {
             const infoArr = info.split(" ");
             const depth = infoArr[2];
-            const score = ((turn === 'w') ? 1 : -1) * (config.engine === "lc0") ? infoArr[11] : infoArr[9];
+            const score = ((turn === 'w') ? 1 : -1) * (config.engine === "lc0" ? infoArr[11] : infoArr[9]);
             on_engine_score(score, depth);
             last_score = score / 100.0;
         }
@@ -299,11 +302,7 @@ function on_engine_response(message) {
 }
 
 function on_new_pos(fen, startFen, moves) {
-    document.getElementById('chess_line_1').innerHTML = `
-        <div>Calculating...<div>
-        <progress id="progBar" value="2" max="100">
-    `;
-    document.getElementById('chess_line_2').innerText = '';
+    update_best_move('<div>Calculating...<div><progress id="progBar" value="2" max="100">', '');
     if (config.engine === "remote") {
         // todo: need a way to pass startFen+moves directive to remote engine
         request_analyse_fen(fen, config.compute_time).then(on_engine_response);
@@ -414,16 +413,19 @@ function parse_position_from_response(txt) {
 
 function update_evaluation(eval_string) {
     if (eval_string && config.computer_evaluation) {
-        document.getElementById('evaluation').innerText = eval_string;
+        document.getElementById('evaluation').innerHTML = eval_string;
+        if (eval_string.includes('Checkmate') || eval_string.includes('Stalemate')) {
+            update_best_move('', '');
+        }
     }
 }
 
 function update_best_move(line1, line2) {
     if (line1 != null) {
-        document.getElementById('chess_line_1').innerText = line1;
+        document.getElementById('chess_line_1').innerHTML = line1;
     }
     if (line2 != null) {
-        document.getElementById('chess_line_2').innerText = line2;
+        document.getElementById('chess_line_2').innerHTML = line2;
     }
 }
 
