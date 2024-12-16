@@ -107,9 +107,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 });
 
 async function initialize_engine() {
-    if (config.engine === "remote") {
-        return;
-    }
+    if (config.engine === "remote") return;
 
     const engineMap = {
         "stockfish-17-nnue-79": "stockfish-17-79/sf17-79.js",
@@ -118,8 +116,8 @@ async function initialize_engine() {
         "stockfish-11-hce": "stockfish-11-hce/sfhce.js",
         "stockfish-11": "stockfish-11/stockfish.js",
         "stockfish-6": "stockfish-6/stockfish.js",
-        "fairy-stockfish-14-nnue": "fairy-stockfish-14/fsf14.js",
         "lc0": "lc0/lc0.js",
+        "fairy-stockfish-14-nnue": "fairy-stockfish-14/fsf14.js",
     }
     const enginePath = `/lib/engine/${engineMap[config.engine]}`;
     const engineBasePath = enginePath.substring(0, enginePath.lastIndexOf('/'));
@@ -203,7 +201,6 @@ function send_engine_uci(message) {
 function on_engine_best_move(best, threat) {
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
-
     if (best === '(none)') {
         update_best_move(`${next} Wins`, '');
     } else if (config.simon_says_mode) {
