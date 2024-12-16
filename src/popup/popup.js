@@ -1,5 +1,7 @@
 import {Chess} from "../../lib/chess.js";
 
+// todo: analysis button should consider variant
+
 let engine;
 let board;
 let fen_cache;
@@ -139,24 +141,20 @@ async function initialize_engine() {
                     const nnue_responses = await Promise.all(nnues.map(nnue => fetch(`${engineBasePath}/${nnue}`)));
                     return await Promise.all(nnue_responses.map(res => res.arrayBuffer()));
                 } else {
-                    // todo: try using https://github.com/fairy-stockfish/fairy-stockfish.wasm
                     const variantNnueMap = {
                         'chess': 'nn-46832cfbead3.nnue',
                         'fischerandom': 'nn-46832cfbead3.nnue',
                         'crazyhouse': 'crazyhouse-8ebf84784ad2.nnue',
                         'kingofthehill': 'kingofthehill-978b86d0e6a4.nnue',
                         '3check': '3check-cb5f517c228b.nnue',
-                        'antichess': 'antichess-dd3cbe53cd4e.nnue', // BAD_NNUE
+                        'antichess': 'antichess-dd3cbe53cd4e.nnue',
                         'atomic': 'atomic-2cf13ff256cc.nnue',
-                        'horde': 'horde-28173ddccabe.nnue', // BAD_NNUE
+                        'horde': 'horde-28173ddccabe.nnue',
                         'racingkings': 'racingkings-636b95f085e3.nnue',
                     };
                     const variantNnue = variantNnueMap[config.variant];
-                    console.log("Attempting fetch: ", `${engineBasePath}/nnue/${variantNnue}`)
                     const nnue_response = await fetch(`${engineBasePath}/nnue/${variantNnue}`);
-                    const buffer = await nnue_response.arrayBuffer()
-                    console.log("Buffer", buffer);
-                    return [buffer];
+                    return [await nnue_response.arrayBuffer()];
                 }
             }
 
@@ -352,10 +350,21 @@ function parse_position_from_response(txt) {
             record = {fen: chess.fen(), startFen: indirectHit.startFen, moves: indirectHit.moves + ' ' + moveReceipt.lan}
         } else { // perform all moves
             console.log('FULL');
-            let startFen = getStartingPosition();
+
+            // todo: remove this logic in favor of scraping position at start of game?
+            const sans = txt.split("*****").slice(0, -1);
+            let startFen;
+            if (config.variant === 'fischerandom') {
+                let chess960Id = sans[0];
+                sans.shift();
+                startFen = getStartingPosition(chess960Id);
+            } else {
+                startFen = getStartingPosition();
+            }
+
             chess.load(startFen);
             let moves = '';
-            for (const san of txt.split("*****").slice(0, -1)) {
+            for (const san of sans) {
                 const moveReceipt = chess.move(san);
                 moves += moveReceipt.lan + ' ';
             }
