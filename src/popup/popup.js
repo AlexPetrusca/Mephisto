@@ -181,7 +181,9 @@ async function initialize_engine() {
         engine.postMessage({type: "weights", data: {name: "weights_32195.dat.gz", weights: weights}}, "*");
     }
 
-    send_engine_uci(`setoption name Hash value ${config.memory}`);
+    if (config.engine !== 'stockfish-16-nnue-40') { // crashes for some reason
+        send_engine_uci(`setoption name Hash value ${config.memory}`);
+    }
     send_engine_uci(`setoption name Threads value ${config.threads}`);
     send_engine_uci(`setoption name MultiPV value ${config.multiple_lines}`);
     send_engine_uci('ucinewgame');
@@ -246,18 +248,13 @@ function on_engine_best_move(best, threat) {
 function on_engine_mate(mateNum) {
     if (mateNum === 0) {
         update_evaluation('Checkmate!');
-        update_best_move('', '');
     } else {
         update_evaluation(`Checkmate in ${mateNum}`);
     }
 }
 
 function on_engine_score(score, depth) {
-    if (score) {
-        update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
-    } else {
-        update_evaluation('Stalemate!');
-    }
+    update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
 }
 
 function on_engine_response(message) {
@@ -285,7 +282,7 @@ function on_engine_response(message) {
         } else if (info.includes('score')) {
             const infoArr = info.split(" ");
             const depth = infoArr[2];
-            const score = ((turn === 'w') ? 1 : -1) * (config.engine === "lc0" ? infoArr[11] : infoArr[9]);
+            const score = (turn === 'w' ? 1 : -1) * (config.engine === "lc0" ? infoArr[11] : infoArr[9]);
             on_engine_score(score, depth);
             last_score = score / 100.0;
         }
@@ -294,7 +291,7 @@ function on_engine_response(message) {
     if (is_calculating) {
         prog++;
         let progMapping = 100 * (1 - Math.exp(-prog / 30));
-        document.getElementById('progBar').setAttribute('value', `${Math.round(progMapping)}`);
+        document.getElementById('progBar')?.setAttribute('value', `${Math.round(progMapping)}`);
     }
 }
 
@@ -411,7 +408,9 @@ function parse_position_from_response(txt) {
 function update_evaluation(eval_string) {
     if (eval_string && config.computer_evaluation) {
         document.getElementById('evaluation').innerHTML = eval_string;
-        if (eval_string === 'Checkmate!' || eval_string === 'Stalemate!') {
+        if (eval_string === 'Checkmate!') {
+            update_best_move(null, '');
+        } else if (eval_string === 'Stalemate!') {
             update_best_move('', '');
         }
     }
