@@ -49,7 +49,7 @@ function scrapePosition() {
     let res = '';
     const moves = getMoveRecords();
     if (config.variant === 'chess') {
-        if (moves?.length || getBoard()) {
+        if (moves?.length) {
             prefix += 'fen***';
             res = scrapePositionFen(moves);
         } else {
@@ -69,8 +69,7 @@ function scrapePosition() {
         }
     }
 
-
-    if (res || getBoard()) {
+    if (res) {
         console.log(prefix + res.replace(/[^\w-+#*@&]/g, ''));
         return prefix + res.replace(/[^\w-+=#*@&]/g, '');
     } else {
@@ -129,7 +128,12 @@ function scrapePositionPuz() {
         const colorMap = {white: 'w', black: 'b'};
         const pieces = Array.from(document.querySelectorAll(pieceSelector)).filter(piece => !!piece.classList[1]);
         for (const piece of pieces) {
-            const transform = piece.style.transform;
+            let transform;
+            if (piece.classList.contains('dragging')) {
+                transform = document.querySelector('.ghost').style.transform;
+            } else {
+                transform = piece.style.transform;
+            }
             const xyCoords = transform.substring(transform.indexOf('(') + 1, transform.length - 1)
                 .replaceAll('px', '').replace(' ', '').split(",")
                 .map(num => Number(num) / piece.getBoundingClientRect().width + 1);
@@ -138,8 +142,6 @@ function scrapePositionPuz() {
                 : String.fromCharCode('a'.charCodeAt(0) + xyCoords[0] - 1) + (9 - xyCoords[1]);
             if (piece.classList[0] !== "ghost") {
                 res += `${colorMap[piece.classList[0]]}-${pieceMap[piece.classList[1]]}-${coords}*****`;
-            } else if (piece.style.visibility === "visible") {
-                res += `${colorMap[piece.classList[1]]}-${pieceMap[piece.classList[2]]}-${coords}*****`;
             }
         }
     }
@@ -207,11 +209,20 @@ function getMoveRecords() {
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
     if (site === 'chesscom') {
-        let highlights = document.querySelectorAll('.highlight');
-        if (highlights.length === 0) {
-            highlights = document.querySelectorAll('.move-square');
+        const highlights = [];
+        for (const elem of getBoard().children) {
+            if (elem.classList.contains('coordinates')) continue;
+            if (elem.classList.contains('hover-square')) break;
+            highlights.push(elem);
         }
-        [fromSquare, toSquare] = Array.from(highlights);
+        if (highlights.length === 2) {
+            [fromSquare, toSquare] = [highlights[0], highlights[1]];
+        } else {
+            [fromSquare, toSquare] = [highlights[1], highlights[2]];
+        }
+        if (!fromSquare.classList.contains('highlight') || !toSquare.classList.contains('highlight')) {
+            throw Error('Invalid last move highlights');
+        }
         const toPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
         if (!toPiece) {
             [fromSquare, toSquare] = [toSquare, fromSquare];
@@ -231,8 +242,14 @@ function getLastMoveHighlights() {
 }
 
 function getTurn() {
+    let toSquare;
+    try {
+        toSquare = getLastMoveHighlights()[1];
+    } catch (e) {
+        return 'w'; // if no-one has moved yet, then white is to play
+    }
+
     let turn;
-    const [_, toSquare] = getLastMoveHighlights();
     if (site === 'chesscom') {
         const hlPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
         const hlColorType = Array.from(hlPiece.classList).find(c => c.match(/[wb][prnbkq]/));

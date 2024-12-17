@@ -400,17 +400,28 @@ function parse_position_from_response(txt) {
     }
 
     function parse_position_from_pieces(chess, txt) {
-        // todo: use fen cache here as well?
+        const directHit = fen_cache.get(txt);
+        if (directHit) { // reuse position
+            console.log('DIRECT');
+            turn = directHit.charAt(directHit.indexOf(' ') + 1);
+            return directHit;
+        }
+
+        console.log('FULL');
         chess.clear(); // clear the board so we can place our pieces
         const [playerTurn, ...pieces] = txt.split("*****").slice(0, -1);
-        console.log(txt);
         for (const piece of pieces) {
             const attributes = piece.split("-");
             chess.put({type: attributes[1], color: attributes[0]}, attributes[2]);
         }
         chess.setTurn(playerTurn);
+
+        console.log("NEW POSITION:", chess);
+
         turn = chess.turn();
-        return chess.fen();
+        const fen = chess.fen();
+        fen_cache.set(txt, fen);
+        return fen;
     }
 
     const metaTag = txt.substring(3, 8);
