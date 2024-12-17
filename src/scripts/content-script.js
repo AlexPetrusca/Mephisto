@@ -49,7 +49,7 @@ function scrapePosition() {
     let res = '';
     const moves = getMoveRecords();
     if (config.variant === 'chess') {
-        if (moves && moves.length) {
+        if (moves?.length || getBoard()) {
             prefix += 'fen***';
             res = scrapePositionFen(moves);
         } else {
@@ -69,8 +69,13 @@ function scrapePosition() {
         }
     }
 
-    console.log((res) ? prefix + res.replace(/[^\w-+#*@&]/g, '') : 'no');
-    return (res) ? prefix + res.replace(/[^\w-+=#*@&]/g, '') : 'no';
+
+    if (res || getBoard()) {
+        console.log(prefix + res.replace(/[^\w-+#*@&]/g, ''));
+        return prefix + res.replace(/[^\w-+=#*@&]/g, '');
+    } else {
+        return 'no';
+    }
 }
 
 function scrapePositionFen(moves) {
@@ -182,7 +187,7 @@ function getSelectedMoveRecord() {
 
 function getMoveRecords() {
     let moves;
-    if (site === 'chesscom') {
+    if (site === 'chesscom') {  // wc-chess-board
         moves = document.querySelectorAll('.node'); // vs player + computer (new)
         if (moves.length === 0) {
             moves = document.querySelectorAll('.move-text-component'); // vs player + computer (old)
@@ -190,7 +195,7 @@ function getMoveRecords() {
         if (moves.length === 0) {
             moves = document.querySelectorAll('.move-text'); // analysis
         }
-    } else if (site === 'lichess') {
+    } else if (site === 'lichess') { // cg-board
         moves = document.querySelectorAll('kwdb'); // vs player + computer
         if (moves.length === 0) {
             moves = document.querySelectorAll('move'); // vs training
@@ -271,9 +276,9 @@ function getBoard() {
     if (site === 'chesscom') {
         board = document.querySelector('.board');
     } else if (site === 'lichess') {
-        board = document.querySelector('cg-board');
+        board = document.querySelector('.main-board');
     } else if (site === 'blitztactics') {
-        board = document.querySelector('cg-board');
+        board = document.querySelector('.chessground-board');
     }
     return board;
 }
