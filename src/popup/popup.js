@@ -9,10 +9,7 @@ let config;
 
 let is_calculating = false;
 let prog = 0;
-let last_fen = '';
-let last_pv = '';
-let last_score = '';
-let last_best_move = '';
+let last_eval = {};
 let turn = ''; // 'w' | 'b'
 
 const piece_name_map = {
@@ -77,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 board.orientation(response.orient);
             }
             const {fen, startFen, moves} = parse_position_from_response(response.dom);
-            if (last_fen !== fen) {
+            if (last_eval['fen'] !== fen) {
                 on_new_pos(fen, startFen, moves);
             }
         } else if (response.pullConfig) {
@@ -96,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // register button click listeners
     document.getElementById('analyze').addEventListener('click', () => {
-        window.open(`https://lichess.org/analysis?fen=${last_fen}`, '_blank');
+        window.open(`https://lichess.org/analysis?fen=${last_eval['fen']}`, '_blank');
     });
     document.getElementById('config').addEventListener('click', () => {
         window.open('/src/options/options.html', '_blank');
@@ -205,7 +202,21 @@ function on_engine_best_move(best, threat) {
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
     if (best === '(none)') {
-        update_best_move(`${next} Wins`, '');
+        if (last_eval.hasOwnProperty('mate')) {
+            update_evaluation('Checkmate!');
+            if (config.variant === 'antichess') {
+                update_best_move(`${toplay} Wins`, '');
+            } else {
+                update_best_move(`${next} Wins`, '');
+            }
+        } else {
+            update_evaluation('Stalemate!');
+            if (config.variant === 'antichess') {
+                update_best_move(`${toplay} Wins`, '');
+            } else {
+                update_best_move('Draw', '');
+            }
+        }
     } else if (config.simon_says_mode) {
         const startSquare = best.substring(0, 2);
         const startPiece = board.position()[startSquare];
@@ -221,13 +232,18 @@ function on_engine_best_move(best, threat) {
         }
     }
     if (toplay.toLowerCase() === board.orientation()) {
-        last_best_move = best;
+        last_eval['bestmove'] = best;
+        last_eval['threat'] = threat;
         if (config.simon_says_mode) {
             // todo: why does this break?
             // Uncaught TypeError: Cannot read properties of undefined (reading 'substring')
             const startSquare = best.substring(0, 2);
             const startPiece = board.position()[startSquare].substring(1);
-            request_console_log(`${piece_name_map[startPiece]} ==> ${last_score}`);
+            if (last_eval.hasOwnProperty('mate')) {
+                request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval['score'] / 100.0}`);
+            } else {
+                request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval['score'] / 100.0}`);
+            }
             if (config.threat_analysis) {
                 draw_move_annotation(threat, 'red', document.getElementById('response-arrow'));
             }
@@ -245,49 +261,59 @@ function on_engine_best_move(best, threat) {
     toggle_calculating(false);
 }
 
-function on_engine_mate(mateNum) {
-    if (mateNum === 0) {
-        update_evaluation('Checkmate!');
+function on_engine_evaluation(info) {
+    if (info.hasOwnProperty('mate')) {
+        update_evaluation(`Checkmate in ${info['mate']}`);
     } else {
-        update_evaluation(`Checkmate in ${mateNum}`);
+        update_evaluation(`Score: ${info['score'] / 100.0} at depth ${info['depth']}`)
     }
-}
-
-function on_engine_score(score, depth) {
-    update_evaluation(`Score: ${score / 100.0} at depth ${depth}`)
 }
 
 function on_engine_response(message) {
     console.log('on_engine_response', message);
     if (config.engine === "remote") {
-        on_engine_best_move(message['move'], message['ponder']);
+        last_eval['bestmove'] = message['move'];
+        last_eval['threat'] = message['ponder'];
         if (message['score']['is_mate']) {
-            on_engine_mate(message['score'].value)
+            last_eval['mate'] = message['score'].value;
         } else {
-            on_engine_score(message['score'].value, message['score'].depth)
+            last_eval['score'] = message['score'].value;
+            last_eval['depth'] = message['score'].depth;
         }
-    } else if (message.includes('bestmove')) {
+        on_engine_best_move(message['move'], message['ponder']);
+        on_engine_evaluation(last_eval);
+        // todo: what about pv and rest?
+    } else if (message.startsWith('bestmove')) {
         const arr = message.split(' ');
         const best = arr[1];
         const threat = arr[3];
         on_engine_best_move(best, threat);
-    } else if (message.includes('info depth')) {
-        const pvSplit = message.split(" pv ");
-        const info = pvSplit[0];
-        if (info.includes('score mate')) {
-            const arr = message.split('score mate ');
-            const mateArr = arr[1].split(' ');
-            const mateNum = parseInt(mateArr[0]);
-            on_engine_mate(mateNum);
-        } else if (info.includes('score')) {
-            const infoArr = info.split(" ");
-            const depth = infoArr[2];
-            const score = (turn === 'w' ? 1 : -1) * (config.engine === "lc0" ? infoArr[11] : infoArr[9]);
-            on_engine_score(score, depth);
-            last_score = score / 100.0;
+    } else if (message.startsWith('info depth')) {
+        console.log("EVALUATION_BEFORE:", JSON.parse(JSON.stringify(last_eval)));
+        const tokens = message.split(' ').slice(1);
+        for (let i = 0; i < tokens.length; i++) {
+            const token = tokens[i];
+            if (token === 'upperbound' || token === 'lowerbound') {
+                // do nothing - ignore
+            } else if (token === 'score') {
+                last_eval['rawScore'] = `${tokens[i + 1]} ${tokens[i + 2]}`;
+                i += 2; // take 2 tokens
+            } else if (token === 'pv') {
+                last_eval[token] = tokens.slice(i + 1).join(' '); // take rest of tokens
+                break;
+            } else {
+                const num = parseInt(tokens[i + 1]);
+                last_eval[token] = isNaN(num) ? tokens[i + 1] : num;
+                i++; // take 1 token
+            }
         }
-        last_pv = pvSplit[1];
+        const scoreNumber = Number(last_eval['rawScore'].substring(last_eval['rawScore'].indexOf(' ') + 1));
+        const scoreType = last_eval['rawScore'].includes('cp') ? 'score' : 'mate';
+        last_eval[scoreType] = (turn === 'w' ? 1 : -1) * scoreNumber;
+
+        on_engine_evaluation(last_eval)
     }
+    console.log("EVALUATION:", JSON.parse(JSON.stringify(last_eval)));
     if (is_calculating) {
         prog++;
         let progMapping = 100 * (1 - Math.exp(-prog / 30));
@@ -296,7 +322,7 @@ function on_engine_response(message) {
 }
 
 function on_new_pos(fen, startFen, moves) {
-    update_best_move('<div>Calculating...<div><progress id="progBar" value="2" max="100">', '');
+    toggle_calculating(true);
     if (config.engine === "remote") {
         // todo: need a way to pass startFen+moves directive to remote engine
         request_analyse_fen(fen, config.compute_time).then(on_engine_response);
@@ -309,14 +335,13 @@ function on_new_pos(fen, startFen, moves) {
         send_engine_uci(`go movetime ${config.compute_time}`);
     }
     board.position(fen);
-    last_fen = fen;
     if (config.simon_says_mode) {
-        draw_move_annotation(last_best_move, 'blue', document.getElementById('move-arrow'));
-        request_console_log(`Best Move: ${last_best_move}`);
+        draw_move_annotation(last_eval['bestmove'], 'blue', document.getElementById('move-arrow'));
+        request_console_log('Best Move: ' + last_eval['bestmove']);
     } else {
         clear_arrows();
     }
-    toggle_calculating(true);
+    last_eval = {fen}; // new evaluation
 }
 
 function parse_position_from_response(txt) {
@@ -406,13 +431,8 @@ function parse_position_from_response(txt) {
 }
 
 function update_evaluation(eval_string) {
-    if (eval_string && config.computer_evaluation) {
+    if (eval_string != null && config.computer_evaluation) {
         document.getElementById('evaluation').innerHTML = eval_string;
-        if (eval_string === 'Checkmate!') {
-            update_best_move(null, '');
-        } else if (eval_string === 'Stalemate!') {
-            update_best_move('', '');
-        }
     }
 }
 
@@ -433,7 +453,7 @@ function request_fen() {
 
 function request_automove(move) {
     const message = (config.puzzle_mode)
-        ? {automove: true, pv: last_pv || move}
+        ? {automove: true, pv: last_eval['pv'] || move}
         : {automove: true, move: move};
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, message);
@@ -533,6 +553,9 @@ function clear_arrows() {
 function toggle_calculating(on) {
     prog = 0;
     is_calculating = on;
+    if (is_calculating) {
+        update_best_move('<div>Calculating...<div><progress id="progBar" value="2" max="100">', '');
+    }
 }
 
 async function dispatch_click_event(x, y) {
