@@ -2,28 +2,13 @@ let site; // the site that the content-script was loaded on (lichess, chess.com,
 let config; // localhost configuration pulled from popup
 let moving = false; // whether the content-script is performing a move
 
-const siteMap = {
-    'lichess.org': 'lichess',
-    'www.chess.com': 'chesscom',
-    'blitztactics.com': 'blitztactics'
-}
-
-const pieceMap = {
-    pawn: 'p',
-    rook: 'r',
-    knight: 'n',
-    bishop: 'b',
-    queen: 'q',
-    king: 'k'
-}
-
-const colorMap = {
-    white: 'w',
-    black: 'b'
-}
-
 window.onload = () => {
     console.log('Mephisto is listening!');
+    const siteMap = {
+        'lichess.org': 'lichess',
+        'www.chess.com': 'chesscom',
+        'blitztactics.com': 'blitztactics'
+    }
     site = siteMap[window.location.hostname];
     pullConfig();
 };
@@ -135,6 +120,8 @@ function scrapePositionPuz() {
         } else if (site === 'blitztactics') {
             pieceSelector = '.board-area piece';
         }
+        const pieceMap = {pawn: 'p', rook: 'r', knight: 'n', bishop: 'b', queen: 'q', king: 'k'};
+        const colorMap = {white: 'w', black: 'b'};
         const pieces = Array.from(document.querySelectorAll(pieceSelector)).filter(piece => !!piece.classList[1]);
         for (const piece of pieces) {
             const transform = piece.style.transform;

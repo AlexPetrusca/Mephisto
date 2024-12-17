@@ -201,14 +201,7 @@ function send_engine_uci(message) {
 
 function on_engine_best_move(best, threat) {
     console.log("EVALUATION:", JSON.parse(JSON.stringify(last_eval)));
-    const piece_name_map = {
-        'P': 'Pawn',
-        'R': 'Rook',
-        'N': 'Knight',
-        'B': 'Bishop',
-        'Q': 'Queen',
-        'K': 'King',
-    };
+    const piece_name_map = {P: 'Pawn', R: 'Rook', N: 'Knight', B: 'Bishop', Q: 'Queen', K: 'King'};
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
     if (best === '(none)') {
