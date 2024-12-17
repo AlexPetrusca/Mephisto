@@ -1,4 +1,4 @@
-import {Chess} from "../../lib/chess.js";
+import {Chess} from '../../lib/chess.js';
 
 let engine;
 let board;
@@ -105,29 +105,29 @@ document.addEventListener('DOMContentLoaded', async function () {
 });
 
 async function initialize_engine() {
-    if (config.engine === "remote") return;
+    if (config.engine === 'remote') return;
 
     const engineMap = {
-        "stockfish-17-nnue-79": "stockfish-17-79/sf17-79.js",
-        "stockfish-16-nnue-40": "stockfish-16-40/stockfish.js",
-        "stockfish-16-nnue-7": "stockfish-16-7/sf16-7.js",
-        "stockfish-11-hce": "stockfish-11-hce/sfhce.js",
-        "stockfish-11": "stockfish-11/stockfish.js",
-        "stockfish-6": "stockfish-6/stockfish.js",
-        "lc0": "lc0/lc0.js",
-        "fairy-stockfish-14-nnue": "fairy-stockfish-14/fsf14.js",
+        'stockfish-17-nnue-79': 'stockfish-17-79/sf17-79.js',
+        'stockfish-16-nnue-40': 'stockfish-16-40/stockfish.js',
+        'stockfish-16-nnue-7': 'stockfish-16-7/sf16-7.js',
+        'stockfish-11-hce': 'stockfish-11-hce/sfhce.js',
+        'stockfish-11': 'stockfish-11/stockfish.js',
+        'stockfish-6': 'stockfish-6/stockfish.js',
+        'lc0': 'lc0/lc0.js',
+        'fairy-stockfish-14-nnue': 'fairy-stockfish-14/fsf14.js',
     }
     const enginePath = `/lib/engine/${engineMap[config.engine]}`;
     const engineBasePath = enginePath.substring(0, enginePath.lastIndexOf('/'));
-    if (["stockfish-16-nnue-40", "stockfish-11", "stockfish-6"].includes(config.engine)) {
+    if (['stockfish-16-nnue-40', 'stockfish-11', 'stockfish-6'].includes(config.engine)) {
         engine = new Worker(enginePath);
         engine.onmessage = (event) => on_engine_response(event.data);
-    } else if (["stockfish-17-nnue-79", "stockfish-16-nnue-7", "fairy-stockfish-14-nnue", "stockfish-hce"].includes(config.engine)) {
+    } else if (['stockfish-17-nnue-79', 'stockfish-16-nnue-7', 'fairy-stockfish-14-nnue', 'stockfish-hce'].includes(config.engine)) {
         const module = await import(enginePath);
         engine = await module.default();
-        if (config.engine.includes("nnue")) {
+        if (config.engine.includes('nnue')) {
             async function fetchNnueModels(engine, engineBasePath) {
-                if (config.engine !== "fairy-stockfish-14-nnue") {
+                if (config.engine !== 'fairy-stockfish-14-nnue') {
                     const nnues = [];
                     for (let i = 0; ; i++) {
                         let nnue = engine.getRecommendedNnue(i);
@@ -161,7 +161,7 @@ async function initialize_engine() {
             nnues.forEach((model, i) => engine.setNnueBuffer(new Uint8Array(model), i))
         }
         engine.listen = (message) => on_engine_response(message);
-    } else if (["lc0"].includes(config.engine)) {
+    } else if (['lc0'].includes(config.engine)) {
         const lc0Frame = document.createElement('iframe');
         lc0Frame.src = `${engineBasePath}/lc0.html`;
         lc0Frame.style.display = 'none';
@@ -176,7 +176,7 @@ async function initialize_engine() {
 
         window.onmessage = event => on_engine_response(event.data);
         let weights = await fetch(`${engineBasePath}/weights/weights_32195.dat.gz`).then(res => res.arrayBuffer());
-        engine.postMessage({type: "weights", data: {name: "weights_32195.dat.gz", weights: weights}}, "*");
+        engine.postMessage({type: 'weights', data: {name: 'weights_32195.dat.gz', weights: weights}}, '*');
     }
 
     if (config.engine !== 'stockfish-16-nnue-40') { // crashes for some reason
@@ -186,11 +186,11 @@ async function initialize_engine() {
     send_engine_uci(`setoption name MultiPV value ${config.multiple_lines}`);
     send_engine_uci('ucinewgame');
     send_engine_uci('isready');
-    console.log("Engine ready!", engine);
+    console.log('Engine ready!', engine);
 }
 
 function send_engine_uci(message) {
-    if (config.engine === "lc0") {
+    if (config.engine === 'lc0') {
         engine.postMessage(message, '*');
     } else if (engine instanceof Worker) {
         engine.postMessage(message);
@@ -200,7 +200,7 @@ function send_engine_uci(message) {
 }
 
 function on_engine_best_move(best, threat) {
-    console.log("EVALUATION:", JSON.parse(JSON.stringify(last_eval)));
+    console.log('EVALUATION:', JSON.parse(JSON.stringify(last_eval)));
     const piece_name_map = {P: 'Pawn', R: 'Rook', N: 'Knight', B: 'Bishop', Q: 'Queen', K: 'King'};
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
@@ -274,7 +274,7 @@ function on_engine_evaluation(info) {
 
 function on_engine_response(message) {
     console.log('on_engine_response', message);
-    if (config.engine === "remote") {
+    if (config.engine === 'remote') {
         last_eval['bestmove'] = message['move'];
         last_eval['threat'] = message['ponder'];
         if (message['score']['is_mate']) {
@@ -324,7 +324,7 @@ function on_engine_response(message) {
 
 function on_new_pos(fen, startFen, moves) {
     toggle_calculating(true);
-    if (config.engine === "remote") {
+    if (config.engine === 'remote') {
         // todo: need a way to pass startFen+moves directive to remote engine
         request_analyse_fen(fen, config.compute_time).then(on_engine_response);
     } else {
@@ -352,7 +352,7 @@ function parse_position_from_response(txt) {
         bt: 'Game detected on BlitzTactics.com'
     };
 
-    function parse_position_from_moves(chess, txt) {
+    function parse_position_from_moves(txt) {
         const directHit = fen_cache.get(txt);
         if (directHit) { // reuse position
             console.log('DIRECT');
@@ -362,8 +362,9 @@ function parse_position_from_response(txt) {
 
         let record;
         const lastMoveRegex = /([\w-+=#]+[*]+)$/;
-        const cacheKey = txt.replace(lastMoveRegex, "");
+        const cacheKey = txt.replace(lastMoveRegex, '');
         const indirectHit = fen_cache.get(cacheKey);
+        const chess = new Chess(config.variant);
         if (indirectHit) { // append newest move
             console.log('INDIRECT');
             chess.load(indirectHit.fen);
@@ -371,9 +372,8 @@ function parse_position_from_response(txt) {
             record = {fen: chess.fen(), startFen: indirectHit.startFen, moves: indirectHit.moves + ' ' + moveReceipt.lan}
         } else { // perform all moves
             console.log('FULL');
-
             // todo: remove this logic in favor of scraping position at start of game?
-            const sans = txt.split("*****").slice(0, -1);
+            const sans = txt.split('*****').slice(0, -1);
             let startFen;
             if (config.variant === 'fischerandom') {
                 let chess960Id = sans[0];
@@ -392,14 +392,14 @@ function parse_position_from_response(txt) {
             record = {fen: chess.fen(), startFen, moves: moves.trim()};
         }
 
-        console.log("NEW POSITION:", chess);
+        console.log('NEW POSITION:', chess);
 
         turn = chess.turn();
         fen_cache.set(txt, record);
         return record;
     }
 
-    function parse_position_from_pieces(chess, txt) {
+    function parse_position_from_pieces(txt) {
         const directHit = fen_cache.get(txt);
         if (directHit) { // reuse position
             console.log('DIRECT');
@@ -408,15 +408,16 @@ function parse_position_from_response(txt) {
         }
 
         console.log('FULL');
+        const chess = new Chess(config.variant);
         chess.clear(); // clear the board so we can place our pieces
-        const [playerTurn, ...pieces] = txt.split("*****").slice(0, -1);
+        const [playerTurn, ...pieces] = txt.split('*****').slice(0, -1);
         for (const piece of pieces) {
-            const attributes = piece.split("-");
+            const attributes = piece.split('-');
             chess.put({type: attributes[1], color: attributes[0]}, attributes[2]);
         }
         chess.setTurn(playerTurn);
 
-        console.log("NEW POSITION:", chess);
+        console.log('NEW POSITION:', chess);
 
         turn = chess.turn();
         const fen = chess.fen();
@@ -429,16 +430,15 @@ function parse_position_from_response(txt) {
     document.getElementById('game-detection').innerText = prefixMap[prefix];
     txt = txt.substring(11);
 
-    const chess = new Chess(config.variant); // todo: we dont need to create this on DIRECT hits
-    if (metaTag.includes("var")) {
+    if (metaTag.includes('var')) {
         // todo: incomplete - finish me
         const puzTxt = txt.substring(0, txt.indexOf('&') - 5);
         const fenTxt = txt.substring(txt.indexOf('&') + 6);
-        return parse_position_from_moves(chess, fenTxt);
-    } else if (metaTag.includes("puz")) { // chess.com & blitztactics.com puzzle pages
-        return {fen: parse_position_from_pieces(chess, txt)};
+        return parse_position_from_moves(fenTxt);
+    } else if (metaTag.includes('puz')) { // chess.com & blitztactics.com puzzle pages
+        return {fen: parse_position_from_pieces(txt)};
     } else { // chess.com and lichess.org pages
-        return parse_position_from_moves(chess, txt);
+        return parse_position_from_moves(txt);
     }
 }
 
@@ -514,10 +514,10 @@ function draw_move_annotation(move, color, overlay) {
         const piecePath = `/res/chesspieces/${pieceSet}/${pieceIdentifier}.${ext}`
 
         overlay.innerHTML = `
-            <img style="position: absolute; z-index: -1; left: ${imgX}px; top: ${imgY}px;" width="43px" height="43px" 
-                src="${piecePath}" alt="${pieceIdentifier}">
-            <svg width="344px" height="344px" viewBox="0, 0, 8, 8">
-                <circle cx="${x}" cy="${y}" r="0.45" fill="transparent" stroke="${color}" stroke-width="0.1" />
+            <img style='position: absolute; z-index: -1; left: ${imgX}px; top: ${imgY}px;' width='43px' height='43px' 
+                src='${piecePath}' alt='${pieceIdentifier}'>
+            <svg width='344px' height='344px' viewBox='0, 0, 8, 8'>
+                <circle cx='${x}' cy='${y}' r='0.45' fill='transparent' stroke='${color}' stroke-width='0.1' />
             </svg>
         `;
     } else {
@@ -536,14 +536,14 @@ function draw_move_annotation(move, color, overlay) {
         const ay1 = y1 - 0.4 * (dy / d);
 
         overlay.innerHTML = `
-            <svg width="344px" height="344px" viewBox="0, 0, 8, 8">
+            <svg width='344px' height='344px' viewBox='0, 0, 8, 8'>
                 <defs>
-                    <marker id="arrow-${color}" markerWidth="13" markerHeight="13" refX="1" refY="7" orient="auto">
-                        <path d="M1,5.75 L3,7 L1,8.25" fill="${color}" />
+                    <marker id='arrow-${color}' markerWidth='13' markerHeight='13' refX='1' refY='7' orient='auto'>
+                        <path d='M1,5.75 L3,7 L1,8.25' fill='${color}' />
                     </marker>
                 </defs>
-                <line x1="${ax0}" y1="${ay0}" x2="${ax1}" y2="${ay1}" stroke="${color}" fill=${color}" stroke-width="0.225"
-                    marker-end="url(#arrow-${color})"/>
+                <line x1='${ax0}' y1='${ay0}' x2='${ax1}' y2='${ay1}' stroke='${color}' fill=${color}' stroke-width='0.225'
+                    marker-end='url(#arrow-${color})'/>
             </svg>
         `;
     }
@@ -581,15 +581,15 @@ async function dispatch_click_event(x, y) {
 async function request_debugger_click(x, y) {
     chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
         const debugee = {tabId: tabs[0].id};
-        chrome.debugger.attach(debugee, "1.3", async () => {
-            await dispatch_mouse_event(debugee, "Input.dispatchMouseEvent", {
+        chrome.debugger.attach(debugee, '1.3', async () => {
+            await dispatch_mouse_event(debugee, 'Input.dispatchMouseEvent', {
                 type: 'mousePressed',
                 button: 'left',
                 clickCount: 1,
                 x: x,
                 y: y,
             });
-            await dispatch_mouse_event(debugee, "Input.dispatchMouseEvent", {
+            await dispatch_mouse_event(debugee, 'Input.dispatchMouseEvent', {
                 type: 'mouseReleased',
                 button: 'left',
                 clickCount: 1,
@@ -620,11 +620,11 @@ async function request_analyse_fen(fen, time) {
 
 async function call_backend(url, data) {
     return fetch(url, {
-        method: "POST",
-        credentials: "include",
-        cache: "no-cache",
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-cache',
         headers: {
-            "Content-Type": "application/json"
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify(data)
     });
