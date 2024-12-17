@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 500,
         fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
         multiple_lines: JSON.parse(localStorage.getItem('multiple_lines')) || 1,
-        threads: JSON.parse(localStorage.getItem('threads')) || 1,
+        threads: JSON.parse(localStorage.getItem('threads')) || navigator.hardwareConcurrency - 1,
         memory: JSON.parse(localStorage.getItem('memory')) || 32,
         think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
         think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,

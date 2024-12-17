@@ -3,7 +3,6 @@ import {SettingsPage} from "../../../util/SettingsPage.js";
 
 class GeneralSettings extends SettingsPage {
     init() {
-        // todo: set default number of threads to `navigator.hardwareConcurrency - 1`
         M.FormSelect.init(document.querySelectorAll('select'), {});
         M.Range.init(document.querySelectorAll('input[type=range]'), {});
         const engine_select = this.registerFormElement('engine', 'Engine:', 'select', 'stockfish-16-nnue-7');
@@ -11,7 +10,7 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 500);
         this.registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 100);
         const multipv_range = this.registerFormElement('multiple_lines', 'Multiple Lines:', 'range', 1);
-        const threads_range = this.registerFormElement('threads', 'Threads:', 'range', 1);
+        const threads_range = this.registerFormElement('threads', 'Threads:', 'range', navigator.hardwareConcurrency - 1);
         const memory_range = this.registerFormElement('memory', 'Memory:', 'range', 32);
         this.registerFormElement('computer_evaluation', 'Show Computer Evaluation:', 'checkbox', true);
         this.registerFormElement('threat_analysis', 'Show Threat Analysis', 'checkbox', true);
