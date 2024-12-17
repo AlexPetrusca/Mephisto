@@ -1,7 +1,5 @@
 import {Chess} from "../../lib/chess.js";
 
-// todo: analysis button should consider variant
-
 let engine;
 let board;
 let fen_cache;
@@ -11,15 +9,6 @@ let is_calculating = false;
 let prog = 0;
 let last_eval = {};
 let turn = ''; // 'w' | 'b'
-
-const piece_name_map = {
-    'P': 'Pawn',
-    'R': 'Rook',
-    'N': 'Knight',
-    'B': 'Bishop',
-    'Q': 'Queen',
-    'K': 'King',
-};
 
 document.addEventListener('DOMContentLoaded', async function () {
     // load extension configurations from localStorage
@@ -93,7 +82,19 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // register button click listeners
     document.getElementById('analyze').addEventListener('click', () => {
-        window.open(`https://lichess.org/analysis?fen=${last_eval['fen']}`, '_blank');
+        const variantNameMap = {
+            'chess': 'standard',
+            'fischerandom': 'chess960',
+            'crazyhouse': 'crazyhouse',
+            'kingofthehill': 'kingOfTheHill',
+            '3check': 'threeCheck',
+            'antichess': 'antichess',
+            'atomic': 'atomic',
+            'horde': 'horde',
+            'racingkings': 'racingKings',
+        }
+        const variant = variantNameMap[config.variant];
+        window.open(`https://lichess.org/analysis/${variant}?fen=${last_eval['fen']}`, '_blank');
     });
     document.getElementById('config').addEventListener('click', () => {
         window.open('/src/options/options.html', '_blank');
@@ -200,6 +201,14 @@ function send_engine_uci(message) {
 
 function on_engine_best_move(best, threat) {
     console.log("EVALUATION:", JSON.parse(JSON.stringify(last_eval)));
+    const piece_name_map = {
+        'P': 'Pawn',
+        'R': 'Rook',
+        'N': 'Knight',
+        'B': 'Bishop',
+        'Q': 'Queen',
+        'K': 'King',
+    };
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
     if (best === '(none)') {
