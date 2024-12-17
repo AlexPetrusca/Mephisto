@@ -1,0 +1,2 @@
+*.dat.gz filter=lfs diff=lfs merge=lfs -text
+*.nnue filter=lfs diff=lfs merge=lfs -text
