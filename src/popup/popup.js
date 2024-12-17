@@ -199,6 +199,7 @@ function send_engine_uci(message) {
 }
 
 function on_engine_best_move(best, threat) {
+    console.log("EVALUATION:", JSON.parse(JSON.stringify(last_eval)));
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
     if (best === '(none)') {
@@ -289,7 +290,6 @@ function on_engine_response(message) {
         const threat = arr[3];
         on_engine_best_move(best, threat);
     } else if (message.startsWith('info depth')) {
-        console.log("EVALUATION_BEFORE:", JSON.parse(JSON.stringify(last_eval)));
         const tokens = message.split(' ').slice(1);
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
@@ -313,7 +313,6 @@ function on_engine_response(message) {
 
         on_engine_evaluation(last_eval)
     }
-    console.log("EVALUATION:", JSON.parse(JSON.stringify(last_eval)));
     if (is_calculating) {
         prog++;
         let progMapping = 100 * (1 - Math.exp(-prog / 30));
