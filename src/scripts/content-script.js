@@ -1,5 +1,6 @@
-let site; // the site that the content-script was loaded on (lichess, chess.com,)
+let site; // the site that the content-script was loaded on (lichess, chess.com, blitztactics.com)
 let config; // localhost configuration pulled from popup
+let chess960Pos; // starting position for chess960 (as puzzle string)
 let moving = false; // whether the content-script is performing a move
 
 window.onload = () => {
@@ -57,14 +58,15 @@ function scrapePosition() {
             res = scrapePositionPuz();
         }
     } else {
-        // todo: incomplete finish me
+        // todo: will variant starting position be analyzed? (e.g. horde, antichess, etc.)
         prefix += 'var***';
-        // res += scrapePositionPuz(moves);
-        if (moves && moves.length) {
-            res += '&*****';
-            if (config.variant === 'fischerandom') {
-                res += getChess960StartPosition() + '*****';
+        if (config.variant === 'fischerandom') {
+            if (!moves?.length) {
+                chess960Pos = scrapePositionPuz(moves);
             }
+            res += chess960Pos + '&*****';
+        }
+        if (moves?.length) {
             res += scrapePositionFen(moves);
         }
     }
@@ -319,14 +321,6 @@ function getPromotionSelection(promotion) {
             : { 'q': 0, 'r': 1, 'n': 2, 'b': 3 };
     const idx = promoteMap[promotion];
     return (promotions) ? promotions[idx] : undefined;
-}
-
-// todo: this doesnt work for chess.com
-function getChess960StartPosition() {
-    if (site === 'lichess') {
-        let posElem = document.querySelector('.game__meta section:last-child a');
-        return parseInt(posElem.innerText);
-    }
 }
 
 // -------------------------------------------------------------------------------------------

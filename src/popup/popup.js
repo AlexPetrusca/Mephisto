@@ -352,7 +352,7 @@ function parse_position_from_response(txt) {
         bt: 'Game detected on BlitzTactics.com'
     };
 
-    function parse_position_from_moves(txt) {
+    function parse_position_from_moves(txt, startFen) {
         const directHit = fen_cache.get(txt);
         if (directHit) { // reuse position
             console.log('DIRECT');
@@ -364,37 +364,25 @@ function parse_position_from_response(txt) {
         const lastMoveRegex = /([\w-+=#]+[*]+)$/;
         const cacheKey = txt.replace(lastMoveRegex, '');
         const indirectHit = fen_cache.get(cacheKey);
-        const chess = new Chess(config.variant);
         if (indirectHit) { // append newest move
             console.log('INDIRECT');
-            chess.load(indirectHit.fen);
+            const chess = new Chess(config.variant, indirectHit.fen);
             const moveReceipt = chess.move(txt.match(lastMoveRegex)[0].split('*****')[0]);
+            turn = chess.turn();
             record = {fen: chess.fen(), startFen: indirectHit.startFen, moves: indirectHit.moves + ' ' + moveReceipt.lan}
         } else { // perform all moves
             console.log('FULL');
-            // todo: remove this logic in favor of scraping position at start of game?
+            const chess = new Chess(config.variant, startFen);
             const sans = txt.split('*****').slice(0, -1);
-            let startFen;
-            if (config.variant === 'fischerandom') {
-                let chess960Id = sans[0];
-                sans.shift();
-                startFen = getStartingPosition(chess960Id);
-            } else {
-                startFen = getStartingPosition();
-            }
-
-            chess.load(startFen);
             let moves = '';
             for (const san of sans) {
                 const moveReceipt = chess.move(san);
                 moves += moveReceipt.lan + ' ';
             }
-            record = {fen: chess.fen(), startFen, moves: moves.trim()};
+            turn = chess.turn();
+            record = {fen: chess.fen(), startFen: chess.startFen(), moves: moves.trim()};
         }
 
-        console.log('NEW POSITION:', chess);
-
-        turn = chess.turn();
         fen_cache.set(txt, record);
         return record;
     }
@@ -403,7 +391,7 @@ function parse_position_from_response(txt) {
         const directHit = fen_cache.get(txt);
         if (directHit) { // reuse position
             console.log('DIRECT');
-            turn = directHit.charAt(directHit.indexOf(' ') + 1);
+            turn = directHit.fen.charAt(directHit.fen.indexOf(' ') + 1);
             return directHit;
         }
 
@@ -416,13 +404,11 @@ function parse_position_from_response(txt) {
             chess.put({type: attributes[1], color: attributes[0]}, attributes[2]);
         }
         chess.setTurn(playerTurn);
-
-        console.log('NEW POSITION:', chess);
-
         turn = chess.turn();
-        const fen = chess.fen();
-        fen_cache.set(txt, fen);
-        return fen;
+
+        const record =  {fen: chess.fen()};
+        fen_cache.set(txt, record);
+        return record;
     }
 
     const metaTag = txt.substring(3, 8);
@@ -431,12 +417,16 @@ function parse_position_from_response(txt) {
     txt = txt.substring(11);
 
     if (metaTag.includes('var')) {
-        // todo: incomplete - finish me
-        const puzTxt = txt.substring(0, txt.indexOf('&') - 5);
-        const fenTxt = txt.substring(txt.indexOf('&') + 6);
-        return parse_position_from_moves(fenTxt);
+        if (config.variant === 'fischerandom') {
+            const puzTxt = txt.substring(0, txt.indexOf('&'));
+            const fenTxt = txt.substring(txt.indexOf('&') + 6);
+            const startFen = parse_position_from_pieces(puzTxt).fen.replace('-', 'KQkq');
+            console.log('CHESS960 START FEN:', startFen)
+            return parse_position_from_moves(fenTxt, startFen);
+        }
+        return parse_position_from_moves(txt);
     } else if (metaTag.includes('puz')) { // chess.com & blitztactics.com puzzle pages
-        return {fen: parse_position_from_pieces(txt)};
+        return parse_position_from_pieces(txt);
     } else { // chess.com and lichess.org pages
         return parse_position_from_moves(txt);
     }
@@ -634,69 +624,4 @@ function promise_timeout(time) {
     return new Promise((resolve) => {
         setTimeout(() => resolve(time), time);
     });
-}
-
-// todo: move into chess.js?
-function getStartingPosition(chess960id) {
-    if (config.variant === 'horde') {
-        return 'rnbqkbnr/pppppppp/8/1PP2PP1/PPPPPPPP/PPPPPPPP/PPPPPPPP/PPPPPPPP w kq - 0 1';
-    } else if (config.variant === '3check') {
-        return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 +0+0';
-    } else if (config.variant === 'racingkings') {
-        return '8/8/8/8/8/8/krbnNBRK/qrbnNBRQ w - - 0 1';
-    } else if (config.variant === 'antichess') {
-        return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1';
-    } else if (config.variant === 'fischerandom') {
-        function placeAtEmptyIndex(arr, i, val) {
-            for (let j = 0; j < arr.length; j++) {
-                if (arr[j]) continue;
-                if (i === 0) {
-                    arr[j] = val;
-                    break;
-                }
-                i--;
-            }
-        }
-
-        function generateFile(n) {
-            const file = Array(8);
-
-            const n2 = Math.floor(n / 4);
-            const b1 = n % 4;
-            file[2 * b1 + 1] = 'b';
-
-            const n3 = Math.floor(n2 / 4);
-            const b2 = n2 % 4;
-            file[2 * b2] = 'b';
-
-            const n4 = Math.floor(n3 / 6);
-            let q = n3 % 6;
-            placeAtEmptyIndex(file, q, 'q');
-
-            let n5 = n4;
-            let d = 4;
-            while (n5 >= d) {
-                n5 -= d;
-                d--;
-            }
-
-            let k1 = 4 - d;
-            placeAtEmptyIndex(file, k1, 'n');
-
-            let k2 = k1 + n5;
-            placeAtEmptyIndex(file, k2, 'n');
-
-            placeAtEmptyIndex(file, 0, 'r');
-            placeAtEmptyIndex(file, 0, 'k');
-            placeAtEmptyIndex(file, 0, 'r');
-
-            return file.join('');
-        }
-
-        const black_file = generateFile(chess960id);
-        const white_file = black_file.toUpperCase();
-        return `${black_file}/pppppppp/8/8/8/8/PPPPPPPP/${white_file} w KQkq - 0 1`;
-    } else {
-        return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    }
 }
