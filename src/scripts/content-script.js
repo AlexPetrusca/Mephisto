@@ -1,7 +1,13 @@
 let site; // the site that the content-script was loaded on (lichess, chess.com, blitztactics.com)
 let config; // localhost configuration pulled from popup
-let chess960Pos; // starting position for chess960 (as puzzle string)
+let startPosCache; // cache of non-standard starting positions as puzzle strings (kept in localStorage)
 let moving = false; // whether the content-script is performing a move
+
+const LOCAL_CACHE = 'mephisto.startPosCache';
+const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-e8*****b-b-f8*****b-n-g8*****' +
+    'b-r-h8*****b-p-a7*****b-p-b7*****b-p-c7*****b-p-d7*****b-p-e7*****b-p-f7*****b-p-g7*****b-p-h7*****' +
+    'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
+    'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
 window.onload = () => {
     console.log('Mephisto is listening!');
@@ -9,8 +15,9 @@ window.onload = () => {
         'lichess.org': 'lichess',
         'www.chess.com': 'chesscom',
         'blitztactics.com': 'blitztactics'
-    }
+    };
     site = siteMap[window.location.hostname];
+    scrapeStartingPosition();
     pullConfig();
 };
 
@@ -38,16 +45,41 @@ chrome.runtime.onMessage.addListener(response => {
     }
 });
 
+function scrapeStartingPosition() {
+    // load cache
+    startPosCache = JSON.parse(localStorage.getItem(LOCAL_CACHE)) || {};
+    // clean old positions
+    const currentTime = Date.now();
+    for (const key in startPosCache) {
+        if (currentTime - startPosCache[key].timestamp > 3.6e+6) { // older than an hour
+            delete startPosCache[key];
+        }
+    }
+    // cache position, if it's a non-standard starting position
+    if (!getMoveRecords()?.length) { // is stating position?
+        const position = scrapePositionPuz();
+        if (position !== DEFAULT_POSITION) { // is non-standard?
+            startPosCache[location.href] = {
+                position: position,
+                timestamp: currentTime
+            };
+        }
+    }
+    // save cache
+    localStorage.setItem(LOCAL_CACHE, JSON.stringify(startPosCache));
+
+}
+
 function scrapePosition() {
     if (!getBoard()) return;
 
     let prefix = '';
     if (site === 'chesscom') {
-        prefix += "***cc"
+        prefix += '***cc'
     } else if (site === 'lichess') {
-        prefix += "***li"
+        prefix += '***li'
     } else if (site === 'blitztactics') {
-        prefix += "***bt"
+        prefix += '***bt'
     }
 
     let res = '';
@@ -63,10 +95,8 @@ function scrapePosition() {
     } else {
         prefix += 'var***';
         if (config.variant === 'fischerandom') {
-            if (!moves?.length) {
-                chess960Pos = scrapePositionPuz(moves);
-            }
-            res += chess960Pos + '&*****';
+            const startPos = startPosCache[location.href]?.position || DEFAULT_POSITION;
+            res += startPos + '&*****';
         }
         res += (moves?.length) ? scrapePositionFen(moves) : '?';
     }
@@ -137,12 +167,12 @@ function scrapePositionPuz() {
                 transform = piece.style.transform;
             }
             const xyCoords = transform.substring(transform.indexOf('(') + 1, transform.length - 1)
-                .replaceAll('px', '').replace(' ', '').split(",")
+                .replaceAll('px', '').replace(' ', '').split(',')
                 .map(num => Number(num) / piece.getBoundingClientRect().width + 1);
             const coords = (getOrientation() === 'black')
                 ? String.fromCharCode('h'.charCodeAt(0) - xyCoords[0] + 1) + xyCoords[1]
                 : String.fromCharCode('a'.charCodeAt(0) + xyCoords[0] - 1) + (9 - xyCoords[1]);
-            if (piece.classList[0] !== "ghost") {
+            if (piece.classList[0] !== 'ghost') {
                 res += `${colorMap[piece.classList[0]]}-${pieceMap[piece.classList[1]]}-${coords}*****`;
             }
         }
@@ -412,7 +442,7 @@ function simulatePvMoves(pv) {
 
     function deriveLastMove() {
         function deriveCoords(square) {
-            if (!square) return "no";
+            if (!square) return 'no';
             const squareBounds = square.getBoundingClientRect();
             const xIdx = Math.floor(((squareBounds.x + 1) - boardBounds.x) / squareBounds.width);
             const yIdx = Math.floor(((squareBounds.y + 1) - boardBounds.y) / squareBounds.height);
