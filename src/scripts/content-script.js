@@ -1,7 +1,6 @@
 let site; // the site that the content-script was loaded on (lichess, chess.com, blitztactics.com)
-let config; // localhost configuration pulled from popup
-// todo: replace with LRU cache
-let startPosCache; // cache of non-standard starting positions as puzzle strings (kept in localStorage)
+let config; // configuration pulled from popup
+let startPosCache; // cache of non-standard starting positions as puzzle strings (to support chess960)
 let moving = false; // whether the content-script is performing a move
 
 const LOCAL_CACHE = 'mephisto.startPosCache';
@@ -71,7 +70,7 @@ function scrapePosition() {
     } else {
         prefix += 'var***';
         if (config.variant === 'fischerandom') {
-            const startPos = startPosCache[location.href]?.position || DEFAULT_POSITION;
+            const startPos = readStartPos(location.href)?.position || DEFAULT_POSITION;
             res += startPos + '&*****';
         }
         res += (moves?.length) ? scrapePositionFen(moves) : '?';
@@ -343,27 +342,31 @@ function getPromotionSelection(promotion) {
 // -------------------------------------------------------------------------------------------
 
 function loadStartPosCache() {
-    return JSON.parse(localStorage.getItem(LOCAL_CACHE)) || {};
+    const cache = new LRU(10);
+    const entries = JSON.parse(localStorage.getItem(LOCAL_CACHE)) || [];
+    for (const entry of entries.reverse()) {
+        cache.set(entry.key, entry.value);
+    }
+    return cache;
 }
 
 function saveStartPosCache() {
-    localStorage.setItem(LOCAL_CACHE, JSON.stringify(startPosCache));
+    localStorage.setItem(LOCAL_CACHE, JSON.stringify(startPosCache.toJSON()));
 }
 
-function cleanStartPosCache() {
-    const currentTime = Date.now();
-    for (const key in startPosCache) {
-        if (currentTime - startPosCache[key].timestamp > 3.6e+6) { // older than an hour
-            delete startPosCache[key];
-        }
-    }
+function readStartPos(url) {
+    const startPos = startPosCache.get(url);
+    saveStartPosCache();
+    return startPos;
+}
+
+function writeStartPos(url, startPos) {
+    startPosCache.set(url, startPos);
     saveStartPosCache();
 }
 
 function determineStartPosition() {
     startPosCache = loadStartPosCache();
-    cleanStartPosCache();
-
     // scrape the position when the board and pieces are present
     let retryCount = 0;
     const intervalId = setInterval(() => {
@@ -372,7 +375,7 @@ function determineStartPosition() {
             onPositionLoad();
         }
         if (++retryCount >= 10) { // give up after 1s
-            console.error('Unable to determine starting position');
+            console.error('Unable to determine starting position (timeout after 1s)');
             clearInterval(intervalId);
         }
     }, 100); // check every 100ms
@@ -384,11 +387,10 @@ function onPositionLoad() {
     if (!getMoveRecords()?.length) { // is stating position?
         const position = scrapePositionPuz();
         if (position !== DEFAULT_POSITION) { // is non-standard?
-            startPosCache[location.href] = {
+            writeStartPos(location.href, {
                 position: position,
                 timestamp: Date.now()
-            };
-            saveStartPosCache();
+            })
         }
     }
 }

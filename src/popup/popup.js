@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
 
     // init fen LRU cache
-    fen_cache = new LRU(1000);
+    fen_cache = new LRU(100);
 
     // init engine webworker
     await initialize_engine();
@@ -422,7 +422,6 @@ function parse_position_from_response(txt) {
             const puzTxt = txt.substring(0, txt.indexOf('&'));
             const fenTxt = txt.substring(txt.indexOf('&') + 6);
             const startFen = parse_position_from_pieces(puzTxt).fen.replace('-', 'KQkq');
-            console.log('CHESS960 START FEN:', startFen)
             return parse_position_from_moves(fenTxt, startFen);
         }
         return parse_position_from_moves(txt);

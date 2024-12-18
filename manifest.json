@@ -36,6 +36,7 @@
         "*://blitztactics.com/*"
       ],
       "js": [
+        "lib/lru.min.js",
         "src/scripts/content-script.js"
       ]
     }
