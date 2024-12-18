@@ -17,6 +17,7 @@ window.onload = () => {
 chrome.runtime.onMessage.addListener(response => {
     if (moving) return;
     if (response.queryfen) {
+        if (!config) return;
         const res = scrapePosition();
         const orient = getOrientation();
         chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
@@ -38,6 +39,8 @@ chrome.runtime.onMessage.addListener(response => {
 });
 
 function scrapePosition() {
+    if (!getBoard()) return;
+
     let prefix = '';
     if (site === 'chesscom') {
         prefix += "***cc"
@@ -58,7 +61,6 @@ function scrapePosition() {
             res = scrapePositionPuz();
         }
     } else {
-        // todo: will variant starting position be analyzed? (e.g. horde, antichess, etc.)
         prefix += 'var***';
         if (config.variant === 'fischerandom') {
             if (!moves?.length) {
@@ -66,9 +68,7 @@ function scrapePosition() {
             }
             res += chess960Pos + '&*****';
         }
-        if (moves?.length) {
-            res += scrapePositionFen(moves);
-        }
+        res += (moves?.length) ? scrapePositionFen(moves) : '?';
     }
 
     if (res) {
