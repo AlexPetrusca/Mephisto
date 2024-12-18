@@ -1,5 +1,6 @@
 let site; // the site that the content-script was loaded on (lichess, chess.com, blitztactics.com)
 let config; // localhost configuration pulled from popup
+// todo: replace with LRU cache
 let startPosCache; // cache of non-standard starting positions as puzzle strings (kept in localStorage)
 let moving = false; // whether the content-script is performing a move
 
@@ -17,8 +18,8 @@ window.onload = () => {
         'blitztactics.com': 'blitztactics'
     };
     site = siteMap[window.location.hostname];
-    scrapeStartingPosition();
     pullConfig();
+    determineStartPosition();
 };
 
 chrome.runtime.onMessage.addListener(response => {
@@ -44,31 +45,6 @@ chrome.runtime.onMessage.addListener(response => {
         console.log(response.consoleMessage);
     }
 });
-
-function scrapeStartingPosition() {
-    // load cache
-    startPosCache = JSON.parse(localStorage.getItem(LOCAL_CACHE)) || {};
-    // clean old positions
-    const currentTime = Date.now();
-    for (const key in startPosCache) {
-        if (currentTime - startPosCache[key].timestamp > 3.6e+6) { // older than an hour
-            delete startPosCache[key];
-        }
-    }
-    // cache position, if it's a non-standard starting position
-    if (!getMoveRecords()?.length) { // is stating position?
-        const position = scrapePositionPuz();
-        if (position !== DEFAULT_POSITION) { // is non-standard?
-            startPosCache[location.href] = {
-                position: position,
-                timestamp: currentTime
-            };
-        }
-    }
-    // save cache
-    localStorage.setItem(LOCAL_CACHE, JSON.stringify(startPosCache));
-
-}
 
 function scrapePosition() {
     if (!getBoard()) return;
@@ -139,7 +115,7 @@ function scrapePositionFen(moves) {
 function scrapePositionPuz() {
     let res = getTurn() + '*****';
     if (site === 'chesscom') {
-        for (const piece of document.querySelectorAll('.piece')) {
+        for (const piece of getPieces()) {
             let [colorTypeClass, coordsClass] = [piece.classList[1], piece.classList[2]];
             if (!coordsClass.includes('square')) {
                 [colorTypeClass, coordsClass] = [coordsClass, colorTypeClass];
@@ -150,16 +126,9 @@ function scrapePositionPuz() {
             res += `${color}-${type}-${coords}*****`;
         }
     } else {
-        let pieceSelector;
-        if (site === 'lichess') {
-            pieceSelector = '.main-board piece';
-        } else if (site === 'blitztactics') {
-            pieceSelector = '.board-area piece';
-        }
         const pieceMap = {pawn: 'p', rook: 'r', knight: 'n', bishop: 'b', queen: 'q', king: 'k'};
         const colorMap = {white: 'w', black: 'b'};
-        const pieces = Array.from(document.querySelectorAll(pieceSelector)).filter(piece => !!piece.classList[1]);
-        for (const piece of pieces) {
+        for (const piece of getPieces()) {
             let transform;
             if (piece.classList.contains('dragging')) {
                 transform = document.querySelector('.ghost').style.transform;
@@ -270,6 +239,10 @@ function getLastMoveHighlights() {
     } else if (site === 'blitztactics') {
         [fromSquare, toSquare] = [document.querySelector('.move-from'), document.querySelector('.move-to')];
     }
+
+    if (!fromSquare || !toSquare) {
+        throw Error('Last move highlights not found');
+    }
     return [fromSquare, toSquare];
 }
 
@@ -332,6 +305,20 @@ function getBoard() {
     return board;
 }
 
+function getPieces() {
+    if (site === 'chesscom') {
+        return document.querySelectorAll('.piece');
+    } else {
+        let pieceSelector;
+        if (site === 'lichess') {
+            pieceSelector = '.main-board piece';
+        } else if (site === 'blitztactics') {
+            pieceSelector = '.board-area piece';
+        }
+        return Array.from(document.querySelectorAll(pieceSelector)).filter(piece => !!piece.classList[1]);
+    }
+}
+
 function getPromotionSelection(promotion) {
     let promotions;
     if (site === 'chesscom') {
@@ -351,6 +338,59 @@ function getPromotionSelection(promotion) {
             : { 'q': 0, 'r': 1, 'n': 2, 'b': 3 };
     const idx = promoteMap[promotion];
     return (promotions) ? promotions[idx] : undefined;
+}
+
+// -------------------------------------------------------------------------------------------
+
+function loadStartPosCache() {
+    return JSON.parse(localStorage.getItem(LOCAL_CACHE)) || {};
+}
+
+function saveStartPosCache() {
+    localStorage.setItem(LOCAL_CACHE, JSON.stringify(startPosCache));
+}
+
+function cleanStartPosCache() {
+    const currentTime = Date.now();
+    for (const key in startPosCache) {
+        if (currentTime - startPosCache[key].timestamp > 3.6e+6) { // older than an hour
+            delete startPosCache[key];
+        }
+    }
+    saveStartPosCache();
+}
+
+function determineStartPosition() {
+    startPosCache = loadStartPosCache();
+    cleanStartPosCache();
+
+    // scrape the position when the board and pieces are present
+    let retryCount = 0;
+    const intervalId = setInterval(() => {
+        if (getBoard() && getPieces()?.length) { // board and pieces are present?
+            clearInterval(intervalId);
+            onPositionLoad();
+        }
+        if (++retryCount >= 10) { // give up after 1s
+            console.error('Unable to determine starting position');
+            clearInterval(intervalId);
+        }
+    }, 100); // check every 100ms
+}
+
+
+function onPositionLoad() {
+    // cache position, if it's a non-standard starting position
+    if (!getMoveRecords()?.length) { // is stating position?
+        const position = scrapePositionPuz();
+        if (position !== DEFAULT_POSITION) { // is non-standard?
+            startPosCache[location.href] = {
+                position: position,
+                timestamp: Date.now()
+            };
+            saveStartPosCache();
+        }
+    }
 }
 
 // -------------------------------------------------------------------------------------------

@@ -352,8 +352,9 @@ function parse_position_from_response(txt) {
         bt: 'Game detected on BlitzTactics.com'
     };
 
-    function parse_position_from_moves(txt, startFen) {
-        const directHit = fen_cache.get(txt);
+    function parse_position_from_moves(txt, startFen = null) {
+        const directKey = (startFen) ? `${startFen}_${txt}` : txt;
+        const directHit = fen_cache.get(directKey);
         if (directHit) { // reuse position
             console.log('DIRECT');
             turn = directHit.fen.charAt(directHit.fen.indexOf(' ') + 1);
@@ -362,8 +363,8 @@ function parse_position_from_response(txt) {
 
         let record;
         const lastMoveRegex = /([\w-+=#]+[*]+)$/;
-        const cacheKey = txt.replace(lastMoveRegex, '');
-        const indirectHit = fen_cache.get(cacheKey);
+        const indirectKey = directKey.replace(lastMoveRegex, '');
+        const indirectHit = fen_cache.get(indirectKey);
         if (indirectHit) { // append newest move
             console.log('INDIRECT');
             const chess = new Chess(config.variant, indirectHit.fen);
@@ -383,7 +384,7 @@ function parse_position_from_response(txt) {
             record = {fen: chess.fen(), startFen: chess.startFen(), moves: moves.trim()};
         }
 
-        fen_cache.set(txt, record);
+        fen_cache.set(directKey, record);
         return record;
     }
 
