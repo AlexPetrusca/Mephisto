@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 board.orientation(response.orient);
             }
             const {fen, startFen, moves} = parse_position_from_response(response.dom);
-            if (last_eval['fen'] !== fen) {
+            if (last_eval.fen !== fen) {
                 on_new_pos(fen, startFen, moves);
             }
         } else if (response.pullConfig) {
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             'racingkings': 'racingKings',
         }
         const variant = variantNameMap[config.variant];
-        window.open(`https://lichess.org/analysis/${variant}?fen=${last_eval['fen']}`, '_blank');
+        window.open(`https://lichess.org/analysis/${variant}?fen=${last_eval.fen}`, '_blank');
     });
     document.getElementById('config').addEventListener('click', () => {
         window.open('/src/options/options.html', '_blank');
@@ -194,7 +194,7 @@ function send_engine_uci(message) {
         engine.postMessage(message, '*');
     } else if (engine instanceof Worker) {
         engine.postMessage(message);
-    } else if (engine.hasOwnProperty('uci')) {
+    } else if ('uci' in engine) {
         engine.uci(message);
     }
 }
@@ -205,7 +205,7 @@ function on_engine_best_move(best, threat) {
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
     if (best === '(none)') {
-        if (last_eval.hasOwnProperty('mate')) {
+        if ('mate' in last_eval.lines[0]) {
             update_evaluation('Checkmate!');
             if (config.variant === 'antichess') {
                 update_best_move(`${toplay} Wins`, '');
@@ -235,17 +235,17 @@ function on_engine_best_move(best, threat) {
         }
     }
     if (toplay.toLowerCase() === board.orientation()) {
-        last_eval['bestmove'] = best;
-        last_eval['threat'] = threat;
+        last_eval.bestmove = best;
+        last_eval.threat = threat;
         if (config.simon_says_mode) {
             // todo: why does this break?
             // Uncaught TypeError: Cannot read properties of undefined (reading 'substring')
             const startSquare = best.substring(0, 2);
             const startPiece = board.position()[startSquare].substring(1);
-            if (last_eval.hasOwnProperty('mate')) {
-                request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval['score'] / 100.0}`);
+            if ('mate' in last_eval.lines[0]) {
+                request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval.lines[0].score / 100.0}`);
             } else {
-                request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval['score'] / 100.0}`);
+                request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval.lines[0].score / 100.0}`);
             }
             if (config.threat_analysis) {
                 draw_move_annotation(threat, 'red', document.getElementById('response-arrow'));
@@ -265,23 +265,24 @@ function on_engine_best_move(best, threat) {
 }
 
 function on_engine_evaluation(info) {
-    if (info.hasOwnProperty('mate')) {
-        update_evaluation(`Checkmate in ${info['mate']}`);
+    if ('mate' in info) {
+        update_evaluation(`Checkmate in ${info.lines[0].mate}`);
     } else {
-        update_evaluation(`Score: ${info['score'] / 100.0} at depth ${info['depth']}`)
+        update_evaluation(`Score: ${info.lines[0].score / 100.0} at depth ${info.lines[0].depth}`)
     }
 }
 
 function on_engine_response(message) {
     console.log('on_engine_response', message);
     if (config.engine === 'remote') {
-        last_eval['bestmove'] = message['move'];
-        last_eval['threat'] = message['ponder'];
+        // todo: this is broken now - fix me
+        last_eval.bestmove = message['move'];
+        last_eval.threat = message['ponder'];
         if (message['score']['is_mate']) {
-            last_eval['mate'] = message['score'].value;
+            last_eval.lines[0].mate = message['score'].value;
         } else {
-            last_eval['score'] = message['score'].value;
-            last_eval['depth'] = message['score'].depth;
+            last_eval.lines[0].score = message['score'].value;
+            last_eval.lines[0].depth = message['score'].depth;
         }
         on_engine_best_move(message['move'], message['ponder']);
         on_engine_evaluation(last_eval);
@@ -292,26 +293,31 @@ function on_engine_response(message) {
         const threat = arr[3];
         on_engine_best_move(best, threat);
     } else if (message.startsWith('info depth')) {
+        const pvInfo = {};
         const tokens = message.split(' ').slice(1);
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
             if (token === 'upperbound' || token === 'lowerbound') {
                 // do nothing - ignore
             } else if (token === 'score') {
-                last_eval['rawScore'] = `${tokens[i + 1]} ${tokens[i + 2]}`;
+                pvInfo.rawScore = `${tokens[i + 1]} ${tokens[i + 2]}`;
                 i += 2; // take 2 tokens
             } else if (token === 'pv') {
-                last_eval[token] = tokens.slice(i + 1).join(' '); // take rest of tokens
+                pvInfo[token] = tokens.slice(i + 1).join(' '); // take rest of tokens
                 break;
             } else {
                 const num = parseInt(tokens[i + 1]);
-                last_eval[token] = isNaN(num) ? tokens[i + 1] : num;
+                pvInfo[token] = isNaN(num) ? tokens[i + 1] : num;
                 i++; // take 1 token
             }
         }
-        const scoreNumber = Number(last_eval['rawScore'].substring(last_eval['rawScore'].indexOf(' ') + 1));
-        const scoreType = last_eval['rawScore'].includes('cp') ? 'score' : 'mate';
-        last_eval[scoreType] = (turn === 'w' ? 1 : -1) * scoreNumber;
+
+        const scoreNumber = Number(pvInfo.rawScore.substring(pvInfo.rawScore.indexOf(' ') + 1));
+        const scoreType = pvInfo.rawScore.includes('cp') ? 'score' : 'mate';
+        pvInfo[scoreType] = (turn === 'w' ? 1 : -1) * scoreNumber;
+
+        const pvIdx = pvInfo.multipv - 1;
+        last_eval.lines[pvIdx] = pvInfo;
 
         on_engine_evaluation(last_eval)
     }
@@ -337,12 +343,12 @@ function on_new_pos(fen, startFen, moves) {
     }
     board.position(fen);
     if (config.simon_says_mode) {
-        draw_move_annotation(last_eval['bestmove'], 'blue', document.getElementById('move-arrow'));
-        request_console_log('Best Move: ' + last_eval['bestmove']);
+        draw_move_annotation(last_eval.bestmove, 'blue', document.getElementById('move-arrow'));
+        request_console_log('Best Move: ' + last_eval.bestmove);
     } else {
         clear_arrows();
     }
-    last_eval = {fen}; // new evaluation
+    last_eval = {fen, lines: new Array(config.multiple_lines)}; // new evaluation
 }
 
 function parse_position_from_response(txt) {
@@ -455,7 +461,7 @@ function request_fen() {
 
 function request_automove(move) {
     const message = (config.puzzle_mode)
-        ? {automove: true, pv: last_eval['pv'] || move}
+        ? {automove: true, pv: last_eval.lines[0].pv || move}
         : {automove: true, move: move};
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, message);
