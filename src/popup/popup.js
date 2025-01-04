@@ -268,7 +268,9 @@ function on_engine_best_move(best, threat) {
 }
 
 function on_engine_evaluation(info) {
-    if (info.lines[0] && 'mate' in info.lines[0]) {
+    if (!info.lines[0]) return;
+
+    if ('mate' in info.lines[0]) {
         update_evaluation(`Checkmate in ${info.lines[0].mate}`);
     } else {
         update_evaluation(`Score: ${info.lines[0].score / 100.0} at depth ${info.lines[0].depth}`)
@@ -276,6 +278,8 @@ function on_engine_evaluation(info) {
 }
 
 function on_engine_response(message) {
+    if (message.includes('upperbound') || message.includes('lowerbound')) return;
+
     console.log('on_engine_response', message);
     if (config.engine === 'remote') {
         // todo: this is broken now - fix me
@@ -295,7 +299,7 @@ function on_engine_response(message) {
         const best = arr[1];
         const threat = arr[3];
         on_engine_best_move(best, threat);
-    } else if (message.startsWith('info depth') && !message.includes('upperbound') && !message.includes('lowerbound')) {
+    } else if (message.startsWith('info depth')) {
         const lineInfo = {};
         const tokens = message.split(' ').slice(1);
         for (let i = 0; i < tokens.length; i++) {
@@ -336,6 +340,7 @@ function on_new_pos(fen, startFen, moves) {
         // todo: need a way to pass startFen+moves directive to remote engine
         request_analyse_fen(fen, config.compute_time).then(on_engine_response);
     } else {
+        send_engine_uci('stop');
         if (moves) {
             send_engine_uci(`position fen ${startFen} moves ${moves}`);
         } else {
@@ -344,7 +349,7 @@ function on_new_pos(fen, startFen, moves) {
         send_engine_uci(`go movetime ${config.compute_time}`);
     }
     board.position(fen);
-    clear_moves();
+    clear_moves(); // todo: fix - when scrolling through moves quickly, shit breaks
     if (config.simon_says_mode) {
         draw_moves();
         request_console_log('Best Move: ' + last_eval.bestmove);
@@ -482,7 +487,7 @@ function push_config() {
 }
 
 function draw_moves() {
-    if (!last_eval?.lines) return;
+    if (!last_eval?.lines[0]) return;
 
     function strokeFunc(line) {
         const MATE_SCORE = 20;
