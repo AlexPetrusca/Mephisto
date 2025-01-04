@@ -183,20 +183,18 @@ html, body {
     color: white;
 }
 
-#move-arrow {
+#move-annotations {
     position: absolute;
     z-index: 51;
-    opacity: 0.4;
     top: 26px;
     left: 5px;
     width: 344px;
     height: 344px;
 }
 
-#response-arrow {
+#response-annotations {
     position: absolute;
     z-index: 50;
-    opacity: 0.4;
     top: 26px;
     left: 5px;
     width: 344px;

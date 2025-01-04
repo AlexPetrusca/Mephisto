@@ -234,6 +234,7 @@ function on_engine_best_move(best, threat) {
             update_best_move(`${toplay} to play, best move is ${best}`, '');
         }
     }
+
     if (toplay.toLowerCase() === board.orientation()) {
         last_eval.bestmove = best;
         last_eval.threat = threat;
@@ -243,29 +244,31 @@ function on_engine_best_move(best, threat) {
             const startSquare = best.substring(0, 2);
             const startPiece = board.position()[startSquare].substring(1);
             if ('mate' in last_eval.lines[0]) {
-                request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval.lines[0].score / 100.0}`);
+                request_console_log(`${piece_name_map[startPiece]} ==> #${last_eval.lines[0].mate}`);
             } else {
                 request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval.lines[0].score / 100.0}`);
             }
             if (config.threat_analysis) {
-                draw_move_annotation(threat, 'red', document.getElementById('response-arrow'));
+                draw_threat();
             }
         }
         if (config.autoplay) {
             request_automove(best);
         }
     }
+
     if (!config.simon_says_mode) {
-        draw_move_annotation(best, 'blue', document.getElementById('move-arrow'));
+        draw_moves();
         if (config.threat_analysis) {
-            draw_move_annotation(threat, 'red', document.getElementById('response-arrow'));
+            draw_threat()
         }
     }
+
     toggle_calculating(false);
 }
 
 function on_engine_evaluation(info) {
-    if ('mate' in info) {
+    if (info.lines[0] && 'mate' in info.lines[0]) {
         update_evaluation(`Checkmate in ${info.lines[0].mate}`);
     } else {
         update_evaluation(`Score: ${info.lines[0].score / 100.0} at depth ${info.lines[0].depth}`)
@@ -292,32 +295,31 @@ function on_engine_response(message) {
         const best = arr[1];
         const threat = arr[3];
         on_engine_best_move(best, threat);
-    } else if (message.startsWith('info depth')) {
-        const pvInfo = {};
+    } else if (message.startsWith('info depth') && !message.includes('upperbound') && !message.includes('lowerbound')) {
+        const lineInfo = {};
         const tokens = message.split(' ').slice(1);
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
-            if (token === 'upperbound' || token === 'lowerbound') {
-                // do nothing - ignore
-            } else if (token === 'score') {
-                pvInfo.rawScore = `${tokens[i + 1]} ${tokens[i + 2]}`;
+            if (token === 'score') {
+                lineInfo.rawScore = `${tokens[i + 1]} ${tokens[i + 2]}`;
                 i += 2; // take 2 tokens
             } else if (token === 'pv') {
-                pvInfo[token] = tokens.slice(i + 1).join(' '); // take rest of tokens
+                lineInfo['move'] = tokens[i + 1];
+                lineInfo[token] = tokens.slice(i + 1).join(' '); // take rest of tokens
                 break;
             } else {
                 const num = parseInt(tokens[i + 1]);
-                pvInfo[token] = isNaN(num) ? tokens[i + 1] : num;
+                lineInfo[token] = isNaN(num) ? tokens[i + 1] : num;
                 i++; // take 1 token
             }
         }
 
-        const scoreNumber = Number(pvInfo.rawScore.substring(pvInfo.rawScore.indexOf(' ') + 1));
-        const scoreType = pvInfo.rawScore.includes('cp') ? 'score' : 'mate';
-        pvInfo[scoreType] = (turn === 'w' ? 1 : -1) * scoreNumber;
+        const scoreNumber = Number(lineInfo.rawScore.substring(lineInfo.rawScore.indexOf(' ') + 1));
+        const scoreType = lineInfo.rawScore.includes('cp') ? 'score' : 'mate';
+        lineInfo[scoreType] = (turn === 'w' ? 1 : -1) * scoreNumber;
 
-        const pvIdx = pvInfo.multipv - 1;
-        last_eval.lines[pvIdx] = pvInfo;
+        const pvIdx = (lineInfo.multipv - 1) || 0;
+        last_eval.lines[pvIdx] = lineInfo;
 
         on_engine_evaluation(last_eval)
     }
@@ -342,11 +344,10 @@ function on_new_pos(fen, startFen, moves) {
         send_engine_uci(`go movetime ${config.compute_time}`);
     }
     board.position(fen);
+    clear_moves();
     if (config.simon_says_mode) {
-        draw_move_annotation(last_eval.bestmove, 'blue', document.getElementById('move-arrow'));
+        draw_moves();
         request_console_log('Best Move: ' + last_eval.bestmove);
-    } else {
-        clear_arrows();
     }
     last_eval = {fen, lines: new Array(config.multiple_lines)}; // new evaluation
 }
@@ -480,7 +481,65 @@ function push_config() {
     });
 }
 
-function draw_move_annotation(move, color, overlay) {
+function draw_moves() {
+    if (!last_eval?.lines) return;
+
+    function strokeFunc(line) {
+        const MATE_SCORE = 20;
+        const WINNING_THRESHOLD = 4;
+        const MAX_STROKE = 0.225, MIN_STROKE = 0.075;
+        const STROKE_SHIM = 0.0125;
+
+        const top_line = last_eval.lines[0];
+        const top_score = (turn === 'w' ? 1 : -1) * top_line.score / 100;
+        const score = (turn === 'w' ? 1 : -1) * line.score / 100;
+        if (top_line.move === line.move) { // is best move?
+            console.log(`0 => ${MAX_STROKE + 2 * STROKE_SHIM}`);
+            return MAX_STROKE + 2 * STROKE_SHIM; // accentuate the best move
+        } else if (isNaN(top_score) || top_score >= WINNING_THRESHOLD) { // is winning?
+            if (isNaN(score)) {
+                console.log(`winning: #${line.mate} => ${MAX_STROKE - STROKE_SHIM}`);
+                return MAX_STROKE - STROKE_SHIM; // moves that checkmate are necessarily good
+            } else if (score < WINNING_THRESHOLD) {
+                console.log(`winning: ${score} => losing`);
+                return 0; // hide moves that are not winning
+            } else {
+                const delta = (isNaN(top_score) ? MATE_SCORE : top_score) - score;
+                console.log(`winning: ${score} => ok ${delta}`);
+                if (delta <= 0) {
+                    return MAX_STROKE - 2 * STROKE_SHIM; // moves that are still winning are good
+                } else {
+                    const stroke = MAX_STROKE - 2 * STROKE_SHIM - delta / 150;
+                    return (stroke < MIN_STROKE) ? MIN_STROKE : stroke;
+                }
+            }
+        } else { // is roughly equal?
+            const delta = top_score - score;
+            if (isNaN(score) || delta >= WINNING_THRESHOLD) {
+                console.log(`${delta} => 0`);
+                return 0; // hide moves that are too losing or get us checkmated
+            } else {
+                const stroke = MAX_STROKE - delta / 15;
+                console.log(`${delta} => ${stroke}`);
+                return (stroke < MIN_STROKE) ? MIN_STROKE : stroke;
+            }
+        }
+    }
+
+    for (let i = 0; i < last_eval.lines.length; i++) {
+        if (!last_eval.lines[i]) continue;
+
+        const arrow_color = (i === 0) ? '#004db8' : '#4a4a4a';
+        const stroke_width = strokeFunc(last_eval.lines[i]);
+        draw_move(last_eval.lines[i].move, arrow_color, document.getElementById('move-annotations'), stroke_width);
+    }
+}
+
+function draw_threat() {
+    draw_move(last_eval.threat, '#bf0000', document.getElementById('response-annotations'));
+}
+
+function draw_move(move, color, overlay, stroke_width = 0.225) {
     if (!move || move === '(none)') {
         overlay.lastElementChild?.remove();
         return;
@@ -508,12 +567,11 @@ function draw_move_annotation(move, color, overlay) {
         const pieceIdentifier = turn + move[0];
         const [pieceSet, ext] = config.pieces.split('.');
         const piecePath = `/res/chesspieces/${pieceSet}/${pieceIdentifier}.${ext}`
-
-        overlay.innerHTML = `
-            <img style='position: absolute; z-index: -1; left: ${imgX}px; top: ${imgY}px;' width='43px' height='43px' 
-                src='${piecePath}' alt='${pieceIdentifier}'>
-            <svg width='344px' height='344px' viewBox='0, 0, 8, 8'>
-                <circle cx='${x}' cy='${y}' r='0.45' fill='transparent' stroke='${color}' stroke-width='0.1' />
+        overlay.innerHTML += `
+            <img style='position: absolute; z-index: -1; left: ${imgX}px; top: ${imgY}px; opacity: 0.4;' width='43px'
+                height='43px' src='${piecePath}' alt='${pieceIdentifier}'>
+            <svg style='position: absolute; z-index: -1; left: 0; top: 0;' width='344px' height='344px' viewBox='0, 0, 8, 8'>
+                <circle cx='${x}' cy='${y}' r='0.45' fill='transparent' opacity="0.4" stroke='${color}' stroke-width='0.1' />
             </svg>
         `;
     } else {
@@ -531,30 +589,29 @@ function draw_move_annotation(move, color, overlay) {
         const ax1 = x1 - 0.4 * ((x1 - x0) / d);
         const ay1 = y1 - 0.4 * (dy / d);
 
-        overlay.innerHTML = `
-            <svg width='344px' height='344px' viewBox='0, 0, 8, 8'>
+        const marker_id = color.replace(/[ ,()]/g, '-');
+        overlay.innerHTML += `
+            <svg style='position: absolute; z-index: -1; left: 0; top: 0;' width='344px' height='344px' viewBox='0, 0, 8, 8'>
                 <defs>
-                    <marker id='arrow-${color}' markerWidth='13' markerHeight='13' refX='1' refY='7' orient='auto'>
+                    <marker id='arrow-${marker_id}' markerWidth='13' markerHeight='13' refX='1' refY='7' orient='auto'>
                         <path d='M1,5.75 L3,7 L1,8.25' fill='${color}' />
                     </marker>
                 </defs>
-                <line x1='${ax0}' y1='${ay0}' x2='${ax1}' y2='${ay1}' stroke='${color}' fill=${color}' stroke-width='0.225'
-                    marker-end='url(#arrow-${color})'/>
+                <line x1='${ax0}' y1='${ay0}' x2='${ax1}' y2='${ay1}' stroke='${color}' fill=${color}' opacity="0.4"
+                    stroke-width='${stroke_width}' marker-end='url(#arrow-${marker_id})'/>
             </svg>
         `;
     }
 }
 
-function clear_arrows() {
-    if (!config.simon_says_mode) {
-        let move_annotation = document.getElementById('move-arrow');
-        while (move_annotation.childElementCount) {
-            move_annotation.lastElementChild.remove();
-        }
-        let response_annotation = document.getElementById('response-arrow');
-        while (response_annotation.childElementCount) {
-            response_annotation.lastElementChild.remove();
-        }
+function clear_moves() {
+    let move_annotation = document.getElementById('move-annotations');
+    while (move_annotation.childElementCount) {
+        move_annotation.lastElementChild.remove();
+    }
+    let response_annotation = document.getElementById('response-annotations');
+    while (response_annotation.childElementCount) {
+        response_annotation.lastElementChild.remove();
     }
 }
 
