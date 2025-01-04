@@ -278,7 +278,7 @@ function on_engine_evaluation(info) {
 }
 
 function on_engine_response(message) {
-    if (message.includes('upperbound') || message.includes('lowerbound')) return;
+    if (message.includes('upperbound') || message.includes('lowerbound') || message.includes('currmove')) return;
 
     console.log('on_engine_response', message);
     if (config.engine === 'remote') {
@@ -348,8 +348,9 @@ function on_new_pos(fen, startFen, moves) {
         }
         send_engine_uci(`go movetime ${config.compute_time}`);
     }
+
     board.position(fen);
-    clear_moves(); // todo: fix - when scrolling through moves quickly, shit breaks
+    clear_moves();
     if (config.simon_says_mode) {
         draw_moves();
         request_console_log('Best Move: ' + last_eval.bestmove);
@@ -531,6 +532,7 @@ function draw_moves() {
         }
     }
 
+    clear_moves();
     for (let i = 0; i < last_eval.lines.length; i++) {
         if (!last_eval.lines[i]) continue;
 
