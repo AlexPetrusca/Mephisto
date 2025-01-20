@@ -278,7 +278,7 @@ function on_engine_evaluation(info) {
 }
 
 function on_engine_response(message) {
-    if (message.includes('upperbound') || message.includes('lowerbound') || message.includes('currmove')) return;
+    if (message.includes('lowerbound') || message.includes('upperbound') || message.includes('currmove')) return;
 
     console.log('on_engine_response', message);
     if (config.engine === 'remote') {
@@ -323,10 +323,27 @@ function on_engine_response(message) {
         lineInfo[scoreType] = (turn === 'w' ? 1 : -1) * scoreNumber;
 
         const pvIdx = (lineInfo.multipv - 1) || 0;
-        last_eval.lines[pvIdx] = lineInfo;
-
-        on_engine_evaluation(last_eval)
+        if (lineInfo.depth === 1) {
+            last_eval.activeLines++; // count active lines at depth 1
+        }
+        if (pvIdx === 0) {
+            if (lineInfo.depth > 1) {
+                if (!last_eval.lines[0]) return;
+                // continuously show the best move for each depth
+                const best_move = last_eval.lines[0].pv.substring(0, 4);
+                const threat = last_eval.lines[0].pv.substring(5, 9);
+                on_engine_best_move(best_move, threat);
+            }
+            // reset lines
+            last_eval.lines = new Array(config.multiple_lines);
+            // trigger an evaluation update
+            last_eval.lines[pvIdx] = lineInfo;
+            on_engine_evaluation(last_eval);
+        } else {
+            last_eval.lines[pvIdx] = lineInfo;
+        }
     }
+
     if (is_calculating) {
         prog++;
         let progMapping = 100 * (1 - Math.exp(-prog / 30));
@@ -355,7 +372,7 @@ function on_new_pos(fen, startFen, moves) {
         draw_moves();
         request_console_log('Best Move: ' + last_eval.bestmove);
     }
-    last_eval = {fen, lines: new Array(config.multiple_lines)}; // new evaluation
+    last_eval = {fen, activeLines: 0, lines: new Array(config.multiple_lines)}; // new evaluation
 }
 
 function parse_position_from_response(txt) {
@@ -488,7 +505,7 @@ function push_config() {
 }
 
 function draw_moves() {
-    if (!last_eval?.lines[0]) return;
+    if (!last_eval.lines[0]) return;
 
     function strokeFunc(line) {
         const MATE_SCORE = 20;
@@ -533,7 +550,7 @@ function draw_moves() {
     }
 
     clear_moves();
-    for (let i = 0; i < last_eval.lines.length; i++) {
+    for (let i = 0; i < last_eval.activeLines; i++) {
         if (!last_eval.lines[i]) continue;
 
         const arrow_color = (i === 0) ? '#004db8' : '#4a4a4a';
