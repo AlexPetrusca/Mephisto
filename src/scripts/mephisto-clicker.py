@@ -5,7 +5,7 @@ import argparse
 from flask import Flask, request
 
 app = Flask(__name__)
-parser = argparse.ArgumentParser(description='A simple backend to perform simulated clicks for the Mephisto chrome extension.')
+parser = argparse.ArgumentParser(description='A backend to perform simulated clicks for the Mephisto chrome extension.')
 parser.add_argument('--port', '-p', dest='port', action='store', default=8080,
                     help='The port to run the server on. (default: 8080)')
 parser.add_argument('--drag-time', '-d', dest='drag_time', action='store', default=100,

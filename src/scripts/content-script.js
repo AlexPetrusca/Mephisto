@@ -32,7 +32,7 @@ chrome.runtime.onMessage.addListener(response => {
         toggleMoving();
         if (config.puzzle_mode) {
             console.log(response.pv);
-            simulatePvMoves(response.pv.split(' ')).finally(toggleMoving);
+            simulatePvMoves(response.pv).finally(toggleMoving);
         } else {
             console.log(response.move);
             simulateMove(response.move).finally(toggleMoving);

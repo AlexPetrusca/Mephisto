@@ -105,8 +105,6 @@ document.addEventListener('DOMContentLoaded', async function () {
 });
 
 async function initialize_engine() {
-    if (config.engine === 'remote') return;
-
     const engineMap = {
         'stockfish-17-nnue-79': 'stockfish-17-79/sf17-79.js',
         'stockfish-16-nnue-40': 'stockfish-16-40/stockfish.js',
@@ -190,7 +188,14 @@ async function initialize_engine() {
 }
 
 function send_engine_uci(message) {
-    if (config.engine === 'lc0') {
+    if (config.engine === 'remote') {
+        if (message.startsWith('setoption')) {
+            const option = {};
+            const split = message.split(' ');
+            option[split[2]] = split[4];
+            request_remote_configure(option);
+        }
+    } else if (config.engine === 'lc0') {
         engine.postMessage(message, '*');
     } else if (engine instanceof Worker) {
         engine.postMessage(message);
@@ -200,6 +205,10 @@ function send_engine_uci(message) {
 }
 
 function on_engine_best_move(best, threat) {
+    if (config.engine === 'remote') {
+        last_eval.activeLines = last_eval.lines.length;
+    }
+
     console.log('EVALUATION:', JSON.parse(JSON.stringify(last_eval)));
     const piece_name_map = {P: 'Pawn', R: 'Rook', N: 'Knight', B: 'Bishop', Q: 'Queen', K: 'King'};
     const toplay = (turn === 'w') ? 'White' : 'Black';
@@ -278,22 +287,16 @@ function on_engine_evaluation(info) {
 }
 
 function on_engine_response(message) {
-    if (message.includes('lowerbound') || message.includes('upperbound') || message.includes('currmove')) return;
-
     console.log('on_engine_response', message);
     if (config.engine === 'remote') {
-        // todo: this is broken now - fix me
-        last_eval.bestmove = message['move'];
-        last_eval.threat = message['ponder'];
-        if (message['score']['is_mate']) {
-            last_eval.lines[0].mate = message['score'].value;
-        } else {
-            last_eval.lines[0].score = message['score'].value;
-            last_eval.lines[0].depth = message['score'].depth;
-        }
-        on_engine_best_move(message['move'], message['ponder']);
+        last_eval = Object.assign(last_eval, message);
         on_engine_evaluation(last_eval);
-        // todo: what about pv and rest?
+        on_engine_best_move(last_eval.bestmove, last_eval.threat);
+        return;
+    }
+
+    if (message.includes('lowerbound') || message.includes('upperbound') || message.includes('currmove')) {
+        return; // ignore these messages
     } else if (message.startsWith('bestmove')) {
         const arr = message.split(' ');
         const best = arr[1];
@@ -354,8 +357,11 @@ function on_engine_response(message) {
 function on_new_pos(fen, startFen, moves) {
     toggle_calculating(true);
     if (config.engine === 'remote') {
-        // todo: need a way to pass startFen+moves directive to remote engine
-        request_analyse_fen(fen, config.compute_time).then(on_engine_response);
+        if (moves) {
+            request_remote_analysis(startFen, config.compute_time, moves).then(on_engine_response);
+        } else {
+            request_remote_analysis(fen, config.compute_time).then(on_engine_response);
+        }
     } else {
         send_engine_uci('stop');
         if (moves) {
@@ -485,7 +491,7 @@ function request_fen() {
 
 function request_automove(move) {
     const message = (config.puzzle_mode)
-        ? {automove: true, pv: last_eval.lines[0].pv || move}
+        ? {automove: true, pv: last_eval.lines[0].pv.split(' ') || [move]}
         : {automove: true, move: move};
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
         chrome.tabs.sendMessage(tabs[0].id, message);
@@ -595,7 +601,7 @@ function draw_move(move, color, overlay, stroke_width = 0.225) {
             <img style='position: absolute; z-index: -1; left: ${imgX}px; top: ${imgY}px; opacity: 0.4;' width='43px'
                 height='43px' src='${piecePath}' alt='${pieceIdentifier}'>
             <svg style='position: absolute; z-index: -1; left: 0; top: 0;' width='344px' height='344px' viewBox='0, 0, 8, 8'>
-                <circle cx='${x}' cy='${y}' r='0.45' fill='transparent' opacity="0.4" stroke='${color}' stroke-width='0.1' />
+                <circle cx='${x}' cy='${y}' r='0.45' fill='transparent' opacity='0.4' stroke='${color}' stroke-width='0.1' />
             </svg>
         `;
     } else {
@@ -621,7 +627,7 @@ function draw_move(move, color, overlay, stroke_width = 0.225) {
                         <path d='M1,5.75 L3,7 L1,8.25' fill='${color}' />
                     </marker>
                 </defs>
-                <line x1='${ax0}' y1='${ay0}' x2='${ax1}' y2='${ay1}' stroke='${color}' fill=${color}' opacity="0.4"
+                <line x1='${ax0}' y1='${ay0}' x2='${ax1}' y2='${ay1}' stroke='${color}' fill=${color}' opacity='0.4'
                     stroke-width='${stroke_width}' marker-end='url(#arrow-${marker_id})'/>
             </svg>
         `;
@@ -643,7 +649,7 @@ function toggle_calculating(on) {
     prog = 0;
     is_calculating = on;
     if (is_calculating) {
-        update_best_move('<div>Calculating...<div><progress id="progBar" value="2" max="100">', '');
+        update_best_move(`<div>Calculating...<div><progress id='progBar' value='2' max='100'>`, '');
     }
 }
 
@@ -691,8 +697,16 @@ async function request_backend_move(x0, y0, x1, y1) {
     return call_backend('http://localhost:8080/performMove', {x0: x0, y0: y0, x1: x1, y1: y1});
 }
 
-async function request_analyse_fen(fen, time) {
-    return call_backend('http://localhost:9090/analyse', {fen: fen, time: time}).then(res => res.json());
+async function request_remote_configure(options) {
+    return call_backend('http://localhost:9090/configure', options).then(res => res.json());
+}
+
+async function request_remote_analysis(fen, time, moves = null) {
+    return call_backend('http://localhost:9090/analyse', {
+        fen: fen,
+        moves: moves,
+        time: time,
+    }).then(res => res.json());
 }
 
 async function call_backend(url, data) {
