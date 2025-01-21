@@ -177,25 +177,26 @@ async function initialize_engine() {
         engine.postMessage({type: 'weights', data: {name: 'weights_32195.dat.gz', weights: weights}}, '*');
     }
 
-    if (config.engine !== 'stockfish-16-nnue-40') { // crashes for some reason
-        send_engine_uci(`setoption name Hash value ${config.memory}`);
+    if (config.engine === 'remote') {
+        request_remote_configure({
+            "Hash": config.memory,
+            "Threads": config.threads,
+            "MultiPV": config.multiple_lines,
+        });
+    } else {
+        if (config.engine !== 'stockfish-16-nnue-40') { // crashes for some reason
+            send_engine_uci(`setoption name Hash value ${config.memory}`);
+        }
+        send_engine_uci(`setoption name Threads value ${config.threads}`);
+        send_engine_uci(`setoption name MultiPV value ${config.multiple_lines}`);
+        send_engine_uci('ucinewgame');
+        send_engine_uci('isready');
     }
-    send_engine_uci(`setoption name Threads value ${config.threads}`);
-    send_engine_uci(`setoption name MultiPV value ${config.multiple_lines}`);
-    send_engine_uci('ucinewgame');
-    send_engine_uci('isready');
     console.log('Engine ready!', engine);
 }
 
 function send_engine_uci(message) {
-    if (config.engine === 'remote') {
-        if (message.startsWith('setoption')) {
-            const option = {};
-            const split = message.split(' ');
-            option[split[2]] = split[4];
-            request_remote_configure(option);
-        }
-    } else if (config.engine === 'lc0') {
+    if (config.engine === 'lc0') {
         engine.postMessage(message, '*');
     } else if (engine instanceof Worker) {
         engine.postMessage(message);

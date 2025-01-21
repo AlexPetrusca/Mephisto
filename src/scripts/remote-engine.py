@@ -86,7 +86,7 @@ def analyse():
         return {'error': "Parameter 'time' is required"}, 400
 
     board = chess.Board(data.get('fen'))
-    if 'moves' in data:
+    if data.get('moves'):
         # todo: handle placements (e.g. '@Kf3')
         # todo: more generally, handle variants
         for move in data.get('moves').split():
