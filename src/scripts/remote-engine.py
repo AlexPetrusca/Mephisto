@@ -1,7 +1,10 @@
-# Example Usage: python remote-engine.py /usr/bin/stockfish -o Hash:32 -o "Skill Level":15 -o SyzygyPath:"/path/to/syzygy" -p 9090
+# Example Usages:
+#   $ python remote-engine.py /usr/bin/stockfish -o Hash:32 -o "Skill Level":15 -o SyzygyPath:"/path/to/syzygy" -p 9090
+#   $ python remote-engine.py fairy-stockfish -o UCI_Variant:crazyhouse -p 9090
 
 import argparse
 import chess.engine
+import chess.variant
 from chess.engine import MANAGED_OPTIONS
 from flask import Flask, request
 
@@ -77,6 +80,9 @@ def format_score(score, depth):
         'depth': depth,
     }
 
+
+# todo: [enhancement] force flask to handle only one request at a time using threading.Lock()
+#  - https://github.com/niklasf/python-chess/issues/1116
 @app.route('/analyse', methods=['POST'])
 def analyse():
     data = request.get_json()
@@ -85,10 +91,14 @@ def analyse():
     elif 'time' not in data:
         return {'error': "Parameter 'time' is required"}, 400
 
-    board = chess.Board(data.get('fen'))
+    variant = engine_options.get('UCI_Variant')
+    if variant == 'fischerandom':
+        board = chess.Board(data.get('fen'), chess960=True)
+    else:
+        VariantBoard = chess.variant.find_variant(variant)
+        board = VariantBoard(data.get('fen'))
+
     if data.get('moves'):
-        # todo: handle placements (e.g. '@Kf3')
-        # todo: more generally, handle variants
         for move in data.get('moves').split():
             board.push(chess.Move.from_uci(move))
     time_limit = chess.engine.Limit(time=data.get('time') / 1000)

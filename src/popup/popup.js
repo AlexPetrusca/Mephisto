@@ -540,7 +540,7 @@ function draw_moves() {
                     return MAX_STROKE - 2 * STROKE_SHIM; // moves that are still winning are good
                 } else {
                     const stroke = MAX_STROKE - 2 * STROKE_SHIM - delta / 150;
-                    return (stroke < MIN_STROKE) ? MIN_STROKE : stroke;
+                    return Math.min(MAX_STROKE, Math.max(MIN_STROKE, stroke));
                 }
             }
         } else { // is roughly equal?
@@ -551,7 +551,7 @@ function draw_moves() {
             } else {
                 const stroke = MAX_STROKE - delta / 15;
                 console.log(`${delta} => ${stroke}`);
-                return (stroke < MIN_STROKE) ? MIN_STROKE : stroke;
+                return Math.min(MAX_STROKE, Math.max(MIN_STROKE, stroke))
             }
         }
     }
