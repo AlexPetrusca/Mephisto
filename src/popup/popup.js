@@ -356,6 +356,7 @@ function on_engine_response(message) {
 }
 
 function on_new_pos(fen, startFen, moves) {
+    console.log("on_new_pos", fen, startFen, moves);
     toggle_calculating(true);
     if (config.engine === 'remote') {
         if (moves) {

@@ -7,6 +7,12 @@ import chess.engine
 import chess.variant
 from chess.engine import MANAGED_OPTIONS
 from flask import Flask, request
+import threading
+
+engine_options = {}
+request_counter = 0
+engine_lock = threading.Lock()
+request_lock = threading.Lock()
 
 app = Flask(__name__)
 parser = argparse.ArgumentParser(description='A backend to remotely communicate with a chess engine over UCI.')
@@ -56,6 +62,7 @@ def format_line(line):
             formatted_line['score'] = score.score()
         return formatted_line
 
+
 def format_lines(lines):
     lines = list(map(lambda line: format_line(line), lines))
     if 'pv' in lines[0]:
@@ -81,40 +88,53 @@ def format_score(score, depth):
     }
 
 
-# todo: [enhancement] force flask to handle only one request at a time using threading.Lock()
-#  - https://github.com/niklasf/python-chess/issues/1116
 @app.route('/analyse', methods=['POST'])
 def analyse():
-    data = request.get_json()
-    if 'fen' not in data:
-        return {'error': "Parameter 'fen' is required"}, 400
-    elif 'time' not in data:
-        return {'error': "Parameter 'time' is required"}, 400
+    global request_counter, request_lock
 
-    variant = engine_options.get('UCI_Variant')
-    if variant == 'fischerandom':
-        board = chess.Board(data.get('fen'), chess960=True)
-    else:
-        VariantBoard = chess.variant.find_variant(variant)
-        board = VariantBoard(data.get('fen'))
+    with request_lock:
+        request_counter += 1
+        request_id = request_counter
 
-    if data.get('moves'):
-        for move in data.get('moves').split():
-            board.push(chess.Move.from_uci(move))
-    time_limit = chess.engine.Limit(time=data.get('time') / 1000)
-    multipv = engine_options.get('MultiPV') if 'MultiPV' in engine_options else 1
-    lines = engine.analyse(board, time_limit, info=chess.engine.INFO_ALL, multipv=multipv)
-    return format_lines(lines)
+    with engine_lock:
+        data = request.get_json()
+        if 'fen' not in data:
+            return {'error': "Parameter 'fen' is required"}, 400
+        elif 'time' not in data:
+            return {'error': "Parameter 'time' is required"}, 400
+
+        variant = engine_options.get('UCI_Variant')
+        if variant is None:
+            board = chess.Board(data.get('fen'))
+        elif variant == 'fischerandom':
+            board = chess.Board(data.get('fen'), chess960=True)
+        else:
+            VariantBoard = chess.variant.find_variant(variant)
+            board = VariantBoard(data.get('fen'))
+
+        if data.get('moves'):
+            for move in data.get('moves').split():
+                board.push(chess.Move.from_uci(move))
+        time_limit = chess.engine.Limit(time=data.get('time') / 1000)
+        multipv = engine_options.get('MultiPV') if 'MultiPV' in engine_options else 1
+
+        with engine.analysis(board, time_limit, multipv=multipv) as analysis:
+            if request_counter == request_id: #
+                for _ in analysis:
+                    if request_counter != request_id:
+                        break # request was cancelled
+        return format_lines(analysis.multipv)
 
 
 @app.route('/configure', methods=['POST'])
 def configure():
-    data = request.get_json()
-    for (key, value) in data.items():
-        engine_options[key] = value
-        if not key.lower() in MANAGED_OPTIONS:
-            engine.configure({key: value})
-    return config()
+    with engine_lock:
+        data = request.get_json()
+        for (key, value) in data.items():
+            engine_options[key] = value
+            if not key.lower() in MANAGED_OPTIONS:
+                engine.configure({key: value})
+        return config()
 
 
 @app.route('/config', methods=['GET'])
@@ -125,7 +145,6 @@ def config():
 
 
 if __name__ == '__main__':
-    engine_options = {}
     engine = chess.engine.SimpleEngine.popen_uci(args.executable)
     for option in args.options or []:
         key, value = option.split(':')
