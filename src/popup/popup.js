@@ -574,7 +574,9 @@ function draw_threat() {
 function draw_move(move, color, overlay, stroke_width = 0.225) {
     if (!move || move === '(none)') {
         overlay.lastElementChild?.remove();
-        return;
+        return; // hide overlay on win/loss
+    } else if (stroke_width === 0) {
+        return; // hide losing moves
     }
 
     function get_coord(square) {
@@ -596,6 +598,11 @@ function draw_move(move, color, overlay, stroke_width = 0.225) {
         const imgX = 43 * (coord.x - 1);
         const imgY = 43 * (8 - coord.y);
 
+        const MAX_STROKE = 0.25;
+        stroke_width = 0.1 * stroke_width / MAX_STROKE;
+        const stroke_diff = (MAX_STROKE - stroke_width) / 10;
+        console.log("STROKE_DIFF:", MAX_STROKE, "-", stroke_width, "=", stroke_diff);
+
         const pieceIdentifier = turn + move[0];
         const [pieceSet, ext] = config.pieces.split('.');
         const piecePath = `/res/chesspieces/${pieceSet}/${pieceIdentifier}.${ext}`
@@ -603,7 +610,7 @@ function draw_move(move, color, overlay, stroke_width = 0.225) {
             <img style='position: absolute; z-index: -1; left: ${imgX}px; top: ${imgY}px; opacity: 0.4;' width='43px'
                 height='43px' src='${piecePath}' alt='${pieceIdentifier}'>
             <svg style='position: absolute; z-index: -1; left: 0; top: 0;' width='344px' height='344px' viewBox='0, 0, 8, 8'>
-                <circle cx='${x}' cy='${y}' r='0.45' fill='transparent' opacity='0.4' stroke='${color}' stroke-width='0.1' />
+                <circle cx='${x}' cy='${y}' r='${0.45 + stroke_diff}' fill='transparent' opacity='0.4' stroke='${color}' stroke-width='${stroke_width}' />
             </svg>
         `;
     } else {
