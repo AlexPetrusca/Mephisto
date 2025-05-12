@@ -189,3 +189,16 @@ body.parallax-demo footer {
     height: 60px;
     width: 100%;
 }
+
+.flex-group {
+    display: flex;
+    gap: 50px;
+}
+
+.flex-group.flex-space-between {
+    justify-content: space-between;
+}
+
+.flex-group.flex-small-gap {
+    gap: 10px;
+}

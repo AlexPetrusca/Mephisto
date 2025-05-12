@@ -10,8 +10,7 @@
                             <option value="stockfish-17-nnue-79">Stockfish 17 NNUE - 79MB</option>
                             <option value="stockfish-16-nnue-40">Stockfish 16 NNUE - 40MB</option>
                             <option value="stockfish-16-nnue-7">Stockfish 16 NNUE - 7MB</option>
-                            <option value="stockfish-hce">Stockfish 11 HCE</option>
-                            <option value="stockfish-11">Stockfish 11</option>
+                            <option value="stockfish-11-hce">Stockfish 11 (HCE)</option>
                             <option value="stockfish-6">Stockfish 6</option>
                             <option value="lc0">Leela Chess Zero v0.19.1</option>
                             <option value="fairy-stockfish-14-nnue">Fairy Stockfish 14 NNUE</option>
@@ -35,17 +34,19 @@
                         </select>
                     </label>
                 </div>
-                <div class="section">
-                    <label>
-                        Search Time (ms):
-                        <input id="compute_time_input" type="number">
-                    </label>
-                </div>
-                <div class="section">
-                    <label>
-                        Fen Refresh Interval (ms):
-                        <input id="fen_refresh_input" type="number">
-                    </label>
+                <div class="flex-group">
+                    <div class="section">
+                        <label>
+                            Search Time (ms):
+                            <input id="compute_time_input" type="number">
+                        </label>
+                    </div>
+                    <div class="section">
+                        <label>
+                            Fen Refresh Interval (ms):
+                            <input id="fen_refresh_input" type="number">
+                        </label>
+                    </div>
                 </div>
                 <div class="section">
                     <label>
@@ -71,46 +72,49 @@
                         </p>
                     </label>
                 </div>
-                <div class="section switch">
-                    <label class="switch-label">Show Computer Evaluation:</label>
-                    <label>
-                        Off
-                        <input id="computer_evaluation_checkbox" type="checkbox">
-                        <span class="lever"></span>
-                        On
-                    </label>
-                </div>
-                <div class="section switch">
-                    <label class="switch-label">Show Threat Analysis:</label>
-                    <label>
-                        Off
-                        <input id="threat_analysis_checkbox" type="checkbox">
-                        <span class="lever"></span>
-                        On
-                    </label>
-                </div>
-                <div class="section switch">
-                    <label class="switch-label">"Hand and Brain" Mode:</label>
-                    <label>
-                        Off
-                        <input id="simon_says_mode_checkbox" type="checkbox">
-                        <span class="lever"></span>
-                        On
-                    </label>
+                <div class="flex-group">
+                    <div class="section switch">
+                        <label class="switch-label">Show Computer Evaluation:</label>
+                        <label>
+                            Off
+                            <input id="computer_evaluation_checkbox" type="checkbox">
+                            <span class="lever"></span>
+                            On
+                        </label>
+                    </div>
+                    <div class="section switch">
+                        <label class="switch-label">Show Threat Analysis:</label>
+                        <label>
+                            Off
+                            <input id="threat_analysis_checkbox" type="checkbox">
+                            <span class="lever"></span>
+                            On
+                        </label>
+                    </div>
+                    <div class="section switch">
+                        <label class="switch-label">"Hand and Brain" Mode:</label>
+                        <label>
+                            Off
+                            <input id="simon_says_mode_checkbox" type="checkbox">
+                            <span class="lever"></span>
+                            On
+                        </label>
+                    </div>
                 </div>
             </div>
             <div id="autoplay" class="scrollspy">
                 <h3 class="header">Autoplay</h3>
-                <div class="section switch">
-                    <label class="switch-label">Autoplay:</label>
-                    <label>
-                        Off
-                        <input id="autoplay_checkbox" type="checkbox">
-                        <span class="lever"></span>
-                        On
-                    </label>
-                </div>
-                <div class="section switch">
+                <div class="flex-group">
+                    <div class="section switch">
+                        <label class="switch-label">Autoplay:</label>
+                        <label>
+                            Off
+                            <input id="autoplay_checkbox" type="checkbox">
+                            <span class="lever"></span>
+                            On
+                        </label>
+                    </div>
+                    <div class="section switch">
                     <label class="switch-label">Puzzle Mode:</label>
                     <label>
                         Off
@@ -119,47 +123,50 @@
                         On
                     </label>
                 </div>
-                <div class="section switch">
-                    <label class="switch-label">Python Autoplay Backend:</label>
-                    <label>
-                        Off
-                        <input id="python_autoplay_backend_checkbox" type="checkbox">
-                        <span class="lever"></span>
-                        On
-                    </label>
+                    <div class="section switch">
+                            <label class="switch-label">Python Autoplay Backend:</label>
+                            <label>
+                                Off
+                                <input id="python_autoplay_backend_checkbox" type="checkbox">
+                                <span class="lever"></span>
+                                On
+                            </label>
+                        </div>
                 </div>
-                <div class="section">
-                    <label>
-                        Base Simulated Think Time (ms):
-                        <input id="think_time_input" type="number">
-                    </label>
+                <div class="flex-group">
+                    <div class="section">
+                        <label>
+                            Base Simulated Think Time (ms):
+                            <input id="think_time_input" type="number">
+                        </label>
+                    </div>
+                    <div class="section">
+                        <label>
+                            Simulated Think Time Variance (ms):
+                            <input id="think_variance_input" type="number">
+                        </label>
+                    </div>
                 </div>
-                <div class="section">
-                    <label>
-                        Simulated Think Time Variance (ms):
-                        <input id="think_variance_input" type="number">
-                    </label>
-                </div>
-                <div class="section">
-                    <label>
-                        Base Simulated Move Time (ms):
-                        <input id="move_time_input" type="number">
-                    </label>
-                </div>
-                <div class="section">
-                    <label>
-                        Simulated Move Time Variance (ms):
-                        <input id="move_variance_input" type="number">
-                    </label>
+                <div class="flex-group">
+                    <div class="section">
+                        <label>
+                            Base Simulated Move Time (ms):
+                            <input id="move_time_input" type="number">
+                        </label>
+                    </div>
+                    <div class="section">
+                        <label>
+                            Simulated Move Time Variance (ms):
+                            <input id="move_variance_input" type="number">
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="big-section">
-            <div class="section no-pad">
-                <button id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
-            </div>
-            <div class="section">
+            <div class="flex-group flex-small-gap">
                 <button id="apply_btn" class="waves-effect waves-light btn">Apply</button>
+                <button id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
             </div>
         </div>
     </div>
