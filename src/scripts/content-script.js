@@ -57,12 +57,11 @@ function scrapePosition() {
         prefix += '***bt'
     }
 
-    let res = '';
-    const moves = getMoveRecords();
+    let res;
     if (config.variant === 'chess') {
-        if (moves?.length) {
+        if (getMoveContainer()) {
             prefix += 'fen***';
-            res = scrapePositionFen(moves);
+            res = scrapePositionFen(getMoveRecords());
         } else {
             prefix += 'puz***';
             res = scrapePositionPuz();
@@ -71,13 +70,14 @@ function scrapePosition() {
         prefix += 'var***';
         if (config.variant === 'fischerandom') {
             const startPos = readStartPos(location.href)?.position || DEFAULT_POSITION;
-            res += startPos + '&*****';
+            res = startPos + '&*****';
         }
+        const moves = getMoveRecords();
         res += (moves?.length) ? scrapePositionFen(moves) : '?';
     }
 
-    if (res) {
-        console.log(prefix + res.replace(/[^\w-+#*@&]/g, ''));
+    if (res != null) {
+        console.log(prefix + res.replace(/[^\w-+#*@&]/g, ''), getBoard().getAttributeNames().join(" "));
         return prefix + res.replace(/[^\w-+=#*@&]/g, '');
     } else {
         return 'no';
@@ -86,8 +86,11 @@ function scrapePosition() {
 
 function scrapePositionFen(moves) {
     let res = '';
+    const selectedMove = getSelectedMoveRecord();
+    if (!selectedMove) {
+        return res;
+    }
     if (site === 'chesscom') {
-        const selectedMove = getSelectedMoveRecord();
         for (const moveWrapper of moves) {
             const move = moveWrapper.lastElementChild
             if (move.lastElementChild?.classList.contains('icon-font-chess')) {
@@ -100,7 +103,6 @@ function scrapePositionFen(moves) {
             }
         }
     } else if (site === 'lichess') {
-        const selectedMove = getSelectedMoveRecord();
         for (const move of moves) {
             res += move.innerText.replace(/\n.*/, '') + '*****';
             if (!config.simon_says_mode && move === selectedMove) {
@@ -112,6 +114,9 @@ function scrapePositionFen(moves) {
 }
 
 function scrapePositionPuz() {
+    if (isAnimating()) {
+        throw Error("Board is animating. Can't scrape.")
+    }
     let res = getTurn() + '*****';
     if (site === 'chesscom') {
         for (const piece of getPieces()) {
@@ -177,7 +182,7 @@ function pullConfig() {
 function getSelectedMoveRecord() {
     let selectedMove;
     if (site === 'chesscom') {
-        selectedMove = document.querySelector('.node.selected') // vs player + computer (new)
+        selectedMove = document.querySelector('.node .selected') // vs player + computer (new)
             || document.querySelector('.move-node-highlighted .move-text-component') // vs player + computer (old)
             || document.querySelector('.move-node.selected .move-text'); // analysis
     } else if (site === 'lichess') {
@@ -206,12 +211,26 @@ function getMoveRecords() {
     return moves;
 }
 
+function getMoveContainer() {
+    let moveContainer;
+    if (site === 'chesscom') {
+        moveContainer = document.querySelector('wc-simple-move-list');
+    } else if (site === 'lichess') {
+        moveContainer = document.querySelector('l4x'); // vs player + computer
+        if (!moveContainer) {
+            moveContainer = document.querySelector('.tview2'); // vs training
+        }
+    }
+    return moveContainer;
+}
+
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
     if (site === 'chesscom') {
         const highlights = [];
         for (const elem of getBoard().children) {
             if (elem.classList.contains('coordinates')) continue;
+            if (elem.classList.contains('element-pool')) continue;
             if (elem.classList.contains('hover-square')) break;
             highlights.push(elem);
         }
@@ -250,7 +269,12 @@ function getTurn() {
     try {
         toSquare = getLastMoveHighlights()[1];
     } catch (e) {
-        return 'w'; // if no-one has moved yet, then white is to play
+        if (getMoveContainer()) {
+            console.log("getMoveContainer():", getMoveContainer());
+            return 'w'; // if starting position, white goes first
+        } else {
+            return (getOrientation() === 'black') ? 'w' : 'b'; // if puzzle, the opposite player moves first
+        }
     }
 
     let turn;
@@ -337,6 +361,16 @@ function getPromotionSelection(promotion) {
             : { 'q': 0, 'r': 1, 'n': 2, 'b': 3 };
     const idx = promoteMap[promotion];
     return (promotions) ? promotions[idx] : undefined;
+}
+
+function isAnimating() {
+    let anim;
+    if (site === 'chesscom') {
+        anim = getBoard().getAttribute('data-test-animating');
+    } else if (site === 'lichess' || site === 'blitztactics') {
+        anim = getBoard().querySelector('piece.anim');
+    }
+    return !!anim;
 }
 
 // -------------------------------------------------------------------------------------------

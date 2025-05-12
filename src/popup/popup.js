@@ -64,7 +64,6 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
             const {fen, startFen, moves} = parse_position_from_response(response.dom);
             if (last_eval.fen !== fen) {
-                console.log("--------- NEW POS ---------", fen, startFen, moves);
                 on_new_pos(fen, startFen, moves);
             }
         } else if (response.pullConfig) {
