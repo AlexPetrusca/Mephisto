@@ -25,7 +25,7 @@ chrome.runtime.onMessage.addListener(response => {
     if (moving) return;
     if (response.queryfen) {
         if (!config) return;
-        const res = scrapePosition();
+        const res = tryScrapePosition();
         const orient = getOrientation();
         chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
     } else if (response.automove) {
@@ -44,6 +44,14 @@ chrome.runtime.onMessage.addListener(response => {
         console.log(response.consoleMessage);
     }
 });
+
+function tryScrapePosition() {
+    try {
+        return scrapePosition();
+    } catch (e) {
+        return 'no'; // skip the current attempt, if we can't scrape
+    }
+}
 
 function scrapePosition() {
     if (!getBoard()) return;
