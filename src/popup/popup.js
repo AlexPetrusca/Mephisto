@@ -639,6 +639,18 @@ function draw_move(move, color, overlay, stroke_width = 0.225) {
                     stroke-width='${stroke_width}' marker-end='url(#arrow-${marker_id})'/>
             </svg>
         `;
+
+        if (move.length === 5) {
+            const imgX = 43 * (coords.x1 - 1);
+            const imgY = 43 * (8 - coords.y1);
+            const pieceIdentifier = turn + move[4];
+            const [pieceSet, ext] = config.pieces.split('.');
+            const piecePath = `/res/chesspieces/${pieceSet}/${pieceIdentifier}.${ext}`;
+            overlay.innerHTML += `
+                <img style='position: absolute; z-index: -1; left: ${imgX}px; top: ${imgY}px; opacity: 0.4;' width='43px'
+                    height='43px' src='${piecePath}' alt='${pieceIdentifier}'>
+            `;
+        }
     }
 }
 
