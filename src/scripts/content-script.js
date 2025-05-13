@@ -66,10 +66,11 @@ function scrapePosition() {
     }
 
     let res;
+    const moves = getMoveRecords();
     if (config.variant === 'chess') {
-        if (getMoveContainer()) {
+        if (moves.length > 0) {
             prefix += 'fen***';
-            res = scrapePositionFen(getMoveRecords());
+            res = scrapePositionFen(moves);
         } else {
             prefix += 'puz***';
             res = scrapePositionPuz();
@@ -80,7 +81,6 @@ function scrapePosition() {
             const startPos = readStartPos(location.href)?.position || DEFAULT_POSITION;
             res = startPos + '&*****';
         }
-        const moves = getMoveRecords();
         res += (moves?.length) ? scrapePositionFen(moves) : '?';
     }
 
@@ -279,7 +279,6 @@ function getTurn() {
         toSquare = getLastMoveHighlights()[1];
     } catch (e) {
         if (getMoveContainer()) {
-            console.log("getMoveContainer():", getMoveContainer());
             return 'w'; // if starting position, white goes first
         } else {
             return (getOrientation() === 'black') ? 'w' : 'b'; // if puzzle, the opposite player moves first
@@ -380,6 +379,10 @@ function isAnimating() {
         anim = getBoard().querySelector('piece.anim');
     }
     return !!anim;
+}
+
+function isStartingPosition() {
+
 }
 
 // -------------------------------------------------------------------------------------------
