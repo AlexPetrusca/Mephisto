@@ -85,7 +85,7 @@ function scrapePosition() {
     }
 
     if (res != null) {
-        console.log(prefix + res.replace(/[^\w-+#*@&]/g, ''), getBoard().getAttributeNames().join(" "));
+        console.log(prefix + res.replace(/[^\w-+#*@&]/g, ''));
         return prefix + res.replace(/[^\w-+=#*@&]/g, '');
     } else {
         return 'no';
@@ -235,21 +235,22 @@ function getMoveContainer() {
 function getLastMoveHighlights() {
     let fromSquare, toSquare;
     if (site === 'chesscom') {
-        const highlights = [];
-        for (const elem of getBoard().children) {
-            if (elem.classList.contains('coordinates')) continue;
-            if (elem.classList.contains('element-pool')) continue;
-            if (elem.classList.contains('hover-square')) break;
-            highlights.push(elem);
+        const board = getBoard();
+        let highlights = Array.from(document.querySelectorAll('.highlight'));
+        if (highlights.length === 3) {
+            // If there are 3 highlights, we need to figure out which of them is a user action.
+            // Either a piece is being dragged or a piece was clicked and let go.
+            const dragPiece = board.querySelector('.piece.dragging');
+            if (dragPiece) {
+                const dragSquareId = dragPiece.className.match('square-[0-9][0-9]')[0];
+                highlights = highlights.filter(ht => !ht.classList.contains(dragSquareId));
+            } else {
+                const hoverSquare = board.querySelector('.hover-square');
+                const hoverSquareId = hoverSquare.className.match('square-[0-9][0-9]')[0];
+                highlights = highlights.filter(ht => !ht.classList.contains(hoverSquareId));
+            }
         }
-        if (highlights.length === 2) {
-            [fromSquare, toSquare] = [highlights[0], highlights[1]];
-        } else {
-            [fromSquare, toSquare] = [highlights[1], highlights[2]];
-        }
-        if (!fromSquare.classList.contains('highlight') || !toSquare.classList.contains('highlight')) {
-            throw Error('Invalid last move highlights');
-        }
+        [fromSquare, toSquare] = [highlights[0], highlights[1]];
         const toPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
         if (!toPiece) {
             [fromSquare, toSquare] = [toSquare, fromSquare];
