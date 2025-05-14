@@ -70,8 +70,7 @@ function scrapePosition() {
         const moveContainer = getMoveContainer();
         if (moveContainer != null) {
             prefix += 'fen***';
-            const moves = getMoveRecords();
-            res = scrapePositionFen(moves);
+            res = scrapePositionFen();
         } else {
             prefix += 'puz***';
             res = scrapePositionPuz();
@@ -94,14 +93,14 @@ function scrapePosition() {
     }
 }
 
-function scrapePositionFen(moves) {
+function scrapePositionFen() {
     let res = '';
     const selectedMove = getSelectedMoveRecord();
     if (!config.simon_says_mode && !selectedMove) {
         return res;
     }
     if (site === 'chesscom') {
-        for (const moveWrapper of moves) {
+        for (const moveWrapper of getMoveRecords()) {
             const move = moveWrapper.lastElementChild
             if (move.lastElementChild?.classList.contains('icon-font-chess')) {
                 res += move.lastElementChild.getAttribute('data-figurine') + move.innerText + '*****';
@@ -113,7 +112,7 @@ function scrapePositionFen(moves) {
             }
         }
     } else if (site === 'lichess') {
-        for (const move of moves) {
+        for (const move of getMoveRecords()) {
             res += move.innerText.replace(/\n.*/, '') + '*****';
             if (!config.simon_says_mode && move === selectedMove) {
                 break;
@@ -127,7 +126,7 @@ function scrapePositionPuz() {
     if (isAnimating()) {
         throw Error("Board is animating. Can't scrape.")
     }
-    let res = getTurn() + '*****';
+    let res = '';
     if (site === 'chesscom') {
         for (const piece of getPieces()) {
             let [colorTypeClass, coordsClass] = [piece.classList[1], piece.classList[2]];
@@ -160,7 +159,7 @@ function scrapePositionPuz() {
             }
         }
     }
-    return res;
+    return (res) ? getTurn() + '*****' + res : null;
 }
 
 function getOrientation() {
