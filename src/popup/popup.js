@@ -326,13 +326,10 @@ function on_engine_response(message) {
         lineInfo[scoreType] = (turn === 'w' ? 1 : -1) * scoreNumber;
 
         const pvIdx = (lineInfo.multipv - 1) || 0;
-        if (lineInfo.depth === 1) {
-            last_eval.activeLines++; // count active lines at depth 1
-        }
+        last_eval.activeLines = Math.max(last_eval.activeLines, lineInfo.multipv);
         if (pvIdx === 0) {
-            if (lineInfo.depth > 1) {
-                if (!last_eval.lines[0]) return;
-                // continuously show the best move for each depth
+            // continuously show the best move for each depth
+            if (last_eval.lines[0]) {
                 const best_move = last_eval.lines[0].pv.substring(0, 4);
                 const threat = last_eval.lines[0].pv.substring(5, 9);
                 on_engine_best_move(best_move, threat);
