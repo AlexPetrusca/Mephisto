@@ -258,6 +258,7 @@ function on_engine_best_move(best, threat) {
                 request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval.lines[0].score / 100.0}`);
             }
             if (config.threat_analysis) {
+                clear_annotations();
                 draw_threat();
             }
         }
@@ -329,7 +330,7 @@ function on_engine_response(message) {
         last_eval.activeLines = Math.max(last_eval.activeLines, lineInfo.multipv);
         if (pvIdx === 0) {
             // continuously show the best move for each depth
-            if (last_eval.lines[0]) {
+            if (last_eval.lines && last_eval.lines[0]) {
                 const best_move = last_eval.lines[0].pv.substring(0, 4);
                 const threat = last_eval.lines[0].pv.substring(5, 9);
                 on_engine_best_move(best_move, threat);
@@ -371,7 +372,7 @@ function on_new_pos(fen, startFen, moves) {
     }
 
     board.position(fen);
-    clear_moves();
+    clear_annotations();
     if (config.simon_says_mode) {
         draw_moves();
         request_console_log('Best Move: ' + last_eval.bestmove);
@@ -553,7 +554,7 @@ function draw_moves() {
         }
     }
 
-    clear_moves();
+    clear_annotations();
     for (let i = 0; i < last_eval.activeLines; i++) {
         if (!last_eval.lines[i]) continue;
 
@@ -651,7 +652,7 @@ function draw_move(move, color, overlay, stroke_width = 0.225) {
     }
 }
 
-function clear_moves() {
+function clear_annotations() {
     let move_annotation = document.getElementById('move-annotations');
     while (move_annotation.childElementCount) {
         move_annotation.lastElementChild.remove();
