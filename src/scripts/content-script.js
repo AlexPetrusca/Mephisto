@@ -66,10 +66,11 @@ function scrapePosition() {
     }
 
     let res;
-    const moves = getMoveRecords();
     if (config.variant === 'chess') {
-        if (moves.length > 0) {
+        const moveContainer = getMoveContainer();
+        if (moveContainer != null) {
             prefix += 'fen***';
+            const moves = getMoveRecords();
             res = scrapePositionFen(moves);
         } else {
             prefix += 'puz***';
@@ -81,6 +82,7 @@ function scrapePosition() {
             const startPos = readStartPos(location.href)?.position || DEFAULT_POSITION;
             res = startPos + '&*****';
         }
+        const moves = getMoveRecords();
         res += (moves?.length) ? scrapePositionFen(moves) : '?';
     }
 
@@ -95,7 +97,7 @@ function scrapePosition() {
 function scrapePositionFen(moves) {
     let res = '';
     const selectedMove = getSelectedMoveRecord();
-    if (!selectedMove) {
+    if (!config.simon_says_mode && !selectedMove) {
         return res;
     }
     if (site === 'chesscom') {

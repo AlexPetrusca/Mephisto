@@ -7,7 +7,7 @@ let config;
 
 let is_calculating = false;
 let prog = 0;
-let last_eval = {};
+let last_eval = {fen: '', activeLines: 0, lines: []};
 let turn = ''; // 'w' | 'b'
 
 document.addEventListener('DOMContentLoaded', async function () {
@@ -214,7 +214,7 @@ function on_engine_best_move(best, threat) {
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
     if (best === '(none)') {
-        if ('mate' in last_eval.lines[0]) {
+        if (last_eval.lines != null && 'mate' in last_eval.lines[0]) {
             update_evaluation('Checkmate!');
             if (config.variant === 'antichess') {
                 update_best_move(`${toplay} Wins`, '');
@@ -230,11 +230,15 @@ function on_engine_best_move(best, threat) {
             }
         }
     } else if (config.simon_says_mode) {
-        const startSquare = best.substring(0, 2);
-        const startPiece = board.position()[startSquare];
-        const startPieceType = (startPiece) ? startPiece.substring(1) : null;
-        if (startPieceType) {
-            update_best_move(piece_name_map[startPieceType]);
+        if (toplay.toLowerCase() === board.orientation()) {
+            const startSquare = best.substring(0, 2);
+            const startPiece = board.position()[startSquare];
+            const startPieceType = (startPiece) ? startPiece.substring(1) : null;
+            if (startPieceType) {
+                update_best_move(piece_name_map[startPieceType]);
+            }
+        } else {
+            update_best_move('');
         }
     } else {
         if (threat && threat !== '(none)') {
@@ -248,14 +252,20 @@ function on_engine_best_move(best, threat) {
         last_eval.bestmove = best;
         last_eval.threat = threat;
         if (config.simon_says_mode) {
-            // todo: why does this break?
-            // Uncaught TypeError: Cannot read properties of undefined (reading 'substring')
             const startSquare = best.substring(0, 2);
+            if (board.position()[startSquare] == null) {
+                // The current best move is stale so abort! This happens when the opponent makes a move in
+                // the middle of continuous evaluation: the engine isn't done evaluating the opponent's
+                // position and ends up returning the opponent's best move on our turn.
+                return;
+            }
             const startPiece = board.position()[startSquare].substring(1);
-            if ('mate' in last_eval.lines[0]) {
-                request_console_log(`${piece_name_map[startPiece]} ==> #${last_eval.lines[0].mate}`);
-            } else {
-                request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval.lines[0].score / 100.0}`);
+            if (last_eval.lines != null) {
+                if ('mate' in last_eval.lines[0]) {
+                    request_console_log(`${piece_name_map[startPiece]} ==> #${last_eval.lines[0].mate}`);
+                } else {
+                    request_console_log(`${piece_name_map[startPiece]} ==> ${last_eval.lines[0].score / 100.0}`);
+                }
             }
             if (config.threat_analysis) {
                 clear_annotations();
@@ -374,8 +384,11 @@ function on_new_pos(fen, startFen, moves) {
     board.position(fen);
     clear_annotations();
     if (config.simon_says_mode) {
-        draw_moves();
-        request_console_log('Best Move: ' + last_eval.bestmove);
+        const toplay = (turn === 'w') ? 'White' : 'Black';
+        if (toplay.toLowerCase() !== board.orientation()) {
+            draw_moves();
+            request_console_log('Best Move: ' + last_eval.bestmove);
+        }
     }
     last_eval = {fen, activeLines: 0, lines: new Array(config.multiple_lines)}; // new evaluation
 }
@@ -565,7 +578,9 @@ function draw_moves() {
 }
 
 function draw_threat() {
-    draw_move(last_eval.threat, '#bf0000', document.getElementById('response-annotations'));
+    if (last_eval.threat) {
+        draw_move(last_eval.threat, '#bf0000', document.getElementById('response-annotations'));
+    }
 }
 
 function draw_move(move, color, overlay, stroke_width = 0.225) {
