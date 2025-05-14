@@ -214,7 +214,8 @@ function on_engine_best_move(best, threat) {
     const toplay = (turn === 'w') ? 'White' : 'Black';
     const next = (turn === 'w') ? 'Black' : 'White';
     if (best === '(none)') {
-        if (last_eval.lines != null && 'mate' in last_eval.lines[0]) {
+        const pvLine = last_eval.lines[0] || '';
+        if ('mate' in pvLine) {
             update_evaluation('Checkmate!');
             if (config.variant === 'antichess') {
                 update_best_move(`${toplay} Wins`, '');
@@ -260,7 +261,7 @@ function on_engine_best_move(best, threat) {
                 return;
             }
             const startPiece = board.position()[startSquare].substring(1);
-            if (last_eval.lines != null) {
+            if (last_eval.lines[0] != null) {
                 if ('mate' in last_eval.lines[0]) {
                     request_console_log(`${piece_name_map[startPiece]} ==> #${last_eval.lines[0].mate}`);
                 } else {
@@ -340,10 +341,11 @@ function on_engine_response(message) {
         last_eval.activeLines = Math.max(last_eval.activeLines, lineInfo.multipv);
         if (pvIdx === 0) {
             // continuously show the best move for each depth
-            if (last_eval.lines && last_eval.lines[0]) {
-                const best_move = last_eval.lines[0].pv.substring(0, 4);
-                const threat = last_eval.lines[0].pv.substring(5, 9);
-                on_engine_best_move(best_move, threat);
+            if (last_eval.lines[0] != null) {
+                const arr = last_eval.lines[0].pv.split(' ');
+                const best = arr[0];
+                const threat = arr[1];
+                on_engine_best_move(best, threat);
             }
             // reset lines
             last_eval.lines = new Array(config.multiple_lines);
@@ -523,7 +525,7 @@ function push_config() {
 }
 
 function draw_moves() {
-    if (!last_eval.lines[0]) return;
+    if (last_eval.lines[0] == null) return;
 
     function strokeFunc(line) {
         const MATE_SCORE = 20;
@@ -599,12 +601,12 @@ function draw_move(move, color, overlay, stroke_width = 0.225) {
 
     function get_coords(move) {
         const {x: x0, y: y0} = get_coord(move.substring(0, 2));
-        const {x: x1, y: y1} = get_coord(move.substring(2));
+        const {x: x1, y: y1} = get_coord(move.substring(2, 4));
         return {x0, y0, x1, y1}
     }
 
     if (move.includes('@')) {
-        const coord = get_coord(move.substring(2));
+        const coord = get_coord(move.substring(2, 4));
         const x = 0.5 + (coord.x - 1);
         const y = 8 - (0.5 + (coord.y - 1));
         const imgX = 43 * (coord.x - 1);
