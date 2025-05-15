@@ -5,6 +5,7 @@ class GeneralSettings extends SettingsPage {
     init() {
         M.FormSelect.init(document.querySelectorAll('select'), {});
         M.Range.init(document.querySelectorAll('input[type=range]'), {});
+        M.Tooltip.init(document.querySelectorAll('.tooltipped'), {enterDelay: 1000});
         const engine_select = this.registerFormElement('engine', 'Engine:', 'select', 'stockfish-16-nnue-7');
         const variant_select = this.registerFormElement('variant', 'Variant:', 'select', 'chess');
         this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 3000);
@@ -22,6 +23,8 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('think_variance', 'Simulated Think Variance (ms):', 'input', 500);
         this.registerFormElement('move_time', 'Simulated Move Time (ms):', 'input', 500);
         this.registerFormElement('move_variance', 'Simulated Move Variance (ms):', 'input', 250);
+        const engineLabelTooltiped = document.querySelector('#engine-label-tooltiped');
+        const engineLabelUntooltiped = document.querySelector('#engine-label-untooltiped');
         for (const range of [multipv_range, threads_range, memory_range]) {
             range.registerChangeListener(() => {
                 let section = range.elem;
@@ -41,6 +44,13 @@ class GeneralSettings extends SettingsPage {
             } else {
                 section.classList.add('hidden');
                 variant_select.setValue('chess');
+            }
+            if (engine_select.getValue() === 'remote') {
+                engineLabelTooltiped.classList.remove('hidden');
+                engineLabelUntooltiped.classList.add('hidden');
+            } else {
+                engineLabelTooltiped.classList.add('hidden');
+                engineLabelUntooltiped.classList.remove('hidden');
             }
         })
     }

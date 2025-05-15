@@ -202,3 +202,13 @@ body.parallax-demo footer {
 .flex-group.flex-small-gap {
     gap: 10px;
 }
+
+.info-tooltip {
+    font-size: x-small !important;
+    /*vertical-align: super;*/
+    cursor: pointer;
+}
+
+.tooltip-content {
+    max-width: 250px;
+}

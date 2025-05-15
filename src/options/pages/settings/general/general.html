@@ -5,7 +5,15 @@
                 <h3 class="header">Engine</h3>
                 <div class="section">
                     <label>
-                        Engine:
+                        <span id="engine-label-tooltiped" class="hidden tooltipped" data-position="right"
+                              data-tooltip="Mephisto communicates with a chess engine running locally on your machine
+                                            to evaluate positions. NOTE: remote-engine.py (in &quot;src/scripts&quot;)
+                                            must be running and configured properly for this to work.">
+                            Engine <i class="material-icons info-tooltip">info</i>
+                        </span>
+                        <span id="engine-label-untooltiped">
+                            Engine
+                        </span>
                         <select name="engine" id="engine_select">
                             <option value="stockfish-17-nnue-79">Stockfish 17 NNUE - 79MB</option>
                             <option value="stockfish-16-nnue-40">Stockfish 16 NNUE - 40MB</option>
@@ -20,7 +28,7 @@
                 </div>
                 <div class="section">
                     <label>
-                        Variant:
+                        Variant
                         <select name="variant" id="variant_select">
                             <option value="chess">Chess</option>
                             <option value="fischerandom">Chess960</option>
@@ -37,20 +45,25 @@
                 <div class="flex-group">
                     <div class="section">
                         <label>
-                            Search Time (ms):
+                            Search Time (ms)
                             <input id="compute_time_input" type="number">
                         </label>
                     </div>
                     <div class="section">
                         <label>
-                            Fen Refresh Interval (ms):
+                            <span class="tooltipped" data-position="right"
+                                  data-tooltip="Determines how often Mephisto checks the webpage for changes in the
+                                                chess position."
+                            >
+                                Fen Refresh Interval (ms) <i class="material-icons info-tooltip">info</i>
+                            </span>
                             <input id="fen_refresh_input" type="number">
                         </label>
                     </div>
                 </div>
                 <div class="section">
                     <label>
-                        Multiple Lines (<span class="value"></span>):
+                        Multiple Lines (<span class="value"></span>)
                         <p class="range-field">
                             <input id="multiple_lines_range" type="range" min="1" max="5" step="1">
                         </p>
@@ -58,7 +71,7 @@
                 </div>
                 <div class="section">
                     <label>
-                        Threads (<span class="value"></span>):
+                        Threads (<span class="value"></span>)
                         <p class="range-field">
                             <input id="threads_range" type="range" min="1" max="32" step="1">
                         </p>
@@ -66,7 +79,7 @@
                 </div>
                 <div class="section">
                     <label>
-                        Memory (<span class="value"></span> MB):
+                        Memory (<span class="value"></span> MB)
                         <p class="range-field">
                             <input id="memory_range" type="range" min="32" max="512" step="32">
                         </p>
@@ -74,7 +87,7 @@
                 </div>
                 <div class="flex-group">
                     <div class="section switch">
-                        <label class="switch-label">Show Computer Evaluation:</label>
+                        <label class="switch-label">Show Computer Evaluation</label>
                         <label>
                             Off
                             <input id="computer_evaluation_checkbox" type="checkbox">
@@ -83,7 +96,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label">Show Threat Analysis:</label>
+                        <label class="switch-label">Show Threat Analysis</label>
                         <label>
                             Off
                             <input id="threat_analysis_checkbox" type="checkbox">
@@ -92,7 +105,13 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label">"Hand and Brain" Mode:</label>
+                        <label class="switch-label tooltipped" data-position="right"
+                               data-tooltip="Mephisto plays as the &quot;Brain&quot;, choosing which piece type to
+                                             move, and you play as the &quot;Hand&quot;, selecting the specific legal
+                                             move for that piece."
+                        >
+                            "Hand & Brain" Mode <i class="material-icons info-tooltip">info</i>
+                        </label>
                         <label>
                             Off
                             <input id="simon_says_mode_checkbox" type="checkbox">
@@ -106,7 +125,7 @@
                 <h3 class="header">Autoplay</h3>
                 <div class="flex-group">
                     <div class="section switch">
-                        <label class="switch-label">Autoplay:</label>
+                        <label class="switch-label">Autoplay</label>
                         <label>
                             Off
                             <input id="autoplay_checkbox" type="checkbox">
@@ -115,7 +134,13 @@
                         </label>
                     </div>
                     <div class="section switch">
-                    <label class="switch-label">Puzzle Mode:</label>
+                    <label class="switch-label tooltipped" data-position="right"
+                           data-tooltip="Mephisto optimizes for solving chess puzzles as quickly as possible, at the
+                                         expense of accuracy. This should be enabled when autoplaying puzzle minigames,
+                                         like Chess.com's Puzzle Rush and Lichess's Puzzle Storm."
+                    >
+                        Puzzle Mode <i class="material-icons info-tooltip">info</i>
+                    </label>
                     <label>
                         Off
                         <input id="puzzle_mode_checkbox" type="checkbox">
@@ -124,7 +149,14 @@
                     </label>
                 </div>
                     <div class="section switch">
-                            <label class="switch-label">Python Autoplay Backend:</label>
+                            <label class="switch-label tooltipped" data-position="right"
+                                   data-tooltip="Mephisto takes control of the mouse pointer to perform automated moves.
+                                                 NOTE: mephisto-clicker.py (in &quot;src/scripts&quot;) must be running
+                                                 for this to work. You may need to grant specific permissions for
+                                                 PyAutoGUI depending on your setup (do a google search for this)."
+                            >
+                                Python Autoplay Backend <i class="material-icons info-tooltip">info</i>
+                            </label>
                             <label>
                                 Off
                                 <input id="python_autoplay_backend_checkbox" type="checkbox">
@@ -136,13 +168,22 @@
                 <div class="flex-group">
                     <div class="section">
                         <label>
-                            Base Simulated Think Time (ms):
+                            <span class="switch-label tooltipped" data-position="right"
+                                data-tooltip="Mephisto will always wait at least this long before making a move."
+                            >
+                                Simulated Think Time Base (ms) <i class="material-icons info-tooltip">info</i>
+                            </span>
                             <input id="think_time_input" type="number">
                         </label>
                     </div>
                     <div class="section">
                         <label>
-                            Simulated Think Time Variance (ms):
+                            <span class="switch-label tooltipped" data-position="right"
+                                data-tooltip="Mephisto will additionally wait a random amount of time, up to this
+                                              amount, before making a move."
+                            >
+                                Simulated Think Time Variance (ms) <i class="material-icons info-tooltip">info</i>
+                            </span>
                             <input id="think_variance_input" type="number">
                         </label>
                     </div>
@@ -150,13 +191,23 @@
                 <div class="flex-group">
                     <div class="section">
                         <label>
-                            Base Simulated Move Time (ms):
+                            <span class="switch-label tooltipped" data-position="right"
+                                  data-tooltip="Mephisto will always take at least this long to perform an action
+                                                (click, drag, etc.)."
+                            >
+                                Simulated Move Time Base (ms) <i class="material-icons info-tooltip">info</i>
+                            </span>
                             <input id="move_time_input" type="number">
                         </label>
                     </div>
                     <div class="section">
                         <label>
-                            Simulated Move Time Variance (ms):
+                            <span class="switch-label tooltipped" data-position="right"
+                                  data-tooltip="Mephisto will take a random extra amount of time, up to this amount,
+                                                to perform an action (click, drag, etc.)."
+                            >
+                                Simulated Move Time Variance (ms) <i class="material-icons info-tooltip">info</i>
+                            </span>
                             <input id="move_variance_input" type="number">
                         </label>
                     </div>
