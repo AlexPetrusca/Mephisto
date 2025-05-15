@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         engine: JSON.parse(localStorage.getItem('engine')) || 'stockfish-16-nnue-7',
         variant: JSON.parse(localStorage.getItem('variant')) || 'chess',
         compute_time: JSON.parse(localStorage.getItem('compute_time')) || 3000,
-        fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 200,
+        fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
         multiple_lines: JSON.parse(localStorage.getItem('multiple_lines')) || 1,
         threads: JSON.parse(localStorage.getItem('threads')) || navigator.hardwareConcurrency - 1,
         memory: JSON.parse(localStorage.getItem('memory')) || 32,
