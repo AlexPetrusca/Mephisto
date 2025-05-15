@@ -116,12 +116,13 @@ async function initialize_engine() {
         'stockfish-16-nnue-40': 'stockfish-16-40/stockfish.js',
         'stockfish-16-nnue-7': 'stockfish-16-7/sf16-7.js',
         'stockfish-11-hce': 'stockfish-11-hce/sfhce.js',
+        'stockfish-6': 'stockfish-6/stockfish.js',
         'lc0': 'lc0/lc0.js',
         'fairy-stockfish-14-nnue': 'fairy-stockfish-14/fsf14.js',
     }
     const enginePath = `/lib/engine/${engineMap[config.engine]}`;
     const engineBasePath = enginePath.substring(0, enginePath.lastIndexOf('/'));
-    if (['stockfish-16-nnue-40'].includes(config.engine)) {
+    if (['stockfish-16-nnue-40', 'stockfish-6'].includes(config.engine)) {
         engine = new Worker(enginePath);
         engine.onmessage = (event) => on_engine_response(event.data);
     } else if (['stockfish-17-nnue-79', 'stockfish-16-nnue-7', 'fairy-stockfish-14-nnue', 'stockfish-11-hce'].includes(config.engine)) {
