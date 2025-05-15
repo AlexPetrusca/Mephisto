@@ -189,10 +189,12 @@ async function initialize_engine() {
             "MultiPV": config.multiple_lines,
         });
     } else {
-        if (config.engine !== 'stockfish-16-nnue-40') { // crashes for some reason
+        if (config.engine !== 'stockfish-16-nnue-40' && config.engine !== 'stockfish-6') { // crashes for some reason
             send_engine_uci(`setoption name Hash value ${config.memory}`);
         }
-        send_engine_uci(`setoption name Threads value ${config.threads}`);
+        if (config.engine !== 'stockfish-6') {
+            send_engine_uci(`setoption name Threads value ${config.threads}`);
+        }
         send_engine_uci(`setoption name MultiPV value ${config.multiple_lines}`);
         send_engine_uci('ucinewgame');
         send_engine_uci('isready');
