@@ -12,19 +12,25 @@ let turn = ''; // 'w' | 'b'
 
 document.addEventListener('DOMContentLoaded', async function () {
     // load extension configurations from localStorage
+    const computeTime = JSON.parse(localStorage.getItem('compute_time'));
+    const fenRefresh = JSON.parse(localStorage.getItem('fen_refresh'));
+    const thinkTime = JSON.parse(localStorage.getItem('think_time'));
+    const thinkVariance = JSON.parse(localStorage.getItem('think_variance'));
+    const moveTime = JSON.parse(localStorage.getItem('move_time'));
+    const moveVariance = JSON.parse(localStorage.getItem('move_variance'));
     config = {
         // general settings
         engine: JSON.parse(localStorage.getItem('engine')) || 'stockfish-16-nnue-7',
         variant: JSON.parse(localStorage.getItem('variant')) || 'chess',
-        compute_time: JSON.parse(localStorage.getItem('compute_time')) || 3000,
-        fen_refresh: JSON.parse(localStorage.getItem('fen_refresh')) || 100,
+        compute_time: (computeTime != null) ? computeTime : 3000,
+        fen_refresh: (fenRefresh != null) ? fenRefresh : 100,
         multiple_lines: JSON.parse(localStorage.getItem('multiple_lines')) || 1,
         threads: JSON.parse(localStorage.getItem('threads')) || navigator.hardwareConcurrency - 1,
         memory: JSON.parse(localStorage.getItem('memory')) || 32,
-        think_time: JSON.parse(localStorage.getItem('think_time')) || 1000,
-        think_variance: JSON.parse(localStorage.getItem('think_variance')) || 500,
-        move_time: JSON.parse(localStorage.getItem('move_time')) || 500,
-        move_variance: JSON.parse(localStorage.getItem('move_variance')) || 250,
+        think_time: (thinkTime != null) ? thinkTime : 1000,
+        think_variance: (thinkVariance != null) ? thinkVariance : 500,
+        move_time: (moveTime != null) ? moveTime : 500,
+        move_variance: (moveVariance != null) ? moveVariance : 250,
         computer_evaluation: JSON.parse(localStorage.getItem('computer_evaluation')) || false,
         threat_analysis: JSON.parse(localStorage.getItem('threat_analysis')) || false,
         simon_says_mode: JSON.parse(localStorage.getItem('simon_says_mode')) || false,
