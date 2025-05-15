@@ -382,10 +382,6 @@ function isAnimating() {
     return !!anim;
 }
 
-function isStartingPosition() {
-
-}
-
 // -------------------------------------------------------------------------------------------
 
 function loadStartPosCache() {
