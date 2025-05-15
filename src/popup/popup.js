@@ -207,7 +207,7 @@ function send_engine_uci(message) {
         engine.postMessage(message, '*');
     } else if (engine instanceof Worker) {
         engine.postMessage(message);
-    } else if ('uci' in engine) {
+    } else if (engine && 'uci' in engine) {
         engine.uci(message);
     }
 }
@@ -367,6 +367,7 @@ function on_engine_response(message) {
 
     if (is_calculating) {
         prog++;
+        console.log("----------------------------------- PROG:", prog)
         let progMapping = 100 * (1 - Math.exp(-prog / 30));
         document.getElementById('progBar')?.setAttribute('value', `${Math.round(progMapping)}`);
     }
