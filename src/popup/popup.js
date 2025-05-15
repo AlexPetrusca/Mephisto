@@ -204,7 +204,7 @@ function send_engine_uci(message) {
     }
 }
 
-function on_engine_best_move(best, threat) {
+function on_engine_best_move(best, threat, isTerminal=false) {
     if (config.engine === 'remote') {
         last_eval.activeLines = last_eval.lines.length;
     }
@@ -273,7 +273,7 @@ function on_engine_best_move(best, threat) {
                 draw_threat();
             }
         }
-        if (config.autoplay) {
+        if (config.autoplay && isTerminal) {
             request_automove(best);
         }
     }
@@ -303,7 +303,7 @@ function on_engine_response(message) {
     if (config.engine === 'remote') {
         last_eval = Object.assign(last_eval, message);
         on_engine_evaluation(last_eval);
-        on_engine_best_move(last_eval.bestmove, last_eval.threat);
+        on_engine_best_move(last_eval.bestmove, last_eval.threat, true);
         return;
     }
 
@@ -313,7 +313,7 @@ function on_engine_response(message) {
         const arr = message.split(' ');
         const best = arr[1];
         const threat = arr[3];
-        on_engine_best_move(best, threat);
+        on_engine_best_move(best, threat, true);
     } else if (message.startsWith('info depth')) {
         const lineInfo = {};
         const tokens = message.split(' ').slice(1);

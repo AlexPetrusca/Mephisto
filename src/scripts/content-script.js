@@ -544,9 +544,13 @@ function simulatePvMoves(pv) {
         let runtime = 0;
         while (runtime < 10000) { // < 10 seconds
             runtime += await promiseTimeout(config.fen_refresh);
-            const observedLastMove = deriveLastMove();
-            if (observedLastMove !== lastMove) {
-                return observedLastMove === move;
+            try {
+                const observedLastMove = deriveLastMove();
+                if (observedLastMove !== lastMove) {
+                    return observedLastMove === move;
+                }
+            } catch (error) {
+                // retry on failure
             }
         }
         return false;

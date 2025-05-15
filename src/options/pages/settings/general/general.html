@@ -169,9 +169,10 @@
                     <div class="section">
                         <label>
                             <span class="switch-label tooltipped" data-position="right"
-                                data-tooltip="Mephisto will always wait at least this long before making a move."
+                                data-tooltip="Mephisto will always wait at least this long after fully evaluating a
+                                              position (determined by Search Time) to make a move."
                             >
-                                Simulated Think Time Base (ms) <i class="material-icons info-tooltip">info</i>
+                                Simulated Think Time (ms) <i class="material-icons info-tooltip">info</i>
                             </span>
                             <input id="think_time_input" type="number">
                         </label>
@@ -179,8 +180,8 @@
                     <div class="section">
                         <label>
                             <span class="switch-label tooltipped" data-position="right"
-                                data-tooltip="Mephisto will additionally wait a random amount of time, up to this
-                                              amount, before making a move."
+                                data-tooltip="Mephisto will wait a random extra amount of time, up to this amount, on
+                                              top of Simulated Think Time."
                             >
                                 Simulated Think Time Variance (ms) <i class="material-icons info-tooltip">info</i>
                             </span>
@@ -192,10 +193,10 @@
                     <div class="section">
                         <label>
                             <span class="switch-label tooltipped" data-position="right"
-                                  data-tooltip="Mephisto will always take at least this long to perform an action
-                                                (click, drag, etc.)."
+                                  data-tooltip="Mephisto will always take at least this long to perform the mouse
+                                                actions of a single move."
                             >
-                                Simulated Move Time Base (ms) <i class="material-icons info-tooltip">info</i>
+                                Simulated Move Time (ms) <i class="material-icons info-tooltip">info</i>
                             </span>
                             <input id="move_time_input" type="number">
                         </label>
@@ -204,7 +205,7 @@
                         <label>
                             <span class="switch-label tooltipped" data-position="right"
                                   data-tooltip="Mephisto will take a random extra amount of time, up to this amount,
-                                                to perform an action (click, drag, etc.)."
+                                                on top of Simulated Move Time."
                             >
                                 Simulated Move Time Variance (ms) <i class="material-icons info-tooltip">info</i>
                             </span>
