@@ -31,15 +31,11 @@ export class SettingsPage {
 
     // localstorage values push/pull
     pullConfigValues() {
-        console.log(JSON.parse(JSON.stringify(localStorage)))
         this.formElements.forEach(formElement => {
             const localStorageVal = localStorage.getItem(formElement.name);
-            console.log(localStorageVal);
             if (localStorageVal) {
-                console.log("FOUND:", formElement.name, '-->', JSON.parse(localStorageVal));
                 formElement.setValue(JSON.parse(localStorageVal));
             } else {
-                console.log("MISS:", formElement.name, '-->', formElement.default);
                 formElement.setValue(formElement.default);
             }
         });
