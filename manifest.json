@@ -3,7 +3,7 @@
   "manifest_version": 3,
   "name": "Mephisto Chess Extension",
   "description": "Next best move analysis for your favorite chess websites",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "homepage_url": "https://github.com/AlexPetrusca/Mephisto",
   "author": "Alex Petrusca",
   "icons": {
