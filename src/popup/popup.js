@@ -367,7 +367,6 @@ function on_engine_response(message) {
 
     if (is_calculating) {
         prog++;
-        console.log("----------------------------------- PROG:", prog)
         let progMapping = 100 * (1 - Math.exp(-prog / 30));
         document.getElementById('progBar')?.setAttribute('value', `${Math.round(progMapping)}`);
     }
