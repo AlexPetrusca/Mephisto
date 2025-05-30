@@ -4,6 +4,7 @@ Mephisto is a browser extension that provides next-best-move analysis and can au
 
 <p align="center">
   <img src="https://github.com/AlexPetrusca/Mephisto/blob/master/res/puzzle_rush_demo.gif" align="center" height="500px" />
+  <p align="center">Mephisto crushing some Puzzle Rush in real-time</p>
 </p>
 
 ## Getting Started
