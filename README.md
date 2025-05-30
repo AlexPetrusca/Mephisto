@@ -1,6 +1,8 @@
 ![alt text](https://raw.githubusercontent.com/AlexPetrusca/Mephisto/master/res/mephisto_banner_lowercase.png)
 
-Mephisto is a browser extension that enables next best move analysis and automated gameplay on Chess.com and Lichess.
+Mephisto is a browser extension that provides next-best-move analysis and can automate gameplay on Chess.com and Lichess.
+
+<img src="https://github.com/AlexPetrusca/Mephisto/blob/master/res/puzzle_rush_demo.gif" align="center" height="66px" />
 
 ## Getting Started
 
@@ -14,15 +16,15 @@ Mephisto is a browser extension that enables next best move analysis and automat
 <br>
 <br>
 
-Click Mephisto's icon to open its popup window and automatically scrape the current page for a chess position to 
-analyze. For ease of use, pin Mephisto in chrome's extensions menu. Click the puzzle icon to the right of Chrome's address bar. 
-Find "Mephisto Chess Extension" and click the pin icon to the right of it.
+Click the Mephisto icon to open its popup window. It will automatically detect and analyze the current chess position on the page.
 
-You may notice that when you click outside of Mephisto's popup window, the popup will lose focus and close. To prevent
-this, right-click the pinned icon and click 'Inspect Popup'. 
+For quick access, pin Mephisto to Chrome’s toolbar:
+1. Click the puzzle icon next to Chrome’s address bar.
+2. Find "Mephisto Chess Extension" and click the pin icon next to it.
 
-For more information, see [Getting Started](https://github.com/AlexPetrusca/Mephisto/wiki/Getting-Started).
+Note: The popup window will close if you click outside of it. To keep it open, right-click the pinned Mephisto icon and select "Inspect Popup."
 
+For more details, visit the [Getting Started](https://github.com/AlexPetrusca/Mephisto/wiki/Getting-Started) guide.
 
 ## How to Develop Locally
 Set up a local install:
