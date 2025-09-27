@@ -100,10 +100,18 @@ document.addEventListener('DOMContentLoaded', async function () {
             'racingkings': 'racingKings',
         }
         const variant = variantNameMap[config.variant];
-        window.open(`https://lichess.org/analysis/${variant}?fen=${last_eval.fen}`, '_blank');
+        const lichessFen = last_eval.fen.replace(/ /g, '_');
+        window.open(`https://lichess.org/analysis/${variant}/${lichessFen}`, '_blank');
+    });
+    document.getElementById('analyze-chesscom').addEventListener('click', () => {
+        const chesscomFen = last_eval.fen.replace(/ /g, '+');
+        window.open(`https://www.chess.com/analysis?fen=${chesscomFen}`, '_blank');
     });
     document.getElementById('config').addEventListener('click', () => {
         window.open('/src/options/options.html', '_blank');
+    });
+    document.getElementById('close-popup').addEventListener('click', () => {
+        window.close();
     });
 
     // initialize materialize
