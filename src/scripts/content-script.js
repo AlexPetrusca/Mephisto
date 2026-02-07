@@ -22,26 +22,34 @@ window.onload = () => {
 };
 
 chrome.runtime.onMessage.addListener(response => {
-    if (moving) return;
-    if (response.queryfen) {
-        if (!config) return;
-        const res = tryScrapePosition();
-        const orient = getOrientation();
-        chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
-    } else if (response.automove) {
-        toggleMoving();
-        if (config.puzzle_mode) {
-            console.log(response.pv);
-            simulatePvMoves(response.pv).finally(toggleMoving);
-        } else {
-            console.log(response.move);
-            simulateMove(response.move).finally(toggleMoving);
+    try {
+        if (moving) return;
+        if (response.queryfen) {
+            if (!config) return;
+            const res = tryScrapePosition();
+            const orient = getOrientation();
+            try {
+                chrome.runtime.sendMessage({ dom: res, orient: orient, fenresponse: true });
+            } catch (e) {
+                console.warn('content-script sendMessage error:', e);
+            }
+        } else if (response.automove) {
+            toggleMoving();
+            if (config.puzzle_mode) {
+                console.log(response.pv);
+                simulatePvMoves(response.pv).finally(toggleMoving);
+            } else {
+                console.log(response.move);
+                simulateMove(response.move).finally(toggleMoving);
+            }
+        } else if (response.pushConfig) {
+            console.log(response.config);
+            config = response.config;
+        } else if (response.consoleMessage) {
+            console.log(response.consoleMessage);
         }
-    } else if (response.pushConfig) {
-        console.log(response.config);
-        config = response.config;
-    } else if (response.consoleMessage) {
-        console.log(response.consoleMessage);
+    } catch (e) {
+        console.warn('content-script onMessage error:', e);
     }
 });
 

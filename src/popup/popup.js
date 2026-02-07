@@ -64,19 +64,27 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // listen to messages from content-script
     chrome.runtime.onMessage.addListener(function (response) {
-        if (response.fenresponse && response.dom !== 'no') {
-            if (board.orientation() !== response.orient) {
-                board.orientation(response.orient);
+        try {
+            if (response.fenresponse && response.dom !== 'no') {
+                if (board.orientation() !== response.orient) {
+                    board.orientation(response.orient);
+                }
+                try {
+                    const {fen, startFen, moves} = parse_position_from_response(response.dom);
+                    if (last_eval.fen !== fen) {
+                        on_new_pos(fen, startFen, moves);
+                    }
+                } catch (e) {
+                    console.warn('Error parsing position (board may be in transition):', e);
+                }
+            } else if (response.pullConfig) {
+                push_config();
+            } else if (response.click) {
+                console.log(response);
+                dispatch_click_event(response.x, response.y);
             }
-            const {fen, startFen, moves} = parse_position_from_response(response.dom);
-            if (last_eval.fen !== fen) {
-                on_new_pos(fen, startFen, moves);
-            }
-        } else if (response.pullConfig) {
-            push_config();
-        } else if (response.click) {
-            console.log(response);
-            dispatch_click_event(response.x, response.y);
+        } catch (e) {
+            console.warn('Error in onMessage listener:', e);
         }
     });
 
@@ -505,10 +513,25 @@ function update_best_move(line1, line2) {
     }
 }
 
+let pending_fen_request = false;
+
 function request_fen() {
-    chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, {queryfen: true});
-    });
+    if (pending_fen_request) return; // skip if a request is already in flight
+    pending_fen_request = true;
+    try {
+        chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+            pending_fen_request = false;
+            if (!tabs || !tabs[0]) return;
+            try {
+                chrome.tabs.sendMessage(tabs[0].id, {queryfen: true});
+            } catch (e) {
+                console.warn('request_fen sendMessage error:', e);
+            }
+        });
+    } catch (e) {
+        pending_fen_request = false;
+        console.warn('request_fen error:', e);
+    }
 }
 
 function request_automove(move) {
@@ -516,19 +539,34 @@ function request_automove(move) {
         ? {automove: true, pv: last_eval.lines[0].pv.split(' ') || [move]}
         : {automove: true, move: move};
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, message);
+        if (!tabs || !tabs[0]) return;
+        try {
+            chrome.tabs.sendMessage(tabs[0].id, message);
+        } catch (e) {
+            console.warn('request_automove sendMessage error:', e);
+        }
     });
 }
 
 function request_console_log(message) {
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, {consoleMessage: message});
+        if (!tabs || !tabs[0]) return;
+        try {
+            chrome.tabs.sendMessage(tabs[0].id, {consoleMessage: message});
+        } catch (e) {
+            console.warn('request_console_log sendMessage error:', e);
+        }
     });
 }
 
 function push_config() {
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, {pushConfig: true, config: config});
+        if (!tabs || !tabs[0]) return;
+        try {
+            chrome.tabs.sendMessage(tabs[0].id, {pushConfig: true, config: config});
+        } catch (e) {
+            console.warn('push_config sendMessage error:', e);
+        }
     });
 }
 
