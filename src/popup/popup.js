@@ -15,6 +15,9 @@ let discard_stale_search = false; // drop engine output (incl. the flushed bestm
 let search_active = false; // a 'go' was issued whose bestmove hasn't arrived yet (is_calculating can't be
                            // used for this: it flips false on the first info line, not on bestmove)
 let premove_tracker = {fen: '', lines: {}}; // per-multipv reply stability while the opponent thinks
+let mirror_prev_stm = null;    // side to move of the previous position (mirror mode timing)
+let mirror_last_pos_ts = 0;    // wall time when the current position first appeared
+let mirror_opp_move_ms = null; // how long the opponent spent on their last move
 let prog = 0;
 let last_eval = {fen: '', activeLines: 0, lines: []};
 let turn = ''; // 'w' | 'b'
@@ -29,6 +32,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     const moveVariance = JSON.parse(localStorage.getItem('move_variance'));
     const autoplay = JSON.parse(localStorage.getItem('autoplay'));
     const computerEval = JSON.parse(localStorage.getItem('computer_evaluation'));
+    const mirrorBase = JSON.parse(localStorage.getItem('mirror_base'));
+    const mirrorPct = JSON.parse(localStorage.getItem('mirror_pct'));
     // engines dropped in this version — migrate stale selections to the current default
     const REMOVED_ENGINES = ['stockfish-6', 'stockfish-16-nnue-40', 'stockfish-16-nnue-7', 'lc0', 'stockfish-17-nnue-79'];
     let storedEngine = JSON.parse(localStorage.getItem('engine'));
@@ -54,6 +59,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         puzzle_mode: JSON.parse(localStorage.getItem('puzzle_mode')) || false,
         help_mode: JSON.parse(localStorage.getItem('help_mode')) || false,
         eval_bar: JSON.parse(localStorage.getItem('eval_bar')) || false,
+        // Mirror mode: search exactly as long as the opponent spent on their last move,
+        // adjusted by mirror_pct (them 10s -> us 9s at -10%); mirror_base until they've moved
+        mirror_mode: JSON.parse(localStorage.getItem('mirror_mode')) || false,
+        mirror_base: (mirrorBase != null) ? mirrorBase : 1000,
+        mirror_pct: (mirrorPct != null) ? mirrorPct : -10,
         python_autoplay_backend: JSON.parse(localStorage.getItem('python_autoplay_backend')) || false,
         // appearance settings
         pieces: JSON.parse(localStorage.getItem('pieces')) || 'wikipedia.svg',
@@ -250,6 +260,62 @@ function init_quick_settings() {
         if (!slider || !label) continue;
         label.textContent = slider.value;
         slider.addEventListener('input', () => { label.textContent = slider.value; });
+    }
+    // Mirror Mode: one button flips the panel into "play at the opponent's pace". It forces the
+    // mode toggles above into the only configuration that makes sense for it (autoplay on;
+    // premove/puzzle/help off -- instant premoves, puzzle sprints and help arrows all contradict
+    // pacing), and search_movetime() takes over the engine's time budget.
+    const mirrorBtn = document.getElementById('qs_mirror');
+    const mirrorParams = document.getElementById('qs_mirror_params');
+    const render_mirror = () => {
+        const on = !!config.mirror_mode;
+        if (mirrorBtn) mirrorBtn.classList.toggle('active', on);
+        if (mirrorParams) mirrorParams.style.display = on ? '' : 'none';
+        // active mirror collapses the panel to the essentials (see popup.css .mirror-on rules)
+        document.getElementById('quick-settings')?.classList.toggle('mirror-on', on);
+        const auto = document.getElementById('qs_autoplay');
+        if (auto) {
+            auto.disabled = on; // autoplay is forced ON while mirroring -- visible but locked
+            if (on) auto.checked = true;
+        }
+    };
+    render_mirror();
+    if (mirrorBtn) {
+        mirrorBtn.addEventListener('click', () => {
+            config.mirror_mode = !config.mirror_mode;
+            save('mirror_mode', config.mirror_mode);
+            if (config.mirror_mode) {
+                for (const [key, value, id] of [['autoplay', true, 'qs_autoplay'], ['premove', false, 'qs_premove'],
+                                                ['puzzle_mode', false, 'qs_puzzle'], ['help_mode', false, 'qs_help']]) {
+                    config[key] = value;
+                    save(key, value);
+                    const box = document.getElementById(id);
+                    if (box) box.checked = value; // reflect the forced state on the switches above
+                }
+                request_clear_hint();
+                mirror_opp_move_ms = null; // fresh activation: pace off mirror_base until they move
+            }
+            // the go mode (infinite vs movetime) and the movetime source both changed: abandon
+            // the current search and re-analyse under the new mode on the next position push
+            send_engine_uci('stop');
+            last_eval.fen = '';
+            render_mirror();
+            push_config();
+        });
+    }
+    for (const [id, key, def, clamp] of [
+        ['qs_mirror_base', 'mirror_base', 1000, v => Math.max(100, Math.min(30000, v))],
+        ['qs_mirror_pct', 'mirror_pct', -10, v => Math.max(-90, Math.min(100, v))],
+    ]) {
+        const elem = document.getElementById(id);
+        if (!elem) continue;
+        elem.value = config[key];
+        elem.addEventListener('change', () => {
+            const parsed = parseInt(elem.value);
+            config[key] = clamp(Number.isFinite(parsed) ? parsed : def);
+            elem.value = config[key];
+            save(key, config[key]);
+        });
     }
 }
 
@@ -739,17 +805,46 @@ function premove_instant_reply(new_fen, new_moves) {
     return null;
 }
 
+// Mirror mode: our search budget mirrors the time the opponent spent on their LAST move,
+// adjusted by mirror_pct (them 10s -> us 9s at -10%). Until they have moved (or after a board
+// flip reset), mirror_base applies. Only OUR turn is paced this way -- background analysis of
+// the opponent's turn keeps the normal compute_time budget. Clamped so a correspondence
+// opponent thinking for an hour can't lock the engine into an hour-long search.
+function search_movetime(fen) {
+    if (!config.mirror_mode) return config.compute_time;
+    const our = (board.orientation() === 'white') ? 'w' : 'b';
+    if (fen.split(' ')[1] !== our) return config.compute_time;
+    const raw = (mirror_opp_move_ms != null)
+        ? mirror_opp_move_ms * (1 + config.mirror_pct / 100)
+        : config.mirror_base;
+    return Math.round(Math.max(50, Math.min(30000, raw)));
+}
+
 function on_new_pos(fen, startFen, moves) {
     console.log("on_new_pos", fen, startFen, moves);
     if (config.help_mode) request_clear_hint(); // position changed; last hint is stale
     premove_tracker = {fen: fen, startFen: startFen || fen, moves: moves || '', lines: {}}; // certifications belong to exactly one position
+    // Mirror mode timing: a transition from "them to move" to "us to move" means the opponent
+    // just completed a move; the wall time since the previous position appeared is (to within
+    // a scrape debounce) how long they spent on it.
+    const stm = fen.split(' ')[1];
+    const now_ts = Date.now();
+    const our_color = (board.orientation() === 'white') ? 'w' : 'b';
+    if (mirror_prev_stm && mirror_prev_stm !== our_color && stm === our_color) {
+        mirror_opp_move_ms = now_ts - mirror_last_pos_ts;
+        if (config.mirror_mode) {
+            console.log(`Mirror: opponent took ${mirror_opp_move_ms}ms -> our search budget ${search_movetime(fen)}ms`);
+        }
+    }
+    mirror_prev_stm = stm;
+    mirror_last_pos_ts = now_ts;
     const search_in_flight = search_active;
     toggle_calculating(true);
     if (is_remote()) {
         if (moves) {
-            request_remote_analysis(startFen, config.compute_time, moves).then(on_engine_response).catch(on_remote_error);
+            request_remote_analysis(startFen, search_movetime(fen), moves).then(on_engine_response).catch(on_remote_error);
         } else {
-            request_remote_analysis(fen, config.compute_time).then(on_engine_response).catch(on_remote_error);
+            request_remote_analysis(fen, search_movetime(fen)).then(on_engine_response).catch(on_remote_error);
         }
     } else {
         if (search_in_flight) {
@@ -768,7 +863,7 @@ function on_new_pos(fen, startFen, moves) {
         if (config.help_mode || !config.autoplay) {
             send_engine_uci('go infinite'); // pure analysis: keep deepening until the position changes
         } else {
-            send_engine_uci(`go movetime ${config.compute_time}`); // autoplay needs a final bestmove to act on
+            send_engine_uci(`go movetime ${search_movetime(fen)}`); // autoplay needs a final bestmove to act on
         }
         search_active = true;
     }

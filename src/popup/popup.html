@@ -29,7 +29,7 @@
 
 <div id="quick-settings">
     <div class="qs-title">Quick Settings</div>
-    <div class="qs-row switch">
+    <div class="qs-row switch qs-mirror-keep">
         <span class="qs-label">Autoplay</span>
         <label><input id="qs_autoplay" type="checkbox"><span class="lever"></span></label>
     </div>
@@ -52,7 +52,7 @@
               data-tooltip="Show a vertical evaluation bar to the left of the game board, with the score shown inside it (chess.com-style).">Eval Bar</span>
         <label><input id="qs_evalbar" type="checkbox"><span class="lever"></span></label>
     </div>
-    <div class="qs-row">
+    <div class="qs-row qs-mirror-keep">
         <span class="qs-label">Engine</span>
         <select id="qs_engine" class="browser-default">
             <option value="stockfish-dev-nnue">SF dev NNUE</option>
@@ -111,6 +111,22 @@
         <div class="qs-pair">
             <input id="qs_move" class="browser-default" type="number" min="0" step="50">
             <input id="qs_move_var" class="browser-default" type="number" min="0" step="50">
+        </div>
+    </div>
+    <div class="qs-row qs-mirror-keep">
+        <button id="qs_mirror" class="tooltipped" data-position="left"
+                data-tooltip="Play at the opponent's pace: the engine's search time becomes the time
+                              they spent on their LAST move, adjusted by the % below (their 10s
+                              -> our 9s at -10%). The base time applies until they have moved.
+                              Turns Autoplay on and Premove / Puzzle / Help off.">
+            Mirror Mode
+        </button>
+    </div>
+    <div class="qs-row qs-mirror-keep" id="qs_mirror_params" style="display: none;">
+        <span class="qs-label">Base (ms) / Adjust (%)</span>
+        <div class="qs-pair">
+            <input id="qs_mirror_base" class="browser-default" type="number" min="100" max="30000" step="100">
+            <input id="qs_mirror_pct" class="browser-default" type="number" min="-90" max="100" step="5">
         </div>
     </div>
 </div>

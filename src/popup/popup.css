@@ -336,6 +336,37 @@ html, body {
 }
 #quick-settings #qs_variant_detect:hover { background: #f0f0f0; }
 
+/* Mirror mode active: the panel collapses to the essentials -- Engine, Autoplay (forced on),
+   the Mirror button and its Base/Adjust params. Everything else is pace-irrelevant while
+   mirroring and only invites conflicting tweaks, so it is hidden. */
+#quick-settings.mirror-on .qs-row { display: none; }
+#quick-settings.mirror-on .qs-row.qs-mirror-keep { display: block; }
+#quick-settings.mirror-on .qs-row.switch.qs-mirror-keep { display: flex; }
+/* Autoplay is locked ON while mirroring: keep the lever looking ON (materialize greys out
+   disabled levers, which would read as "off"; !important settles the fight for good) */
+#quick-settings.mirror-on #qs_autoplay[disabled] + .lever { background-color: #84c7c1 !important; }
+#quick-settings.mirror-on #qs_autoplay[disabled] + .lever:after { background-color: #26a69a !important; }
+
+/* Mirror Mode: a full-width toggle button; teal = active */
+#quick-settings #qs_mirror {
+    width: 100%;
+    height: 28px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #fff;
+    color: #555;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+}
+#quick-settings #qs_mirror:hover { background: #f0f0f0; }
+#quick-settings #qs_mirror.active {
+    background: #26a69a;
+    border-color: #26a69a;
+    color: #fff;
+}
+#quick-settings #qs_mirror.active:hover { background: #2bbbad; }
+
 #quick-settings select.browser-default,
 #quick-settings input.browser-default {
     width: 100%;
@@ -401,6 +432,18 @@ body.mephisto-dark #quick-settings #qs_variant_detect {
     border-color: #34353d;
 }
 body.mephisto-dark #quick-settings #qs_variant_detect:hover { background: #202127; }
+body.mephisto-dark #quick-settings #qs_mirror {
+    background: #16171b;
+    color: #e6e6e9;
+    border-color: #34353d;
+}
+body.mephisto-dark #quick-settings #qs_mirror:hover { background: #202127; }
+body.mephisto-dark #quick-settings #qs_mirror.active {
+    background: #26a69a;
+    border-color: #26a69a;
+    color: #fff;
+}
+body.mephisto-dark #quick-settings #qs_mirror.active:hover { background: #2bbbad; }
 body.mephisto-dark #quick-settings select.browser-default:focus,
 body.mephisto-dark #quick-settings input.browser-default:focus {
     border-color: #26a69a; /* teal accent on focus */
