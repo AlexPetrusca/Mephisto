@@ -18,7 +18,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.24'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.2.0'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`Mephisto is listening! (content-script build ${MEPHISTO_BUILD})`);
     const siteMap = {
@@ -29,6 +29,7 @@ window.onload = () => {
     site = siteMap[window.location.hostname];
     pullConfig();
     determineStartPosition();
+    startPositionObserver();
 };
 
 chrome.runtime.onMessage.addListener((response, sender, sendResponse) => {
@@ -41,10 +42,10 @@ chrome.runtime.onMessage.addListener((response, sender, sendResponse) => {
         return;
     }
     if (response.queryfen) {
-        // ALWAYS answer so the popup's in-flight poll guard clears immediately -- otherwise a poll
-        // sent while we're mid-move (or before config) gets no reply and the board freezes for up
-        // to the fallback timeout. While moving/unconfigured the DOM is transient, so answer 'no'
-        // (skip); the next 10ms poll picks up the real position the instant we're idle again.
+        // Fallback poll from the popup (positions normally arrive via pushPosition). ALWAYS
+        // answer so the popup's in-flight guard clears immediately. While moving/unconfigured
+        // the DOM is transient, so answer 'no' (skip); the observer pushes the real position
+        // the instant we're idle again.
         let res = 'no', orient;
         if (!moving && config) {
             res = tryScrapePosition();
@@ -76,6 +77,9 @@ chrome.runtime.onMessage.addListener((response, sender, sendResponse) => {
     } else if (response.pushConfig) {
         console.log(response.config);
         config = response.config;
+        // a (re)opened popup hasn't seen any position yet -- invalidate the dedupe and push now
+        lastPushedPosition = null;
+        schedulePositionPush();
     } else if (response.drawHint) {
         drawHintArrows(response.arrows);
     } else if (response.clearHint) {
@@ -88,6 +92,57 @@ chrome.runtime.onMessage.addListener((response, sender, sendResponse) => {
         console.log(response.consoleMessage);
     }
 });
+
+// ------------------------------------------------------------------------------------------
+// Event-driven position updates. The popup used to POLL {queryfen} every fen_refresh ms
+// (10ms default = up to 100 full DOM scrapes and forced layout passes per second, per tab),
+// which starved the page's main thread and made the site -- and sometimes Chrome itself --
+// stutter or hang. Instead, a MutationObserver watches the page and PUSHES a scrape only when
+// the DOM actually changed; the popup keeps a slow poll purely as a safety net. Mutation
+// bursts (piece animations, batched move-list updates) coalesce through a short debounce, and
+// identical scrapes are deduped so the popup only ever hears about real position changes.
+
+const PUSH_DEBOUNCE_MS = 30; // at most one scrape per 30ms, and only while the DOM is mutating
+
+let positionObserver = null;
+let positionPushTimer = null;
+let lastPushedPosition = null;
+
+function startPositionObserver() {
+    if (positionObserver || !document.body) return;
+    positionObserver = new MutationObserver(schedulePositionPush);
+    positionObserver.observe(document.body, {
+        childList: true,   // moves appended to the move list; board/pieces added or removed
+        subtree: true,
+        attributes: true,  // pieces move via style transforms and class changes
+        attributeFilter: ['class', 'style'],
+        // no characterData: clock text ticks would wake us pointlessly; anything that changes
+        // the POSITION also adds/moves elements, which the two filters above already catch
+    });
+}
+
+function schedulePositionPush() {
+    if (positionPushTimer) return; // a push is already pending; this mutation coalesces into it
+    positionPushTimer = setTimeout(() => {
+        positionPushTimer = null;
+        pushPosition();
+    }, PUSH_DEBOUNCE_MS);
+}
+
+function pushPosition() {
+    if (moving || !config) return; // mid-automove/unconfigured; toggleMoving/pushConfig re-push after
+    const res = tryScrapePosition();
+    if (res === 'no') return; // transient (board animating): the animation's own mutations retry this
+    const orient = getOrientation();
+    const key = `${orient}|${res}`;
+    if (key === lastPushedPosition) return; // nothing actually changed (clock tick, hover, ...)
+    lastPushedPosition = key;
+    try {
+        chrome.runtime.sendMessage({dom: res, orient: orient, fenresponse: true});
+    } catch (e) {
+        // extension was reloaded — this orphaned content-script can't reach it anymore
+    }
+}
 
 // ------------------------------------------------------------------------------------------
 // In-page overlay: the whole Mephisto panel (popup.html) injected into the page as a
@@ -513,7 +568,9 @@ function toggleMoving() {
     // longer than any real move takes -- so scraping always resumes.
     clearTimeout(movingWatchdog);
     if (moving) {
-        movingWatchdog = setTimeout(() => { moving = false; }, 15000);
+        movingWatchdog = setTimeout(() => { moving = false; schedulePositionPush(); }, 15000);
+    } else {
+        schedulePositionPush(); // pushes were suppressed while moving; catch up on the final state
     }
 }
 
@@ -961,7 +1018,9 @@ function simulatePvMoves(pv) {
     async function confirmResponse(move, lastMove) {
         let runtime = 0;
         while (runtime < 10000) { // < 10 seconds
-            runtime += await promiseTimeout(config.fen_refresh);
+            // fixed 50ms: fen_refresh is the popup's SLOW fallback poll now (>= 1s) and must not
+            // pace this loop -- puzzle mode needs to see the opponent's reply promptly
+            runtime += await promiseTimeout(50);
             try {
                 const observedLastMove = deriveLastMove();
                 if (observedLastMove !== lastMove) {

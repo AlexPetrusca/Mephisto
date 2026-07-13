@@ -50,10 +50,11 @@
                     <div class="section">
                         <label>
                             <span class="tooltipped" data-position="right"
-                                  data-tooltip="Determines how often Mephisto checks the webpage for changes in the
-                                                chess position."
+                                  data-tooltip="Position changes are detected instantly by watching the page for DOM
+                                                mutations. This only sets the slow fallback poll that re-syncs if an
+                                                update is ever missed (minimum 1000ms)."
                             >
-                                Fen Refresh Interval (ms) <i class="material-icons info-tooltip">info</i>
+                                Fallback Poll Interval (ms) <i class="material-icons info-tooltip">info</i>
                             </span>
                             <input id="fen_refresh_input" type="number">
                         </label>

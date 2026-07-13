@@ -9,7 +9,7 @@ class GeneralSettings extends SettingsPage {
         const engine_select = this.registerFormElement('engine', 'Engine:', 'select', 'stockfish-dev-nnue');
         const variant_select = this.registerFormElement('variant', 'Variant:', 'select', 'chess');
         this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 300);
-        this.registerFormElement('fen_refresh', 'Fen Refresh Interval (ms):', 'input', 10);
+        this.registerFormElement('fen_refresh', 'Fallback Poll Interval (ms):', 'input', 1000);
         const multipv_range = this.registerFormElement('multiple_lines', 'Multiple Lines:', 'range', 1);
         const threads_range = this.registerFormElement('threads', 'Threads:', 'range', 8);
         const memory_range = this.registerFormElement('memory', 'Memory:', 'range', 512);

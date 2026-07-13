@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         engine: storedEngine || 'stockfish-dev-nnue',
         variant: JSON.parse(localStorage.getItem('variant')) || 'chess',
         compute_time: (computeTime != null) ? computeTime : 300,
-        fen_refresh: (fenRefresh != null) ? fenRefresh : 10,
+        fen_refresh: (fenRefresh != null) ? fenRefresh : 1000, // fallback poll only; positions arrive as pushes
         multiple_lines: JSON.parse(localStorage.getItem('multiple_lines')) || 1,
         threads: JSON.parse(localStorage.getItem('threads')) || 8,
         memory: JSON.parse(localStorage.getItem('memory')) || 512,
@@ -137,11 +137,15 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     });
 
-    // query fen periodically from content-script
+    // The content-script now PUSHES a scrape whenever the page actually changes (its
+    // MutationObserver), so this poll is only a safety net for a missed push (observer edge
+    // case, content-script from an older build). fen_refresh used to be the hot poll interval
+    // (10ms default!) -- clamp it so old saved settings can't reinstate the 100Hz scrape loop
+    // that starved the page and destabilized Chrome.
     request_fen();
     setInterval(function () {
         request_fen();
-    }, config.fen_refresh);
+    }, Math.max(1000, config.fen_refresh));
 
     // register button click listeners
     document.getElementById('analyze').addEventListener('click', () => {
@@ -207,7 +211,7 @@ function init_quick_settings() {
     for (const [id, key, parse] of [
         ['qs_engine', 'engine', v => v],
         ['qs_variant', 'variant', v => v],
-        ['qs_fen', 'fen_refresh', v => Math.max(10, parseInt(v) || 10)], // the poll interval is created once at startup
+        ['qs_fen', 'fen_refresh', v => Math.max(1000, parseInt(v) || 1000)], // fallback poll; created once at startup
         ['qs_threads', 'threads', v => parseInt(v) || 8],
         ['qs_memory', 'memory', v => parseInt(v) || 512],
         ['qs_lines', 'multiple_lines', v => parseInt(v) || 1],
@@ -904,9 +908,9 @@ let fen_request_inflight = false;
 let fen_request_timer = null;
 
 function request_fen() {
-    // don't pile up overlapping fen requests when the scrape round-trip is slower than the poll
-    // interval (10ms). Self-heals: the content-script skips replying while it performs a move (or
-    // before config arrives), so a 500ms fallback clears the flag -- polling can never wedge.
+    // safety-net poll only -- positions normally arrive as pushes from the content-script's
+    // MutationObserver. Don't pile up overlapping requests; the content-script skips replying
+    // while it performs a move (or before config arrives), so a 500ms fallback clears the flag.
     if (fen_request_inflight) return;
     fen_request_inflight = true;
     clearTimeout(fen_request_timer);
