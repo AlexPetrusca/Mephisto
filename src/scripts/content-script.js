@@ -37,7 +37,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.126'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.128'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -227,7 +227,7 @@ const BOOK_H = 132;        // extra height for the opening-explorer overlay (hea
 let panelBook = false;     // likewise mirrored: the overlay only grows the panel while it's shown
 const panelH = () => panelCompact ? COMPACT_H : (POPUP_H + (panelBook ? BOOK_H : 0));
 const POPUP_W = 568;       // the popup page's fixed layout size (popup.css html,body)
-const POPUP_H = 700; // matches popup.css body height (score + WDL + alt-lines, and all 21 quick settings)
+const POPUP_H = 672; // matches popup.css body height (whichever column is taller)
 const OVERLAY_SCALE = 0.8; // default render scale for fresh installs; resizing the panel persists a width
 const OVERLAY_BOX_KEY = 'mephisto.overlayBox'; // per-site localStorage: {left, top, width}
 

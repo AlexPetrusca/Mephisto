@@ -7,7 +7,10 @@ html.toolbar-popup {
 
 html, body {
     width: 568px; /* 378px left column (14px eval bar + 4px gap + 350px board + margins) + 190px quick settings */
-    height: 700px; /* score + WDL + alt-lines under the board, and all 21 quick settings beside it */
+    height: 672px; /* the taller column: board + score/WDL + 5 alt-lines on the left (~623px, and the
+                      button row sits below that), or the 21 quick settings on the right (~636px with
+                      the tighter rows). Both fit with no dead space -- the row spacing was the real
+                      overflow, not the height. */
     overflow: hidden;
     background-color: rgb(240, 240, 240);
     color: #000; /* stark: pure black in light mode (user: "no grey") */
@@ -691,7 +694,7 @@ body.mephisto-dark #alt-lines::-webkit-scrollbar-thumb { background: #34353d; bo
 }
 
 body.mephisto-book:not(.mephisto-compact) {
-    height: 832px; /* 700 + BOOK_H (132) -- keep in sync with content-script.js */
+    height: 804px; /* 672 + BOOK_H (132) -- keep in sync with content-script.js */
 }
 
 body.mephisto-compact {
