@@ -6,3 +6,7 @@ lib/engine/stockfish-18-small/*.nnue -filter -diff -merge -text
 lib/engine/stockfish-18/*.nnue -filter -diff -merge -text
 lib/engine/stockfish-17-79/*.nnue -filter -diff -merge -text
 lib/engine/fairy-stockfish-14/nnue/*.nnue -filter -diff -merge -text
+
+# README screenshots: they belong on GitHub, not inside the installed extension --
+# keep them out of the release zip (git archive honours export-ignore).
+docs/ export-ignore
