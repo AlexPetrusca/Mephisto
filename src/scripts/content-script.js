@@ -37,7 +37,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.130'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.131'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -65,6 +65,10 @@ function handleExtensionMessage(response, sender, sendResponse) {
     }
     if (response.closeOverlay) { // sent to every tab when the user switches to toolbar-popup mode
         removeOverlay();
+        return;
+    }
+    if (response.hideOpponent !== undefined) {
+        applyHideOpponent(response.hideOpponent);
         return;
     }
     if (response.dragSelect) {
@@ -128,6 +132,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
     } else if (response.pushConfig) {
         console.log(response.config);
         config = response.config;
+        applyHideOpponent(!!config.hide_opponent); // follows the setting on every config push
         // config in hand = we can scrape. Start the event-driven pipeline and sync the panel
         // immediately (a re-opened panel must not wait for the next board mutation or fallback poll).
         startPositionObserver();
@@ -332,6 +337,29 @@ function startDragSelect() {
         if (self.MephistoPanel?.snapWithCrop) self.MephistoPanel.snapWithCrop(crop);
         else console.warn('Mephisto: drag-select needs the floating panel (the toolbar popup closes when you click the page)');
     });
+}
+
+// Blur the opponent's name and avatar on the PAGE (opt-in, off by default). Purely cosmetic and
+// local -- it changes nothing the site sees. Worth knowing: this is the one feature that
+// deliberately adds a <style> to the page, so it is off unless you ask for it.
+const HIDE_OPP_ID = 'mephisto-hide-opp';
+const HIDE_OPP_SELECTORS = [
+    // chess.com
+    '.player-component .user-username-component', '.player-tagline .user-username-component',
+    '.user-tagline-username', '.player-avatar', '.user-avatar-component',
+    // lichess
+    '.game__meta .player .user-link', '.ruser a', '.ruser .name', '.game__meta .player .name',
+].join(', ');
+
+function applyHideOpponent(on) {
+    const existing = document.getElementById(HIDE_OPP_ID);
+    if (!on) { existing?.remove(); return; }
+    if (existing) return;
+    const st = document.createElement('style');
+    st.id = HIDE_OPP_ID;
+    // blur rather than hide: the layout stays intact, so the page looks normal
+    st.textContent = `${HIDE_OPP_SELECTORS} { filter: blur(6px) !important; }`;
+    (document.head || document.documentElement).appendChild(st);
 }
 
 function removeOverlay() {

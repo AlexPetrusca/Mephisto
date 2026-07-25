@@ -20,6 +20,7 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('autoplay', 'Autoplay:', 'checkbox', false);
         this.registerFormElement('premove', 'Premove:', 'checkbox', false);
         this.registerFormElement('ponder', 'Pondering:', 'checkbox', false);
+        this.registerFormElement('hide_opponent', 'Hide Opponent Name:', 'checkbox', false);
         this.registerFormElement('explorer', 'Opening Explorer:', 'checkbox', false);
         this.registerFormElement('book_play', 'Play Book Moves:', 'checkbox', false);
         this.registerFormElement('explorer_db', 'Opening Database:', 'select', 'masters');

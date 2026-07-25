@@ -210,6 +210,9 @@ async function initPanel(root, tabId) {
         ponder: JSON.parse(MephistoConfig.get('ponder')) || false,
         // Opening explorer: `explorer` draws the overlay, `book_play` actually plays a weighted-random
         // book move. Two independent toggles -- turning on the overlay must never change how you play.
+        // Blur the opponent's name and avatar on the page. For screenshots and screen sharing --
+        // a real person's username should not end up in a bug report or a README.
+        hide_opponent: JSON.parse(MephistoConfig.get('hide_opponent')) || false,
         explorer: JSON.parse(MephistoConfig.get('explorer')) || false,
         book_play: JSON.parse(MephistoConfig.get('book_play')) || false,
         explorer_db: JSON.parse(MephistoConfig.get('explorer_db') || '"masters"'),
@@ -590,6 +593,7 @@ function init_quick_settings() {
                 if (eng === 'maia' || eng === 'maia3') save('variant', 'chess');
                 else if (!FAIRY_ENGINES.includes(eng) && !['chess', 'fischerandom'].includes(config.variant)) save('variant', 'chess');
             }
+            if (key === 'engine') stop_current_engine(); // free the old process before switching
             save(key, parse(elem.value));
             panel_reload();
         });
@@ -3181,6 +3185,7 @@ function is_remote() {
 // (live depth like Stockfish), ending with a 'done' frame. Each request's onInfo gets the
 // intermediate frames; the promise resolves on 'done'.
 let native_bg_port = null;
+let native_bg_port_name = null; // which engine that port was opened for
 let native_seq = 0;
 const native_pending = new Map(); // id -> {resolve, reject, onInfo}
 
@@ -3193,9 +3198,39 @@ function native_port_name() {
     return config.engine; // sf-native / fairy-native == the host key in NATIVE_HOSTS
 }
 
+// Shut down whatever engine is running right now. Used when SELECTING a different engine: the
+// offscreen WASM engine is disposed and the native host's port is closed (the background shuts the
+// host down when its last port goes), so the engine you just left stops instead of idling loaded.
+function stop_current_engine() {
+    try { abandon_search(); } catch (e) { /* */ }
+    try {
+        chrome.runtime.sendMessage({toOffscreen: true, clientId: ENGINE_CLIENT, cmd: 'dispose'});
+    } catch (e) { /* SW/offscreen already gone */ }
+    if (native_bg_port) {
+        try { native_bg_port.disconnect(); } catch (e) { /* */ }
+        native_bg_port = null;
+        native_bg_port_name = null;
+    }
+    engine_ready = false;
+    last_init_fp = null; // never let a warm-reuse fingerprint match across an engine change
+}
+
 function native_bg() {
+    // The port is per ENGINE. Switching engines re-opens the panel but does not reload this script,
+    // so a cached port would still be wired to the engine you switched AWAY from -- the old host
+    // kept running (burning cores on a stale search) and, worse, the new engine's requests went to
+    // it. Drop the port whenever the selected engine no longer matches the one it was opened for;
+    // the background kills a host once its last port closes.
+    const want = native_port_name();
+    if (native_bg_port && native_bg_port_name !== want) {
+        try { native_bg_port.disconnect(); } catch (e) { /* already gone */ }
+        native_bg_port = null;
+        for (const pend of native_pending.values()) pend.reject(new Error('engine switched'));
+        native_pending.clear();
+    }
     if (native_bg_port) return native_bg_port;
-    native_bg_port = chrome.runtime.connect({name: native_port_name()});
+    native_bg_port_name = want;
+    native_bg_port = chrome.runtime.connect({name: want});
     native_bg_port.onMessage.addListener(frame => {
         if (frame.fatal) {
             for (const p of native_pending.values()) p.reject(new Error(frame.fatal));

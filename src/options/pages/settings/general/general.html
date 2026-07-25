@@ -215,6 +215,23 @@
                     </div>
                     <div class="section switch">
                         <label class="switch-label tooltipped" data-position="right"
+                               data-tooltip="Blurs your opponent's username and avatar on the page, so a
+                                             screenshot or a screen share does not expose a real person. Purely
+                                             cosmetic and local -- the site sees nothing different. This is the
+                                             one option that adds a style element to the page, so it is off
+                                             unless you turn it on."
+                        >
+                            Hide Opponent Name <i class="material-icons info-tooltip">info</i>
+                        </label>
+                        <label>
+                            Off
+                            <input id="hide_opponent_checkbox" type="checkbox">
+                            <span class="lever"></span>
+                            On
+                        </label>
+                    </div>
+                    <div class="section switch">
+                        <label class="switch-label tooltipped" data-position="right"
                                data-tooltip="Show how humans actually played this opening (lichess database): the opening
                                              name plus the most-played replies and their win/draw/loss split, in a block
                                              under the analysis lines. Read-out only -- it never changes which move you
@@ -577,8 +594,9 @@
                 <p style="margin: 0 0 10px; font-size: 13px; line-height: 1.4;">
                     Keyboard shortcuts that work while you're on the game page (they only fire when the floating panel
                     is open). Click a key to rebind it — the next key you press (with any Ctrl/Alt/Shift/Meta) becomes
-                    the binding; press <b>Esc</b> to cancel, or <b>Backspace/Delete</b> to clear it. Defaults use
-                    <b>Alt+letter</b> to avoid clashing with the site's own shortcuts; the play-move key is Spacebar.
+                    the binding; press <b>Esc</b> to cancel, or <b>Backspace/Delete</b> to clear it. Defaults are
+                    <b>single letters</b>; the play-move key is Spacebar. If one clashes with a shortcut the site
+                    itself uses, rebind it with any Ctrl/Alt/Shift/Meta combination.
                 </p>
                 <div id="hotkey_rows"></div>
                 <div class="section">
