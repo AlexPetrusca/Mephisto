@@ -37,7 +37,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.124'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.125'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -948,8 +948,9 @@ function getOrientation() {
         return (ttQuery()?.myColor === 'black') ? 'black' : 'white';
     }
     if (site === 'chessbase') {
-        // no site board to overlay; orient the popup's own board to the side to move so the solver
-        // sees the puzzle from the moving side's perspective
+        // Tactics puzzles are presented from the solving side, so the side to move is the side at
+        // the bottom -- which is both the popup board's orientation AND the site board's, so the
+        // same answer serves the on-board arrows and the autoplay click geometry.
         return (cbState && cbState.split(' ')[1] === 'b') ? 'black' : 'white';
     }
     if (isChesscomVariants()) {
@@ -1485,8 +1486,34 @@ function getRanksFiles() {
     return [rankCoords, fileCoords];
 }
 
+// ChessBase renders its board with its own engine, so there is no class name to rely on. Find it by
+// SHAPE instead: the largest square-ish element that is big enough to be the board. That survives
+// their markup changing, which a hand-picked selector would not. Cached until it leaves the DOM,
+// because this walks the tree.
+let cbBoardEl = null;
+
+function getChessbaseBoard() {
+    if (cbBoardEl?.isConnected && cbBoardEl.getBoundingClientRect().width > 100) return cbBoardEl;
+    cbBoardEl = null;
+    let best = null, bestArea = 0;
+    for (const el of document.querySelectorAll('canvas, div, svg')) {
+        const r = el.getBoundingClientRect();
+        if (r.width < 160 || r.height < 160) continue;          // too small to be a puzzle board
+        if (Math.abs(r.width - r.height) > r.width * 0.04) continue; // must be square
+        if (el.querySelector('canvas, svg')) continue;          // prefer the innermost square element
+        const area = r.width * r.height;
+        if (area > bestArea) { best = el; bestArea = area; }
+    }
+    return (cbBoardEl = best);
+}
+
 function getBoard() {
     let board;
+    if (site === 'chessbase') {
+        // arrows and autoplay both derive purely from this rect + getOrientation(), so finding the
+        // element is all that On-board arrows / Autoplay need here
+        return getChessbaseBoard();
+    }
     if (site === 'taketaketake') {
         // the WebGPU canvas is exactly the 8x8 board (aspect-square) -- clicks, the eval bar and
         // hint arrows all key off its bounding rect
@@ -1603,7 +1630,61 @@ function determineStartPosition() {
 }
 
 
+// A "From Position" game's custom start could only ever be captured at move 0, by scraping the
+// pieces off the board. Reload such a game at move 20 and the capture was skipped entirely -- every
+// later scrape then replayed the moves from the STANDARD start, so the analysis was of a different
+// game (or aborted on the first move that didn't fit). The page still knows the real start, so read
+// it from the embedded game data instead of the board. Returns the start in the same piece-string
+// form scrapePositionPuz produces, or null.
+const FEN_RE = /^([rnbqkpRNBQKP1-8]+\/){7}[rnbqkpRNBQKP1-8]+ [wb] /;
+
+function fenToPuzString(fen) {
+    const [placement, turn] = fen.trim().split(/\s+/);
+    let out = `${turn}*****`;
+    const rows = placement.split('/');
+    if (rows.length !== 8) return null;
+    for (let r = 0; r < 8; r++) {
+        let file = 0;
+        for (const ch of rows[r]) {
+            if (ch >= '1' && ch <= '8') { file += ch.charCodeAt(0) - 48; continue; }
+            const sq = String.fromCharCode(97 + file) + (8 - r);
+            out += `${ch === ch.toUpperCase() ? 'w' : 'b'}-${ch.toLowerCase()}-${sq}*****`;
+            file++;
+        }
+        if (file !== 8) return null;
+    }
+    return out;
+}
+
+// lichess ships the game's starting FEN in the page (the round data calls it initialFen). Read it
+// from the raw HTML rather than a DOM path, so a markup reshuffle doesn't break it -- and validate
+// hard, because a wrong start position corrupts every scrape that follows.
+function readInitialFenFromPage() {
+    if (site !== 'lichess') return null;
+    try {
+        const m = document.documentElement.innerHTML.match(/"initialFen"\s*:\s*"([^"]+)"/);
+        if (!m) return null;
+        const fen = m[1].replace(/\\\//g, '/').trim();
+        if (fen === 'startpos' || !FEN_RE.test(fen)) return null;
+        new Chess('chess', fen); // throws on anything chess.js can't read
+        return fenToPuzString(fen);
+    } catch (e) {
+        return null;
+    }
+}
+
 function onPositionLoad(retries = 10) {
+    // Loaded mid-game (a refresh, or opening a game already in progress): the board no longer shows
+    // the start, so ask the page for it. This is the only path that can recover a custom start after
+    // move 0 -- without it the game is replayed from the standard position.
+    if (getMoveRecords()?.length) {
+        const fromPage = readInitialFenFromPage();
+        if (fromPage && fromPage !== DEFAULT_POSITION && !readStartPos(location.href)) {
+            console.log('Mephisto: recovered this game\'s custom start position from the page');
+            writeStartPos(location.href, {position: fromPage, timestamp: Date.now()});
+        }
+        return;
+    }
     // cache position, if it's a non-standard starting position
     if (!getMoveRecords()?.length) { // is stating position?
         let position;

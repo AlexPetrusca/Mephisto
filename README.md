@@ -413,13 +413,8 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
   download for play that isn't stronger; mainly for comparing styles.
 - [ ] **Syzygy tablebase probing** (≤7 pieces) — perfect endgame play once few enough pieces are left.
 
-**Board & position**
-- [ ] **Setup / From-Position FEN capture** — read custom start positions properly, including black-to-move.
-
 **Variants & packaging**
 - [ ] **Duck Chess autoplay polish** — make the duck-placement step work end to end (detection and analysis already do).
-- [ ] **Auto-download variant nets** — fetch nets on demand instead of bundling every one. Most of the download is the
-  Stockfish and Maia-3 nets, so it only pays off if it covers those — at the cost of the zero-setup, offline install.
 
 ### Blocked upstream
 
@@ -454,6 +449,9 @@ Shipped and in the current build.
 - [x] **Pondering** (v3.1.107) — the roadmap's *Ponder / background analysis*. Opt in under **Settings → General → Pondering**: the opponent's turn is then searched at full threads for their *whole* think, across their **top 5 candidate replies** (narrowing to 1–2 when the position is forced or a recapture), so a deeper answer is ready the moment they move — and Premove can certify an instant reply to any of those five. The roadmap's CPU/battery cost is handled by the default rather than ignored: with Pondering **off**, the opponent's turn drops to a **single thread**, so idle waiting now costs *less* than it used to, not more. Your own move always gets the full thread count, and analysis-only work is never throttled. Works with the in-browser and native Stockfish/Fairy builds and the remote engine; Maia is a single forward pass and can't deepen, so it's excluded.
 - [x] **Opening Explorer** (v3.1.119) — **Settings → General → Opening Explorer**, or the **Explorer** toggle in the panel. Shows how humans played the opening: the opening name, the most-played replies with their win/draw/loss split, and coloured arrows on the board. Turn on **Play Book Moves** to play a *weighted-random* book move instead of the engine's pick — so you don't repeat the same line every game — with a 20-game floor and an engine check (within 40cp of best) so the variety never costs you a worse move. Pick the **Opening Database** (Masters / all Lichess / club 1600–2200). The lookup runs in the background and never delays a move; standard chess only.
 - [x] **Set up a position** (v3.1.119) — grid button in the panel row: paste a **FEN** to analyse any position instead of the page. Stops following the page while set; click again (or Re-detect) to go back.
+- [x] **Setup / From-Position capture** (v3.1.125) — a game that started from a custom position is read correctly even when you load it mid-game. The start is recovered from the page rather than only being captured at move 0, so a refresh no longer replays the game from the standard start.
+- [x] **On-demand nets** (v3.1.125) — a net that isn't bundled is downloaded on first use from the Stockfish project's own net server and cached permanently, so a build can ship without the large nets. Anything already bundled is used as-is and never fetched: a full install behaves exactly as before and still works offline.
+- [x] **ChessBase Tactics: on-board arrows + autoplay** (v3.1.125) — the board is located by shape (ChessBase renders its own, with no class to match), which is all the arrows and the click geometry needed.
 - [x] **Read a position off the screen** (v3.1.124) — the roadmap's *Board from a screenshot*. The camera button captures the tab, finds the board and loads it into the panel. Works on **any site** — a YouTube video, a diagram, a screenshot — not just chess sites. If auto-detection misses, drag a box around the board. Runs entirely on your machine (two ONNX models, no upload).
 - [x] **Playable panel board** (v3.1.124) — click or drag pieces on the panel's own board to walk a line, with an underpromotion picker. The panel stops following the page while you do; Re-detect returns to the live game.
 - [x] **Auto-recover on DOM changes** (v3.1.119) — if a site renames its move-list tags, Mephisto finds the move list structurally instead of silently seeing nothing.

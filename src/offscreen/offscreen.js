@@ -44,8 +44,44 @@ function send(clientId, payload) {
     try { chrome.runtime.sendMessage({fromOffscreen: true, clientId, ...payload}); } catch (e) { /* no receiver */ }
 }
 
+// --- On-demand nets ---------------------------------------------------------------------------
+// The nets are most of the download (the Stockfish and Maia nets alone are ~280 MB), so a build can
+// ship WITHOUT them and fetch what it actually uses on first run. Anything already bundled is used
+// as-is and never fetched, so this costs nothing for a full install and there is no behaviour change
+// unless a net is genuinely absent.
+//
+// Stockfish nets come from the project's own net server -- the same place Stockfish itself pulls
+// them from -- and are content-addressed (the filename IS the hash), so a name can only ever refer
+// to one file. Downloads are cached permanently, so it is a one-time cost per net.
+const NET_CACHE = 'mephisto-nets-v1';
+
+function remoteNetUrl(nnue) {
+    // nn-<hash>.nnue are official Stockfish nets; the variant nets are Fairy's and are not hosted there
+    return /^nn-[0-9a-f]{12}\.nnue$/.test(nnue)
+        ? `https://tests.stockfishchess.org/api/nn/${nnue}` : null;
+}
+
+async function fetchRemoteNet(nnue, onProgress) {
+    const url = remoteNetUrl(nnue);
+    if (!url) return null;
+    try {
+        const cache = await caches.open(NET_CACHE);
+        const hit = await cache.match(url);
+        if (hit) return hit.arrayBuffer();       // already downloaded once
+        onProgress?.(`downloading ${nnue}`);
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        const buf = await r.arrayBuffer();
+        // cache.put wants a Response; store a copy so the buffer stays usable here
+        await cache.put(url, new Response(buf.slice(0)));
+        return buf;
+    } catch (e) {
+        return null; // offline, blocked, or storage full -> caller reports a clear error
+    }
+}
+
 // Mirror popup.js fetch_nnue: nets over 100MB ship split as <name>.part0..N -- stitch them back.
-async function fetchNnue(base, nnue) {
+async function fetchNnue(base, nnue, onProgress) {
     const whole = await fetch(`${base}/${nnue}`).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
     if (whole) return whole;
     const parts = [];
@@ -54,7 +90,12 @@ async function fetchNnue(base, nnue) {
         if (!part) break;
         parts.push(part);
     }
-    if (!parts.length) throw new Error(`NNUE not found: ${nnue}`);
+    if (!parts.length) {
+        // not bundled in any form -> fetch it once and keep it
+        const remote = await fetchRemoteNet(nnue, onProgress);
+        if (remote) return remote;
+        throw new Error(`NNUE not found and could not be downloaded: ${nnue}`);
+    }
     const buf = new Uint8Array(parts.reduce((t, p) => t + p.byteLength, 0));
     parts.reduce((off, p) => { buf.set(new Uint8Array(p), off); return off + p.byteLength; }, 0);
     return buf.buffer;
@@ -99,11 +140,15 @@ async function initEngine(clientId, engineName, variant, maiaLevel) {
         if (engineName === 'fairy-stockfish-14-nnue') {
             engine.uci(`setoption name UCI_Variant value ${variant}`);
             const net = variantNnueMap[variant] || variantNnueMap['chess'];
-            engine.setNnueBuffer(new Uint8Array(await fetchNnue(base, net)), 0);
+            const note = (m) => send(clientId, {kind: 'line', line: `info string ${m}`});
+            engine.setNnueBuffer(new Uint8Array(await fetchNnue(base, net, note)), 0);
         } else {
             const nets = [];
             for (let i = 0; ; i++) { const n = engine.getRecommendedNnue(i); if (!n || nets.includes(n)) break; nets.push(n); }
-            for (let i = 0; i < nets.length; i++) engine.setNnueBuffer(new Uint8Array(await fetchNnue(base, nets[i])), i);
+            const note = (m) => send(clientId, {kind: 'line', line: `info string ${m}`});
+            for (let i = 0; i < nets.length; i++) {
+                engine.setNnueBuffer(new Uint8Array(await fetchNnue(base, nets[i], note)), i);
+            }
         }
     }
     // Fully loaded: publish it and flush everything the panel sent while we were loading, in order.
