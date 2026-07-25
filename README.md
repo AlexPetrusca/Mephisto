@@ -415,14 +415,19 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
 - [ ] **Board from a screenshot** — point it at an image of a board and get a playable position back.
 - [ ] **Setup / From-Position FEN capture** — read custom start positions properly, including black-to-move.
 
-**More variants** (as engines allow)
-- [ ] **Setup Chess · Spell Chess · Fog of War** — Fog of War is imperfect-information, so a normal engine can't
-  play it at all; the other two need engine support that doesn't exist yet.
+**Variants & packaging**
 - [ ] **Duck Chess autoplay polish** — make the duck-placement step work end to end (detection and analysis already do).
-- [ ] **4-player** (4PC, Chaturaji, 4P Giveaway, Self Partnering) — no engine supports four-player boards today.
+- [ ] **Auto-download variant nets** — fetch nets on demand instead of bundling every one. Most of the download is the
+  Stockfish and Maia-3 nets, so it only pays off if it covers those — at the cost of the zero-setup, offline install.
+
+### Blocked upstream
+
+Not waiting on work here — no engine supports these, so there is nothing to build against yet.
+
+- [ ] **Fog of War** — imperfect information; a normal engine cannot play it at all.
+- [ ] **Setup Chess · Spell Chess** — need engine support that doesn't exist.
+- [ ] **4-player** (4PC, Chaturaji, 4P Giveaway, Self Partnering) — no engine supports four-player boards.
 - [ ] **Bughouse / Doubles · Chess with Checkers** — two-board and hybrid variants; no engine support.
-- [ ] **Auto-download variant nets** — fetch Fairy nets on demand instead of bundling every one. Would cut the
-  download enormously, at the cost of the zero-setup, works-offline install.
 
 ---
 
