@@ -7,7 +7,7 @@ html.toolbar-popup {
 
 html, body {
     width: 568px; /* 378px left column (14px eval bar + 4px gap + 350px board + margins) + 190px quick settings */
-    height: 672px; /* room for the score + WDL line + alternative-lines panel under the board, uncramped */
+    height: 700px; /* score + WDL + alt-lines under the board, and all 21 quick settings beside it */
     overflow: hidden;
     background-color: rgb(240, 240, 240);
     color: #000; /* stark: pure black in light mode (user: "no grey") */
@@ -370,6 +370,7 @@ html, body {
     box-sizing: border-box;
     background: #e7e7e7;
     border-left: 1px solid #d0d0d0;
+    overflow-y: auto; /* safety net: a future row should scroll into reach, never be cut off */
     font: 13px 'Roboto', sans-serif;
     line-height: normal;
     text-align: left;
@@ -429,7 +430,10 @@ html, body {
 }
 
 #quick-settings .qs-row {
-    margin-bottom: 9px;
+    /* 21 rows now (Explorer and Book Moves joined the list), so the column ran past the bottom of
+       the panel and the last setting was cut off. Tighter rows + a slightly taller panel fit them
+       all without scrolling. */
+    margin-bottom: 6px;
 }
 
 #quick-settings .qs-row.switch {
@@ -441,7 +445,7 @@ html, body {
 #quick-settings .qs-label {
     display: block;
     font-size: 12px;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
 }
 
 #quick-settings .switch .qs-label {
@@ -687,7 +691,7 @@ body.mephisto-dark #alt-lines::-webkit-scrollbar-thumb { background: #34353d; bo
 }
 
 body.mephisto-book:not(.mephisto-compact) {
-    height: 804px; /* 672 + BOOK_H (132) -- keep in sync with content-script.js */
+    height: 832px; /* 700 + BOOK_H (132) -- keep in sync with content-script.js */
 }
 
 body.mephisto-compact {
