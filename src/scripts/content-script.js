@@ -37,7 +37,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.128'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.129'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -948,9 +948,8 @@ function getOrientation() {
         return (ttQuery()?.myColor === 'black') ? 'black' : 'white';
     }
     if (site === 'chessbase') {
-        // Tactics puzzles are presented from the solving side, so the side to move is the side at
-        // the bottom -- which is both the popup board's orientation AND the site board's, so the
-        // same answer serves the on-board arrows and the autoplay click geometry.
+        // no site board to overlay; orient the popup's own board to the side to move so the solver
+        // sees the puzzle from the moving side's perspective
         return (cbState && cbState.split(' ')[1] === 'b') ? 'black' : 'white';
     }
     if (isChesscomVariants()) {
@@ -1486,34 +1485,8 @@ function getRanksFiles() {
     return [rankCoords, fileCoords];
 }
 
-// ChessBase renders its board with its own engine, so there is no class name to rely on. Find it by
-// SHAPE instead: the largest square-ish element that is big enough to be the board. That survives
-// their markup changing, which a hand-picked selector would not. Cached until it leaves the DOM,
-// because this walks the tree.
-let cbBoardEl = null;
-
-function getChessbaseBoard() {
-    if (cbBoardEl?.isConnected && cbBoardEl.getBoundingClientRect().width > 100) return cbBoardEl;
-    cbBoardEl = null;
-    let best = null, bestArea = 0;
-    for (const el of document.querySelectorAll('canvas, div, svg')) {
-        const r = el.getBoundingClientRect();
-        if (r.width < 160 || r.height < 160) continue;          // too small to be a puzzle board
-        if (Math.abs(r.width - r.height) > r.width * 0.04) continue; // must be square
-        if (el.querySelector('canvas, svg')) continue;          // prefer the innermost square element
-        const area = r.width * r.height;
-        if (area > bestArea) { best = el; bestArea = area; }
-    }
-    return (cbBoardEl = best);
-}
-
 function getBoard() {
     let board;
-    if (site === 'chessbase') {
-        // arrows and autoplay both derive purely from this rect + getOrientation(), so finding the
-        // element is all that On-board arrows / Autoplay need here
-        return getChessbaseBoard();
-    }
     if (site === 'taketaketake') {
         // the WebGPU canvas is exactly the 8x8 board (aspect-square) -- clicks, the eval bar and
         // hint arrows all key off its bounding rect

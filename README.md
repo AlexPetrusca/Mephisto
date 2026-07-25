@@ -416,6 +416,11 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
 **Variants & packaging**
 - [ ] **Duck Chess autoplay polish** — make the duck-placement step work end to end (detection and analysis already do).
 
+**Robustness**
+- [ ] **ChessBase Tactics: on-board arrows + autoplay** — analysis works; drawing on the board and clicking it
+  do not. ChessBase renders its own board with no class to match, and finding it by shape was both slow (the
+  search runs on hot paths) and unreliable. Needs the real markup to anchor on.
+
 ### Blocked upstream
 
 Not waiting on work here — no engine supports these, so there is nothing to build against yet.
@@ -451,7 +456,6 @@ Shipped and in the current build.
 - [x] **Set up a position** (v3.1.119) — grid button in the panel row: paste a **FEN** to analyse any position instead of the page. Stops following the page while set; click again (or Re-detect) to go back.
 - [x] **Setup / From-Position capture** (v3.1.125) — a game that started from a custom position is read correctly even when you load it mid-game. The start is recovered from the page rather than only being captured at move 0, so a refresh no longer replays the game from the standard start.
 - [x] **On-demand nets** (v3.1.125) — a net that isn't bundled is downloaded on first use from the Stockfish project's own net server and cached permanently, so a build can ship without the large nets. Anything already bundled is used as-is and never fetched: a full install behaves exactly as before and still works offline.
-- [x] **ChessBase Tactics: on-board arrows + autoplay** (v3.1.125) — the board is located by shape (ChessBase renders its own, with no class to match), which is all the arrows and the click geometry needed.
 - [x] **Read a position off the screen** (v3.1.124) — the roadmap's *Board from a screenshot*. The camera button captures the tab, finds the board and loads it into the panel. Works on **any site** — a YouTube video, a diagram, a screenshot — not just chess sites. If auto-detection misses, drag a box around the board. Runs entirely on your machine (two ONNX models, no upload).
 - [x] **Playable panel board** (v3.1.124) — click or drag pieces on the panel's own board to walk a line, with an underpromotion picker. The panel stops following the page while you do; Re-detect returns to the live game.
 - [x] **Auto-recover on DOM changes** (v3.1.119) — if a site renames its move-list tags, Mephisto finds the move list structurally instead of silently seeing nothing.
