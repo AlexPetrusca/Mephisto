@@ -116,7 +116,16 @@ async function initEngine(clientId, engineName, variant, maiaLevel) {
     send(clientId, {kind: 'ready'});
 }
 
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    // Screenshot -> FEN. Lives here because onnxruntime-web is already set up in this document and
+    // the .onnx bytes are same-origin. Async, so keep the channel open with `return true`.
+    if (msg && msg.recognizeBoard) {
+        import('/src/offscreen/vision.js')
+            .then(m => m.recognize(msg.recognizeBoard))
+            .then(sendResponse)
+            .catch(e => sendResponse({error: String(e)}));
+        return true;
+    }
     if (!msg || !msg.toOffscreen) return;
     const {clientId, cmd} = msg;
     if (cmd === 'init') {

@@ -30,6 +30,21 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     explorerLookup(msg.explorerLookup).then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }
+  // Panel asks to read the board off the screen. The SW is the only context that can capture a tab;
+  // the offscreen document is the only one with onnxruntime loaded -- so capture here, recognise there.
+  if (msg.captureAndRecognize) {
+    (async () => {
+      try {
+        const dataUri = await chrome.tabs.captureVisibleTab({format: 'png'});
+        await ensureOffscreen();
+        const res = await chrome.runtime.sendMessage({recognizeBoard: {dataUri, crop: msg.captureAndRecognize.crop}});
+        sendResponse(res || {error: 'no response from recogniser'});
+      } catch (e) {
+        sendResponse({error: String(e)});
+      }
+    })();
+    return true; // async sendResponse
+  }
   // the panel asks for its piece set separately -- only it knows the configured theme
   if (msg.getPieces) {
     buildPieces(msg.pieceSet, msg.pieceExt).then(pieces => sendResponse({pieces}))

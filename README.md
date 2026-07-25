@@ -273,6 +273,8 @@ id changed — re-run the install command.
   (choose the actual move).
 - **Continuous analysis** — with Autoplay off, the engine keeps analyzing indefinitely instead of stopping after
   the search time.
+- **Read a position off the screen** — the camera button captures the tab, finds the board and loads it. Works on any site (a video, a diagram, an image); drag a box around the board if auto-detection misses. Runs locally — nothing is uploaded.
+- **Playable panel board** — click or drag pieces on the panel's board to walk a line (with underpromotion). Re-detect goes back to the live game.
 - **Opening Explorer** — shows how humans played the opening (Lichess database): the opening name, the most-played
   replies with their win/draw/loss split, and coloured arrows on the board. Pick the database — Masters, all
   Lichess games, or a club rating band. Read-out only; standard chess. See **Play Book Moves** below to actually
@@ -412,7 +414,6 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
 - [ ] **Syzygy tablebase probing** (≤7 pieces) — perfect endgame play once few enough pieces are left.
 
 **Board & position**
-- [ ] **Board from a screenshot** — point it at an image of a board and get a playable position back.
 - [ ] **Setup / From-Position FEN capture** — read custom start positions properly, including black-to-move.
 
 **Variants & packaging**
@@ -453,6 +454,8 @@ Shipped and in the current build.
 - [x] **Pondering** (v3.1.107) — the roadmap's *Ponder / background analysis*. Opt in under **Settings → General → Pondering**: the opponent's turn is then searched at full threads for their *whole* think, across their **top 5 candidate replies** (narrowing to 1–2 when the position is forced or a recapture), so a deeper answer is ready the moment they move — and Premove can certify an instant reply to any of those five. The roadmap's CPU/battery cost is handled by the default rather than ignored: with Pondering **off**, the opponent's turn drops to a **single thread**, so idle waiting now costs *less* than it used to, not more. Your own move always gets the full thread count, and analysis-only work is never throttled. Works with the in-browser and native Stockfish/Fairy builds and the remote engine; Maia is a single forward pass and can't deepen, so it's excluded.
 - [x] **Opening Explorer** (v3.1.119) — **Settings → General → Opening Explorer**, or the **Explorer** toggle in the panel. Shows how humans played the opening: the opening name, the most-played replies with their win/draw/loss split, and coloured arrows on the board. Turn on **Play Book Moves** to play a *weighted-random* book move instead of the engine's pick — so you don't repeat the same line every game — with a 20-game floor and an engine check (within 40cp of best) so the variety never costs you a worse move. Pick the **Opening Database** (Masters / all Lichess / club 1600–2200). The lookup runs in the background and never delays a move; standard chess only.
 - [x] **Set up a position** (v3.1.119) — grid button in the panel row: paste a **FEN** to analyse any position instead of the page. Stops following the page while set; click again (or Re-detect) to go back.
+- [x] **Read a position off the screen** (v3.1.124) — the roadmap's *Board from a screenshot*. The camera button captures the tab, finds the board and loads it into the panel. Works on **any site** — a YouTube video, a diagram, a screenshot — not just chess sites. If auto-detection misses, drag a box around the board. Runs entirely on your machine (two ONNX models, no upload).
+- [x] **Playable panel board** (v3.1.124) — click or drag pieces on the panel's own board to walk a line, with an underpromotion picker. The panel stops following the page while you do; Re-detect returns to the live game.
 - [x] **Auto-recover on DOM changes** (v3.1.119) — if a site renames its move-list tags, Mephisto finds the move list structurally instead of silently seeing nothing.
 - [x] **Double premove** (v3.1.107) — on chess.com (standard chess), when the line is forced two moves deep, both of your replies are queued at once instead of one at a time. Every branch in that chain is forced, so neither queued move can fire in a position it wasn't meant for; anything less falls back to a single premove.
 - [x] **Instant reopen, warm engine** (v3.1.92) — closing the panel with X stops the search (frees CPU) but keeps the engine loaded, so reopening is instant instead of reloading the neural net. A fingerprint of the engine settings means an unchanged reopen skips *all* setup (no net reload, no `ucinewgame` hash clear); a settings change reconfigures without reloading. A real tab close still frees the engine.
@@ -464,6 +467,10 @@ Shipped and in the current build.
 Ideas, bug reports, and PRs are all welcome — open an issue or a pull request.
 
 ## License & credits
+
+**Board recognition** uses two models from [Chess_diagram_to_FEN](https://github.com/tsoj/Chess_diagram_to_FEN)
+by Jost Triller (MIT), converted to ONNX — see `lib/engine/vision/` for the licence and details.
+
 
 This project's own source code (and the original [Mephisto](https://github.com/AlexPetrusca/Mephisto)
 by Alexandru Petrusca) is under the **MIT License** ([`LICENSE`](LICENSE)). But it **bundles copyleft

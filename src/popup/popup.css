@@ -191,6 +191,9 @@ html, body {
 }
 
 #book-annotations {
+    /* Decoration only -- it sits ON TOP of the board (z-index 50/51, exactly the board's box),
+       so without this it swallows every click and the board cannot be played. */
+    pointer-events: none;
     position: absolute;
     z-index: 50; /* UNDER the engine arrows: book is context, the engine line is the answer */
     top: 26px;
@@ -200,6 +203,9 @@ html, body {
 }
 
 #move-annotations {
+    /* Decoration only -- it sits ON TOP of the board (z-index 50/51, exactly the board's box),
+       so without this it swallows every click and the board cannot be played. */
+    pointer-events: none;
     position: absolute;
     z-index: 51;
     top: 26px;
@@ -209,6 +215,9 @@ html, body {
 }
 
 #response-annotations {
+    /* Decoration only -- it sits ON TOP of the board (z-index 50/51, exactly the board's box),
+       so without this it swallows every click and the board cannot be played. */
+    pointer-events: none;
     position: absolute;
     z-index: 50;
     top: 26px;
@@ -331,10 +340,10 @@ html, body {
    so the row is genuinely full: widths are pinned and the spacing tightened to 56px to fit a fourth
    (set-up-position) without colliding. Right-anchored, so they stay clear of the 190px quick
    settings. Left edges land at 157 / 213 / 269 / 325 -- every gap >= 5px. */
-#config, #recheck, #selftest, #setupfen {
+#config, #recheck, #selftest, #setupfen, #snapfen {
     position: absolute;
     bottom: 5px;
-    width: 48px;
+    width: 42px;
     min-width: 0;
     padding: 0;
     display: flex;
@@ -342,10 +351,14 @@ html, body {
     justify-content: center;
 }
 
-#config  { right: 195px; }
-#recheck { right: 251px; } /* beside the settings gear */
-#selftest { right: 307px; } /* beside re-detect */
-#setupfen { right: 363px; } /* set up a position -- snug after the PGN button (ends at x=152) */
+/* Five icon buttons share the row with FEN/PGN, which end at x=152 in a 378px column -- only 226px
+   left, so 5x48 (240px) genuinely does not fit. 42px on a 45px pitch does: left edges 156/201/246/
+   291/336, the last ending exactly on the 378px column edge, clear of the 190px quick settings. */
+#config   { right: 190px; }
+#recheck  { right: 235px; } /* beside the settings gear */
+#selftest { right: 280px; } /* beside re-detect */
+#setupfen { right: 325px; } /* set up a position by FEN */
+#snapfen  { right: 370px; } /* read the position off the screen */
 
 #quick-settings {
     position: absolute;
@@ -661,9 +674,16 @@ body.mephisto-dark #alt-lines::-webkit-scrollbar-thumb { background: #34353d; bo
 }
 
 #setup_fen_msg {
+    /* block, not inline: after a 100%-width input an inline span sits on the SAME line and, with the
+       row's white-space:nowrap, runs straight off the 368px column into the quick settings. Its own
+       line + wrapping keeps it inside the panel however long the message is. */
+    display: block;
+    max-width: 100%;
     font: 13px 'Roboto', sans-serif;
     line-height: 18px;
     opacity: 0.75;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 body.mephisto-book:not(.mephisto-compact) {

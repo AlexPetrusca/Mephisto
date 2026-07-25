@@ -262,6 +262,8 @@ async function initPanel(root, tabId) {
         pieceMap: PANEL_ASSETS?.pieces || null,               // in-page: inlined data: URIs
         pieceTheme: `/res/chesspieces/${pieceSet}/{piece}.${ext}`, // popup page: plain extension path
         showNotation: config.coordinates,
+        onMove: play_on_panel_board, // click or drag a piece to play it and keep analysing
+        needsPromotion: panel_move_promotes, // ask which piece before a promoting move
     });
 
     // init fen LRU cache
@@ -424,6 +426,7 @@ async function initPanel(root, tabId) {
     });
     PANEL_ROOT.getElementById('selftest')?.addEventListener('click', run_self_test);
     PANEL_ROOT.getElementById('setupfen')?.addEventListener('click', toggle_setup_fen);
+    PANEL_ROOT.getElementById('snapfen')?.addEventListener('click', () => snap_position());
     PANEL_ROOT.getElementById('setup_fen_input')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); apply_setup_fen(); }
         if (e.key === 'Escape') { e.preventDefault(); clear_setup_fen(); }
@@ -1584,6 +1587,106 @@ function engine_line_scores() {
 // Opens an input under the lines; a valid FEN is analysed instead of the page's board. While one is
 // held the panel stops following the page entirely (see the `setup_fen` guard in the scrape handler),
 // because a live scrape would otherwise replace it on the next poll.
+// Play a move on the PANEL's own board and keep analysing from there. Any move takes the panel out
+// of page-following mode (the same `setup_fen` hold the FEN box uses) -- otherwise the next scrape
+// would overwrite the position a second later. That makes the little board a usable analysis board:
+// set up or capture a position, then walk the line move by move. Returns false on an illegal move so
+// the board just drops the selection.
+// Does this move promote? Returns the mover's colour (so the picker shows the right pieces), or
+// null. Asked BEFORE the move is made, so it works for click and drag alike.
+function panel_move_promotes(from, to) {
+    const base = setup_fen || last_eval.fen;
+    if (!base) return null;
+    try {
+        const c = new Chess(config.variant, base);
+        const m = c.moves({verbose: true}).find(x => x.from === from && x.to === to && x.promotion);
+        return m ? m.color : null;
+    } catch (e) {
+        return null; // can't tell -> don't interrupt with a picker, the move path will auto-queen
+    }
+}
+
+function play_on_panel_board(from, to, promotion) {
+    const base = setup_fen || last_eval.fen;
+    if (!base) return false;
+    let next;
+    try {
+        const c = new Chess(config.variant, base);
+        // `promotion` comes from the board's picker when the move promotes; queen otherwise
+        const mv = c.move({from, to, promotion: promotion || 'q'});
+        if (!mv) return false;
+        next = c.fen();
+    } catch (e) {
+        return false; // illegal move (or a variant fen chess.js can't parse) -> keep the position
+    }
+    setup_fen = next;
+    // SHOW the setup row: it carries the "not following the page" message and the live FEN, and a
+    // hidden row would leave that state invisible -- the board would just stop tracking the game with
+    // no explanation. It also means the FEN of whatever you've walked to is always there to copy.
+    const row = PANEL_ROOT.getElementById('setup-fen-row');
+    if (row) row.style.display = '';
+    const input = PANEL_ROOT.getElementById('setup_fen_input');
+    if (input) input.value = next;
+    setup_fen_msg('Playing on the panel board — Re-detect to follow the page again');
+    last_eval.fen = ''; prev_ply_count = 0;
+    opp_spend = opp_clock_mark = last_our_eval = null;
+    explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
+    abandon_search();
+    turn = next.split(' ')[1];
+    on_new_pos(next, next, '');
+    return true;
+}
+
+// Read the position off the screen. Captures the tab, lets the recogniser find the board, and loads
+// the result as a manual position -- so it works on any page (a video, a diagram, an image), and the
+// board it produces is immediately playable. `crop` (from the drag-select fallback) skips detection.
+async function snap_position(crop) {
+    setup_fen_msg('');
+    const row = PANEL_ROOT.getElementById('setup-fen-row');
+    if (row) row.style.display = '';
+    setup_fen_msg('Reading the board from the screen…');
+    let res;
+    try {
+        res = await chrome.runtime.sendMessage({captureAndRecognize: {crop}});
+    } catch (e) {
+        setup_fen_msg(`Capture failed (${e})`);
+        return;
+    }
+    if (!res || res.error) {
+        // No board found -> offer the manual path rather than dead-ending. This is the documented
+        // fallback: the detector is the flakiest step on a busy page or a video frame.
+        setup_fen_msg(`${res?.error === 'no board found' ? 'No board found' : `Failed: ${res?.error}`} — drag a box around the board`);
+        request_drag_select();
+        return;
+    }
+    // The recogniser reports placement only: it cannot know whose move it is or the castling rights.
+    // Assume white to move with no rights -- both are then correctable (the header king switch flips
+    // the turn, and the FEN box is right there showing what was read).
+    const fen = `${res.placement} w - - 0 1`;
+    if (!is_legal_position(fen)) {
+        setup_fen_msg('Read a position that is not legal — try dragging a box around the board');
+        request_drag_select();
+        return;
+    }
+    setup_fen = fen;
+    const input = PANEL_ROOT.getElementById('setup_fen_input');
+    if (input) input.value = fen;
+    setup_fen_msg('Read from screen — flip the turn with the king switch if needed');
+    last_eval.fen = ''; prev_ply_count = 0;
+    opp_spend = opp_clock_mark = last_our_eval = null;
+    explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
+    abandon_search();
+    turn = 'w';
+    board.orientation('white');
+    on_new_pos(fen, fen, '');
+}
+
+// Ask the content-script to put a drag-to-select overlay on the page; it replies with the rect in
+// image pixels, which goes back through the same recognise path with detection skipped.
+function request_drag_select() {
+    send_to_active_tab({dragSelect: true});
+}
+
 function setup_fen_msg(text) {
     const el = PANEL_ROOT.getElementById('setup_fen_msg');
     if (el) el.textContent = text || '';
@@ -3147,7 +3250,15 @@ function on_native_info(info, fen) {
     last_eval.lines[pvIdx] = info;
     if (pvIdx === 0) {
         on_engine_evaluation(last_eval);
-        if (info.pv && info.pv[0]) on_engine_best_move(info.pv[0], info.pv[1], false); // live arrow, non-terminal
+        if (info.pv && info.pv[0]) {
+            on_engine_best_move(info.pv[0], info.pv[1], false); // live arrow, non-terminal
+        } else if (is_calculating) {
+            // An info line with a score but NO pv (a dead-drawn or terminal position) left the
+            // progress bar in the move line forever, so the panel looked like it was still loading
+            // while the eval and depth were plainly updating. Say what's actually happening instead.
+            is_calculating = false;
+            update_best_move(Number.isInteger(info.depth) ? `Searching (depth ${info.depth})` : 'Searching');
+        }
     }
 }
 
@@ -3202,6 +3313,9 @@ async function call_backend(url, data) {
 self.MephistoPanel = {
     initPanel,
     isBooted: () => PANEL_BOOTED,
+    // the drag-select overlay (content-script) hands back a crop in image pixels; re-run the
+    // recognise path with board detection skipped
+    snapWithCrop: (crop) => { snap_position(crop).catch(e => console.warn('Mephisto: snap failed', e)); },
     // the floating panel's title bar owns the compact toggle; the panel owns the state
     toggleCompact: () => toggle_compact(),
     // the content-script's keydown listener dispatches hotkey actions here; returns whether it was
@@ -3229,6 +3343,24 @@ self.MephistoPanel = {
     // Sticky per position (held across re-scrapes of the same board so you can toggle back and forth),
     // auto-cleared when a real move changes the side or on close. Re-analyses immediately.
     flipTurn: () => {
+        // A manually held position (screenshot capture, pasted FEN, or a move played on the panel
+        // board) never goes through the scrape path -- that's where turn_override is applied, and it
+        // returns early while setup_fen is set. So flip THIS position's turn directly and re-analyse,
+        // or the switch is dead exactly when you most need it: a captured board is assumed white to
+        // move, and without this you could never move the black pieces.
+        if (setup_fen) {
+            const flipped = flip_fen_turn(setup_fen);
+            if (!is_legal_position(flipped)) return; // handing the move over would be illegal
+            setup_fen = flipped;
+            const input = PANEL_ROOT.getElementById('setup_fen_input');
+            if (input) input.value = flipped;
+            turn = flipped.split(' ')[1];
+            set_turn_switch(turn);
+            try { abandon_search(); } catch (e) { /* */ }
+            last_eval.fen = '';
+            on_new_pos(flipped, flipped, '');
+            return;
+        }
         const cur = (last_eval.fen && last_eval.fen.split(' ')[1]) === 'b' ? 'b' : 'w';
         turn_override = (cur === 'w') ? 'b' : 'w';
         set_turn_switch(turn_override); // instant feedback; the re-analysis repaints it from the FEN

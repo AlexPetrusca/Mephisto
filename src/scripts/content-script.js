@@ -37,7 +37,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.119'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.124'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -50,6 +50,11 @@ window.onload = () => {
     };
     site = siteMap[window.location.hostname];
     pullConfig();
+    // Mephisto now loads on EVERY site so a position can be read off any page (a video, a diagram,
+    // a screenshot). On a site we have no scraper for there is simply nothing to detect: skip the
+    // board hunt and let the panel run in manual mode -- set up a position by FEN, play moves on the
+    // panel board, or capture one from the screen. Everything below this line is scraper-only.
+    if (!site) return;
     determineStartPosition();
 };
 
@@ -60,6 +65,10 @@ function handleExtensionMessage(response, sender, sendResponse) {
     }
     if (response.closeOverlay) { // sent to every tab when the user switches to toolbar-popup mode
         removeOverlay();
+        return;
+    }
+    if (response.dragSelect) {
+        startDragSelect();
         return;
     }
     if (response.detectVariant) {
@@ -268,6 +277,61 @@ function readOverlayBox() {
     } catch (e) {
         return null;
     }
+}
+
+// Drag a box around the board when auto-detection misses. The captured image is the VISIBLE tab at
+// devicePixelRatio, so the CSS-pixel rect the user drags has to be scaled by that ratio to line up
+// with the pixels the recogniser sees -- on a retina screen it is 2x and skipping this reads the
+// wrong quarter of the screen.
+function startDragSelect() {
+    if (document.getElementById('mephisto-drag-select')) return;
+    const veil = document.createElement('div');
+    veil.id = 'mephisto-drag-select';
+    veil.style.cssText = 'position:fixed;inset:0;z-index:2147483647;cursor:crosshair;' +
+        'background:rgba(0,0,0,0.25)';
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;border:2px solid #14b8a6;background:rgba(20,184,166,0.15);display:none';
+    const hint = document.createElement('div');
+    hint.textContent = 'Drag a box around the board  ·  Esc to cancel';
+    hint.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);' +
+        'background:#1b1c22;color:#fff;padding:6px 12px;border-radius:6px;font:14px sans-serif';
+    veil.appendChild(box); veil.appendChild(hint);
+    document.documentElement.appendChild(veil);
+
+    let sx = 0, sy = 0, dragging = false;
+    const done = () => { veil.remove(); document.removeEventListener('keydown', onKey, true); };
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); done(); } }
+    document.addEventListener('keydown', onKey, true);
+    veil.addEventListener('mousedown', (e) => {
+        dragging = true; sx = e.clientX; sy = e.clientY;
+        box.style.cssText += ';display:block';
+        box.style.left = sx + 'px'; box.style.top = sy + 'px';
+        box.style.width = box.style.height = '0px';
+        e.preventDefault();
+    });
+    veil.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        box.style.left = Math.min(sx, e.clientX) + 'px';
+        box.style.top = Math.min(sy, e.clientY) + 'px';
+        box.style.width = Math.abs(e.clientX - sx) + 'px';
+        box.style.height = Math.abs(e.clientY - sy) + 'px';
+    });
+    veil.addEventListener('mouseup', (e) => {
+        if (!dragging) return;
+        dragging = false;
+        const r = window.devicePixelRatio || 1; // captureVisibleTab returns device pixels
+        const crop = {
+            x: Math.min(sx, e.clientX) * r, y: Math.min(sy, e.clientY) * r,
+            w: Math.abs(e.clientX - sx) * r, h: Math.abs(e.clientY - sy) * r,
+        };
+        done();
+        if (crop.w < 40 * r || crop.h < 40 * r) return; // a stray click, not a selection
+        // Hand it back to the panel, which re-runs the recognise path with detection skipped. Only
+        // the FLOATING panel shares this realm; in toolbar-popup mode the popup page is the panel and
+        // Chrome closes it the moment you click the page to drag, so say so rather than no-op.
+        if (self.MephistoPanel?.snapWithCrop) self.MephistoPanel.snapWithCrop(crop);
+        else console.warn('Mephisto: drag-select needs the floating panel (the toolbar popup closes when you click the page)');
+    });
 }
 
 function removeOverlay() {
