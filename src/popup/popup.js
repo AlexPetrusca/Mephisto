@@ -1265,6 +1265,11 @@ function on_engine_response(message) {
         } else {
             last_eval.lines[pvIdx] = lineInfo;
             render_alt_lines(); // alternative lines land AFTER the pv-1 reset; keep the panel current
+            // ...and REDRAW THE ARROWS. draw_moves only ran from the pv-1 branch, which clears the
+            // line array first -- so it always drew with exactly one line in hand and Multi Lines
+            // showed a single arrow no matter how many lines the panel listed. Help Mode mirrors the
+            // same set onto the site board, so it was one arrow there too.
+            if (!config.simon_says_mode) draw_moves();
         }
     }
 
@@ -3248,6 +3253,10 @@ function on_native_info(info, fen) {
     }
     last_eval.activeLines = Math.max(last_eval.activeLines, info.multipv || 1);
     last_eval.lines[pvIdx] = info;
+    if (pvIdx > 0 && !config.simon_says_mode) {
+        render_alt_lines();
+        draw_moves(); // same as the WASM path: without this only line 1 ever gets an arrow
+    }
     if (pvIdx === 0) {
         on_engine_evaluation(last_eval);
         if (info.pv && info.pv[0]) {
