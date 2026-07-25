@@ -15,6 +15,8 @@ so analysis and autoplay keep running for the whole game.
 
 ---
 
+![Analysis with five candidate lines drawn on the board](docs/analysis-lines.png)
+
 ## ⚠️ Read this first — disclaimer & fair play
 
 **Using this in a live game against another person violates the Terms of Service of Chess.com, Lichess,
@@ -160,6 +162,8 @@ To pick up a code change: reload the extension on `chrome://extensions`, then re
 
 Everything runs locally in your browser via WebAssembly — no server, no account, nothing leaves your machine.
 
+![Maia-3 with the 600-2600 rating slider](docs/maia3.png)
+
 | Engine | Notes |
 | --- | --- |
 | **Stockfish dev NNUE** | Latest development build, neural‑net eval. Default. |
@@ -181,6 +185,8 @@ slider mean **full strength** (no cap): *Off* on the far left, *"max+"* on the f
 within bounds automatically.
 
 ### Variants
+
+![Atomic on Lichess, analysed by Fairy-Stockfish](docs/variants.png)
 
 Standard chess and **Chess960 / Fischer Random** work on every mainline Stockfish (via `UCI_Chess960`) — including every castling case (king‑takes‑rook UCI, the king already standing on its castled square, and rooks on non‑standard files).
 Fairy‑Stockfish ships its own NNUE net per variant and additionally plays:
@@ -264,6 +270,9 @@ id changed — re-run the install command.
 ## Analysis features
 
 - **Multiple lines** — show the top 1–5 candidate moves (MultiPV), each drawn on the board with its evaluation.
+
+  ![Three candidate lines, each with its own coloured arrow](docs/multiple-lines.png)
+
 - **Show computer evaluation** — display the numeric score / eval bar (turn off for a cleaner board).
 - **Eval bar** — a chess.com‑style vertical bar beside the board, from your perspective, with the score inside it.
 - **Threat analysis** — also show the opponent's strongest reply, so you can see what they're threatening.
@@ -274,7 +283,12 @@ id changed — re-run the install command.
 - **Continuous analysis** — with Autoplay off, the engine keeps analyzing indefinitely instead of stopping after
   the search time.
 - **Read a position off the screen** — the camera button captures the tab, finds the board and loads it. Works on any site (a video, a diagram, an image); drag a box around the board if auto-detection misses. Runs locally — nothing is uploaded.
+
+  ![Reading a position straight off a YouTube video](docs/read-from-screen.png)
+
 - **Playable panel board** — click or drag pieces on the panel's board to walk a line (with underpromotion). Re-detect goes back to the live game.
+  ![The opening explorer, with each book move drawn on the board](docs/opening-explorer.png)
+
 - **Opening Explorer** — shows how humans played the opening (Lichess database): the opening name, the most-played
   replies with their win/draw/loss split, and coloured arrows on the board. Pick the database — Masters, all
   Lichess games, or a club rating band. Read-out only; standard chess. See **Play Book Moves** below to actually
@@ -315,6 +329,9 @@ Off by default (**Settings → General → Pondering**). Uses the opponent's thi
 
 Make automated play look like a real person instead of a flawless engine:
 
+![The move mix and move-quality thresholds, with live accuracy estimates](docs/humanize.png)
+
+
 - **Move mix** — seven sliders set how often it plays the **top move**, a **2nd / 3rd / 4th line**, an **inaccuracy**, a **mistake**, or a **blunder**.
 - **Thresholds** — a separate section sets, in centipawns, how far each may stray, with a **live Lichess accuracy estimate** ([win-% model](https://lichess.org/page/accuracy)) of the win-chance drop. Defaults match Lichess's labels: **110cp = Inaccuracy, 230cp = Mistake, 377cp = Blunder**.
 - Sharing to a deep category widens the engine's search so it has such a move to pick; nothing past the blunder threshold is played, and blunders never fire in a decided game. Edits apply next move.
@@ -338,6 +355,8 @@ Both also size the engine's search to the time they'll spend, so the wait become
 ---
 
 ## Supported sites & modes
+
+![TakeTakeTake, whose board is a WebGPU canvas with no DOM to scrape](docs/taketaketake.png)
 
 | Site | Analysis | Bot play / Autoplay | Premove | Puzzles | Online play | Variants |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -446,6 +465,9 @@ Shipped and in the current build.
 - [x] **Graceful "unsupported variant" message** (v3.1.73) — says so instead of analysing the wrong position.
 - [x] **Manual mode** (v3.1.84) — the engine thinks until you press the play-move key (**Space**), then plays its best move.
 - [x] **Configurable hotkeys** (v3.1.84) — **Settings → Hotkeys**; single-letter defaults, each toggle shows its key, carried in export/import.
+
+  ![The hotkeys page, each action rebindable](docs/hotkeys.png)
+
 - [x] **Opponent Mistake Alert** (v3.1.84) (the roadmap's *Blunder alert*) — opt-in toast over the board for the opponent's inaccuracy/mistake/blunder (Lichess win%, depth-gated).
 - [x] **Self-test button** (v3.1.84) — beside Re-detect; checks scraping, the engine, and the native host.
 - [x] **Human cursor travel** (v3.1.90) — every synthetic click is preceded by an eased, jittered `mouseMoved` path from the cursor's last position; travel time consumes the Move Time budget so the whole click sequence fits inside whatever number you set.
