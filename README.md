@@ -302,13 +302,18 @@ id changed — re-run the install command.
 - **Help Mode** — instead of autoplaying, all analysis arrows are mirrored onto the site's board while the engine
   keeps evaluating; you play the move yourself when ready. Overrides Autoplay while on.
 - **Puzzle Mode** — optimizes for solving puzzles as fast as possible (Puzzle Rush / Puzzle Storm).
+  Plays several moves of the engine's line per search instead of one, and stops early the moment the
+  opponent deviates from it. On chess.com it also recovers the **en passant** square from the board's
+  last-move highlight — puzzle pages ship no move list, so without that an ep capture is invisible to
+  the engine and a whole class of pawn endgames is unsolvable.
 - **Play Book Moves** — plays the opening from the Opening Explorer instead of the engine's pick: a
   *weighted-random* choice among the popular replies, so you don't repeat the same line every game. A move must
   appear in at least 20 games and rate within 40cp of the engine's best, so the variety never costs you a worse
   move. The lookup runs in the background and never delays a move; out of book, the engine takes over. Needs Autoplay.
 - **Background Play** (off by default) — with it off, moves only fire while the game tab is **focused and visible**;
-  a move that comes due while you're tabbed away is deferred until you come back. Humans don't play while looking at
-  another tab. Turn it on to keep autoplay/premove running in the background.
+  a move that comes due while you're tabbed away is deferred until you come back — and is re-issued as soon as you
+  do, rather than leaving the tab sitting there. Humans don't play while looking at another tab. Turn it on to keep
+  autoplay/premove running in the background.
 
 ### Safe Premove
 

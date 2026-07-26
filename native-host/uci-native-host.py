@@ -197,8 +197,14 @@ def do_analyse(data, mid):
                 for info in analysis:
                     if request_counter != request_id:
                         break  # superseded by a newer position
-                    # STREAM per-depth updates (live depth UI + JS premove certification)
-                    if info.get('pv') and info.get('score') is not None:
+                    # STREAM per-depth updates (live depth UI + JS premove certification).
+                    # Aspiration re-searches emit `score cp N lowerbound|upperbound` lines whose pv
+                    # is a partial, unresolved guess. The WASM path drops them (popup.js checks the
+                    # raw UCI text); over here format_line does NOT forward the flag, so the popup
+                    # cannot tell them apart -- they have to be dropped HERE or they land in the
+                    # premove depth-13/14 certification snapshots as if they were finished lines.
+                    if (info.get('pv') and info.get('score') is not None
+                            and not info.get('lowerbound') and not info.get('upperbound')):
                         try:
                             send_message({'id': mid, 'info': format_line(info, False, None)})
                         except Exception:

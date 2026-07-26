@@ -14,9 +14,18 @@ function tabActive() {
 
 // When the tab becomes active again after a move was held, re-scrape so the popup re-analyses the
 // (still-current) position and re-issues the move -- now that we're allowed to click.
+//
+// The position has NOT changed while we were away, and both ends dedupe on exactly that: pushPosition
+// drops a push whose key matches lastPushKey, and the popup skips analysis when last_eval.fen already
+// equals the incoming fen. Two independent "nothing new here" guards, and between them the held move
+// was never re-issued -- coming back to the tab just froze. Clear our key and mark the push a resume
+// so the popup clears its own.
+let resumePush = false; // next push is a resume: both dedupes must be bypassed for it
 function resumeIfDeferred() {
     if (deferredWhileHidden && tabActive()) {
         deferredWhileHidden = false;
+        resumePush = true;
+        lastPushKey = lastDisplayKey = null;
         schedulePush();
     }
 }
@@ -37,7 +46,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.131'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.133'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -917,6 +926,14 @@ function scrapePositionFen() {
     return res;
 }
 
+// "square-54" (chess.com's file-then-rank digit pair, on pieces AND highlight overlays) -> "e4".
+// Same conversion the piece loop below does inline; named here because the last-move highlights
+// need it too. Returns null for anything that isn't a square class.
+function chesscomSquareOf(el) {
+    const m = (el?.className || '').match(/square-(\d)(\d)/);
+    return m ? String.fromCharCode('a'.charCodeAt(0) + parseInt(m[1]) - 1) + m[2] : null;
+}
+
 function scrapePositionPuz() {
     if (isAnimating()) {
         throw Error("Board is animating. Can't scrape.")
@@ -933,6 +950,16 @@ function scrapePositionPuz() {
             const coords = String.fromCharCode('a'.charCodeAt(0) + parseInt(coordsStr[0]) - 1) + coordsStr[1];
             res += `${color}-${type}-${coords}*****`;
         }
+        // A chess.com puzzle ships PIECES ONLY -- there is no move list on the page, so the FEN the
+        // popup rebuilds from them carries an empty en-passant field and ep captures simply do not
+        // exist for the engine. That silently breaks the pawn endgames these puzzles are full of.
+        // The last move IS on the page, as the two highlighted squares: ship it and let the popup
+        // decide whether it was a double pawn push. Best-effort -- no highlights (the puzzle's
+        // opening position) just means there is no ep right to declare.
+        try {
+            const [from, to] = getLastMoveHighlights().map(chesscomSquareOf);
+            if (from && to) res += `lm-${from}${to}*****`;
+        } catch (e) { /* no readable last move -- fall through with pieces only, as before */ }
     } else {
         const pieceMap = {pawn: 'p', rook: 'r', knight: 'n', bishop: 'b', queen: 'q', king: 'k'};
         const colorMap = {white: 'w', black: 'b'};
@@ -1257,7 +1284,9 @@ function pushPosition() {
             return;
         }
         lastPushKey = key;
-        sendToPanel({ dom: res, orient: orient, clocks: scrapeClocks(), fenresponse: true });
+        const resume = resumePush;
+        resumePush = false; // one-shot: only the push that follows the tab regaining focus
+        sendToPanel({ dom: res, orient: orient, clocks: scrapeClocks(), fenresponse: true, resume });
     } catch (e) {
         // extension was reloaded -- this orphaned content-script can't reach it anymore
     }

@@ -333,7 +333,13 @@ async function initPanel(root, tabId) {
             }
             // Header switch mirrors the side we're actually about to analyse (post-override).
             update_turn_badge(fen);
-            if (last_eval.fen !== fen) {
+            // `resume` = the tab regained focus with a move still held (see resumeIfDeferred in the
+            // content-script). The position is unchanged BY DEFINITION, so this guard would skip the
+            // whole block and the held move would never be re-issued -- coming back to the tab just
+            // froze. Fall through on a resume instead. Note this deliberately does NOT clear
+            // last_eval.fen: premove_instant_reply matches its tracker against it, so leaving it
+            // intact lets an already-certified reply fire immediately rather than re-searching.
+            if (last_eval.fen !== fen || (response.resume && config.autoplay)) {
                 // Clock Mode mirroring: bookkeep the opponent's clock at turn boundaries. When a
                 // position lands on OUR turn, they just moved -- their spend = their clock at the
                 // start of their turn minus now (they get the increment back after moving). When it
@@ -1241,12 +1247,12 @@ function on_engine_response(message) {
 
         const pvIdx = (lineInfo.multipv - 1) || 0;
         // premove: while this position is searched, track how stable each line's 2nd move
-        // (our reply to the predicted opponent move) is across depths 6 / 9 / latest
+        // (our reply to the predicted opponent move) is across depths 13 / 14 / latest
         if (config.premove && lineInfo.pv && pvIdx < premove_lines && Number.isInteger(lineInfo.depth)) {
             const [pred, reply] = lineInfo.pv.split(' ');
             const line = premove_tracker.lines[pvIdx] || (premove_tracker.lines[pvIdx] = {});
-            if (lineInfo.depth === 6) line.d6 = `${pred} ${reply}`;
-            if (lineInfo.depth === 9) line.d9 = `${pred} ${reply}`;
+            if (lineInfo.depth === PREMOVE_DEPTH_PREV) line.dPrev = `${pred} ${reply}`;
+            if (lineInfo.depth === PREMOVE_DEPTH_LAST) line.dLast = `${pred} ${reply}`;
             line.latest = `${pred} ${reply}`;
             line.pred = pred;
             line.reply = reply;
@@ -1313,13 +1319,27 @@ function is_legal_position(fen) {
 // "Premove" without the blunder risk: while the opponent thinks we certify a reply to their
 // PREDICTED move (max 2 candidate lines). It only fires if the new position is EXACTLY the
 // predicted one -- any other move discards the table and searches normally, so a wrong guess
-// costs nothing. Certification = the reply is identical at depth 6, depth 9 and the latest
-// depth (>= 10). Residual risk is only a marginally weaker (still certified) move, never a
-// move meant for a different position.
+// costs nothing. Certification = the reply is identical at depth 13, depth 14 and the latest
+// depth (>= 14) -- see PREMOVE_DEPTH_PREV/LAST. Residual risk is only a marginally weaker
+// (still certified) move, never a move meant for a different position.
 // Final gate before ANY premove reply is clicked: it must move OUR piece, and when it is already
 // our turn (an instant reply, not a premove queued during the opponent's turn) it must be fully
 // legal right now. This rejects a stale/mismatched chain that would otherwise click the opponent's
 // move or an illegal move (the observed "it plays the opponent's move and gets stuck" bug).
+// Premove certification window. A (their move, our reply) pair is only trusted once the search has
+// reached PREMOVE_DEPTH_LAST and has not changed its mind over the final two iterations: the pair
+// must be identical at depth 13, at depth 14, and at the latest depth reported. Raised from the old
+// 6 / 9 / >=10 window -- a pair that is merely stable in shallow search still flips often enough by
+// depth 14 that premoves were firing on replies the engine went on to abandon.
+const PREMOVE_DEPTH_PREV = 13;
+const PREMOVE_DEPTH_LAST = 14;
+
+// shared by BOTH `info depth` parsers (WASM and native) so the two gates cannot drift apart
+function premove_certified(line) {
+    return !!line && line.depth >= PREMOVE_DEPTH_LAST
+        && !!line.dPrev && line.dPrev === line.dLast && line.dPrev === line.latest;
+}
+
 function premove_reply_playable(fen, uci) {
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci ?? '')) return false;
     try {
@@ -1391,12 +1411,12 @@ function maybe_premove_forced_reply(line) {
     // hold. The earlier queen blunder predates the optimistic-state probe (v3); if it recurs,
     // gate this on `detected_prefix === 'tt'` again.
     if (config.help_mode || config.puzzle_mode || config.simon_says_mode) return;
-    if (line.depth < 10 || !line.d6 || line.d6 !== line.d9 || line.d6 !== line.latest) return;
+    if (!premove_certified(line)) return;
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(line.reply ?? '')) return;
     const mover = (premove_tracker.fen.split(' ')[1] === 'w') ? 'white' : 'black';
     if (mover === board.orientation()) return; // only while the opponent is to move
     if (premove_tracker.safe === undefined) {
-        // cached per position; certification pins (pred, reply) via the depth-6 snapshot,
+        // cached per position; certification pins (pred, reply) via the depth-13 snapshot,
         // so at most one pair can ever be checked here per position
         premove_tracker.safe = premove_is_safe(premove_tracker.fen, line.pred, line.reply);
     }
@@ -1450,7 +1470,7 @@ function premove_instant_reply(new_fen, new_moves) {
     let certified = 0;
     for (let idx = 0; idx < premove_lines; idx++) {
         const line = premove_tracker.lines[idx];
-        if (!line || line.depth < 10 || !line.d6 || line.d6 !== line.d9 || line.d6 !== line.latest) continue;
+        if (!premove_certified(line)) continue;
         if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(line.reply ?? '')) continue;
         certified++;
         // primary match: the exact MOVE, per the premove contract (robust across sites --
@@ -1895,6 +1915,45 @@ function on_new_pos(fen, startFen, moves) {
         lastMove: moves ? moves.trim().split(' ').pop() : null}; // opp's last move (humanize recapture check)
 }
 
+// Restore the en-passant square on a position that was rebuilt from PIECES ALONE (chess.com
+// puzzles: no move list on the page). Such a FEN always serialises "-" for ep, so an ep capture is
+// invisible to the engine -- and in a pawn endgame that is frequently the entire point of the
+// puzzle, which is why they were being failed. `lastMove` is the page's last-move highlight.
+//
+// The square is only declared when the capture is genuinely available: the last move was a two-rank
+// pawn push, and a pawn of the side to move stands beside it. Declaring it otherwise would change
+// the position's identity (and its hash) without changing what is legal.
+function apply_ep_square(fen, lastMove) {
+    if (!/^[a-h][1-8][a-h][1-8]$/.test(lastMove ?? '')) return fen;
+    try {
+        const [from, to] = [lastMove.slice(0, 2), lastMove.slice(2, 4)];
+        if (from[0] !== to[0]) return fen;                       // not a straight push
+        const moved = new Chess(config.variant, fen).get(to);
+        if (!moved || moved.type !== 'p') return fen;             // not a pawn that landed there
+        const stm = fen.split(' ')[1];
+        if (moved.color === stm) return fen;                      // the mover must be the OTHER side
+        const [fromRank, toRank] = [Number(from[1]), Number(to[1])];
+        const double = (moved.color === 'w' && fromRank === 2 && toRank === 4)
+                    || (moved.color === 'b' && fromRank === 7 && toRank === 5);
+        if (!double) return fen;
+        // an enemy pawn must actually be beside the pushed pawn, or there is no ep right to record
+        const file = to.charCodeAt(0);
+        const board = new Chess(config.variant, fen);
+        const adjacent = [file - 1, file + 1]
+            .filter(f => f >= 'a'.charCodeAt(0) && f <= 'h'.charCodeAt(0))
+            .map(f => board.get(String.fromCharCode(f) + to[1]));
+        if (!adjacent.some(p => p && p.type === 'p' && p.color === stm)) return fen;
+
+        const fields = fen.split(' ');
+        fields[3] = to[0] + ((moved.color === 'w') ? '3' : '6');
+        const patched = fields.join(' ');
+        new Chess(config.variant, patched); // reject a patch this chess.js won't parse
+        return patched;
+    } catch (e) {
+        return fen; // anything unexpected: the position without ep is still a valid position
+    }
+}
+
 function parse_position_from_response(txt) {
     const prefixMap = {
         li: 'Game detected on Lichess.org',
@@ -1962,9 +2021,13 @@ function parse_position_from_response(txt) {
             chess.setCastlingRights('w', {k: true, q: true});
             chess.setCastlingRights('b', {k: true, q: true});
         }
-        const [playerTurn, ...pieces] = txt.split('*****').slice(0, -1);
-        for (const piece of pieces) {
-            const attributes = piece.split('-');
+        const [playerTurn, ...tokens] = txt.split('*****').slice(0, -1);
+        // `lm-<from><to>` is the page's last-move highlight, shipped by the chess.com puzzle scrape
+        // purely so the en-passant square can be recovered (see below). Everything else is a piece.
+        let lastMove = null;
+        for (const token of tokens) {
+            if (token.startsWith('lm-')) { lastMove = token.slice(3); continue; }
+            const attributes = token.split('-');
             chess.put({type: attributes[1], color: attributes[0]}, attributes[2]);
         }
         if (isStartPos) {
@@ -1999,7 +2062,7 @@ function parse_position_from_response(txt) {
             return parse_position_from_pieces(txt, true); // isStartPos=true -> cannot recurse again
         }
 
-        const record =  {fen: chess.fen()};
+        const record =  {fen: apply_ep_square(chess.fen(), lastMove)};
         fen_cache.set(txt, record);
         return record;
     }
@@ -2752,6 +2815,29 @@ function do_hotkey(action) {
     return true;
 }
 
+// How much of a pv Puzzle Mode auto-plays before going back to the engine. Only pv[0] came out of a
+// completed root search; everything after it is the pv's tail, which a short search (the default is
+// 300ms) gets progressively wronger the deeper you read. Uncapped -- the old behaviour -- a single
+// search could click a 20-ply line, so a puzzle was solved almost entirely from moves the engine
+// never finished evaluating. The cap is a straight speed/accuracy dial: 7 entries is four of our
+// moves and three opponent replies, then the sequence ends and the normal loop re-searches.
+//
+// Deliberately NOT gated on the line being forced (considered and rejected: it collapsed to a single
+// move on most puzzles and gave up the speed Puzzle Mode exists for). simulatePvMoves still aborts
+// the moment the opponent plays something other than the predicted reply, which is the real backstop.
+const PUZZLE_PV_PLIES = 7;
+
+function puzzle_pv_prefix(pv, move) {
+    // The pv is only ours to play if it STARTS at the move we're playing. A deeper partial iteration
+    // can move the engine's final bestmove off the last completed info line's pv[0] -- playing the pv
+    // then clicks a move the engine did not choose.
+    if (!pv.length || pv[0] !== move) return [move];
+    // Keep it odd: even indices are OUR moves, so ending on one means the sequence never sits in
+    // confirmResponse waiting on a reply it has no follow-up for.
+    const n = Math.min(pv.length, PUZZLE_PV_PLIES);
+    return pv.slice(0, (n % 2) ? n : n - 1);
+}
+
 function request_automove(move, think = null, manual = false) {
     // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
     // queues a blind premove (it won't appear in the move list until they move), so it must NOT be
@@ -2767,7 +2853,9 @@ function request_automove(move, think = null, manual = false) {
     // taken when the panel/config first loaded. `?? config.x` keeps the loaded value if unset.
     const timing = fresh_timing();
     const message = (config.puzzle_mode)
-        ? {automove: true, pv: last_eval.lines[0]?.pv ? pv_moves(last_eval.lines[0].pv) : [move], deselect, verify, timing, manual}
+        ? {automove: true, pv: last_eval.lines[0]?.pv
+                ? puzzle_pv_prefix(pv_moves(last_eval.lines[0].pv), move) : [move],
+           deselect, verify, timing, manual}
         : {automove: true, move: move, deselect, verify, think, timing, manual};
     send_to_active_tab(message);
 }
@@ -3272,14 +3360,21 @@ function on_native_info(info, fen) {
     if (premove_tracker.fen !== fen) return; // stale: position already moved on
     const pvIdx = (info.multipv || 1) - 1;
     // Premove certification for the native engines: track how stable each line's reply is across
-    // depths 6 / 9 / latest, exactly like the WASM `info depth` parser -- without this they'd
+    // depths 13 / 14 / latest, exactly like the WASM `info depth` parser -- without this they'd
     // never premove, since certification is what the premove path waits on.
+    // Bound by premove_lines rather than a hardcoded 2, to match the WASM parser and
+    // premove_instant_reply (which scans idx < premove_lines). NOTE this is currently the SAME
+    // number: the ponder width (ponder_line_count, up to 5) is applied in the WASM branch of
+    // on_new_pos only -- the remote/native branch never reassigns premove_lines and never pushes a
+    // per-position MultiPV, so on native engines Pondering does NOT widen the candidate list and
+    // premove still certifies at most 2 lines. Widening it there needs a configure round-trip per
+    // position; until that exists, this line is consistency, not a new capability.
     if (config.premove && info.pv && info.pv[0] != null
-            && pvIdx <= 1 && Number.isInteger(info.depth)) {
+            && pvIdx < premove_lines && Number.isInteger(info.depth)) {
         const pred = String(info.pv[0]), reply = (info.pv[1] != null) ? String(info.pv[1]) : '';
         const line = premove_tracker.lines[pvIdx] || (premove_tracker.lines[pvIdx] = {});
-        if (info.depth === 6) line.d6 = `${pred} ${reply}`;
-        if (info.depth === 9) line.d9 = `${pred} ${reply}`;
+        if (info.depth === PREMOVE_DEPTH_PREV) line.dPrev = `${pred} ${reply}`;
+        if (info.depth === PREMOVE_DEPTH_LAST) line.dLast = `${pred} ${reply}`;
         line.latest = `${pred} ${reply}`;
         line.pred = pred;
         line.reply = reply;
