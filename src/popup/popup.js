@@ -390,6 +390,12 @@ async function initPanel(root, tabId) {
         request_fen();
     }, Math.max(1000, config.fen_refresh));
 
+    // Update check: one message to the SW, which caches for 12h. Silent unless there is genuinely a
+    // newer release -- a failed or rate-limited check leaves the notice hidden, exactly as if the
+    // build were current. Clicking it opens the release page via the background (window.open from a
+    // content script runs in the SITE's context and gets swallowed).
+    check_for_update();
+
     // register button click listeners
     PANEL_ROOT.getElementById('analyze').addEventListener('click', () => {
         const variantNameMap = {
@@ -544,6 +550,29 @@ function init_quick_settings() {
                 last_eval.fen = '';
             }
             if (['help_mode', 'autoplay', 'clock_mode', 'mirror_mode', 'manual_mode'].includes(key)) {
+                // Turning Autoplay ON while an unbounded analysis is ALREADY running on this position
+                // is the one case where restarting is strictly worse. With Autoplay off the search is
+                // `go infinite`, so by the time you flip the toggle it is usually far deeper than the
+                // fresh `go movetime` that would replace it -- and abandon_search would then throw
+                // that result away (it counts the incoming bestmove into pending_stops). Send a bare
+                // `stop` instead and KEEP the bestmove: it arrives through the normal handler, which
+                // now sees autoplay on and plays it. Deeper move, and no second search.
+                //
+                // Gated hard: WASM only (a native host has no stop channel -- its analyse is bounded
+                // by the request's `time`, so there is nothing to harvest and it must re-ask), our
+                // turn only (the opponent's-turn search returns THEIR move), and only when no other
+                // mode is independently forcing the infinite search.
+                const our = (board.orientation() === 'white') ? 'w' : 'b';
+                const harvest = key === 'autoplay' && elem.checked && search_active && !is_remote()
+                    && !config.help_mode && !config.manual_mode
+                    && last_eval.fen && last_eval.fen.split(' ')[1] === our;
+                if (harvest) {
+                    // NOT abandon_search(): that is the discard path. last_eval.fen is left intact so
+                    // the next push doesn't re-analyse the position we just harvested.
+                    send_engine_uci('stop');
+                    push_config();
+                    return;
+                }
                 // the go mode (infinite vs movetime) / search budget depends on these; abandon the
                 // current search and re-analyse the position under the new mode on the next push
                 abandon_search();
@@ -1841,7 +1870,15 @@ function on_new_pos(fen, startFen, moves) {
     }
     // whose move is it -- drives the ponder budget (remote/native) and the per-turn thread cap (WASM)
     const our_turn = ((turn === 'w') ? 'white' : 'black') === board.orientation();
-    if (is_remote()) {
+    // Puzzle Mode never analyses the opponent's turn. In a puzzle their reply is scripted and lands
+    // in a couple of hundred ms, and nothing consumes an opponent-turn search here: Premove is
+    // disabled in Puzzle Mode (all three entry points bail on it), so there is no certification to
+    // feed, and the bestmove it produces moves one of THEIR pieces, which premove_reply_playable
+    // rejects anyway. It only burns cores and leaves a search in flight that the real position then
+    // has to supersede. Stop whatever is running and wait for their move instead.
+    if (config.puzzle_mode && !our_turn) {
+        abandon_search();
+    } else if (is_remote()) {
         // pure analysis (Help Mode / Autoplay off) keeps deepening like the WASM `go infinite`: give
         // it a long budget that the next position (a new request supersedes this one) cuts short.
         // PONDERING rides the same rail on the opponent's turn: the native hosts and remote engine
@@ -1864,11 +1901,17 @@ function on_new_pos(fen, startFen, moves) {
         // below, which also lets a ponder run infinite for the whole opponent think). Maia is a single
         // forward pass with no Threads option, so leave it alone. Only re-push when the target changes.
         if (config.engine !== 'maia' && config.engine !== 'maia3') {
-            // 1 thread ONLY for the real in-game wait on the opponent. Analysis / Help / Manual have
-            // no opponent to save cores for, so they keep the full count -- as does our own move.
+            // The cap applies ONLY to the real in-game wait on the opponent. Analysis / Help / Manual
+            // have no opponent to save cores for, so they keep the full count -- as does our own move.
+            //
+            // 2, not 1: this search is what Premove certifies from, and certification now needs the
+            // pair stable at depth 13 AND 14 (see PREMOVE_DEPTH_PREV/LAST). One thread frequently
+            // never got there inside the move time, so premoves stopped firing with Pondering off.
+            // Two roughly doubles the nodes for the same wall clock while still leaving the machine
+            // to the browser. Never ABOVE the user's own budget -- if they set 1 thread, they get 1.
             const bg_wait = config.autoplay && !config.help_mode && !config.manual_mode
                 && !our_turn && !config.ponder;
-            const want_threads = bg_wait ? 1 : config.threads;
+            const want_threads = bg_wait ? Math.min(2, config.threads) : config.threads;
             if (want_threads !== search_threads_set) {
                 send_engine_uci(`setoption name Threads value ${want_threads}`);
                 search_threads_set = want_threads;
@@ -1923,6 +1966,52 @@ function on_new_pos(fen, startFen, moves) {
 // The square is only declared when the capture is genuinely available: the last move was a two-rank
 // pawn push, and a pawn of the side to move stands beside it. Declaring it otherwise would change
 // the position's identity (and its hash) without changing what is legal.
+// Restore castling rights on a position rebuilt from PIECES ALONE. Same root cause as the missing
+// en-passant square: clear()+put() cannot carry rights, so every chess.com puzzle position came out
+// with "-" and NEITHER side could ever castle. That is wrong twice over -- the engine can't find a
+// solution that IS O-O, and, far more often, it evaluates a position that isn't the one on screen
+// (king safety and rook activity both hinge on whether the king may still castle), so it plays a
+// good move for the wrong position.
+//
+// Inferred the standard way, from the board: a side gets a right only when its king sits on the home
+// square AND the matching rook sits on its home corner. That is the same convention diagram-to-FEN
+// tools and chess.com's own puzzle FENs use. It is a well-behaved guess, not proof -- a king or rook
+// that moved away and came back would be granted a right it does not really have. In a tactical
+// puzzle that is vanishingly rare, and the failure it replaces (never castling, in every puzzle) is
+// both far more common and worse: the wrong castle at most fails to click, the wrong evaluation
+// silently picks the wrong move.
+//
+// Standard chess only: chess960 home squares are not e1/a1/h1, and this path already handles a real
+// game's move-0 position separately (isStartPos), where the rights are a fact rather than a guess.
+function apply_castling_rights(fen) {
+    if (config.variant && config.variant !== 'chess') return fen;
+    try {
+        const c = new Chess(config.variant, fen);
+        const home = (sq, type, color) => {
+            const p = c.get(sq);
+            return !!p && p.type === type && p.color === color;
+        };
+        let rights = '';
+        if (home('e1', 'k', 'w')) {
+            if (home('h1', 'r', 'w')) rights += 'K';
+            if (home('a1', 'r', 'w')) rights += 'Q';
+        }
+        if (home('e8', 'k', 'b')) {
+            if (home('h8', 'r', 'b')) rights += 'k';
+            if (home('a8', 'r', 'b')) rights += 'q';
+        }
+        if (!rights) return fen;
+        const fields = fen.split(' ');
+        if (fields[2] === rights) return fen;
+        fields[2] = rights;
+        const patched = fields.join(' ');
+        new Chess(config.variant, patched); // reject a patch this chess.js won't parse
+        return patched;
+    } catch (e) {
+        return fen; // the position without rights is still a valid position
+    }
+}
+
 function apply_ep_square(fen, lastMove) {
     if (!/^[a-h][1-8][a-h][1-8]$/.test(lastMove ?? '')) return fen;
     try {
@@ -2062,7 +2151,9 @@ function parse_position_from_response(txt) {
             return parse_position_from_pieces(txt, true); // isStartPos=true -> cannot recurse again
         }
 
-        const record =  {fen: apply_ep_square(chess.fen(), lastMove)};
+        // Both patches restore information the piece scrape cannot carry. Castling first: it only
+        // reads piece placement, so it is independent of the ep field it is followed by.
+        const record =  {fen: apply_ep_square(apply_castling_rights(chess.fen()), lastMove)};
         fen_cache.set(txt, record);
         return record;
     }
@@ -2815,29 +2906,6 @@ function do_hotkey(action) {
     return true;
 }
 
-// How much of a pv Puzzle Mode auto-plays before going back to the engine. Only pv[0] came out of a
-// completed root search; everything after it is the pv's tail, which a short search (the default is
-// 300ms) gets progressively wronger the deeper you read. Uncapped -- the old behaviour -- a single
-// search could click a 20-ply line, so a puzzle was solved almost entirely from moves the engine
-// never finished evaluating. The cap is a straight speed/accuracy dial: 7 entries is four of our
-// moves and three opponent replies, then the sequence ends and the normal loop re-searches.
-//
-// Deliberately NOT gated on the line being forced (considered and rejected: it collapsed to a single
-// move on most puzzles and gave up the speed Puzzle Mode exists for). simulatePvMoves still aborts
-// the moment the opponent plays something other than the predicted reply, which is the real backstop.
-const PUZZLE_PV_PLIES = 7;
-
-function puzzle_pv_prefix(pv, move) {
-    // The pv is only ours to play if it STARTS at the move we're playing. A deeper partial iteration
-    // can move the engine's final bestmove off the last completed info line's pv[0] -- playing the pv
-    // then clicks a move the engine did not choose.
-    if (!pv.length || pv[0] !== move) return [move];
-    // Keep it odd: even indices are OUR moves, so ending on one means the sequence never sits in
-    // confirmResponse waiting on a reply it has no follow-up for.
-    const n = Math.min(pv.length, PUZZLE_PV_PLIES);
-    return pv.slice(0, (n % 2) ? n : n - 1);
-}
-
 function request_automove(move, think = null, manual = false) {
     // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
     // queues a blind premove (it won't appear in the move list until they move), so it must NOT be
@@ -2853,9 +2921,12 @@ function request_automove(move, think = null, manual = false) {
     // taken when the panel/config first loaded. `?? config.x` keeps the loaded value if unset.
     const timing = fresh_timing();
     const message = (config.puzzle_mode)
-        ? {automove: true, pv: last_eval.lines[0]?.pv
-                ? puzzle_pv_prefix(pv_moves(last_eval.lines[0].pv), move) : [move],
-           deselect, verify, timing, manual}
+        // Puzzle Mode ships the move as a one-element `pv` purely because the content-script's
+        // puzzle branch takes that shape. It is ONE move: Puzzle Mode used to auto-play the engine's
+        // whole line without going back to the engine, and every move after the first was the tail of
+        // a single short search -- unsearched moves that threw away won puzzles. Every move it plays
+        // is now a move it actually searched.
+        ? {automove: true, pv: [move], deselect, verify, timing, manual}
         : {automove: true, move: move, deselect, verify, think, timing, manual};
     send_to_active_tab(message);
 }
@@ -3262,6 +3333,29 @@ async function request_backend_move(x0, y0, x1, y1) {
 
 // Both the HTTP "Remote Engine" and the serverless native engines speak the same request/response
 // shape and reuse the same on_engine_response remote branch.
+// Compare the newest published release against the running build and, only if it is actually newer,
+// reveal the notice. Everything here fails silent: no network, a rate-limited API, a malformed reply
+// or a missing element all end with the notice staying hidden. Version compare is numeric per part,
+// so 3.1.9 -> 3.1.10 reads as an upgrade (a string compare would call it a downgrade).
+function check_for_update() {
+    const el = PANEL_ROOT.getElementById('update-notice');
+    if (!el) return;
+    try {
+        chrome.runtime.sendMessage({updateCheck: true}, (res) => {
+            // the version compare lives in the SW (isNewer) -- one implementation, not two
+            if (chrome.runtime.lastError || !res || res.error || !res.latest || !res.newer) return;
+            el.textContent = `Update available — v${res.latest} (you have v${res.current})`;
+            el.hidden = false;
+            el.onclick = (e) => {
+                e.preventDefault();
+                chrome.runtime.sendMessage({
+                    openUrl: res.url || 'https://github.com/IchNukeDichWeg/Mephisto/releases/latest',
+                });
+            };
+        });
+    } catch (e) { /* extension context gone -- nothing to notify about */ }
+}
+
 function is_remote() {
     // "remote" = anything that isn't an in-browser WASM engine: HTTP remote-engine.py, or a native
     // messaging host. The HTTP-vs-native split happens in request_remote_* below.

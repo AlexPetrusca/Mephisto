@@ -132,6 +132,10 @@ This build is distributed as an unpacked extension, not through the Chrome/Firef
 
 To pick up a code change: reload the extension on `chrome://extensions`, then reload the game tab.
 
+The panel checks this repository for a newer release (at most once every 12 hours) and shows a small
+notice when one exists. The check runs in the extension's service worker, so the chess page never
+makes the request, and it stays silent if it fails.
+
 ---
 
 ## The panel
@@ -302,10 +306,12 @@ id changed — re-run the install command.
 - **Help Mode** — instead of autoplaying, all analysis arrows are mirrored onto the site's board while the engine
   keeps evaluating; you play the move yourself when ready. Overrides Autoplay while on.
 - **Puzzle Mode** — optimizes for solving puzzles as fast as possible (Puzzle Rush / Puzzle Storm).
-  Plays several moves of the engine's line per search instead of one, and stops early the moment the
-  opponent deviates from it. On chess.com it also recovers the **en passant** square from the board's
-  last-move highlight — puzzle pages ship no move list, so without that an ep capture is invisible to
-  the engine and a whole class of pawn endgames is unsolvable.
+  Every move it plays is a move it actually searched, and it never analyses the opponent's turn.
+  A chess.com puzzle page ships no move list, so the position has to be rebuilt from the pieces alone
+  — which loses everything that isn't a piece on a square. Both are recovered from the board:
+  **en passant** from the last-move highlight, and **castling rights** from the king and rook still
+  standing on their home squares. Without them an ep capture is illegal and neither side can castle in
+  *any* puzzle, so the engine evaluates a position that isn't the one on screen.
 - **Play Book Moves** — plays the opening from the Opening Explorer instead of the engine's pick: a
   *weighted-random* choice among the popular replies, so you don't repeat the same line every game. A move must
   appear in at least 20 games and rate within 40cp of the engine's best, so the variety never costs you a worse

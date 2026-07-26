@@ -46,7 +46,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.133'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.134'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -939,6 +939,7 @@ function scrapePositionPuz() {
         throw Error("Board is animating. Can't scrape.")
     }
     let res = '';
+    const occupied = new Set(); // squares holding a piece, for the torn-read guard below
     if (site === 'chesscom') {
         for (const piece of getPieces()) {
             let [colorTypeClass, coordsClass] = [piece.classList[1], piece.classList[2]];
@@ -948,6 +949,7 @@ function scrapePositionPuz() {
             const [color, type] = colorTypeClass;
             const coordsStr = coordsClass.split('-')[1];
             const coords = String.fromCharCode('a'.charCodeAt(0) + parseInt(coordsStr[0]) - 1) + coordsStr[1];
+            occupied.add(coords);
             res += `${color}-${type}-${coords}*****`;
         }
         // A chess.com puzzle ships PIECES ONLY -- there is no move list on the page, so the FEN the
@@ -958,8 +960,31 @@ function scrapePositionPuz() {
         // opening position) just means there is no ep right to declare.
         try {
             const [from, to] = getLastMoveHighlights().map(chesscomSquareOf);
-            if (from && to) res += `lm-${from}${to}*****`;
-        } catch (e) { /* no readable last move -- fall through with pieces only, as before */ }
+            if (from && to) {
+                // TORN-READ GUARD. Pieces come from `.piece.square-NN` classes and the last move from
+                // the separate `.highlight` overlays -- two independent bits of DOM that chess.com does
+                // not update in one paint. In the gap the highlight can already name the opponent's
+                // reply while the moved piece is STILL ON ITS ORIGIN square. That scrape is a position
+                // which never existed; it is perfectly legal so nothing downstream rejects it, and the
+                // turn getTurn() derives from that same highlight says it is our move -- so the engine
+                // analyses a fiction and plays a move for it. That is the "didn't wait for the opponent
+                // and then blundered" bug; data-test-animating does not reliably cover the window.
+                //
+                // ONLY `from` still being occupied proves a tear. Deliberately NOT also requiring `to`
+                // to be occupied: chess.com highlights castling by the KING's squares here, but if it
+                // ever highlights the rook's, both ends read empty afterwards -- and rejecting on that
+                // would reject the settled position too, on every retry and every fallback poll, which
+                // stalls the panel on that position permanently. When only `to` looks wrong we simply
+                // don't claim a last move (so no ep right) and scrape the position as before.
+                if (occupied.has(from)) {
+                    throw Error('Board mid-update (piece still on the last move\'s origin square).');
+                }
+                if (occupied.has(to)) res += `lm-${from}${to}*****`;
+            }
+        } catch (e) {
+            if (/mid-update/.test(e.message)) throw e; // torn read: must NOT be scraped at all
+            /* no readable last move -- fall through with pieces only, as before */
+        }
     } else {
         const pieceMap = {pawn: 'p', rook: 'r', knight: 'n', bishop: 'b', queen: 'q', king: 'k'};
         const colorMap = {white: 'w', black: 'b'};
@@ -1264,10 +1289,27 @@ function schedulePush() {
     }, 30);
 }
 
+// A rejected scrape ('no') used to just give up until the NEXT board mutation or the 1s fallback
+// poll. But 'no' overwhelmingly means "mid-animation", and a chess.com piece animation runs ~200ms
+// -- longer than the 30ms debounce -- so the settling scrape landed inside it, was dropped, and the
+// panel then sat on a stale position for up to a FULL SECOND waiting for the fallback poll. That is
+// the real source of the lag, not the debounce. Retry quickly a bounded number of times instead.
+const NO_SCRAPE_RETRY_MS = 40;
+const NO_SCRAPE_MAX_RETRIES = 10; // 10 x 40ms = 400ms, then let the fallback poll take over
+let noScrapeRetries = 0;
+
 function pushPosition() {
     if (!config) return;           // no config yet -> can't scrape
     const res = tryScrapePosition();
-    if (res === 'no') return;      // transient (animating, no board): never push, never dedupe
+    if (res === 'no') {            // transient (animating, no board): never push, never dedupe
+        if (noScrapeRetries < NO_SCRAPE_MAX_RETRIES) {
+            noScrapeRetries++;
+            // reuse pushDebounce so a mutation arriving mid-retry doesn't schedule a second chain
+            pushDebounce = setTimeout(() => { pushDebounce = null; pushPosition(); }, NO_SCRAPE_RETRY_MS);
+        }
+        return;
+    }
+    noScrapeRetries = 0;
     const orient = getOrientation();
     const key = `${orient}|${res}`;
     if (key === lastPushKey) return; // already delivered as a full (analysed) push -> nothing to do

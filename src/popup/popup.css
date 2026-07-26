@@ -743,4 +743,18 @@ body.mephisto-compact #alt-lines {
 
 /* A variant chess.js can't replay: say so rather than showing a confident wrong analysis. */
 #game-detection.unsupported { color: #c0392b; font-weight: 500; }
+
+/* Update notice: hidden unless a newer release exists, so it costs nothing in the normal case. */
+#update-notice {
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 2px 6px;
+    color: #0b7285;
+    text-decoration: none;
+}
+#update-notice:hover { text-decoration: underline; }
+#update-notice[hidden] { display: none; }
+body.mephisto-dark #update-notice { color: #4dd0e1; }
 body.mephisto-dark #game-detection.unsupported { color: #ff7a70; }

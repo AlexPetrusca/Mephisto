@@ -30,6 +30,10 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     explorerLookup(msg.explorerLookup).then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }
+  if (msg.updateCheck) {
+    updateCheck().then(sendResponse).catch(e => sendResponse({error: String(e)}));
+    return true; // async sendResponse
+  }
   // Panel asks to read the board off the screen. The SW is the only context that can capture a tab;
   // the offscreen document is the only one with onnxruntime loaded -- so capture here, recognise there.
   if (msg.captureAndRecognize) {
@@ -63,8 +67,12 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // The panel can't open the options page itself: it's a content script, so a relative URL resolves
   // against the SITE and chrome-extension:// navigation from a page is blocked.
   if (msg.openUrl) { // analysis board etc. -- a content script can't reliably window.open
-    // Pin to the one destination we actually open (lichess analysis board, issue #36 §1).
-    if (msg.openUrl.startsWith('https://lichess.org/analysis/')) {
+    // Pin to the destinations we actually open (issue #36 §1): the lichess analysis board, and this
+    // fork's releases page for the update notice. Kept as exact prefixes rather than a host check --
+    // a page-side message must never be able to steer this at an arbitrary URL.
+    const ALLOWED = ['https://lichess.org/analysis/',
+                     'https://github.com/IchNukeDichWeg/Mephisto/releases'];
+    if (ALLOWED.some(prefix => msg.openUrl.startsWith(prefix))) {
       chrome.tabs.create({url: msg.openUrl});
     }
     return;
@@ -108,6 +116,54 @@ const EXPLORER_DB = {
 };
 const explorerCache = new Map(); // `${db}|${fen}` -> response; the fallback poll rescrapes the same
 const EXPLORER_CACHE_MAX = 300;  // position constantly, so without this every rescan is a request
+
+// --- Update check ------------------------------------------------------------------------------
+// Ask GitHub for this fork's newest release and compare it to the running manifest version. Done in
+// the SERVICE WORKER, like the explorer lookup, so the chess page never makes the request. Cached
+// for 12h in chrome.storage (survives SW restarts, which are frequent) because the unauthenticated
+// GitHub API allows only 60 requests/hour/IP -- an uncached check on every panel open would burn
+// that on a single session. Every failure path is silent: an update notice is a nicety, and a
+// rate-limited or offline check must never surface as an error in the panel.
+const UPDATE_REPO = 'IchNukeDichWeg/Mephisto';
+const UPDATE_TTL_MS = 12 * 60 * 60 * 1000;
+
+// "3.1.133" -> comparable tuple. Tolerates a leading v and any number of parts.
+function versionParts(v) {
+  return String(v || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+}
+function isNewer(candidate, current) {
+  const [a, b] = [versionParts(candidate), versionParts(current)];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+  }
+  return false;
+}
+
+async function updateCheck() {
+  const current = chrome.runtime.getManifest().version;
+  const cached = (await chrome.storage.local.get('mephisto_update_check')).mephisto_update_check;
+  if (cached && (Date.now() - cached.at) < UPDATE_TTL_MS) {
+    return {...cached.result, current, newer: isNewer(cached.result.latest, current), cached: true};
+  }
+  let result = {latest: null};
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 5000);
+    const res = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
+      headers: {'Accept': 'application/vnd.github+json'}, signal: ctl.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const json = await res.json();
+      result = {latest: String(json.tag_name || '').replace(/^v/, ''), url: json.html_url};
+    }
+  } catch (e) {
+    // offline, rate-limited or aborted -- fall through with latest:null and cache it, so a broken
+    // check backs off for the full TTL instead of retrying on every panel open
+  }
+  await chrome.storage.local.set({mephisto_update_check: {at: Date.now(), result}});
+  return {...result, current, newer: isNewer(result.latest, current), cached: false};
+}
 
 async function explorerLookup({fen, db}) {
   const cfg = EXPLORER_DB[db] || EXPLORER_DB.masters;
