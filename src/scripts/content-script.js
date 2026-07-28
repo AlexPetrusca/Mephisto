@@ -8,6 +8,14 @@ let deferredWhileHidden = false; // an autoplay/premove was held because the tab
 // The tab is "active" only when it's the visible tab AND the window has system focus. `hasFocus()`
 // stays true when focus is inside our floating-panel iframe (same top-level browsing context), so
 // using the panel doesn't count as tabbed-away.
+// Background-play tracing. Quiet during normal play -- it only speaks when the tab is NOT active,
+// which is exactly the situation that is hard to observe: you cannot watch the console of the tab
+// you have tabbed away from while it happens, so the trail has to be there when you come back.
+function bgLog(...args) {
+    if (tabActive()) return;
+    console.log('[Mephisto/bg]', ...args);
+}
+
 function tabActive() {
     return document.visibilityState === 'visible' && document.hasFocus();
 }
@@ -46,7 +54,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.134'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.135'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -106,17 +114,34 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // Turn is shown by the panel's header king-switch (driven off the parsed FEN), not here.
         return;
     }
-    if (moving) return;
+    if (moving) {
+        if (response.automove) bgLog('DROPPED: a previous move is still in progress (moving=true)');
+        return;
+    }
     if (response.automove) {
         // Manual Mode moves (response.manual) are triggered by YOUR keypress, so they're allowed even
         // with Autoplay off. Otherwise: never auto-move if Autoplay was turned off since the message.
-        if (!config.autoplay && !response.manual) return;
+        bgLog('automove received', {move: response.move, premoves: response.premoves,
+            autoplay: config.autoplay, background_play: config.background_play, moving});
+        if (!config.autoplay && !response.manual) { bgLog('DROPPED: autoplay is off'); return; }
         // undetectability: don't click while the tab is backgrounded/unfocused -- a human wouldn't
         // move while tabbed away, and "moved while hidden" is an easy anomaly to flag. It's still our
         // turn (or a queued premove), so the position is stable: hold the move and re-scrape the
         // instant the tab is active again, which makes the popup re-issue it. Opt out with background_play.
         if (!config.background_play && !tabActive()) {
+            bgLog('DEFERRED: tab inactive and Background Play is off');
             deferredWhileHidden = true;
+            return;
+        }
+        // The board must still be the position the panel analysed (see boardStillMatchesAnalysis).
+        // If it moved on, throw this move away and re-scrape: the panel re-analyses what is actually
+        // there. Never click into a position the move was not computed for.
+        if (!boardStillMatchesAnalysis()) {
+            bgLog('DROPPED: board no longer matches the analysed position');
+            mismatchAborts++;
+            console.warn(`Mephisto: board changed since the analysed position -- move dropped, re-scraping (${mismatchAborts} so far)`);
+            lastPushKey = lastDisplayKey = null; // the position we are re-pushing may be the same one
+            schedulePush();
             return;
         }
         // apply the think/move timing the popup read FRESH from storage for this move, so changing the
@@ -390,11 +415,12 @@ window.addEventListener('pagehide', () => {
 });
 
 // Minimize = HIDE the panel without tearing it down, so the engine + autoplay/premove/help keep
-// running exactly as if it were open (closing with X, which removes the iframe, is what STOPS
-// everything). We use opacity:0 + pointer-events:none rather than visibility:hidden/display:none:
-// the frame stays full-size and in the viewport so Chrome treats it as VISIBLE and never throttles
-// its timers (a cross-origin hidden iframe gets throttled to ~1/s -> laggy autoplay). pointer-events
-// :none makes it click-through so it can't sit over a destination square and eat the autoplay click.
+// running exactly as if it were open (closing with X, which removes the panel, is what STOPS
+// everything). opacity:0 + pointer-events:none rather than visibility:hidden/display:none. The
+// timer-throttling reason this was originally written for is GONE -- that applied to the N1
+// cross-origin iframe, and the panel is a plain div in this document now, which Chrome never
+// throttles. What still matters is pointer-events:none: it makes the box click-through so it cannot
+// sit over a destination square and eat the autoplay click.
 // Compact mode's resize half. popup.js owns the setting and the class on the panel body; hiding the
 // contents can't shrink anything by itself, because the panel is a FIXED POPUP_W x POPUP_H box that
 // we scale -- so the box and its wrapper have to be told the new height. Called by popup.js's
@@ -714,15 +740,17 @@ function showOppAlert(label, drop, san, uci) {
 // chess.com-style. The popup computes the numbers and pushes them on every eval update.
 
 const EVALBAR_OVERLAY_ID = 'mephisto-evalbar-overlay';
+const EVALHIST_OVERLAY_ID = 'mephisto-evalhist-overlay';
 
 function clearEvalBar() {
+    overlayEl(EVALHIST_OVERLAY_ID)?.remove();
     overlayEl(EVALBAR_OVERLAY_ID)?.remove();
 }
 
 // frac = white's share of the bar (0..1); text = score magnitude ("1.1" / "M3"); winningWhite
 // decides which end the number sits at and its colour. Repositioned every update (like the hint
 // arrows) so it tracks the board; pointer-events:none so it never eats a click.
-function drawEvalBar({frac, text, winningWhite}) {
+function drawEvalBar({frac, text, winningWhite, history, phases}) {
     const board = getBoard();
     if (!board || typeof frac !== 'number') { clearEvalBar(); return; }
     const bounds = board.getBoundingClientRect();
@@ -768,6 +796,96 @@ function drawEvalBar({frac, text, winningWhite}) {
     num.style.top = numAtBottom ? 'auto' : '2px';
     num.style.bottom = numAtBottom ? '2px' : 'auto';
     num.style.color = winningWhite ? '#403d39' : '#f0f0f0';
+
+    drawEvalHistory(history, bounds, flipped, phases);
+}
+
+// The eval graph: the game so far as a curve, in the shape lichess's computer-analysis graph uses.
+// White's advantage rides above the midline, black's below, the area between curve and midline is
+// filled, and a cursor marks the move you are on. Sits UNDER the board, full board width -- a curve
+// needs a time axis, and the only free axis next to a vertical eval bar is horizontal.
+//
+// The fill trick: instead of clipping two coloured areas at the midline (which needs the crossing
+// points solved), the area is ONE path from the curve to the midline, filled with a gradient whose
+// hard stop sits exactly at the midline. Above it the gradient is light, below it dark, so each
+// segment is coloured correctly by construction and crossings need no maths at all.
+const EVALHIST_H = 96;   // tall enough that a swing is a shape, not a wobble
+
+function drawEvalHistory(history, bounds, flipped, phases) {
+    if (!Array.isArray(history) || history.length < 2) {
+        overlayEl(EVALHIST_OVERLAY_ID)?.remove();
+        return;
+    }
+    let box = overlayEl(EVALHIST_OVERLAY_ID);
+    if (!box) {
+        box = document.createElement('div');
+        box.id = EVALHIST_OVERLAY_ID;
+        box.style.cssText = 'position: absolute; z-index: 2147483646; pointer-events: none; ' +
+            'background: #262421; border-radius: 3px; overflow: hidden; ' +
+            'box-shadow: 0 1px 3px rgba(0,0,0,0.4);';
+        getOverlayRoot().appendChild(box);
+    }
+    const W = Math.max(1, Math.round(bounds.width));
+    box.style.left = `${bounds.left + window.scrollX}px`;
+    box.style.top = `${bounds.top + window.scrollY + bounds.height + 8}px`;
+    box.style.width = `${W}px`;
+    box.style.height = `${EVALHIST_H}px`;
+
+    const H = EVALHIST_H, mid = H / 2, n = history.length;
+    const xAt = (i) => (n === 1) ? 0 : (i / (n - 1)) * W;
+    // frac is white's share (0..1). White up, black down -- NOT mirrored for a flipped board: this
+    // is a graph, and every eval graph puts white on top.
+    const pts = history.map((f, i) => {
+        // NOT `Number(f) || 0.5`: frac 0 is black completely winning, and 0 is falsy -- that
+        // silently redrew a lost position as dead level.
+        const v = Number(f);
+        const y = (1 - Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.5))) * H;
+        return [xAt(i), y];
+    });
+    const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join('');
+    const area = `${line}L${W},${mid}L0,${mid}Z`;
+
+    // Phase dividers, from lichess's own Divider algorithm (ported in the panel). A phase only gets
+    // a line and a label when it actually occurred -- a game that never left the opening draws one
+    // label and no lines, rather than three labels crammed against the left edge.
+    const marks = [];
+    const label = (x, text) =>
+        `<text x="${(x + 3).toFixed(1)}" y="4" fill="#8a8580" font-size="10" ` +
+        `font-family="Roboto, Arial, sans-serif" transform="rotate(90 ${(x + 3).toFixed(1)},4)">` +
+        `${text}</text>`;
+    marks.push(label(0, 'Opening'));
+    for (const [ply, text] of [[phases?.mid, 'Middlegame'], [phases?.end, 'Endgame']]) {
+        if (!Number.isInteger(ply) || ply <= 0 || ply >= n) continue;
+        const x = xAt(ply);
+        marks.push(`<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${H}" ` +
+                   `stroke="#4d4a46" stroke-width="1"/>`);
+        marks.push(label(x, text));
+    }
+
+    box.innerHTML =
+        `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" ` +
+        `xmlns="http://www.w3.org/2000/svg">` +
+        // gradientUnits="userSpaceOnUse" is load-bearing, not decoration. The DEFAULT is
+        // objectBoundingBox, which maps 0..1 onto the PATH's own bounding box -- and this path only
+        // ever spans from the curve to the midline. So the hard stop landed in the middle of whatever
+        // band happened to be filled rather than on the midline, painting the lower half of a white
+        // advantage solid black. In user space the stop sits at `mid`, which IS the midline, whatever
+        // shape the curve takes.
+        `<defs><linearGradient id="mp-eh" gradientUnits="userSpaceOnUse" ` +
+        `x1="0" y1="0" x2="0" y2="${H}">` +
+        `<stop offset="0" stop-color="#e8e6e3"/>` +
+        `<stop offset="${(mid / H).toFixed(6)}" stop-color="#e8e6e3"/>` +
+        `<stop offset="${(mid / H).toFixed(6)}" stop-color="#0e0d0c"/>` +
+        `<stop offset="1" stop-color="#0e0d0c"/>` +
+        `</linearGradient></defs>` +
+        `<line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="#8a8580" stroke-width="1"/>` +
+        `<path d="${area}" fill="url(#mp-eh)" fill-opacity="0.85"/>` +
+        `<path d="${line}" fill="none" stroke="#d64f00" stroke-width="1.5" ` +
+        `stroke-linejoin="round" stroke-linecap="round"/>` +
+        marks.join('') +
+        `<line x1="${pts[n - 1][0].toFixed(1)}" y1="0" ` +
+        `x2="${pts[n - 1][0].toFixed(1)}" y2="${H}" stroke="#d64f00" stroke-width="1"/>` +
+        `</svg>`;
 }
 
 // Best-effort: read the variant off lichess's game page. The variant name is a link to /variant/<key>
@@ -809,6 +927,24 @@ function detectChesscomVariant() {
         'chaturanga': 'chaturanga', 'standard': 'chess',
     };
     return map[slug] || map[slug.replace(/-/g, '')] || null;
+}
+
+// MISMATCH GUARD. The panel analysed the position we last pushed (lastPushKey); by the time its move
+// comes back the board may not be that position any more -- the opponent replied, a takeback landed,
+// or the DOM was mid-update when we read it. Clicking then plays a correct answer to a stale board,
+// which is indistinguishable from a blunder and is exactly how the torn-read bug presented.
+//
+// Cheap: one extra scrape per move, of class names we already read. It compares the SAME key the
+// push used, so anything that would have produced a different push produces a mismatch here.
+// A scrape we cannot take ('no', i.e. mid-animation) counts as a mismatch on purpose -- unverifiable
+// is not the same as unchanged, and the cost of waiting is one re-push.
+let mismatchAborts = 0; // surfaced in the console; a rising count means the board is outrunning us
+
+function boardStillMatchesAnalysis() {
+    if (!lastPushKey) return true; // nothing analysed yet -- nothing to contradict
+    const res = tryScrapePosition();
+    if (res === 'no') return false;
+    return `${getOrientation()}|${res}` === lastPushKey;
 }
 
 function tryScrapePosition() {
@@ -1821,6 +1957,7 @@ function dispatchSimulateClick(x, y, travelMs = 0) {
         // goes to the PANEL (it picks CDP vs the python backend), which is in our own realm when the
         // panel is in-page -- runtime.sendMessage would only reach the extension, never our sibling.
         // travelMs is how long the cursor should take travelling to (x, y) before the click (M2).
+        bgLog('dispatching click', {x: Math.round(x), y: Math.round(y), travelMs});
         return sendToPanel({click: true, x: x, y: y, travelMs});
     } catch (e) {
         // "Extension context invalidated" -- this content-script was orphaned by an extension reload

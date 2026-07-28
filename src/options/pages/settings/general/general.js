@@ -20,6 +20,7 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('autoplay', 'Autoplay:', 'checkbox', false);
         this.registerFormElement('premove', 'Premove:', 'checkbox', false);
         this.registerFormElement('ponder', 'Pondering:', 'checkbox', false);
+        this.registerFormElement('tablebase', 'Endgame Tablebase:', 'checkbox', false);
         this.registerFormElement('hide_opponent', 'Hide Opponent Name:', 'checkbox', false);
         this.registerFormElement('explorer', 'Opening Explorer:', 'checkbox', false);
         this.registerFormElement('book_play', 'Play Book Moves:', 'checkbox', false);
@@ -104,11 +105,12 @@ class GeneralSettings extends SettingsPage {
             manual_play: 'Play move (Manual Mode)', autoplay: 'Toggle Autoplay', premove: 'Toggle Premove',
             help_mode: 'Toggle Help Mode', humanize: 'Toggle Humanize', clock_mode: 'Toggle Clock Mode',
             mirror_mode: 'Toggle Mirror Time', manual_mode: 'Toggle Manual Mode', eval_bar: 'Toggle Eval Bar',
+            eval_history: 'Toggle Eval History', tablebase: 'Toggle Endgame Tablebase',
             puzzle_mode: 'Toggle Puzzle Mode', explorer: 'Toggle Opening Explorer',
             book_play: 'Toggle Book Moves', copy_fen: 'Copy FEN', copy_pgn: 'Copy PGN', redetect: 'Re-detect game',
         };
         const ORDER = ['manual_play', 'manual_mode', 'autoplay', 'premove', 'explorer', 'book_play',
-            'help_mode', 'humanize', 'clock_mode', 'mirror_mode', 'eval_bar', 'puzzle_mode',
+            'help_mode', 'humanize', 'clock_mode', 'mirror_mode', 'eval_bar', 'eval_history', 'tablebase', 'puzzle_mode',
             'copy_fen', 'copy_pgn', 'redetect'];
         // same normalization as the content-script listener, so what we store matches what it compares
         const keyString = (e) => {

@@ -86,6 +86,9 @@ def format_line(line, terminal, bestmove, in_check=False):
             formatted['mate'] = score.mate()
         else:
             formatted['score'] = score.score()
+        # an aspiration re-search: shown, but never certified against (see on_native_info)
+        if line.get('lowerbound') or line.get('upperbound'):
+            formatted['bound'] = True
         wdl = line.get('wdl')  # present only when the engine declares UCI_ShowWDL
         if wdl is not None:
             try:
@@ -198,13 +201,12 @@ def do_analyse(data, mid):
                     if request_counter != request_id:
                         break  # superseded by a newer position
                     # STREAM per-depth updates (live depth UI + JS premove certification).
-                    # Aspiration re-searches emit `score cp N lowerbound|upperbound` lines whose pv
-                    # is a partial, unresolved guess. The WASM path drops them (popup.js checks the
-                    # raw UCI text); over here format_line does NOT forward the flag, so the popup
-                    # cannot tell them apart -- they have to be dropped HERE or they land in the
-                    # premove depth-13/14 certification snapshots as if they were finished lines.
-                    if (info.get('pv') and info.get('score') is not None
-                            and not info.get('lowerbound') and not info.get('upperbound')):
+                    # Aspiration re-searches (`lowerbound`/`upperbound`) carry an unresolved pv, so
+                    # they must not feed premove certification -- but they are FORWARDED anyway,
+                    # flagged, and the popup skips only the certification. Dropping them outright was
+                    # worse: during a long search those windows are frequent, and with nothing sent
+                    # the panel had no depth/eval/nps updates at all and sat on its progress bar.
+                    if info.get('pv') and info.get('score') is not None:
                         try:
                             send_message({'id': mid, 'info': format_line(info, False, None)})
                         except Exception:

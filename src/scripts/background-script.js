@@ -34,6 +34,10 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     updateCheck().then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }
+  if (msg.tablebaseLookup) {
+    tablebaseLookup(msg.tablebaseLookup).then(sendResponse).catch(e => sendResponse({error: String(e)}));
+    return true; // async sendResponse
+  }
   // Panel asks to read the board off the screen. The SW is the only context that can capture a tab;
   // the offscreen document is the only one with onnxruntime loaded -- so capture here, recognise there.
   if (msg.captureAndRecognize) {
@@ -117,6 +121,16 @@ const EXPLORER_DB = {
 const explorerCache = new Map(); // `${db}|${fen}` -> response; the fallback poll rescrapes the same
 const EXPLORER_CACHE_MAX = 300;  // position constantly, so without this every rescan is a request
 
+// Calibration is a FIRST-INSTALL offer, nothing else. It used to fire off nothing but "we have
+// eight nps samples", which meant an existing install got the prompt during a normal game -- and a
+// prompt in the panel is not free, it competes for attention with the position. Chrome tells us the
+// difference: onInstalled fires with reason 'install' exactly once, on a genuinely new install, and
+// with 'update' when the extension is merely reloaded or upgraded. Only the former arms the offer.
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason !== 'install') return;
+  chrome.storage.local.set({calibrate_pending: 'true'}).catch(() => {});
+});
+
 // --- Update check ------------------------------------------------------------------------------
 // Ask GitHub for this fork's newest release and compare it to the running manifest version. Done in
 // the SERVICE WORKER, like the explorer lookup, so the chess page never makes the request. Cached
@@ -163,6 +177,54 @@ async function updateCheck() {
   }
   await chrome.storage.local.set({mephisto_update_check: {at: Date.now(), result}});
   return {...result, current, newer: isNewer(result.latest, current), cached: false};
+}
+
+// --- Syzygy tablebase (lichess) ---------------------------------------------------------------
+// Perfect play once the position is down to <=7 men. PROBED OVER THE NETWORK on purpose: the real
+// tablebases are hundreds of gigabytes and nobody is downloading those to use a browser extension,
+// so the only shippable form is the lookup. Fetched HERE in the service worker, like the explorer,
+// so the chess page itself never issues the request.
+//
+// A hit is not an opinion, it is the answer -- so unlike the opening book there is no "is the engine
+// close enough" filter on the caller side. `moves` comes back sorted best-first; each move's
+// `category` is from the perspective of the side to move AFTER it, so a move to `loss` is a move
+// that loses FOR THEM, i.e. what we want.
+const TABLEBASE_HOST = 'https://tablebase.lichess.ovh';
+// Our variant name -> lichess's endpoint. Probed 2026-07-26: standard, atomic and antichess are the
+// ONLY ones served -- crazyhouse, horde, kingofthehill, racingkings, threecheck and giveaway all 404.
+// Chess960 is deliberately absent: a <=7-man 960 position can still carry castling rights, which
+// Syzygy has no notion of, so mapping it to /standard would ask about a different position.
+const TABLEBASE_PATHS = {chess: 'standard', atomic: 'atomic', antichess: 'antichess'};
+const tablebaseCache = new Map(); // `${variant}|${fen}` -> response
+const TABLEBASE_CACHE_MAX = 300;
+
+async function tablebaseLookup({fen, variant}) {
+  const path = TABLEBASE_PATHS[variant || 'chess'];
+  if (!path) return {error: `no tablebase for variant ${variant}`};
+  const key = `${path}|${fen}`;
+  if (tablebaseCache.has(key)) return tablebaseCache.get(key);
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 4000); // a miss just means the engine plays instead
+  let out;
+  try {
+    // encodeURIComponent, not URLSearchParams: the latter form-encodes the FEN's spaces to '+'
+    // (same trap as the explorer lookup).
+    const url = `${TABLEBASE_HOST}/${path}?fen=${encodeURIComponent(fen)}`;
+    const r = await fetch(url, {signal: ctl.signal});
+    out = r.ok ? await r.json() : {error: `HTTP ${r.status}`};
+    console.log('[Tablebase]', r.status, fen, out.error ? out.error : `${out.category} (${out.moves?.length ?? 0} moves)`);
+  } catch (e) {
+    out = {error: String(e)}; // offline / aborted / DNS
+  } finally {
+    clearTimeout(timer);
+  }
+  if (out.error) {
+    console.warn('Mephisto: tablebase lookup failed -', out.error);
+  } else { // never cache a failure: the next position should retry
+    if (tablebaseCache.size >= TABLEBASE_CACHE_MAX) tablebaseCache.delete(tablebaseCache.keys().next().value);
+    tablebaseCache.set(key, out);
+  }
+  return out;
 }
 
 async function explorerLookup({fen, db}) {

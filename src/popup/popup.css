@@ -249,6 +249,15 @@ html, body {
 }
 
 
+/* body sets white-space: nowrap, which clipped any readout line that outgrew the 378px column --
+   the humanize countdown ("Playing in 1.2s (Humanize) · second line") does it as readily as the
+   move line does. Let these wrap, at a tighter line-height so a second line costs ~22px rather than
+   the body's 35px. */
+#chess_line_1, #next-move, #evaluation {
+    white-space: normal;
+    line-height: 26px;
+}
+
 #next-move {
     height: 21px;
     font: 17px 'Roboto', sans-serif; /* match the move/score lines */
@@ -550,6 +559,16 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------- */
+/* Second line of the move readout: the tablebase verdict and the confidence gap. Its own line so the
+   move text is never clipped -- see readout_extras(). */
+.line1-extra {
+    display: block;
+    font-size: 13px;
+    line-height: 18px;
+    opacity: 0.75;
+    white-space: normal;
+}
+
 /* Dark mode (toggled in Appearance settings -> class `mephisto-dark` on body) */
 body.mephisto-dark {
     background-color: #16171b; /* deeper slate base */
@@ -746,15 +765,55 @@ body.mephisto-compact #alt-lines {
 
 /* Update notice: hidden unless a newer release exists, so it costs nothing in the normal case. */
 #update-notice {
-    display: block;
+    /* Absolutely positioned ON PURPOSE. These used to sit in the flow between #game-detection and
+       #board, so showing one pushed the board down -- and the panel board's arrow overlay is
+       positioned against the board, so it silently went out of alignment. A notice must never move
+       the thing it is a notice about. Pinned above the button row, where nothing is laid out below
+       it, and allowed to WRAP (body sets white-space: nowrap, which made the text run off the
+       panel). */
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 58px;
+    z-index: 20;
     text-align: center;
     font-size: 11px;
-    line-height: 1.4;
-    padding: 2px 6px;
+    line-height: 1.35;
+    white-space: normal;
+    padding: 4px 6px;
+    border-radius: 3px;
+    background: rgba(11, 114, 133, 0.10);
     color: #0b7285;
     text-decoration: none;
+    cursor: pointer;
 }
-#update-notice:hover { text-decoration: underline; }
-#update-notice[hidden] { display: none; }
+#update-notice:hover, #update-notice[hidden] { display: none; }
+
+/* Same treatment as the update notice: hidden unless there is something worth saying. */
+#calibrate-notice {
+    /* Absolutely positioned ON PURPOSE. These used to sit in the flow between #game-detection and
+       #board, so showing one pushed the board down -- and the panel board's arrow overlay is
+       positioned against the board, so it silently went out of alignment. A notice must never move
+       the thing it is a notice about. Pinned above the button row, where nothing is laid out below
+       it, and allowed to WRAP (body sets white-space: nowrap, which made the text run off the
+       panel). */
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 58px;
+    z-index: 20;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: normal;
+    padding: 4px 6px;
+    border-radius: 3px;
+    background: rgba(11, 114, 133, 0.10);
+    color: #0b7285;
+    text-decoration: none;
+    cursor: pointer;
+}
+#calibrate-notice[hidden] { display: none; }
+body.mephisto-dark #calibrate-notice { color: #4dd0e1; }
 body.mephisto-dark #update-notice { color: #4dd0e1; }
 body.mephisto-dark #game-detection.unsupported { color: #ff7a70; }

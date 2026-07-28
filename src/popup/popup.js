@@ -68,7 +68,8 @@ let search_active = false; // a 'go' was issued whose bestmove hasn't arrived ye
                            // used for this: it flips false on the first info line, not on bestmove)
 let last_pos = {startFen: null, moves: ''}; // the position's own start + UCI move list, for Copy PGN
 let premove_tracker = {fen: '', lines: {}}; // per-multipv reply stability while the opponent thinks
-let search_threads_set = null; // last Threads value pushed to the engine; opponent-turn search drops to 1 unless Pondering
+let search_threads_set = null; // last Threads value pushed to the engine; opponent-turn search is capped unless Pondering
+let remote_multipv_set = null; // last MultiPV pushed to a NATIVE host (it stores options; the analyse request has none)
 let premove_lines = 2; // top-N lines premove tracks/certifies; widened to the ponder width while pondering (see ponder_line_count)
 let prog = 0;
 let last_eval = {fen: '', activeLines: 0, lines: []};
@@ -134,6 +135,11 @@ let keep_alive_ctx = null;
 // allowCreate is true ONLY when called from a real user gesture -- creating/resuming an AudioContext
 // without one logs Chrome's "AudioContext was not allowed to start" warning, so non-gesture callers
 // (page load, visibilitychange) only resume an already-created context (sticky activation permits that).
+// The tone is only worth its cost when moves are actually meant to fire while the tab is hidden.
+function keep_alive_wanted() {
+    return !!(config.autoplay && config.background_play);
+}
+
 function keep_alive(active, allowCreate = false) {
     try {
         if (active) {
@@ -208,6 +214,8 @@ async function initPanel(root, tabId) {
         // turn -- burn the wait on a deeper reply. OFF (default) still analyses the opponent's turn for
         // premove/threat/help, but capped to 1 thread so idle time isn't a full-core burn.
         ponder: JSON.parse(MephistoConfig.get('ponder')) || false,
+        tablebase: JSON.parse(MephistoConfig.get('tablebase')) || false,
+        eval_history: JSON.parse(MephistoConfig.get('eval_history')) || false,
         // Opening explorer: `explorer` draws the overlay, `book_play` actually plays a weighted-random
         // book move. Two independent toggles -- turning on the overlay must never change how you play.
         // Blur the opponent's name and avatar on the page. For screenshots and screen sharing --
@@ -236,8 +244,8 @@ async function initPanel(root, tabId) {
     apply_compact();
     // keep autoplay running when the tab is backgrounded: start/resume the keep-alive tone on any
     // panel click and whenever visibility flips, so it's already playing before you tab away
-    document.addEventListener('pointerdown', () => keep_alive(config.autoplay, true), true); // gesture: may create
-    document.addEventListener('visibilitychange', () => keep_alive(config.autoplay)); // resume-only (no create)
+    document.addEventListener('pointerdown', () => keep_alive(keep_alive_wanted(), true), true); // gesture: may create
+    document.addEventListener('visibilitychange', () => keep_alive(keep_alive_wanted())); // resume-only (no create)
     push_config();
     init_quick_settings();
     maybe_autodetect_variant(); // variant game page -> auto-apply the variant (+ Fairy) once
@@ -390,6 +398,8 @@ async function initPanel(root, tabId) {
         request_fen();
     }, Math.max(1000, config.fen_refresh));
 
+    watch_config_changes();
+
     // Update check: one message to the SW, which caches for 12h. Silent unless there is genuinely a
     // newer release -- a failed or rate-limited check leaves the notice hidden, exactly as if the
     // build were current. Clicking it opens the release page via the background (window.open from a
@@ -522,7 +532,9 @@ function init_quick_settings() {
     // toggles apply live
     for (const [id, key] of [['qs_autoplay', 'autoplay'], ['qs_premove', 'premove'],
                              ['qs_puzzle', 'puzzle_mode'], ['qs_help', 'help_mode'],
-                             ['qs_evalbar', 'eval_bar'], ['qs_humanize', 'humanize'],
+                             ['qs_evalbar', 'eval_bar'], ['qs_evalhist', 'eval_history'],
+                             ['qs_tablebase', 'tablebase'],
+                             ['qs_humanize', 'humanize'],
                              ['qs_clock', 'clock_mode'], ['qs_mirror', 'mirror_mode'],
                              ['qs_manual', 'manual_mode'],
                              ['qs_explorer', 'explorer'], ['qs_book', 'book_play']]) {
@@ -532,9 +544,11 @@ function init_quick_settings() {
         elem.addEventListener('change', () => {
             config[key] = elem.checked;
             save(key, elem.checked);
-            keep_alive(config.autoplay, true); // this change is a user gesture -> can (re)start the tone now
+            keep_alive(keep_alive_wanted(), true); // this change is a user gesture -> can (re)start the tone now
             if (key === 'help_mode' && !elem.checked) request_clear_hint();
             if (key === 'eval_bar' && !elem.checked) request_clear_eval_bar();
+            if (key === 'eval_history') request_clear_eval_bar();
+            if (key === 'tablebase') tablebase_data = null; // a stale answer must not survive a toggle
             if (key === 'explorer' || key === 'book_play') {
                 // turning either on mid-game should look this position up right away rather than
                 // waiting for the next move; the out-of-book latch is per game, so clear it too
@@ -799,12 +813,14 @@ async function initialize_engine(reuseWarm = false) {
             ...(config.variant && config.variant !== 'chess' ? {"UCI_Variant": config.variant} : {}),
             ...(config.elo > 0 && config.elo <= 3190 ? {"UCI_LimitStrength": true, "UCI_Elo": config.elo} : {}),
         }).catch(on_remote_error);
+        remote_multipv_set = effective_multipv(); // baseline just configured; don't re-push it
     } else {
         // WASM engines can't allocate the big hash the slider now allows (2 GB) -- their heap is
         // capped, so clamp to 512 MB here. Native engines (remote branch above) get the full value.
         send_engine_uci(`setoption name Hash value ${Math.min(config.memory, 512)}`);
         send_engine_uci(`setoption name Threads value ${config.threads}`);
         search_threads_set = config.threads; // baseline; on_new_pos re-pushes only when the per-turn target differs
+        remote_multipv_set = null;           // WASM path: no host to have configured
         send_engine_uci(`setoption name MultiPV value ${effective_multipv()}`);
         // Win/Draw/Loss readout under the score. Modern Stockfish (dev/18) reports `wdl W D L` per
         // info line once this is on; SF11/Fairy don't declare it and silently ignore this line.
@@ -998,7 +1014,28 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                 if (book && !premove_reply_playable(last_eval.fen, book)) {
                     console.warn('Mephisto: ignoring a book move that is not ours/legal here:', book);
                 }
-                const played = (book && premove_reply_playable(last_eval.fen, book)) ? book : best;
+                // Tablebase outranks everything: at <=7 men the position is SOLVED, so this is not a
+                // preference the engine could out-search, it is the move. Same shape as the book --
+                // it replaces only WHICH move is played, never the timing.
+                const tb = tablebase_pick(last_eval.fen);
+                if (tb && !premove_reply_playable(last_eval.fen, tb)) {
+                    console.warn('Mephisto: ignoring a tablebase move that is not ours/legal here:', tb);
+                }
+                const tb_ok = tb && premove_reply_playable(last_eval.fen, tb);
+                const played = tb_ok ? tb
+                    : (book && premove_reply_playable(last_eval.fen, book)) ? book : best;
+                if (tb_ok && tb !== best) console.log(`Tablebase: playing ${tb} over ${best} (solved position)`);
+                // Blunder guard. A tablebase move is exempt -- it is proven optimal. Everything else is
+                // checked against the board we are about to click on (see move_is_suspect).
+                const our_cp = (board.orientation() === 'white') ? last_eval.lines?.[0]?.score
+                                                                : -last_eval.lines?.[0]?.score;
+                if (!tb_ok && move_is_suspect(last_eval.fen, played, our_cp)) {
+                    console.warn(`Mephisto: refusing ${played} -- it drops ` +
+                        `${move_material_loss(last_eval.fen, played)}cp while the engine reads ${our_cp}cp. ` +
+                        `The analysed position and the board disagree; re-scraping.`);
+                    request_fen();
+                    return;
+                }
                 if (played !== best) console.log(`Book: playing ${played} over ${best} (weighted random)`);
                 if ((config.humanize || clock_aware()) && !config.puzzle_mode) {
                     const pick = humanize_pick(best);
@@ -1053,10 +1090,13 @@ function update_eval_bar(line) {
     bar.style.bottom = flipped ? 'auto' : '0';
     bar.style.height = `${frac * 100}%`;
 
+    record_eval_history(frac);
+
     // mirror the bar onto the site board (chess.com-style: score inside, on the winning side's end)
     if (config.eval_bar) {
         const text = ('mate' in line) ? `M${Math.abs(line.mate)}` : (Math.abs(line.score) / 100).toFixed(1);
-        request_draw_eval_bar({frac, text, winningWhite: frac >= 0.5});
+        request_draw_eval_bar({frac, text, winningWhite: frac >= 0.5,
+                               history: config.eval_history ? eval_history : null});
     }
 }
 
@@ -1098,6 +1138,9 @@ function on_engine_evaluation(info) {
     const l0 = info.lines[0];
     if (npsEl && nps_is_trustworthy(l0)) {
         npsEl.textContent = format_nps(l0.nps);
+        // Calibration samples ride the same filter -- it already rejects the impossible readings the
+        // opening milliseconds of a search produce. Depth-gated on top.
+        if (Number.isFinite(l0.depth) && l0.depth >= 12) record_nps_sample(l0.nps);
     }
     if ('mate' in info.lines[0]) {
         update_evaluation(`Checkmate in ${info.lines[0].mate}`);
@@ -1369,6 +1412,58 @@ function premove_certified(line) {
         && !!line.dPrev && line.dPrev === line.dLast && line.dPrev === line.latest;
 }
 
+// --- Autoplay blunder guard ---------------------------------------------------------------------
+// The naive form of this ("refuse a move whose eval collapsed") cannot work, and it is worth saying
+// why: when the panel analyses the WRONG position the engine is still perfectly self-consistent. It
+// returns the best move for the board it was given, with a healthy score. Comparing the engine's
+// output against the engine's own evaluation therefore agrees with itself and catches nothing.
+//
+// What IS detectable is the CONTRADICTION. Take the move the engine is about to play and check it
+// against the position actually on the board: if the engine believes it is doing fine, yet the move
+// drops a piece for nothing, those two statements cannot both be true of the same position. A
+// correct search on a correct board essentially never produces that pair -- but a search on a stale
+// or mis-scraped board produces it constantly, because the move was reasoned about elsewhere.
+//
+// Deliberately NOT a general blunder filter: real sacrifices are supposed to get through. The engine
+// having a healthy score is what separates "sacrifice it understands" from "answer to another
+// position", and a lost position is exempt entirely (down a queen, everything hangs).
+const PIECE_CP = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000};
+const BLUNDER_MATERIAL_CP = 300;  // a minor piece: below this it is a trade or a pawn, not a signal
+const BLUNDER_EVAL_FLOOR_CP = -100; // already worse than this -> exempt, losing positions shed material
+
+// Crude static exchange on the destination square: what does this move hand over for free? Returns
+// centipawns lost, 0 when nothing hangs. Not a full SEE -- it looks one capture and one recapture
+// deep, which is all that is needed to spot a piece left en prise.
+function move_material_loss(fen, uci) {
+    try {
+        const c = new Chess(config.variant, fen);
+        const [from, to] = [uci.slice(0, 2), uci.slice(2, 4)];
+        const moved = c.get(from);
+        if (!moved || moved.type === 'k') return 0;   // king moves are legality, not material
+        const gained = PIECE_CP[c.get(to)?.type] || 0; // what we capture on the way in
+        c.move({from, to, promotion: uci[4]});
+        // cheapest enemy capture on that square
+        const takes = c.moves({verbose: true}).filter(m => m.to === to);
+        if (!takes.length) return 0;                   // nothing attacks it -- nothing hangs
+        takes.sort((a, b) => (PIECE_CP[a.piece] || 0) - (PIECE_CP[b.piece] || 0));
+        const attacker = PIECE_CP[takes[0].piece] || 0;
+        c.move(takes[0]);
+        const ours = PIECE_CP[uci[4] ? uci[4] : moved.type] || 0;
+        const recaptures = c.moves({verbose: true}).filter(m => m.to === to);
+        // no recapture -> we simply lost the piece; with one, we win their attacker back
+        const loss = recaptures.length ? (ours - gained - attacker) : (ours - gained);
+        return Math.max(0, loss);
+    } catch (e) {
+        return 0; // unparseable variant fen / malformed uci -- never veto on an unknown
+    }
+}
+
+// true = do not play this move. `evalCp` is OUR-perspective centipawns for this position.
+function move_is_suspect(fen, uci, evalCp) {
+    if (evalCp == null || evalCp < BLUNDER_EVAL_FLOOR_CP) return false; // losing already: exempt
+    return move_material_loss(fen, uci) >= BLUNDER_MATERIAL_CP;
+}
+
 function premove_reply_playable(fen, uci) {
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci ?? '')) return false;
     try {
@@ -1563,6 +1658,76 @@ const INITIAL_PLACEMENT = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'; // stan
 let setup_fen = null;        // a manually set position: while held, page scrapes are IGNORED
 let explorer_empty_streak = 0; // consecutive empty lookups; 3 = genuinely out of book
 
+// --- Syzygy tablebase --------------------------------------------------------------------------
+// With <=7 men on the board the position is SOLVED, so a hit here is not an opinion the engine can
+// out-search -- it is the answer, and it beats any move a bounded search produces. Probed over the
+// network (in the service worker, so the page issues nothing): the real tablebases are hundreds of
+// gigabytes, which is not something to ship with a browser extension.
+//
+// Off by default and opt-in under Settings, exactly like the Opening Explorer: it tells a third
+// party the position you are looking at, and that is the user's call to make, not a default.
+//
+// NEVER on the critical path. The lookup is fired when a position arrives and never awaited -- if
+// the answer has not landed by the time the engine's move is ready, the engine's move is played and
+// the probe is simply skipped for that move. A slow or blocked endpoint cannot delay a move or eat
+// into a Clock/Mirror budget.
+const TABLEBASE_MAX_MEN = 7;   // the largest Syzygy set lichess serves
+let tablebase_data = null;     // {fen, category, dtz, dtm, moves:[...]} for the last position probed
+
+// lichess serves Syzygy for standard, atomic and antichess only (probed -- everything else 404s).
+// Chess960 is excluded on purpose: a <=7-man 960 position can still carry castling rights, which
+// Syzygy does not model, so /standard would be answering about a different position.
+const TABLEBASE_VARIANTS = ['chess', 'atomic', 'antichess'];
+
+function tablebase_enabled() {
+    return config.tablebase && TABLEBASE_VARIANTS.includes(config.variant || 'chess');
+}
+
+// men on the board, straight off the FEN placement field
+function piece_count(fen) {
+    return (fen.split(' ')[0].match(/[prnbqkPRNBQK]/g) || []).length;
+}
+
+// Fire-and-forget. Never awaited by the move path (see the note above).
+function request_tablebase(fen) {
+    if (!tablebase_enabled()) return;
+    // A hidden tab makes no third-party requests -- unless Background Play is on, in which case the
+    // game IS still being played and a tablebase answer is exactly as wanted as it is in front of you.
+    if (document.hidden && !config.background_play) return;
+    if (piece_count(fen) > TABLEBASE_MAX_MEN) return;  // out of range -- don't ask
+    if (tablebase_data?.fen === fen) return;           // already have this position
+    chrome.runtime.sendMessage({tablebaseLookup: {fen, variant: config.variant || 'chess'}}, (res) => {
+        if (chrome.runtime.lastError || !res || res.error || !res.moves?.length) return;
+        tablebase_data = {fen, ...res};
+        console.log(`Tablebase: ${res.category} (dtz ${res.dtz}, dtm ${res.dtm}) -> ${res.moves[0].uci}`);
+        update_best_move_suffix();
+    });
+}
+
+// The optimal move for THIS position, or null. lichess returns `moves` sorted best-first, so the
+// answer is simply moves[0] -- there is nothing to weigh or filter, and deliberately no "is the
+// engine's move close enough" check like the opening book has: a solved position has a best move
+// and everything else is worse by definition.
+function tablebase_pick(fen) {
+    if (!tablebase_enabled()) return null;
+    if (tablebase_data?.fen !== fen) return null;      // stale or never answered
+    const best = tablebase_data.moves?.[0]?.uci;
+    return /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(best ?? '') ? best : null;
+}
+
+// Appended to the move readout so a tablebase move is never silently substituted for the engine's.
+function tablebase_label() {
+    if (!tablebase_data || tablebase_data.fen !== last_eval.fen) return '';
+    const c = tablebase_data.category;
+    const n = Math.abs(tablebase_data.dtm ?? tablebase_data.dtz ?? 0);
+    if (c === 'win') return `tablebase: win in ${n}`;
+    if (c === 'loss') return `tablebase: lost in ${n}`;
+    if (c === 'draw') return 'tablebase: draw';
+    if (c === 'cursed-win') return `tablebase: win in ${n} (50-move drawn)`;
+    if (c === 'blessed-loss') return 'tablebase: loss (50-move drawn)';
+    return '';
+}
+
 function explorer_enabled() {
     return (config.explorer || config.book_play)
         && (!config.variant || config.variant === 'chess') // API is standard-chess only here
@@ -1572,7 +1737,9 @@ function explorer_enabled() {
 // Fire-and-forget. Never awaited by the move path (see the note above).
 function request_explorer(fen) {
     if (!explorer_enabled() || explorer_out_of_book) return;
-    if (document.hidden) return; // don't make third-party requests from a tab nobody is looking at
+    // Same rule as the tablebase probe: silent in a hidden tab, unless Background Play says the game
+    // is still going. Otherwise a backgrounded game silently loses its book moves.
+    if (document.hidden && !config.background_play) return;
     if (explorer_data?.fen === fen) return; // already have this position
     chrome.runtime.sendMessage({explorerLookup: {fen, db: config.explorer_db || 'masters'}}, (res) => {
         // A failed lookup must SAY so. Drawing nothing is indistinguishable from "the feature is
@@ -1828,6 +1995,7 @@ function on_new_pos(fen, startFen, moves) {
     }
     // fire the book lookup NOW so the answer has the whole search to arrive; never awaited
     request_explorer(fen);
+    request_tablebase(fen);
     prev_ply_count = ply_count;
     toggle_calculating(true);
     // SIZE THE SEARCH TO THE PACE. When a clock-aware mode intends to spend, say, 1.2s on this move,
@@ -1870,6 +2038,13 @@ function on_new_pos(fen, startFen, moves) {
     }
     // whose move is it -- drives the ponder budget (remote/native) and the per-turn thread cap (WASM)
     const our_turn = ((turn === 'w') ? 'white' : 'black') === board.orientation();
+    // Ponder width, hoisted ABOVE the engine branch because it is engine-agnostic. It used to live in
+    // the WASM branch only, so on a native engine Pondering never actually widened the candidate list
+    // and premove_lines stayed at 2 -- the width bought nothing there.
+    const ponder_now = config.ponder && !our_turn;
+    premove_lines = ponder_now ? ponder_line_count(fen, moves ? moves.trim().split(' ').pop() : null) : 2;
+    const want_multipv = ponder_now ? premove_lines : effective_multipv();
+
     // Puzzle Mode never analyses the opponent's turn. In a puzzle their reply is scripted and lands
     // in a couple of hundred ms, and nothing consumes an opponent-turn search here: Premove is
     // disabled in Puzzle Mode (all three entry points bail on it), so there is no certification to
@@ -1886,11 +2061,30 @@ function on_new_pos(fen, startFen, moves) {
         // instead of stopping after our move time. Superseded by the next position like Help Mode.
         const rt = (config.help_mode || !config.autoplay || config.manual_mode
                     || (config.ponder && !our_turn)) ? 3600000 : movetime;
-        if (moves) {
-            request_remote_analysis(startFen, rt, moves).then(on_engine_response).catch(on_remote_error);
-        } else {
-            request_remote_analysis(fen, rt).then(on_engine_response).catch(on_remote_error);
+        const send_analysis = () => {
+            if (moves) {
+                request_remote_analysis(startFen, rt, moves).then(on_engine_response).catch(on_remote_error);
+            } else {
+                request_remote_analysis(fen, rt).then(on_engine_response).catch(on_remote_error);
+            }
+        };
+        // The host reads MultiPV out of its stored options, not out of the analyse request, so the
+        // width is configured separately. FIRE AND FORGET, never awaited.
+        //
+        // It was awaited at first, to avoid a race: the host handles each message on its own thread
+        // and they only serialise on the engine lock, so a configure sent alongside an analyse can
+        // lose and apply its width to the NEXT position instead. That reasoning was right and the
+        // fix was wrong -- chaining the analysis onto the configure's promise means a configure that
+        // never settles issues NO SEARCH AT ALL. With Pondering on, the width changes every time the
+        // turn flips, so that is one round-trip per move, and one that fails to resolve leaves the
+        // panel with a spinning progress bar and no move. A width that is one position stale is a
+        // vastly better failure than a search that never starts.
+        if (want_multipv !== remote_multipv_set) {
+            remote_multipv_set = want_multipv;
+            // on failure, forget what we think the host has so the next position re-pushes it
+            request_remote_configure({MultiPV: want_multipv}).catch(() => { remote_multipv_set = null; });
         }
+        send_analysis();
     } else {
         // discards the flushed bestmove of the search we're superseding -- `turn` already belongs to
         // the NEW position, so if the old search was for the opponent's side (they replied mid-search)
@@ -1925,9 +2119,7 @@ function on_new_pos(fen, startFen, moves) {
         // Pondering overrides the width: the opponent's turn is searched over their top few candidate
         // replies (ponder_line_count), not our configured line count -- premove_lines mirrors it so an
         // instant reply can be certified for any of them.
-        const ponder_now = config.ponder && !our_turn;
-        premove_lines = ponder_now ? ponder_line_count(fen, moves ? moves.trim().split(' ').pop() : null) : 2;
-        send_engine_uci(`setoption name MultiPV value ${ponder_now ? premove_lines : effective_multipv()}`);
+        send_engine_uci(`setoption name MultiPV value ${want_multipv}`);
         if (moves) {
             send_engine_uci(`position fen ${startFen} moves ${moves}`);
         } else {
@@ -2195,10 +2387,64 @@ function update_evaluation(eval_string) {
 
 // One line: the "Best response for X is Y" threat readout used to occupy a second line here, and
 // its empty reserved row showed as a gap under the move. Threat Analysis is now arrow-only.
+// How much better the best move is than the second best -- the thing a human actually wants to know
+// and the one thing the panel never said. "Only move" and "six moves are all fine" are completely
+// different situations that both used to render as a single arrow and a score.
+//
+// Reads the MultiPV lines that are already on screen; needs no extra search. Silent when only one
+// line is being computed (Multi Lines = 1), because with nothing to compare against there is no gap
+// to report -- it does NOT widen the search to find one.
+const CONFIDENCE_ONLY_MOVE_CP = 150; // best is winning by this much more -> effectively forced
+const CONFIDENCE_EQUAL_CP = 20;      // within this -> genuinely a choice
+
+function move_confidence_label() {
+    try {
+        if (!last_eval.fen || config.simon_says_mode) return '';
+        // a single legal move is "only move" regardless of what the engine reports
+        const legal = new Chess(config.variant, last_eval.fen).moves().length;
+        if (legal === 1) return 'only move';
+        const a = last_eval.lines?.[0], b = last_eval.lines?.[1];
+        if (!a || !b) return '';                       // Multi Lines = 1, or line 2 not in yet
+        // mate scores don't subtract meaningfully against centipawns
+        if (a.mate != null || b.mate != null) {
+            return (a.mate != null && b.mate == null) ? 'only line that mates' : '';
+        }
+        if (typeof a.score !== 'number' || typeof b.score !== 'number') return '';
+        const gap = Math.abs(a.score - b.score);
+        if (gap >= CONFIDENCE_ONLY_MOVE_CP) return `clearly best (+${(gap / 100).toFixed(1)})`;
+        if (gap <= CONFIDENCE_EQUAL_CP) return 'several equal';
+        return `+${(gap / 100).toFixed(2)} over #2`;
+    } catch (e) {
+        return ''; // unparseable variant fen etc. -- the readout is better bare than wrong
+    }
+}
+
+// The tablebase verdict and the confidence gap go on their OWN line, not appended to the move text.
+// body sets `white-space: nowrap` and the left column is 378px, so "White to play, best move is a6a7
+// -- tablebase: win in 13" simply ran off the edge and was clipped mid-word. A second, smaller line
+// costs ~18px of a column that has room, and neither string has to be abbreviated to fit.
+function readout_extras() {
+    // Both labels return BARE text and the separator is added here. They used to carry their own
+    // leading '—' / '·', so which punctuation started the line depended on which label happened to
+    // be present -- and stripping it back off needed a regex that missed the em dash.
+    const extra = [tablebase_label(), move_confidence_label()].filter(Boolean).join(' · ');
+    return extra ? `<span class="line1-extra">${extra}</span>` : '';
+}
+
 function update_best_move(line1) {
     if (line1 != null) {
-        PANEL_ROOT.getElementById('chess_line_1').innerHTML = line1;
+        last_best_move_line = line1;
+        PANEL_ROOT.getElementById('chess_line_1').innerHTML = line1 + readout_extras();
     }
+}
+let last_best_move_line = null; // the readout without the tablebase suffix, so it can be re-rendered
+
+// The tablebase answer arrives AFTER the readout is drawn (it is never awaited), so re-render with
+// the verdict appended rather than leaving the panel claiming a plain engine move.
+function update_best_move_suffix() {
+    if (last_best_move_line == null) return;
+    const el = PANEL_ROOT.getElementById('chess_line_1');
+    if (el) el.innerHTML = last_best_move_line + readout_extras();
 }
 
 
@@ -2868,7 +3114,7 @@ function manual_play() {
 const HOTKEY_TOGGLES = { // action -> the quick-settings checkbox it flips
     autoplay: 'qs_autoplay', premove: 'qs_premove', help_mode: 'qs_help', humanize: 'qs_humanize',
     clock_mode: 'qs_clock', mirror_mode: 'qs_mirror', manual_mode: 'qs_manual',
-    eval_bar: 'qs_evalbar', puzzle_mode: 'qs_puzzle',
+    eval_bar: 'qs_evalbar', eval_history: 'qs_evalhist', tablebase: 'qs_tablebase', puzzle_mode: 'qs_puzzle',
     explorer: 'qs_explorer', book_play: 'qs_book',
 };
 // Returns true if it handled the action (the content-script listener only swallows the key then, so
@@ -2949,6 +3195,143 @@ function request_draw_hint(arrows) {
 
 function request_clear_hint() {
     send_to_active_tab({clearHint: true});
+}
+
+// One white-share value per ply of the current game, for the history strip beside the eval bar.
+// Indexed by ply so the constant re-analysis of a single position overwrites its own slot instead of
+// appending -- without that the strip would grow by a band per engine info line.
+let eval_history = [];
+let eval_history_game = null; // the startFen this history belongs to; a new game resets it
+
+// --- Game phases (lichess's Divider, ported) ----------------------------------------------------
+// Opening / middlegame / endgame boundaries for the eval graph, computed exactly the way lichess
+// does it so the dividers land where a lichess user expects. Ported from scalachess Divider.scala:
+//
+//   midgame = first position where  majorsAndMinors <= 10  OR  backrankSparse  OR  mixedness > 150
+//   endgame = first position where  majorsAndMinors <= 6   (only looked for once a midgame exists)
+//   the midgame marker is dropped if it does not actually precede the endgame one
+//
+// `mixedness` sums a positional score over the 49 overlapping 2x2 regions of the board (a 7x7 grid
+// of them). Worth stating because the obvious reading is 3x3: the source builds them from the
+// bitboard constant 0x0303, which is a 2x2 block, and the score table below bottoms out at 4 pieces
+// per region -- which only makes sense for 4 squares.
+const PHASE_MIXEDNESS_THRESHOLD = 150;
+const PHASE_MIDGAME_PIECES = 10;
+const PHASE_ENDGAME_PIECES = 6;
+
+// score(y, white, black) verbatim from Divider.scala. y is the region's rank index, 1..7.
+function phase_region_score(y, white, black) {
+    switch (white) {
+        case 0: switch (black) {
+            case 1: return 1 + y;
+            case 2: return y < 6 ? 2 + (6 - y) : 0;
+            case 3: return y < 7 ? 3 + (7 - y) : 0;
+            case 4: return y < 7 ? 3 + (7 - y) : 0;
+            default: return 0;
+        }
+        case 1: switch (black) {
+            case 0: return 1 + (8 - y);
+            case 1: return 5 + Math.abs(4 - y);
+            case 2: return 4 + (7 - y);
+            case 3: return 5 + (7 - y);
+            default: return 0;
+        }
+        case 2: switch (black) {
+            case 0: return y > 2 ? 2 + (y - 2) : 0;
+            case 1: return 4 + (y - 1);
+            case 2: return 7;
+            default: return 0;
+        }
+        case 3: switch (black) {
+            case 0: return y > 1 ? 3 + (y - 1) : 0;
+            case 1: return 5 + (y - 1);
+            default: return 0;
+        }
+        case 4: return black === 0 ? (y > 1 ? 3 + (y - 1) : 0) : 0;
+        default: return 0;
+    }
+}
+
+const SQ_FILES = 'abcdefgh';
+
+// one snapshot's three inputs, read off a chess.js position
+function phase_metrics(c) {
+    let majorsMinors = 0, whiteFirstRank = 0, blackLastRank = 0;
+    const grid = []; // [file][rank] -> 'w' | 'b' | null, so the region scan is cheap
+    for (let f = 0; f < 8; f++) {
+        grid[f] = [];
+        for (let r = 0; r < 8; r++) {
+            const p = c.get(SQ_FILES[f] + (r + 1));
+            grid[f][r] = p ? p.color : null;
+            if (!p) continue;
+            if (p.type !== 'k' && p.type !== 'p') majorsMinors++;
+            if (r === 0 && p.color === 'w') whiteFirstRank++;
+            if (r === 7 && p.color === 'b') blackLastRank++;
+        }
+    }
+    let mixedness = 0;
+    for (let ry = 0; ry <= 6; ry++) {
+        for (let rx = 0; rx <= 6; rx++) {
+            let w = 0, b = 0;
+            for (let dx = 0; dx < 2; dx++) {
+                for (let dy = 0; dy < 2; dy++) {
+                    const col = grid[rx + dx][ry + dy];
+                    if (col === 'w') w++; else if (col === 'b') b++;
+                }
+            }
+            mixedness += phase_region_score(ry + 1, w, b);
+        }
+    }
+    return {majorsMinors, backrankSparse: whiteFirstRank < 4 || blackLastRank < 4, mixedness};
+}
+
+let phase_cache = {key: null, value: {mid: null, end: null}};
+
+// {mid, end} as ply indices into the eval history, either possibly null.
+function game_phases(startFen, movesStr) {
+    const key = `${startFen}|${movesStr}`;
+    if (phase_cache.key === key) return phase_cache.value;
+    const out = {mid: null, end: null};
+    try {
+        const c = new Chess(config.variant, startFen || undefined);
+        const moves = (movesStr || '').trim().split(/\s+/).filter(Boolean);
+        for (let i = 0; i <= moves.length; i++) {
+            if (i > 0) {
+                const m = moves[i - 1];
+                c.move({from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4]});
+            }
+            const {majorsMinors, backrankSparse, mixedness} = phase_metrics(c);
+            if (out.mid === null
+                && (majorsMinors <= PHASE_MIDGAME_PIECES || backrankSparse
+                    || mixedness > PHASE_MIXEDNESS_THRESHOLD)) {
+                out.mid = i;
+            }
+            // lichess only starts looking for the endgame once a midgame was found
+            if (out.mid !== null && out.end === null && majorsMinors <= PHASE_ENDGAME_PIECES) {
+                out.end = i;
+            }
+        }
+        // a midgame marker that doesn't precede the endgame one is dropped, as in Divider.apply
+        if (out.mid !== null && out.end !== null && !(out.mid < out.end)) out.mid = null;
+    } catch (e) {
+        return {mid: null, end: null}; // variant fen chess.js can't replay -- no dividers, no error
+    }
+    phase_cache = {key, value: out};
+    return out;
+}
+
+function record_eval_history(frac) {
+    if (!config.eval_history || typeof frac !== 'number') return;
+    // premove_tracker is the one place the CURRENT position's startFen + move list are kept
+    // (on_new_pos sets it unconditionally, whether or not Premove is on). last_eval carries neither.
+    const startFen = premove_tracker.startFen || '';
+    if (eval_history_game !== startFen) { eval_history_game = startFen; eval_history = []; }
+    const moves = premove_tracker.moves || '';
+    const ply = moves ? moves.trim().split(/\s+/).filter(Boolean).length : 0;
+    if (ply > 512) return;                        // absurd move list -- don't grow without bound
+    while (eval_history.length < ply) eval_history.push(eval_history[eval_history.length - 1] ?? 0.5);
+    eval_history[ply] = frac;
+    if (eval_history.length > ply + 1) eval_history.length = ply + 1; // a takeback truncates
 }
 
 function request_draw_eval_bar(data) {
@@ -3051,6 +3434,72 @@ function maybe_autodetect_variant() {
         console.log('Mephisto: auto-detected variant', v, '-> applying (was', config.variant + '/' + config.engine + ')');
         apply_detected_variant(v);
     });
+}
+
+// Options-page changes reaching a LIVE panel.
+//
+// MephistoConfig keeps its own cache fresh via chrome.storage.onChanged, but `config` here is a
+// SNAPSHOT taken once at init, and push_config() ships that snapshot to the content script. So a
+// setting flipped on the options page updated storage, and nothing else: the panel kept its old
+// value and the content script kept being told the old value. Background Play was the visible
+// casualty -- you turned it on and moves carried on deferring -- but every options-page setting had
+// it, including Endgame Tablebase and Search Time.
+//
+// Only settings that are safe to change mid-session are applied. Engine, variant, threads and memory
+// need a full engine re-init, which is a panel rebuild; those are deliberately left to the existing
+// reload path rather than half-applied under a running search.
+const LIVE_CONFIG_KEYS = [
+    'autoplay', 'premove', 'ponder', 'tablebase', 'background_play', 'hide_opponent',
+    'explorer', 'book_play', 'explorer_db', 'help_mode', 'humanize', 'clock_mode', 'mirror_mode',
+    'manual_mode', 'eval_bar', 'eval_history', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
+    'computer_evaluation', 'multiple_lines', 'compute_time', 'move_time', 'move_variance',
+    'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
+];
+
+function watch_config_changes() {
+    try {
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area !== 'local' || !PANEL_BOOTED) return;
+            let touched = false;
+            for (const key of LIVE_CONFIG_KEYS) {
+                if (!(key in changes)) continue;
+                let value;
+                try { value = JSON.parse(changes[key].newValue); } catch (e) { continue; }
+                if (value === undefined || value === config[key]) continue;
+                config[key] = value;
+                touched = true;
+                if (key === 'help_mode' && !value) request_clear_hint();
+                if (key === 'eval_bar' && !value) request_clear_eval_bar();
+                if (key === 'eval_history') request_clear_eval_bar(); // redrawn by the next eval
+                if (key === 'tablebase') tablebase_data = null;       // a stale answer must not survive
+                // these change the go mode / search budget -- restart under the new setting
+                if (['help_mode', 'autoplay', 'clock_mode', 'mirror_mode', 'manual_mode'].includes(key)) {
+                    abandon_search();
+                    last_eval.fen = '';
+                }
+            }
+            if (!touched) return;
+            sync_quick_settings();       // the panel's own switches must show the new state
+            keep_alive(keep_alive_wanted(), false); // resume-only: no gesture here
+            push_config();               // and the content script has to be told, or nothing changes
+        });
+    } catch (e) { /* no chrome.storage here -> options changes need a panel reload, as before */ }
+}
+
+// Mirror `config` back onto the quick-settings switches, so a change made on the options page shows
+// up on the panel instead of leaving the two disagreeing about what is on.
+function sync_quick_settings() {
+    for (const key in HOTKEY_TOGGLES) {
+        const box = PANEL_ROOT.getElementById(HOTKEY_TOGGLES[key]);
+        if (box && typeof config[key] === 'boolean' && box.checked !== config[key]) {
+            box.checked = config[key];
+        }
+    }
+    for (const [id, key] of [['qs_search', 'compute_time'], ['qs_move', 'move_time'],
+                             ['qs_move_var', 'move_variance']]) {
+        const el = PANEL_ROOT.getElementById(id);
+        if (el && String(el.value) !== String(config[key])) el.value = config[key];
+    }
 }
 
 function push_config() {
@@ -3337,6 +3786,67 @@ async function request_backend_move(x0, y0, x1, y1) {
 // reveal the notice. Everything here fails silent: no network, a rate-limited API, a malformed reply
 // or a missing element all end with the notice staying hidden. Version compare is numeric per part,
 // so 3.1.9 -> 3.1.10 reads as an upgrade (a string compare would call it a downgrade).
+// --- Machine calibration ------------------------------------------------------------------------
+// The shipped defaults (300ms search) are a number, not a measurement: the same 300ms is a shallow
+// search on a laptop and a deep one on a 24-core desktop, so "the defaults" mean different playing
+// strengths on different machines. Equal NODES is the thing that travels; equal milliseconds is not.
+//
+// So: measure the NPS this machine actually reaches during normal play -- no separate benchmark, the
+// engine already reports nps on every info line -- and work out the search time that would hit a
+// reference node count. Then SUGGEST it. Silently rewriting someone's setting because a heuristic
+// had an opinion is exactly the kind of surprise the house rules exist to prevent, so this offers
+// the number and applies it only on a click, and only ever offers once per install.
+const CALIBRATION_TARGET_NODES = 1_500_000; // ~ what 300ms buys on the reference machine
+const CALIBRATION_SAMPLES = 8;              // completed searches to median before saying anything
+const CALIBRATION_MIN_MS = 200, CALIBRATION_MAX_MS = 2000;
+let nps_samples = [];
+
+function record_nps_sample(nps) {
+    if (nps_samples === null) return;                 // already suggested (or dismissed) this install
+    if (!Number.isFinite(nps) || nps <= 0) return;
+    nps_samples.push(nps);
+    if (nps_samples.length >= CALIBRATION_SAMPLES) maybe_suggest_calibration();
+}
+
+function suggested_compute_time(npsMedian) {
+    const ms = Math.round((CALIBRATION_TARGET_NODES / npsMedian) * 1000);
+    return Math.max(CALIBRATION_MIN_MS, Math.min(CALIBRATION_MAX_MS, Math.round(ms / 50) * 50));
+}
+
+function maybe_suggest_calibration() {
+    const samples = nps_samples;
+    nps_samples = null;                               // one offer per install, whatever happens next
+    try {
+        // ONLY on a genuinely fresh install. The background sets this from chrome.runtime.onInstalled
+        // with reason 'install'; a reload or an upgrade does not arm it. Without this the prompt
+        // turned up mid-game on an install that had been running for months.
+        if (MephistoConfig.get('calibrate_pending') !== 'true') return;
+        if (MephistoConfig.get('calibrated') === 'true') return; // already answered
+        const sorted = [...samples].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        const want = suggested_compute_time(median);
+        // only worth mentioning if it is a real difference, not a rounding nudge
+        save('calibrate_pending', 'false'); // spent: offered once, taken or not
+        if (Math.abs(want - config.compute_time) < Math.max(100, config.compute_time * 0.25)) return;
+        const el = PANEL_ROOT.getElementById('calibrate-notice');
+        if (!el) return;
+        el.textContent = `This machine measures ${(median / 1e6).toFixed(1)}M nps — ` +
+            `Search Time ${want}ms matches the reference strength (now ${config.compute_time}ms). Tap to apply.`;
+        el.hidden = false;
+        el.onclick = (e) => {
+            e.preventDefault();
+            config.compute_time = want;
+            save('compute_time', want);
+            save('calibrated', 'true');
+            const box = PANEL_ROOT.getElementById('qs_search');
+            if (box) box.value = want;
+            el.hidden = true;
+            push_config();
+            console.log(`Mephisto: search time calibrated to ${want}ms from ${(median / 1e6).toFixed(2)}M nps`);
+        };
+    } catch (e) { /* a suggestion is a nicety -- never let it break the panel */ }
+}
+
 function check_for_update() {
     const el = PANEL_ROOT.getElementById('update-notice');
     if (!el) return;
@@ -3463,7 +3973,10 @@ function on_native_info(info, fen) {
     // per-position MultiPV, so on native engines Pondering does NOT widen the candidate list and
     // premove still certifies at most 2 lines. Widening it there needs a configure round-trip per
     // position; until that exists, this line is consistency, not a new capability.
-    if (config.premove && info.pv && info.pv[0] != null
+    // `info.bound` marks an aspiration re-search: its pv is unresolved, so it must not reach the
+    // depth-13/14 snapshots -- but it IS still displayed, which is why the host flags rather than
+    // swallows it. Dropping them left the panel with no updates at all through those windows.
+    if (config.premove && !info.bound && info.pv && info.pv[0] != null
             && pvIdx < premove_lines && Number.isInteger(info.depth)) {
         const pred = String(info.pv[0]), reply = (info.pv[1] != null) ? String(info.pv[1]) : '';
         const line = premove_tracker.lines[pvIdx] || (premove_tracker.lines[pvIdx] = {});

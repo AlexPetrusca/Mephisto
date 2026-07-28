@@ -102,6 +102,16 @@
               data-tooltip="Show a vertical evaluation bar to the left of the game board, with the score shown inside it (chess.com-style).">Eval Bar</span>
         <label><input id="qs_evalbar" type="checkbox"><span class="lever"></span></label>
     </div>
+    <div class="qs-row switch">
+        <span class="qs-label tooltipped" data-position="left"
+              data-tooltip="A graph under the board showing the whole game so far: white's advantage above the midline, black's below, with the opening/middlegame/endgame boundaries marked. Needs Eval Bar.">Eval History</span>
+        <label><input id="qs_evalhist" type="checkbox"><span class="lever"></span></label>
+    </div>
+    <div class="qs-row switch">
+        <span class="qs-label tooltipped" data-position="left"
+              data-tooltip="With 7 or fewer pieces left the position is solved: ask lichess's Syzygy tablebase for the perfect move instead of trusting the search. Outranks the engine and the opening book. Off by default -- it sends the position to a third party. Never delays a move.">Tablebase</span>
+        <label><input id="qs_tablebase" type="checkbox"><span class="lever"></span></label>
+    </div>
     <div class="qs-row switch qs-compact">
         <span class="qs-label tooltipped" data-position="left"
               data-tooltip="Play like a human: instant recaptures and forced moves, quick obvious moves, long thinks in critical positions -- and occasionally a second-best move, a mistake, or (rarely) a blunder. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Humanize</span>
@@ -214,6 +224,7 @@
 
 <div id="game-detection">No Chess Game Detected</div>
 <a id="update-notice" href="#" target="_blank" rel="noreferrer" hidden></a>
+<a id="calibrate-notice" href="#" hidden></a>
 
 <div id="board"></div>
 <div id="eval-bar"><div id="eval-bar-white"></div></div>

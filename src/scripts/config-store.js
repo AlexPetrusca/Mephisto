@@ -68,7 +68,7 @@
         HOTKEY_DEFAULTS: {
             manual_play: ' ',
             manual_mode: 'n', autoplay: 'a', premove: 'p', help_mode: 'h', humanize: 'u',
-            clock_mode: 'c', mirror_mode: 'm', eval_bar: 'e', puzzle_mode: 'z',
+            clock_mode: 'c', mirror_mode: 'm', eval_bar: 'e', eval_history: 'y', tablebase: 't', puzzle_mode: 'z',
             explorer: 'o', book_play: 'b',
             copy_fen: 'f', copy_pgn: 'g', redetect: 'r',
         },

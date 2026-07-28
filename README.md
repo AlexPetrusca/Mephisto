@@ -319,7 +319,10 @@ id changed — re-run the install command.
 - **Background Play** (off by default) — with it off, moves only fire while the game tab is **focused and visible**;
   a move that comes due while you're tabbed away is deferred until you come back — and is re-issued as soon as you
   do, rather than leaving the tab sitting there. Humans don't play while looking at another tab. Turn it on to keep
-  autoplay/premove running in the background.
+  autoplay, premove, the opening book and the tablebase probe running while the tab is hidden. One caveat worth
+  knowing: Chrome throttles timers in a silent background tab after a few minutes, so keeping one alive means marking
+  it as playing audio — the tab shows a **speaker icon** while this is on. That only happens when Background Play is
+  actually enabled.
 
 ### Safe Premove
 
@@ -328,11 +331,68 @@ id changed — re-run the install command.
 - Forced moves and true recaptures → queued as a real site premove; an illegal one auto-cancels, so it never fires in the wrong position.
 - **Double premove** (chess.com, standard) — when the line is forced *two* moves deep, both replies queue at once. Every branch is forced, so neither can misfire; less than fully forced → a single premove.
 
+### Settings apply immediately
+
+A setting changed on the options page now reaches an open panel straight away — no reload. The panel's
+own switches update to match, and the change reaches the page for the very next move. Engine, variant,
+threads and memory are the exceptions: those need the engine rebuilt, so they still reload the panel.
+
+### Endgame tablebase
+
+Off by default — **Tablebase** in the panel's Quick Settings (hotkey **T**), or **Settings → General → Endgame Tablebase**. With **7 or fewer pieces** on the board the position is
+*solved*, so Mephisto asks lichess's Syzygy tables for the perfect move rather than trusting the search.
+
+- Outranks both the engine and the opening book — a solved position has an answer, not a preference.
+- The readout says what it found: `— tablebase: win in 13`, `— tablebase: draw`.
+- Off by default because it sends the position to a third party. The tables are hundreds of gigabytes, so a network
+  probe is the only shippable form; it runs in the service worker, so the page itself makes no request.
+- Never awaited — if the answer is late the engine's move is played and the probe is skipped for that move.
+
+### Move confidence
+
+The panel says how much better the best move is than the second, not just what it is — `· clearly best (+3.7)`,
+`· +0.35 over #2`, `· several equal`, or `· only move` when there is genuinely one legal reply. "Only move" and
+"six moves are all fine" are completely different situations that used to render identically. Read off the MultiPV
+lines already on screen; it needs no extra search, and stays silent at **Multi Lines = 1** rather than widening one.
+
+### Eval history graph
+
+The **whole game so far** as a curve under the board, in the shape of Lichess's computer-analysis graph: white's
+advantage above the midline, black's below, the area between filled, and a cursor on the move you're at. Swings and the
+move it turned on are visible without scrubbing the move list.
+
+It also marks where the **opening ends and the middlegame and endgame begin**, using Lichess's own division rules
+(ported from scalachess's `Divider`): the middlegame starts at the first position with 10 or fewer major and minor
+pieces, *or* a back rank down to fewer than four pieces, *or* a piece-mixing score above 150; the endgame starts at the
+first position with 6 or fewer. A phase only gets a divider when it actually happened, so a game that never leaves the
+opening is labelled once rather than carved into three.
+
+Its own toggle directly under **Eval Bar** in Quick Settings, with hotkey **Y**. A takeback truncates it; a new game
+clears it. Needs Eval Bar on, since it's drawn alongside it.
+
+### Blunder guard
+
+Autoplay refuses to click a move that drops a piece *while the engine reads the position as fine*. Those two statements
+can't both be true of the same board — but they're routine when the panel has analysed a stale or mis-scraped position,
+which is how every scraping bug so far has presented. Deliberately not a general blunder filter: real sacrifices go
+through, and a already-losing position is exempt entirely. Tablebase moves are exempt too, being proven optimal.
+
+The board is also re-read immediately before every click and the move dropped if the position changed since the search
+started — the board and the analysis come from independent bits of DOM that a site doesn't update in one paint.
+
+### Machine calibration
+
+The shipped defaults are a number, not a measurement: the same 300 ms is a shallow search on a laptop and a deep one on
+a 24-core desktop, so "the defaults" mean different playing strengths on different machines. Equal *nodes* travel; equal
+milliseconds don't. Mephisto measures the NPS your machine actually reaches during normal play — no separate benchmark —
+and once it has a stable reading offers the search time that would hit the reference node count. It **suggests**, and
+applies only on a click, once per install.
+
 ### Pondering
 
 Off by default (**Settings → General → Pondering**). Uses the opponent's think time.
 
-- **Off** — opponent's turn searched on a **single thread**, so idle waiting isn't a full-core burn. Your move and analysis-only work always get full threads.
+- **Off** — opponent's turn is capped at **two threads** (never more than your Threads setting), so idle waiting isn't a full-core burn. Two rather than one because Premove certification needs depth 14, which a single thread often didn't reach. Your move and analysis-only work always get full threads.
 - **On** — opponent's turn searched at **full threads** for their whole think, over their **top 5 candidate replies** (1–2 when forced or a recapture). Pairs with Premove for an instant answer to any of them.
 - Abandoned and discarded the moment the position changes, so it never leaks out as your move. Readout shows `Pondering — <side> to play`.
 
@@ -441,7 +501,6 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
 **Engines & analysis**
 - [ ] **lc0 (Leela) in the browser** — Leela's neural-net engine as a WASM alternative to Stockfish. A large
   download for play that isn't stronger; mainly for comparing styles.
-- [ ] **Syzygy tablebase probing** (≤7 pieces) — perfect endgame play once few enough pieces are left.
 
 **Variants & packaging**
 - [ ] **Duck Chess autoplay polish** — make the duck-placement step work end to end (detection and analysis already do).
@@ -484,7 +543,7 @@ Shipped and in the current build.
 - [x] **Human cursor travel** (v3.1.90) — every synthetic click is preceded by an eased, jittered `mouseMoved` path from the cursor's last position; travel time consumes the Move Time budget so the whole click sequence fits inside whatever number you set.
 - [x] **Faster response** (v3.1.91) — no "Calculating…" placeholder; the panel shows only the progress bar until the first `info depth 1` line arrives (~a few ms), then streams the real eval, move and best-line from depth 1 onward.
 - [x] **Turn switch** (v3.1.92) — a small king-glyph toggle at the top of the panel (replacing the "Quick Settings" title) shows the side to move and flips it on tap. Sticky per position so you can switch back and forth, auto-tracks each move, and resets on close. Replaces the earlier on-board pill + Auto/White/Black dropdown.
-- [x] **Pondering** (v3.1.107) — the roadmap's *Ponder / background analysis*. Opt in under **Settings → General → Pondering**: the opponent's turn is then searched at full threads for their *whole* think, across their **top 5 candidate replies** (narrowing to 1–2 when the position is forced or a recapture), so a deeper answer is ready the moment they move — and Premove can certify an instant reply to any of those five. The roadmap's CPU/battery cost is handled by the default rather than ignored: with Pondering **off**, the opponent's turn drops to a **single thread**, so idle waiting now costs *less* than it used to, not more. Your own move always gets the full thread count, and analysis-only work is never throttled. Works with the in-browser and native Stockfish/Fairy builds and the remote engine; Maia is a single forward pass and can't deepen, so it's excluded.
+- [x] **Pondering** (v3.1.107) — the roadmap's *Ponder / background analysis*. Opt in under **Settings → General → Pondering**: the opponent's turn is then searched at full threads for their *whole* think, across their **top 5 candidate replies** (narrowing to 1–2 when the position is forced or a recapture), so a deeper answer is ready the moment they move — and Premove can certify an instant reply to any of those five. The roadmap's CPU/battery cost is handled by the default rather than ignored: with Pondering **off**, the opponent's turn is capped at **two threads** (never above your Threads setting), so idle waiting now costs *less* than it used to, not more. Your own move always gets the full thread count, and analysis-only work is never throttled. Works with the in-browser and native Stockfish/Fairy builds and the remote engine; Maia is a single forward pass and can't deepen, so it's excluded.
 - [x] **Opening Explorer** (v3.1.119) — **Settings → General → Opening Explorer**, or the **Explorer** toggle in the panel. Shows how humans played the opening: the opening name, the most-played replies with their win/draw/loss split, and coloured arrows on the board. Turn on **Play Book Moves** to play a *weighted-random* book move instead of the engine's pick — so you don't repeat the same line every game — with a 20-game floor and an engine check (within 40cp of best) so the variety never costs you a worse move. Pick the **Opening Database** (Masters / all Lichess / club 1600–2200). The lookup runs in the background and never delays a move; standard chess only.
 - [x] **Set up a position** (v3.1.119) — grid button in the panel row: paste a **FEN** to analyse any position instead of the page. Stops following the page while set; click again (or Re-detect) to go back.
 - [x] **Setup / From-Position capture** (v3.1.125) — a game that started from a custom position is read correctly even when you load it mid-game. The start is recovered from the page rather than only being captured at move 0, so a refresh no longer replays the game from the standard start.
