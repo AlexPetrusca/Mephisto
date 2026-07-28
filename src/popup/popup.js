@@ -396,6 +396,11 @@ async function initPanel(root, tabId) {
     request_fen();
     setInterval(function () {
         request_fen();
+        // Re-assert the keep-alive tone. Chrome can SUSPEND an AudioContext in a hidden tab, and
+        // nothing revived it -- the only other caller is visibilitychange, which by definition does
+        // not fire while you are still away. Once the tone lapses the tab is throttled again and a
+        // backgrounded game quietly stops. Resume-only, and a no-op when it is already running.
+        keep_alive(keep_alive_wanted());
     }, Math.max(1000, config.fen_refresh));
 
     watch_config_changes();
@@ -1025,17 +1030,6 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                 const played = tb_ok ? tb
                     : (book && premove_reply_playable(last_eval.fen, book)) ? book : best;
                 if (tb_ok && tb !== best) console.log(`Tablebase: playing ${tb} over ${best} (solved position)`);
-                // Blunder guard. A tablebase move is exempt -- it is proven optimal. Everything else is
-                // checked against the board we are about to click on (see move_is_suspect).
-                const our_cp = (board.orientation() === 'white') ? last_eval.lines?.[0]?.score
-                                                                : -last_eval.lines?.[0]?.score;
-                if (!tb_ok && move_is_suspect(last_eval.fen, played, our_cp)) {
-                    console.warn(`Mephisto: refusing ${played} -- it drops ` +
-                        `${move_material_loss(last_eval.fen, played)}cp while the engine reads ${our_cp}cp. ` +
-                        `The analysed position and the board disagree; re-scraping.`);
-                    request_fen();
-                    return;
-                }
                 if (played !== best) console.log(`Book: playing ${played} over ${best} (weighted random)`);
                 if ((config.humanize || clock_aware()) && !config.puzzle_mode) {
                     const pick = humanize_pick(best);
@@ -1410,58 +1404,6 @@ const PREMOVE_DEPTH_LAST = 14;
 function premove_certified(line) {
     return !!line && line.depth >= PREMOVE_DEPTH_LAST
         && !!line.dPrev && line.dPrev === line.dLast && line.dPrev === line.latest;
-}
-
-// --- Autoplay blunder guard ---------------------------------------------------------------------
-// The naive form of this ("refuse a move whose eval collapsed") cannot work, and it is worth saying
-// why: when the panel analyses the WRONG position the engine is still perfectly self-consistent. It
-// returns the best move for the board it was given, with a healthy score. Comparing the engine's
-// output against the engine's own evaluation therefore agrees with itself and catches nothing.
-//
-// What IS detectable is the CONTRADICTION. Take the move the engine is about to play and check it
-// against the position actually on the board: if the engine believes it is doing fine, yet the move
-// drops a piece for nothing, those two statements cannot both be true of the same position. A
-// correct search on a correct board essentially never produces that pair -- but a search on a stale
-// or mis-scraped board produces it constantly, because the move was reasoned about elsewhere.
-//
-// Deliberately NOT a general blunder filter: real sacrifices are supposed to get through. The engine
-// having a healthy score is what separates "sacrifice it understands" from "answer to another
-// position", and a lost position is exempt entirely (down a queen, everything hangs).
-const PIECE_CP = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000};
-const BLUNDER_MATERIAL_CP = 300;  // a minor piece: below this it is a trade or a pawn, not a signal
-const BLUNDER_EVAL_FLOOR_CP = -100; // already worse than this -> exempt, losing positions shed material
-
-// Crude static exchange on the destination square: what does this move hand over for free? Returns
-// centipawns lost, 0 when nothing hangs. Not a full SEE -- it looks one capture and one recapture
-// deep, which is all that is needed to spot a piece left en prise.
-function move_material_loss(fen, uci) {
-    try {
-        const c = new Chess(config.variant, fen);
-        const [from, to] = [uci.slice(0, 2), uci.slice(2, 4)];
-        const moved = c.get(from);
-        if (!moved || moved.type === 'k') return 0;   // king moves are legality, not material
-        const gained = PIECE_CP[c.get(to)?.type] || 0; // what we capture on the way in
-        c.move({from, to, promotion: uci[4]});
-        // cheapest enemy capture on that square
-        const takes = c.moves({verbose: true}).filter(m => m.to === to);
-        if (!takes.length) return 0;                   // nothing attacks it -- nothing hangs
-        takes.sort((a, b) => (PIECE_CP[a.piece] || 0) - (PIECE_CP[b.piece] || 0));
-        const attacker = PIECE_CP[takes[0].piece] || 0;
-        c.move(takes[0]);
-        const ours = PIECE_CP[uci[4] ? uci[4] : moved.type] || 0;
-        const recaptures = c.moves({verbose: true}).filter(m => m.to === to);
-        // no recapture -> we simply lost the piece; with one, we win their attacker back
-        const loss = recaptures.length ? (ours - gained - attacker) : (ours - gained);
-        return Math.max(0, loss);
-    } catch (e) {
-        return 0; // unparseable variant fen / malformed uci -- never veto on an unknown
-    }
-}
-
-// true = do not play this move. `evalCp` is OUR-perspective centipawns for this position.
-function move_is_suspect(fen, uci, evalCp) {
-    if (evalCp == null || evalCp < BLUNDER_EVAL_FLOOR_CP) return false; // losing already: exempt
-    return move_material_loss(fen, uci) >= BLUNDER_MATERIAL_CP;
 }
 
 function premove_reply_playable(fen, uci) {

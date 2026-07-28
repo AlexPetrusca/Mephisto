@@ -370,15 +370,13 @@ opening is labelled once rather than carved into three.
 Its own toggle directly under **Eval Bar** in Quick Settings, with hotkey **Y**. A takeback truncates it; a new game
 clears it. Needs Eval Bar on, since it's drawn alongside it.
 
-### Blunder guard
+### Board/engine mismatch guard
 
-Autoplay refuses to click a move that drops a piece *while the engine reads the position as fine*. Those two statements
-can't both be true of the same board — but they're routine when the panel has analysed a stale or mis-scraped position,
-which is how every scraping bug so far has presented. Deliberately not a general blunder filter: real sacrifices go
-through, and a already-losing position is exempt entirely. Tablebase moves are exempt too, being proven optimal.
-
-The board is also re-read immediately before every click and the move dropped if the position changed since the search
-started — the board and the analysis come from independent bits of DOM that a site doesn't update in one paint.
+The board is re-read immediately before every click and the move dropped if the position changed since
+the search started — the board and the analysis come from independent bits of DOM that a site doesn't
+update in one paint, so "the position I analysed" and "the position on screen" can quietly diverge. A
+scrape that can't be taken at all (mid-animation) counts as a mismatch too: unverifiable is not the
+same as unchanged.
 
 ### Machine calibration
 

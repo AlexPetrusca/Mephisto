@@ -54,7 +54,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.135'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.136'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -115,8 +115,17 @@ function handleExtensionMessage(response, sender, sendResponse) {
         return;
     }
     if (moving) {
-        if (response.automove) bgLog('DROPPED: a previous move is still in progress (moving=true)');
-        return;
+        // Stale latch? Break it here rather than waiting for a timer that may be throttled to a
+        // crawl. Only once the budget this move was actually given has elapsed, so a legitimately
+        // slow move (a long humanize think) is never cut off.
+        if (movingSince && Date.now() - movingSince > movingBudget) {
+            console.warn(`Mephisto: clearing a stuck move guard after ` +
+                `${Math.round((Date.now() - movingSince) / 1000)}s (budget ${Math.round(movingBudget / 1000)}s)`);
+            endMoving();
+        } else {
+            if (response.automove) bgLog('DROPPED: a previous move is still in progress (moving=true)');
+            return;
+        }
     }
     if (response.automove) {
         // Manual Mode moves (response.manual) are triggered by YOUR keypress, so they're allowed even
@@ -1353,8 +1362,20 @@ let movingWatchdog = null;
 // call endMoving, and for a think longer than the watchdog BOTH fire -- a toggle flipped the second
 // call false->true and stranded `moving` true with no move in progress, freezing every scrape for a
 // further 15s (and re-arming the watchdog to do it again).
+// When `moving` began and how long it was allowed. The watchdog below is a setTimeout, and in a
+// BACKGROUND tab that is not a reliable escape: if the keep-alive tone lapses, Chrome's intensive
+// throttling pushes timers out to roughly one a minute, so a 15s watchdog may not fire for far
+// longer. Meanwhile `moving` blocks EVERY message in handle(), so one move that fails to resolve
+// silently latches the extension off -- which is exactly what "works, then randomly stops, and stays
+// stopped" looks like. These let the next automove notice the latch is stale and break it itself,
+// without depending on a timer that may not be running.
+let movingSince = 0;
+let movingBudget = 0;
+
 function beginMoving(thinkMs = 0) {
     moving = true;
+    movingSince = Date.now();
+    movingBudget = (Number(thinkMs) || 0) + 15000;
     // Safety net: while `moving` is true the content-script ignores ALL scrape requests, so a move
     // simulation that never resolves (a hung click / promotion) would freeze the extension ("gets
     // stuck and doesn't play anything"). The grace sits ON TOP of this move's think, which is
@@ -1362,12 +1383,13 @@ function beginMoving(thinkMs = 0) {
     // move and drop the `moving` guard -- and that guard is what stops a second automove starting
     // on top of the one still waiting to click.
     clearTimeout(movingWatchdog);
-    movingWatchdog = setTimeout(endMoving, (Number(thinkMs) || 0) + 15000);
+    movingWatchdog = setTimeout(endMoving, movingBudget);
 }
 
 function endMoving() {
     clearTimeout(movingWatchdog);
     moving = false;
+    movingSince = 0;
     schedulePush(); // catch up: board mutations during the automove were suppressed
 }
 
