@@ -233,6 +233,91 @@
                     </div>
                     <div class="section switch">
                         <label class="switch-label tooltipped" data-position="right"
+                               data-tooltip="Name the tactic behind the engine's move -- a fork, a promotion, a capture
+                                             that wins material, mate -- on its own line under the evaluation.
+                                             Deliberately conservative: pins, skewers and discovered attacks can't be
+                                             established reliably from the position alone, so it says nothing rather
+                                             than guessing. A confidently wrong explanation teaches the wrong thing."
+                        >
+                            Explain Moves <i class="material-icons info-tooltip">info</i>
+                        </label>
+                        <label>
+                            Off
+                            <input id="move_reason_checkbox" type="checkbox">
+                            <span class="lever"></span>
+                            On
+                        </label>
+                    </div>
+                    <div class="section switch">
+                        <label class="switch-label tooltipped" data-position="right"
+                               data-tooltip="Blurs your opponent's username and avatar on the page, so a
+                                             screenshot or a screen share does not expose a real person. Purely
+                                             cosmetic and local -- the site sees nothing different. This is the
+                                             one option that adds a style element to the page, so it is off
+                                             unless you turn it on."
+                        >
+                            Hide Opponent Name <i class="material-icons info-tooltip">info</i>
+                        </label>
+                        <label>
+                            Off
+                            <input id="hide_opponent_checkbox" type="checkbox">
+                            <span class="lever"></span>
+                            On
+                        </label>
+                    </div>
+                    <div class="section switch">
+                        <label class="switch-label tooltipped" data-position="right"
+                               data-tooltip="Show how humans actually played this opening (lichess database): the opening
+                                             name plus the most-played replies and their win/draw/loss split, in a block
+                                             under the analysis lines. Read-out only -- it never changes which move you
+                                             play. Standard chess only, and it stops once the game leaves book."
+                        >
+                            Opening Explorer <i class="material-icons info-tooltip">info</i>
+                        </label>
+                        <label>
+                            Off
+                            <input id="explorer_checkbox" type="checkbox">
+                            <span class="lever"></span>
+                            On
+                        </label>
+                    </div>
+                    <div class="section switch">
+                        <label class="switch-label tooltipped" data-position="right"
+                               data-tooltip="Play the opening from the database instead of the engine's pick: a
+                                             WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the
+                                             same line every game -- an engine that always plays the same first move is
+                                             itself a tell. A candidate must appear in at least 20 games AND rate within
+                                             40cp of the engine's own best, so the variety never costs you a worse move.
+                                             If the lookup hasn't arrived by the time the move is due, the engine move is
+                                             played instead -- it never delays a move. Priority -- Move: Book > Humanize
+                                             > engine best. Needs Autoplay."
+                        >
+                            Play Book Moves <i class="material-icons info-tooltip">info</i>
+                        </label>
+                        <label>
+                            Off
+                            <input id="book_play_checkbox" type="checkbox">
+                            <span class="lever"></span>
+                            On
+                        </label>
+                    </div>
+                    <div class="section">
+                        <label>
+                            <span class="tooltipped" data-position="right"
+                                  data-tooltip="Which games the opening data comes from. Masters is the cleanest opening
+                                                play. The Lichess sets are ordinary online games, so they look more like
+                                                a normal opponent -- pick the club band to match a typical rating pool.">
+                                Opening Database <i class="material-icons info-tooltip">info</i>
+                            </span>
+                            <select name="explorer_db" id="explorer_db_select">
+                                <option value="masters">Masters database</option>
+                                <option value="lichess">Lichess &mdash; all rated games</option>
+                                <option value="club">Lichess &mdash; club (1600-2200)</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="section switch">
+                        <label class="switch-label tooltipped" data-position="right"
                                data-tooltip="Blurs your opponent's username and avatar on the page, so a
                                              screenshot or a screen share does not expose a real person. Purely
                                              cosmetic and local -- the site sees nothing different. This is the

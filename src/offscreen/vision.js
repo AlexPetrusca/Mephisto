@@ -76,24 +76,55 @@ async function detectBoard(bitmap) {
             coverage: hits / (BBOX_SIZE * BBOX_SIZE)};
 }
 
+// How many of the least-certain squares to report back. The point is to name the squares worth a
+// second look, not to dump 64 numbers.
+const LOW_CONFIDENCE_REPORT = 3;
+const LOW_CONFIDENCE_MAX = 0.9; // only mention a square the model was not already sure about
+
+// Softmax over one square's 13 class logits. Done in the numerically stable form (subtract the max
+// first) -- raw exp() on logits overflows to Infinity and turns every probability into NaN.
+function squareProbs(logits, base) {
+    let max = logits[base];
+    for (let k = 1; k < 13; k++) if (logits[base + k] > max) max = logits[base + k];
+    let sum = 0;
+    const p = new Array(13);
+    for (let k = 0; k < 13; k++) { p[k] = Math.exp(logits[base + k] - max); sum += p[k]; }
+    for (let k = 0; k < 13; k++) p[k] /= sum;
+    return p;
+}
+
 async function readBoard(bitmap, box) {
     const c = draw(bitmap, BOARD_SIZE, BOARD_SIZE, box.x, box.y, box.w, box.h);
     const out = await posSession.run({[posSession.inputNames[0]]: toTensor(c)});
     const logits = out[posSession.outputNames[0]].data; // [1,64,13], rank 8 first, file a first
     const rows = [];
+    // The model's own certainty is right here and used to be discarded with the argmax. A misread
+    // square usually still produces a LEGAL position, so nothing downstream can flag it -- but the
+    // model itself was unsure, and saying which square it was unsure about turns "the position looks
+    // wrong somewhere" into "check e4".
+    const squares = [];
     for (let r = 0; r < 8; r++) {
         let row = '', gap = 0;
         for (let f = 0; f < 8; f++) {
             const base = (r * 8 + f) * 13;
             let best = 0;
             for (let k = 1; k < 13; k++) if (logits[base + k] > logits[base + best]) best = k;
+            const probs = squareProbs(logits, base);
+            squares.push({
+                square: String.fromCharCode(97 + f) + (8 - r), // r=0 is rank 8, f=0 is file a
+                piece: best === EMPTY ? '' : SYMS[best],
+                prob: probs[best],
+            });
             if (best === EMPTY) gap++;
             else { if (gap) { row += gap; gap = 0; } row += SYMS[best]; }
         }
         if (gap) row += gap;
         rows.push(row);
     }
-    return rows.join('/');
+    const low = squares.filter(sq => sq.prob < LOW_CONFIDENCE_MAX)
+                       .sort((a, b) => a.prob - b.prob)
+                       .slice(0, LOW_CONFIDENCE_REPORT);
+    return {placement: rows.join('/'), low};
 }
 
 // dataUri: the captured tab. crop (optional): a drag-selected rect in image pixels.
@@ -103,6 +134,7 @@ export async function recognize({dataUri, crop}) {
     const bitmap = await createImageBitmap(blob);
     const box = crop || await detectBoard(bitmap);
     if (!box) return {error: 'no board found'};
-    return {placement: await readBoard(bitmap, box), box,
+    const read = await readBoard(bitmap, box);
+    return {placement: read.placement, low: read.low, box,
             imageW: bitmap.width, imageH: bitmap.height};
 }

@@ -215,6 +215,7 @@ async function initPanel(root, tabId) {
         // premove/threat/help, but capped to 1 thread so idle time isn't a full-core burn.
         ponder: JSON.parse(MephistoConfig.get('ponder')) || false,
         tablebase: JSON.parse(MephistoConfig.get('tablebase')) || false,
+        move_reason: JSON.parse(MephistoConfig.get('move_reason')) || false,
         eval_history: JSON.parse(MephistoConfig.get('eval_history')) || false,
         // Opening explorer: `explorer` draws the overlay, `book_play` actually plays a weighted-random
         // book move. Two independent toggles -- turning on the overlay must never change how you play.
@@ -275,6 +276,7 @@ async function initPanel(root, tabId) {
         showNotation: config.coordinates,
         onMove: play_on_panel_board, // click or drag a piece to play it and keep analysing
         needsPromotion: panel_move_promotes, // ask which piece before a promoting move
+        legalTargets: panel_legal_targets,   // dots on where the picked-up piece may actually go
     });
 
     // init fen LRU cache
@@ -313,6 +315,7 @@ async function initPanel(root, tabId) {
                 return; // transient scrape garbage — the next poll (100ms) retries
             }
             let {fen, startFen, moves} = parsed;
+            cross_check_position(fen); // warns only; never gates the move
             if (!is_legal_position(fen)) {
                 // a corrupt/transient scrape (mid-animation, wrong turn guess) can yield an
                 // illegal position; feeding one to the wasm engine crashes it (OOB). Skip it.
@@ -404,6 +407,8 @@ async function initPanel(root, tabId) {
     }, Math.max(1000, config.fen_refresh));
 
     watch_config_changes();
+    // a reload (Engine/Variant/Elo) rebuilds this script -- bring back any position that was set
+    restore_setup_state();
 
     // Update check: one message to the SW, which caches for 12h. Silent unless there is genuinely a
     // newer release -- a failed or rate-limited check leaves the notice hidden, exactly as if the
@@ -444,6 +449,9 @@ async function initPanel(root, tabId) {
         // scrape guard would swallow the very response this button just asked for. Set directly
         // rather than via clear_setup_fen(), which clicks THIS button (and would recurse).
         setup_fen = null;
+        snap_crop = null;
+        snap_follow_stop();
+        stash_setup_state();
         const setupRow = PANEL_ROOT.getElementById('setup-fen-row');
         if (setupRow) setupRow.style.display = 'none';
         last_eval.fen = '';   // treat whatever comes back as a brand-new position
@@ -457,6 +465,23 @@ async function initPanel(root, tabId) {
     PANEL_ROOT.getElementById('selftest')?.addEventListener('click', run_self_test);
     PANEL_ROOT.getElementById('setupfen')?.addEventListener('click', toggle_setup_fen);
     PANEL_ROOT.getElementById('snapfen')?.addEventListener('click', () => snap_position());
+    // click a move in the panel line to walk back to it; playing from there overwrites the rest
+    PANEL_ROOT.getElementById('panel-line')?.addEventListener('click', (e) => {
+        const idx = e.target?.dataset?.idx;
+        if (idx === undefined) return;
+        panel_line_goto(parseInt(idx, 10));
+    });
+    PANEL_ROOT.getElementById('snap_follow')?.addEventListener('click', snap_follow_toggle);
+    // Flip the READ position. The board reader has no way to know which way round the board on
+    // screen was, so it assumes White at the bottom; one click corrects it.
+    PANEL_ROOT.getElementById('setup_fen_flip')?.addEventListener('click', () => {
+        const box = PANEL_ROOT.getElementById('setup_fen_input');
+        const current = (box?.value || setup_fen || '').trim();
+        if (!current) return;
+        const flipped = rotate_fen_180(current);
+        if (box) box.value = flipped;
+        apply_setup_fen();
+    });
     PANEL_ROOT.getElementById('setup_fen_input')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); apply_setup_fen(); }
         if (e.key === 'Escape') { e.preventDefault(); clear_setup_fen(); }
@@ -624,15 +649,48 @@ function init_quick_settings() {
             push_config();
         });
     }
-    // engine settings need a full engine re-init; reload the popup, it re-reads localStorage
+    // Settings that apply WITHOUT rebuilding the panel. Threads and Hash cannot be set mid-search, so
+    // they are queued and flushed at the next `go` (see flush_engine_options); the running search
+    // finishes on the settings it began with. Line count and the fallback poll apply immediately.
+    //
+    // These used to be in the reload group below, which is why nudging Threads restarted a search in
+    // progress -- and, worse, discarded a captured position along with the whole panel.
     for (const [id, key, parse] of [
-        ['qs_engine', 'engine', v => v],
-        ['qs_variant', 'variant', v => v],
-        ['qs_fen', 'fen_refresh', v => Math.max(1000, parseInt(v) || 1000)], // fallback poll, floor 1s (see interval clamp)
         ['qs_threads', 'threads', v => parseInt(v) || MephistoConfig.defaultThreads()],
         ['qs_memory', 'memory', v => parseInt(v) || 512],
         ['qs_lines', 'multiple_lines', v => parseInt(v) || 1],
-        ['qs_maia_level', 'maia_level', v => v], // changing the Maia rating loads a different net (reload)
+        ['qs_fen', 'fen_refresh', v => Math.max(1000, parseInt(v) || 1000)], // floor 1s (see interval clamp)
+    ]) {
+        const elem = PANEL_ROOT.getElementById(id);
+        if (!elem) continue;
+        elem.value = config[key];
+        elem.addEventListener('change', () => {
+            const value = parse(elem.value);
+            config[key] = value;
+            save(key, value);
+            if (key === 'threads') queue_engine_option('Threads', value);
+            if (key === 'memory') queue_engine_option('Hash', Math.min(value, is_remote() ? value : 512));
+            if (key === 'multiple_lines') {
+                if (is_remote()) {
+                    remote_multipv_set = effective_multipv();
+                    request_remote_configure({MultiPV: remote_multipv_set}).catch(() => { remote_multipv_set = null; });
+                } else {
+                    queue_engine_option('MultiPV', effective_multipv());
+                }
+            }
+            if (is_remote() && (key === 'threads' || key === 'memory')) {
+                // a native host applies options on its own lock and they take effect on the next
+                // analyse, so there is nothing to defer
+                request_remote_configure({Threads: config.threads, Hash: config.memory}).catch(() => {});
+            }
+            push_config();
+        });
+    }
+    // engine settings that genuinely need a full re-init; reload the panel, it re-reads storage
+    for (const [id, key, parse] of [
+        ['qs_engine', 'engine', v => v],
+        ['qs_variant', 'variant', v => v],
+        ['qs_maia_level', 'maia_level', v => v], // changing the Maia rating loads a different net
     ]) {
         const elem = PANEL_ROOT.getElementById(id);
         if (!elem) continue;
@@ -898,14 +956,57 @@ function send_engine_uci(message) {
 // so owes TWO bestmoves. A flag cleared by the first would let bestmove(B) through as a terminal
 // result for the superseded position B. Only a search actually in flight flushes anything -- the
 // engine ignores a `stop` with no `go` outstanding, so counting that would eat the NEXT real bestmove.
+// Engine options that can only be set between searches. UCI forbids `setoption` while a search is
+// running, and Threads/Hash in particular tear down and rebuild the engine's internal state.
+//
+// These used to force a full panel reload, which is why changing Threads mid-think restarted
+// everything -- and why it threw away a captured position with it. They are recorded here instead
+// and flushed immediately before the next `go`, once the previous search has been stopped. The
+// search you are watching finishes on the settings it started with, which is the only coherent
+// answer: changing the thread count under a running search would invalidate everything it has done.
+let pending_engine_options = {};
+
+function queue_engine_option(name, value) {
+    pending_engine_options[name] = value;
+}
+
+// Called from on_new_pos AFTER abandon_search() and BEFORE the `go` -- the one window where UCI
+// allows this.
+function flush_engine_options() {
+    const opts = pending_engine_options;
+    pending_engine_options = {};
+    for (const name in opts) {
+        if (is_remote()) continue; // the native path sends these through request_remote_configure
+        send_engine_uci(`setoption name ${name} value ${opts[name]}`);
+        if (name === 'Threads') search_threads_set = opts[name]; // keep the per-turn tracker honest
+    }
+    return opts;
+}
+
 function abandon_search() {
     if (search_active) pending_stops++;
     search_active = false;
     send_engine_uci('stop');
 }
 
+// The restart budget is for a build that traps REPEATEDLY -- three crashes in quick succession mean
+// the engine is not going to work here. It is NOT a lifetime allowance: this counter only ever went
+// up, so three unrelated crashes spread over hours of play permanently disabled recovery and the
+// panel told you to change engine while the engine was in fact fine. Cleared once the engine has run
+// healthily for a while (see note_engine_healthy).
+const ENGINE_HEALTHY_MS = 5 * 60 * 1000;
 let engine_restarts = 0;
 let engine_restarting = false;
+let last_engine_crash_at = 0;
+
+// Called whenever a search completes normally. A crash long ago says nothing about the engine now.
+function note_engine_healthy() {
+    if (!engine_restarts || engine_restarting) return;
+    if (Date.now() - last_engine_crash_at < ENGINE_HEALTHY_MS) return;
+    console.log(`Mephisto: engine healthy for ${Math.round(ENGINE_HEALTHY_MS / 60000)} min -- restart budget reset`);
+    engine_restarts = 0;
+}
+
 
 function on_engine_error(message) {
     console.error(message);
@@ -917,6 +1018,7 @@ function on_engine_error(message) {
         return;
     }
     engine_restarts++;
+    last_engine_crash_at = Date.now();
     engine_restarting = true;
     engine = null; // drop the dead instance; send_engine_uci becomes a no-op meanwhile
     engine_ready = false; // a reopen mid-restart must do a full init, not warm-reuse the dead engine
@@ -1055,6 +1157,8 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         }
     }
 
+    render_move_reason(best); // opt-in; renders nothing at all when the toggle is off
+
     if (!config.simon_says_mode) {
         draw_moves();
         if (config.threat_analysis) {
@@ -1062,6 +1166,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         }
     }
 
+    note_engine_healthy(); // a search that finished is the only evidence the engine is well
     toggle_calculating(false);
 }
 
@@ -1356,6 +1461,52 @@ function on_engine_response(message) {
     }
 }
 
+// A SECOND opinion on the position, where the page happens to publish one.
+//
+// Every scraping bug this project has had shares a shape: the reconstruction is wrong but perfectly
+// LEGAL, so nothing downstream can object and the engine quietly answers a different game. A missing
+// en-passant square, absent castling rights, a torn read caught mid-update -- all invisible from the
+// inside. An independent source settles it instantly.
+//
+// The panel runs in the page's isolated world, so it can read the page's own DOM directly -- no
+// message round trip. Best-effort BY DESIGN: most pages publish nothing, the ones that do move their
+// markup, and this must never gate a move. It only ever warns. Placement ONLY, because a page's FEN
+// and ours legitimately differ on move counters, and on side-to-move when the page is showing a
+// browsed position rather than the live one.
+const FEN_PLACEMENT_RE = /((?:[pnbrqkPNBRQK1-8]{1,8}\/){7}[pnbrqkPNBRQK1-8]{1,8})/;
+let last_crosscheck_warn = 0;
+
+function page_published_placement() {
+    try {
+        // lichess keeps the live FEN in a copyable input; some pages expose one in a data attribute.
+        // Anything that parses as a placement field will do -- we are not guessing at a schema.
+        const el = document.querySelector('input.copyable[value*="/"], input[name="fen"], [data-fen]');
+        const raw = el?.value || el?.getAttribute?.('data-fen') || '';
+        const m = FEN_PLACEMENT_RE.exec(raw);
+        return m ? m[1] : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function cross_check_position(fen) {
+    try {
+        const ours = (fen || '').split(' ')[0];
+        // Both sides must actually LOOK like a placement field. Without this, a garbage `fen` is
+        // "different from" the page's real one and produces a warning whose text is the garbage --
+        // which reports the wrong problem. A scrape that malformed is caught by is_legal_position
+        // immediately after this call; the cross-check is only here to compare two real positions.
+        if (!ours || !FEN_PLACEMENT_RE.test(ours)) return;
+        const theirs = page_published_placement();
+        if (!theirs || theirs === ours) return;
+        if (Date.now() - last_crosscheck_warn < 5000) return; // one complaint per position, not per poll
+        last_crosscheck_warn = Date.now();
+        console.warn('Mephisto: the position we reconstructed disagrees with the one the page publishes.\n' +
+            `  ours: ${ours}\n  page: ${theirs}\n` +
+            '  The page is more likely right -- re-detect, or report this with both strings.');
+    } catch (e) { /* a diagnostic must never break the move path */ }
+}
+
 function is_legal_position(fen) {
     let chess;
     try {
@@ -1598,6 +1749,48 @@ let explorer_out_of_book = false; // latched per game: first empty answer stops 
 let explorer_error = null;   // last lookup failure, shown in the overlay instead of drawing nothing
 const INITIAL_PLACEMENT = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'; // standard start array
 let setup_fen = null;        // a manually set position: while held, page scrapes are IGNORED
+let snap_crop = null;        // the screen rect the last capture came from, for re-scanning it
+
+// A panel reload rebuilds this whole script, so every module variable goes with it -- including a
+// position you had just captured off the screen. Changing Engine or Variant would silently throw
+// your board away and go back to following the page. Park it in storage across the rebuild instead.
+// (Threads, Hash, Lines and the poll no longer reload at all -- see the settings handler.)
+const SETUP_STASH_KEY = 'setup_fen_stash';
+
+function stash_setup_state() {
+    try {
+        if (setup_fen) {
+            MephistoConfig.set(SETUP_STASH_KEY, JSON.stringify({fen: setup_fen, crop: snap_crop}));
+        } else {
+            MephistoConfig.set(SETUP_STASH_KEY, JSON.stringify(null));
+        }
+    } catch (e) { /* storage unavailable -- the reload simply loses it, as before */ }
+}
+
+function restore_setup_state() {
+    try {
+        const raw = JSON.parse(MephistoConfig.get(SETUP_STASH_KEY) || 'null');
+        if (!raw?.fen || !is_legal_position(raw.fen)) return false;
+        setup_fen = raw.fen;
+        snap_crop = raw.crop || null;
+        const row = PANEL_ROOT.getElementById('setup-fen-row');
+        if (row) row.style.display = '';
+        const input = PANEL_ROOT.getElementById('setup_fen_input');
+        if (input) input.value = setup_fen;
+        setup_fen_msg('Restored the position you had set — Re-detect to follow the page again');
+        update_snap_follow_button();
+        try {
+            turn = setup_fen.split(' ')[1] || 'w';
+            board.position(setup_fen);
+            update_turn_badge(setup_fen);
+        } catch (e) { /* board not ready yet */ }
+        on_new_pos(setup_fen, setup_fen, '');
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 let explorer_empty_streak = 0; // consecutive empty lookups; 3 = genuinely out of book
 
 // --- Syzygy tablebase --------------------------------------------------------------------------
@@ -1773,20 +1966,116 @@ function panel_move_promotes(from, to) {
     }
 }
 
+// --- Panel move history -------------------------------------------------------------------------
+// A line you can walk. Every move played ON THE PANEL BOARD is appended here with the position it
+// produced, so you can click back to any point and carry on from there -- and playing a different
+// move at that point OVERWRITES the rest, which is what you want when you are trying something out
+// rather than reviewing a fixed game.
+//
+// Deliberately a single line, not a tree. A branching tree needs a tree UI, and the thing being asked
+// for is "let me take that back and try the other move", which truncation answers exactly.
+let panel_line = [];      // [{san, uci, fen}] -- fen is the position AFTER that move
+let panel_line_base = ''; // the position the line started from
+let panel_line_idx = -1;  // -1 = at the base position, otherwise the index we are sitting on
+
+function panel_line_reset(base) {
+    panel_line = [];
+    panel_line_base = base || '';
+    panel_line_idx = -1;
+    render_panel_line();
+}
+
+// Append a move, truncating anything after the point we are currently sitting on.
+function panel_line_push(san, uci, fen) {
+    if (panel_line_idx < panel_line.length - 1) panel_line.length = panel_line_idx + 1; // overwrite
+    panel_line.push({san, uci, fen});
+    panel_line_idx = panel_line.length - 1;
+    render_panel_line();
+}
+
+// Jump to a point in the line. -1 is the position it started from.
+function panel_line_goto(idx) {
+    if (idx < -1 || idx >= panel_line.length) return;
+    const fen = (idx === -1) ? panel_line_base : panel_line[idx].fen;
+    if (!fen) return;
+    panel_line_idx = idx;
+    setup_fen = fen;
+    const input = PANEL_ROOT.getElementById('setup_fen_input');
+    if (input) input.value = fen;
+    const row = PANEL_ROOT.getElementById('setup-fen-row');
+    if (row) row.style.display = '';
+    setup_fen_msg('Walking the panel line — play a move to continue from here, Re-detect to follow the page');
+    last_eval.fen = ''; prev_ply_count = 0;
+    abandon_search();
+    try {
+        turn = fen.split(' ')[1] || 'w';
+        board.position(fen);
+        update_turn_badge(fen);
+    } catch (e) { /* board not ready */ }
+    render_panel_line();
+    on_new_pos(fen, fen, '');
+}
+
+function render_panel_line() {
+    const el = PANEL_ROOT.getElementById('panel-line');
+    if (!el) return;
+    if (!panel_line.length) { el.hidden = true; el.textContent = ''; return; }
+    el.hidden = false;
+    const parts = [`<span class="pl-move${panel_line_idx === -1 ? ' pl-current' : ''}" data-idx="-1">start</span>`];
+    panel_line.forEach((m, i) => {
+        const num = (i % 2 === 0) ? `${Math.floor(i / 2) + 1}.` : '';
+        parts.push(`<span class="pl-move${i === panel_line_idx ? ' pl-current' : ''}" data-idx="${i}">${num}${m.san}</span>`);
+    });
+    el.innerHTML = parts.join(' ');
+    // Scroll the strip ITSELF, by setting its scrollLeft. NOT scrollIntoView(): that walks up and
+    // scrolls every ancestor scroll container it finds, which here means the panel body -- so a line
+    // long enough to overflow dragged the WHOLE panel sideways and clipped the title, the readout and
+    // the FEN box off the left edge.
+    const cur = el.querySelector('.pl-current');
+    if (cur) {
+        const target = cur.offsetLeft - (el.clientWidth / 2) + (cur.offsetWidth / 2);
+        el.scrollLeft = Math.max(0, target);
+    }
+}
+
+// Where the piece on `square` may legally go, for the board's move dots. The board itself knows no
+// rules -- it draws pieces and reports clicks -- so legality is answered here, against the position
+// the panel is actually analysing.
+//
+// Returns [] rather than throwing on anything unexpected: a piece with no legal moves still selects,
+// and an empty list is the honest answer for a pinned or blocked one. It also means a variant fen
+// chess.js cannot parse degrades to "no dots" instead of breaking the board.
+function panel_legal_targets(square) {
+    try {
+        const base = setup_fen || last_eval.fen;
+        if (!base) return [];
+        return new Chess(config.variant, base)
+            .moves({square, verbose: true})
+            .map(m => m.to);
+    } catch (e) {
+        return [];
+    }
+}
+
 function play_on_panel_board(from, to, promotion) {
     const base = setup_fen || last_eval.fen;
     if (!base) return false;
-    let next;
+    let next, san;
     try {
         const c = new Chess(config.variant, base);
         // `promotion` comes from the board's picker when the move promotes; queen otherwise
         const mv = c.move({from, to, promotion: promotion || 'q'});
         if (!mv) return false;
         next = c.fen();
+        san = mv.san; // `mv` is block-scoped to this try -- read what we need while it is in scope
     } catch (e) {
         return false; // illegal move (or a variant fen chess.js can't parse) -> keep the position
     }
+    // record it in the walkable line BEFORE setup_fen moves on -- the base is whatever we were on
+    if (!panel_line.length && !panel_line_base) panel_line_base = base;
+    panel_line_push(san, `${from}${to}${promotion || ''}`, next);
     setup_fen = next;
+    stash_setup_state();
     // SHOW the setup row: it carries the "not following the page" message and the live FEN, and a
     // hidden row would leave that state invisible -- the board would just stop tracking the game with
     // no explanation. It also means the FEN of whatever you've walked to is always there to copy.
@@ -1807,6 +2096,115 @@ function play_on_panel_board(from, to, promotion) {
 // Read the position off the screen. Captures the tab, lets the recogniser find the board, and loads
 // the result as a manual position -- so it works on any page (a video, a diagram, an image), and the
 // board it produces is immediately playable. `crop` (from the drag-select fallback) skips detection.
+// Rotate a position 180 degrees: a1 becomes h8. Colours are untouched -- this turns the BOARD, it
+// does not swap sides.
+//
+// Needed because the board reader has no idea which way round the board on screen was. It maps the
+// image's top-left corner to a8, always, so a board shown from Black's perspective (which is how
+// every game looks to the player with black, and how plenty of videos are framed) is read upside
+// down. The result is usually still a LEGAL position, so nothing downstream can catch it -- it just
+// quietly analyses a different game. Detecting the orientation from pixels is not reliable, so this
+// is offered as one click instead of guessed at.
+function rotate_fen_180(fen) {
+    try {
+        const parts = fen.split(' ');
+        const squares = [];
+        for (const ch of parts[0]) {
+            if (ch === '/') continue;
+            if (/\d/.test(ch)) squares.push(...Array(Number(ch)).fill(''));
+            else squares.push(ch);
+        }
+        if (squares.length !== 64) return fen;
+        squares.reverse(); // 180 degrees is simply the square sequence backwards
+        const rows = [];
+        for (let r = 0; r < 8; r++) {
+            let row = '', gap = 0;
+            for (let f = 0; f < 8; f++) {
+                const sq = squares[r * 8 + f];
+                if (sq) { if (gap) { row += gap; gap = 0; } row += sq; }
+                else gap++;
+            }
+            if (gap) row += gap;
+            rows.push(row);
+        }
+        parts[0] = rows.join('/');
+        parts[3] = '-'; // any en-passant square is meaningless once the board has turned
+        return parts.join(' ');
+    } catch (e) {
+        return fen;
+    }
+}
+
+// --- Follow the screen ---------------------------------------------------------------------------
+// Re-read the SAME rectangle on a timer, so a board that is playing on screen -- a video, a stream,
+// a game being shown in another app -- keeps the panel in step without capturing by hand each move.
+//
+// Only offered after a capture, because it needs the rectangle that capture found; there is nothing
+// to re-scan before one. Each pass is the ordinary recognise path with detection skipped, so it is
+// as cheap as it can be, and a scan that reads the SAME position does nothing at all -- an unchanged
+// board must not restart the search on every tick.
+const SNAP_FOLLOW_MS = 500;
+let snap_follow_timer = null;
+let snap_follow_busy = false;
+
+function snap_following() {
+    return snap_follow_timer !== null;
+}
+
+function snap_follow_stop() {
+    if (snap_follow_timer !== null) clearInterval(snap_follow_timer);
+    snap_follow_timer = null;
+    update_snap_follow_button();
+}
+
+function snap_follow_start() {
+    if (snap_following() || !snap_crop) return;
+    snap_follow_timer = setInterval(snap_follow_tick, SNAP_FOLLOW_MS);
+    update_snap_follow_button();
+    setup_fen_msg('Following the screen — re-reading that area twice a second');
+}
+
+function snap_follow_toggle() {
+    if (snap_following()) { snap_follow_stop(); setup_fen_msg('Stopped following'); }
+    else snap_follow_start();
+}
+
+async function snap_follow_tick() {
+    if (snap_follow_busy || !snap_crop) return;   // a slow read must not stack up behind itself
+    snap_follow_busy = true;
+    try {
+        const res = await chrome.runtime.sendMessage({captureAndRecognize: {crop: snap_crop}});
+        if (!res || res.error || !res.placement) return;
+        // keep whatever side-to-move and rights the current position has: only the PIECES moved
+        const rest = (setup_fen || '').split(' ').slice(1).join(' ') || 'w - - 0 1';
+        const fen = `${res.placement} ${rest}`;
+        if (fen === setup_fen) return;             // nothing changed -- do not restart the search
+        if (!is_legal_position(fen)) return;       // a frame caught mid-animation; the next tick retries
+        setup_fen = fen;
+        stash_setup_state();
+        const input = PANEL_ROOT.getElementById('setup_fen_input');
+        if (input) input.value = fen;
+        last_eval.fen = '';
+        try { turn = fen.split(' ')[1] || 'w'; board.position(fen); update_turn_badge(fen); } catch (e) { /* */ }
+        on_new_pos(fen, fen, '');
+    } catch (e) {
+        // the tab went away, or the offscreen recogniser is not up -- stop rather than spin
+        snap_follow_stop();
+        setup_fen_msg('Stopped following (the capture failed)');
+    } finally {
+        snap_follow_busy = false;
+    }
+}
+
+// The button exists only while there is a rectangle to re-scan.
+function update_snap_follow_button() {
+    const btn = PANEL_ROOT.getElementById('snap_follow');
+    if (!btn) return;
+    btn.hidden = !snap_crop;
+    btn.textContent = snap_following() ? 'Stop following' : 'Follow screen';
+    btn.classList.toggle('following', snap_following());
+}
+
 async function snap_position(crop) {
     setup_fen_msg('');
     const row = PANEL_ROOT.getElementById('setup-fen-row');
@@ -1836,9 +2234,18 @@ async function snap_position(crop) {
         return;
     }
     setup_fen = fen;
+    snap_crop = res.box || crop || null; // remember WHERE it was read from
+    stash_setup_state();
+    update_snap_follow_button();
+    panel_line_reset(fen); // a freshly read position starts its own line
     const input = PANEL_ROOT.getElementById('setup_fen_input');
     if (input) input.value = fen;
-    setup_fen_msg('Read from screen — flip the turn with the king switch if needed');
+    // Name the squares the model was least sure of. A misread square usually still yields a legal
+    // position, so this is the only warning anyone gets that a piece may be in the wrong place.
+    const unsure = (res.low || []).filter(sq => sq.prob < 0.9)
+        .map(sq => `${sq.square} ${sq.piece ? sq.piece : 'empty'} ${Math.round(sq.prob * 100)}%`);
+    setup_fen_msg('Read from screen — turn with the king switch, orientation with Flip board'
+        + (unsure.length ? ` · least sure: ${unsure.join(', ')}` : ''));
     last_eval.fen = ''; prev_ply_count = 0;
     opp_spend = opp_clock_mark = last_our_eval = null;
     explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
@@ -1895,6 +2302,7 @@ function apply_setup_fen() {
         return;
     }
     setup_fen = parsed;
+    stash_setup_state();
     setup_fen_msg('Set — the panel is no longer following the page');
     // treat it as a brand-new game so no stale pacing/premove/book state carries over
     last_eval.fen = ''; prev_ply_count = 0;
@@ -1907,6 +2315,10 @@ function apply_setup_fen() {
 }
 
 function clear_setup_fen() {
+    panel_line_reset(''); // back to the live game -- the walked line is finished with
+    snap_crop = null;
+    snap_follow_stop();
+    stash_setup_state(); // clears the stash: a reload must NOT bring the position back
     const row = PANEL_ROOT.getElementById('setup-fen-row');
     if (row) row.style.display = 'none';
     if (!setup_fen) return;         // was only open, never applied -- nothing to restore
@@ -2053,6 +2465,9 @@ function on_new_pos(fen, startFen, moves) {
                 search_threads_set = want_threads;
             }
         }
+        // Threads/Hash changed while a search was running: apply them NOW, in the gap between the
+        // stop above and the go below. That is the only point UCI allows it.
+        flush_engine_options();
         // Re-assert the line count every move: humanize_rates() is read fresh per pick, so turning
         // the Mistakes/Blunders sliders on has to widen the engine's list NOW (see
         // effective_multipv). Set at engine init only, those sliders would silently do nothing until
@@ -2329,6 +2744,74 @@ function update_evaluation(eval_string) {
 
 // One line: the "Best response for X is Y" threat readout used to occupy a second line here, and
 // its empty reserved row showed as a gap under the move. Threat Analysis is now arrow-only.
+// --- Why this move ------------------------------------------------------------------------------
+// Names the tactic behind the engine's choice: fork, promotion, a capture that wins material, mate.
+// Opt-in (Settings -> Explain Moves), off by default, and shown on its own line rather than over the
+// board -- the opponent-mistake toast already owns that space and two things fighting for it is
+// worse than either alone.
+//
+// DELIBERATELY CONSERVATIVE. Only motifs that can be established from the position itself are named;
+// pins, skewers and discovered attacks need a judgement this cannot make reliably, so they are not
+// guessed at. When nothing is certain it says nothing, because a confidently wrong explanation is
+// worse than none -- you would learn the wrong thing from it.
+const REASON_PIECE_CP = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 0};
+const REASON_FORK_MIN = 320; // only a knight or better counts as a forked target
+
+function move_reason(fen, uci) {
+    if (!config.move_reason) return '';
+    if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci ?? '')) return '';
+    try {
+        const before = new Chess(config.variant, fen);
+        const from = uci.slice(0, 2), to = uci.slice(2, 4);
+        const mover = before.get(from);
+        if (!mover) return '';
+        const captured = before.get(to);
+        const rec = before.move({from, to, promotion: uci[4]});
+        if (!rec) return '';
+
+        const reasons = [];
+        if (before.isCheckmate()) return 'checkmate';
+        if (uci[4]) reasons.push(`promotes to ${({q: 'a queen', r: 'a rook', b: 'a bishop', n: 'a knight'})[uci[4]]}`);
+
+        // A capture is only worth naming when it WINS something: taking a defended equal is a trade.
+        if (captured) {
+            const gain = REASON_PIECE_CP[captured.type] || 0;
+            const defended = before.moves({verbose: true}).some(m => m.to === to);
+            if (!defended) reasons.push(`wins a ${({p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen'})[captured.type]}`);
+            else if (gain - (REASON_PIECE_CP[mover.type] || 0) >= 100) reasons.push('wins material');
+        }
+
+        // Fork: the piece that just moved now attacks two or more valuable things. Computed by asking
+        // what OUR piece on `to` could take -- which needs the turn flipped back, since the move has
+        // just handed it over.
+        const after = new Chess(config.variant, before.fen());
+        after.setTurn(mover.color);
+        let targets = 0;
+        try {
+            for (const m of after.moves({square: to, verbose: true})) {
+                if (m.captured && (REASON_PIECE_CP[m.captured] || 0) >= REASON_FORK_MIN) targets++;
+            }
+        } catch (e) { /* flipping the turn made an illegal position -- just skip the fork test */ }
+        const givesCheck = before.isCheck();
+        // Phrasing matters here: "check, forking" read like a sentence that had been cut off.
+        if (targets >= 2) reasons.push('a fork');
+        else if (givesCheck && targets >= 1) reasons.push('a fork with check');
+        else if (givesCheck) reasons.push('check');
+
+        return reasons.length ? reasons.join(', ') : '';
+    } catch (e) {
+        return '';
+    }
+}
+
+function render_move_reason(uci) {
+    const el = PANEL_ROOT.getElementById('move-reason');
+    if (!el) return;
+    const text = move_reason(last_eval.fen, uci);
+    el.textContent = text ? `Why: ${text}` : '';
+    el.hidden = !text;
+}
+
 // How much better the best move is than the second best -- the thing a human actually wants to know
 // and the one thing the panel never said. "Only move" and "six moves are all fine" are completely
 // different situations that both used to render as a single arrow and a score.

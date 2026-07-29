@@ -286,7 +286,7 @@ id changed — re-run the install command.
   (choose the actual move).
 - **Continuous analysis** — with Autoplay off, the engine keeps analyzing indefinitely instead of stopping after
   the search time.
-- **Read a position off the screen** — the camera button captures the tab, finds the board and loads it. Works on any site (a video, a diagram, an image); drag a box around the board if auto-detection misses. Runs locally — nothing is uploaded.
+- **Read a position off the screen** — the camera button captures the tab, finds the board and loads it. Works on any site (a video, a diagram, an image); drag a box around the board if auto-detection misses. Runs locally — nothing is uploaded. **Flip board** turns it 180° if the board was shown from Black's side, and the panel names the squares the reader was least sure of, so a misread piece is something you're told about rather than something you have to spot.
 
   ![Reading a position straight off a YouTube video](docs/read-from-screen.png)
 
@@ -369,6 +369,63 @@ opening is labelled once rather than carved into three.
 
 Its own toggle directly under **Eval Bar** in Quick Settings, with hotkey **Y**. A takeback truncates it; a new game
 clears it. Needs Eval Bar on, since it's drawn alongside it.
+
+### Explain moves
+
+Opt in under **Settings → General → Explain Moves**. Names the tactic behind the engine's choice — a fork,
+a promotion, a capture that wins material, mate — on its own line under the evaluation, kept clear of the
+opponent-mistake toast.
+
+Deliberately conservative. Only motifs that can be established from the position itself are named; pins,
+skewers and discovered attacks need a judgement this can't make reliably, so they aren't guessed at. When
+nothing is certain it says nothing — a confidently wrong explanation teaches the wrong thing.
+
+### Reading a board is a guess, and says so
+
+The board reader maps the image's top-left corner to a8, so a board shown from **Black's** side comes
+out rotated — and a rotated position is usually still *legal*, which means nothing downstream can
+object to it. **Flip board** corrects it in one click. Auto-detecting the orientation isn't reliable
+(most positions are legal both ways up), and silently picking wrong is exactly the failure this is
+meant to prevent.
+
+The reader also reports its own least-confident squares — `least sure: e4 pawn 62%` — from the
+probabilities it already computes and used to discard. A misread square produces a legal position too,
+so this is the only warning you'd otherwise get.
+
+### Follow the screen
+
+After reading a board off the screen, a **Follow screen** button appears. It re-reads the *same area*
+twice a second, so a board playing there — a video, a stream, another app — keeps the panel in step
+without capturing each move by hand. A scan that reads the same position does nothing, so an unchanged
+board never restarts the search, and a frame caught mid-animation is skipped rather than analysed.
+
+The button only exists after a capture, because it needs the area that capture found.
+
+### Quieter about other people's servers
+
+The opening explorer and the endgame tablebase both talk to lichess, and they now share one rate-limit
+gate: if either is told to back off, both go quiet for as long as lichess asks, rather than carrying on
+independently. A cooldown is invisible — the engine's move is played as usual, you just don't get a book
+or tablebase answer for it.
+
+### Settings no longer interrupt a search
+
+**Threads** and **Hash** can't be changed while a search is running — UCI forbids it, and both tear down
+the engine's internal state. They're now applied at the *next* search instead of restarting the panel,
+so the search you're watching finishes on the settings it began with. Line count and the fallback poll
+apply immediately. Only Engine, Variant and the Elo cap still rebuild the panel — and a position you
+captured survives even that.
+
+### Panel move line
+
+Every move you play on the panel board is kept as a line you can walk. Click any move to go back to that
+point and carry on from there — and playing a *different* move overwrites the rest, so trying the other
+idea doesn't leave the old continuation dangling behind it. A single line, not a tree: "let me take that
+back and try the other move" is the thing being asked for, and truncation answers it exactly.
+
+Click a piece and its legal moves are shown — a dot on an empty square, a ring around a capture. A piece
+with no legal moves still highlights, so you can tell it's pinned or blocked rather than that the click
+missed.
 
 ### Board/engine mismatch guard
 

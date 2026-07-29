@@ -237,11 +237,17 @@
 <div id="wdl" style="display: none"></div>
 <div id="alt-lines" style="display: none"></div>
 <div id="book-lines" style="display: none"></div>
+<div id="panel-line" hidden></div>
 <div id="setup-fen-row" style="display: none">
     <input id="setup_fen_input" class="browser-default" type="text" spellcheck="false"
            placeholder="Paste a FEN, then press Enter">
     <span id="setup_fen_msg"></span>
+    <button id="setup_fen_flip" class="waves-effect waves-light btn-flat" type="button"
+            title="Rotate the position 180 degrees. The board reader assumes White is at the bottom; if the board on screen was shown from Black's side, the position comes out upside down.">Flip board</button>
+    <button id="snap_follow" class="waves-effect waves-light btn-flat" type="button" hidden
+            title="Re-read the same area of the screen twice a second, so a board that is playing there -- a video, a stream, another app -- keeps the panel in step without capturing each move by hand. Only available after a screen capture, since it needs the area that capture found.">Follow screen</button>
 </div>
+<div id="move-reason" hidden></div>
 <div id="next-move"></div>
 </body>
 

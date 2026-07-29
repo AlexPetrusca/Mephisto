@@ -231,7 +231,10 @@ html, body {
 
 /* the left column is 378px wide; without this the centered text spans the full
    body, drifts under the quick-settings panel and collides with the gear button */
-#game-detection, #moves, #evaluation, #next-move, #nps, #wdl {
+/* The left column. Anything NOT in this list spans the whole 568px body and runs underneath the
+   quick-settings column on the right, where it is clipped -- which is exactly what happened to
+   #move-reason when it was added without it. */
+#game-detection, #moves, #evaluation, #next-move, #nps, #wdl, #move-reason {
     width: 378px;
 }
 
@@ -569,6 +572,50 @@ html, body {
     white-space: normal;
 }
 
+/* "Why this move" -- its own line, deliberately away from the opponent-mistake toast, which owns
+   the space over the board. Hidden entirely when the feature is off or nothing certain was found. */
+#move-reason {
+    font-size: 13px;
+    line-height: 20px;
+    opacity: 0.8;
+    white-space: normal;
+}
+#move-reason[hidden] { display: none; }
+
+/* The walkable panel line. One row, scrolls sideways rather than wrapping: a long line must not
+   change the panel's height, since everything below it is positioned. */
+#panel-line {
+    white-space: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    font-size: 12px;
+    line-height: 20px;
+    padding: 0 6px;
+    text-align: left;
+    /* Stop before the quick-settings column (190px + a 6px gutter). Without a right bound the strip
+       is as wide as the body, so a long line overflows the PANEL rather than scrolling inside the
+       strip -- and the body is overflow:hidden, so the overflow is simply lost off the edge. */
+    margin-right: 196px;
+    /* the scrollbar would eat a third of a 20px row; the strip scrolls programmatically anyway */
+    scrollbar-width: none;
+}
+#panel-line::-webkit-scrollbar { display: none; }
+#panel-line[hidden] { display: none; }
+#panel-line .pl-move {
+    cursor: pointer;
+    padding: 0 3px;
+    border-radius: 2px;
+}
+#panel-line .pl-move:hover { background: rgba(0, 0, 0, 0.08); }
+#panel-line .pl-current { background: #0b7285; color: #fff; }
+body.mephisto-dark #panel-line .pl-move:hover { background: rgba(255, 255, 255, 0.12); }
+body.mephisto-dark #panel-line .pl-current { background: #4dd0e1; color: #10201f; }
+
+/* Follow-screen button: hidden until a capture gives it an area to re-scan. */
+#snap_follow[hidden] { display: none; }
+#snap_follow.following { color: #0b7285; font-weight: 600; }
+body.mephisto-dark #snap_follow.following { color: #4dd0e1; }
+
 /* Dark mode (toggled in Appearance settings -> class `mephisto-dark` on body) */
 body.mephisto-dark {
     background-color: #16171b; /* deeper slate base */
@@ -770,10 +817,15 @@ body.mephisto-compact #alt-lines {
        positioned against the board, so it silently went out of alignment. A notice must never move
        the thing it is a notice about. Pinned above the button row, where nothing is laid out below
        it, and allowed to WRAP (body sets white-space: nowrap, which made the text run off the
-       panel). */
+       panel).
+
+       `right` clears the quick-settings column (190px) rather than the panel edge. Spanning the full
+       568px centred the text over the WHOLE panel, so it read as off-centre above the board and ran
+       underneath the settings on the right. The notice belongs to the left column; it should be
+       centred on that. */
     position: absolute;
     left: 6px;
-    right: 6px;
+    right: 196px; /* 190px quick-settings column + the same 6px gutter as the left */
     bottom: 58px;
     z-index: 20;
     text-align: center;
@@ -796,10 +848,15 @@ body.mephisto-compact #alt-lines {
        positioned against the board, so it silently went out of alignment. A notice must never move
        the thing it is a notice about. Pinned above the button row, where nothing is laid out below
        it, and allowed to WRAP (body sets white-space: nowrap, which made the text run off the
-       panel). */
+       panel).
+
+       `right` clears the quick-settings column (190px) rather than the panel edge. Spanning the full
+       568px centred the text over the WHOLE panel, so it read as off-centre above the board and ran
+       underneath the settings on the right. The notice belongs to the left column; it should be
+       centred on that. */
     position: absolute;
     left: 6px;
-    right: 6px;
+    right: 196px; /* 190px quick-settings column + the same 6px gutter as the left */
     bottom: 58px;
     z-index: 20;
     text-align: center;

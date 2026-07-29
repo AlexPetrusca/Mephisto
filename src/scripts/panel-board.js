@@ -47,7 +47,12 @@
         const showNotation = cfg.showNotation;
         const onMove = cfg.onMove || null; // onMove(from, to, promotion) -- promotion set only when asked
         const needsPromotion = cfg.needsPromotion || null; // (from,to) -> 'w'|'b'|null: ask before moving
+        // (square) -> ['e4','e5',...]: where the piece on `square` may legally go. The board holds no
+        // rules of its own -- it draws pieces and reports clicks -- so the legality comes from the
+        // panel, which has chess.js and the real position. Absent, nothing is highlighted.
+        const legalTargets = cfg.legalTargets || null;
         let selected = null;               // the square currently picked up, if any
+        let targets = [];                  // legal destinations for `selected`, drawn as dots
         // Fall back to the theme path if the inlined map is missing this piece: buildPieces only
         // records pieces whose fetch succeeded, so one failure left `src=""` -- which the browser
         // renders as a broken-image glyph on that piece alone (seen on a promoted queen).
@@ -154,15 +159,18 @@
 
         function squareClicked(alg) {
             if (!onMove) return;
-            if (selected === alg) { selected = null; render(); return; }
+            if (selected === alg) { selected = null; targets = []; render(); return; }
             if (selected) {
                 const from = selected;
-                selected = null;
+                selected = null; targets = [];
                 if (submitMove(from, alg) === false) render(); // rejected -> just drop the selection
                 return;
             }
             if (!pos[alg]) return;   // nothing there to pick up
             selected = alg;
+            // Ask the panel where this piece may go. A piece with no legal moves still selects, so
+            // the highlight tells you it IS pinned or blocked rather than that the click missed.
+            try { targets = legalTargets ? (legalTargets(alg) || []) : []; } catch (e) { targets = []; }
             render();
         }
 
@@ -188,6 +196,19 @@
                     if (onMove) {
                         s.style.cursor = 'pointer';
                         if (alg === selected) s.style.boxShadow = 'inset 0 0 0 3px rgba(20,184,166,0.9)';
+                        else if (targets.includes(alg)) {
+                            // A dot for an empty square, a ring for a capture -- the same language
+                            // every chess site uses, so it needs no explaining.
+                            const dot = document.createElement('div');
+                            dot.style.cssText = pos[alg]
+                                ? `position:absolute;inset:0;border-radius:50%;box-sizing:border-box;` +
+                                  `border:${Math.max(3, Math.round(sq * 0.08))}px solid rgba(20,184,166,0.85);pointer-events:none`
+                                : `position:absolute;left:50%;top:50%;width:${Math.round(sq * 0.28)}px;` +
+                                  `height:${Math.round(sq * 0.28)}px;margin:-${Math.round(sq * 0.14)}px 0 0 ` +
+                                  `-${Math.round(sq * 0.14)}px;border-radius:50%;` +
+                                  `background:rgba(20,184,166,0.55);pointer-events:none`;
+                            s.appendChild(dot);
+                        }
                         s.addEventListener('click', () => squareClicked(alg));
                         // DRAG as well as click: dragging a piece is what most people reach for first.
                         // Pointer events (not HTML5 drag-and-drop, which is unreliable inside a closed

@@ -179,6 +179,34 @@ async function updateCheck() {
   return {...result, current, newer: isNewer(result.latest, current), cached: false};
 }
 
+// --- Shared lichess budget ----------------------------------------------------------------------
+// The opening explorer and the tablebase are separate features with separate caches, and both hit
+// lichess. Neither knew about the other, so a session with both on could spend two independent
+// request streams into the same rate limit -- and when lichess pushed back, each would keep trying,
+// because a 429 to one told the other nothing.
+//
+// One gate for both. A 429 (or a 503) parks EVERY lichess call until the cooldown expires, honouring
+// Retry-After when it is sent. Calls during a cooldown fail instantly and locally: both callers
+// already treat a miss as "no answer", so the engine's move is simply used, which is exactly the
+// right behaviour and costs nothing.
+const LICHESS_COOLDOWN_MS = 60_000; // fallback when Retry-After is absent
+let lichess_blocked_until = 0;
+
+function lichess_blocked() {
+    return Date.now() < lichess_blocked_until;
+}
+
+// Read a rate-limit response and start the shared cooldown. Returns true if it was one.
+function lichess_note_response(res, label) {
+    if (!res || (res.status !== 429 && res.status !== 503)) return false;
+    const retry = Number(res.headers?.get?.('Retry-After'));
+    const ms = Number.isFinite(retry) && retry > 0 ? retry * 1000 : LICHESS_COOLDOWN_MS;
+    lichess_blocked_until = Date.now() + ms;
+    console.warn(`Mephisto: lichess rate-limited (${label}, HTTP ${res.status}) -- ` +
+        `pausing all lichess lookups for ${Math.round(ms / 1000)}s`);
+    return true;
+}
+
 // --- Syzygy tablebase (lichess) ---------------------------------------------------------------
 // Perfect play once the position is down to <=7 men. PROBED OVER THE NETWORK on purpose: the real
 // tablebases are hundreds of gigabytes and nobody is downloading those to use a browser extension,
@@ -203,6 +231,7 @@ async function tablebaseLookup({fen, variant}) {
   if (!path) return {error: `no tablebase for variant ${variant}`};
   const key = `${path}|${fen}`;
   if (tablebaseCache.has(key)) return tablebaseCache.get(key);
+  if (lichess_blocked()) return {error: 'lichess cooling down'}; // cached hits above still answer
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 4000); // a miss just means the engine plays instead
   let out;
@@ -211,6 +240,7 @@ async function tablebaseLookup({fen, variant}) {
     // (same trap as the explorer lookup).
     const url = `${TABLEBASE_HOST}/${path}?fen=${encodeURIComponent(fen)}`;
     const r = await fetch(url, {signal: ctl.signal});
+    lichess_note_response(r, 'tablebase');
     out = r.ok ? await r.json() : {error: `HTTP ${r.status}`};
     console.log('[Tablebase]', r.status, fen, out.error ? out.error : `${out.category} (${out.moves?.length ?? 0} moves)`);
   } catch (e) {
@@ -231,6 +261,7 @@ async function explorerLookup({fen, db}) {
   const cfg = EXPLORER_DB[db] || EXPLORER_DB.masters;
   const key = `${db}|${fen}`;
   if (explorerCache.has(key)) return explorerCache.get(key);
+  if (lichess_blocked()) return {error: 'lichess cooling down'}; // shared with the tablebase probe
   // NOT URLSearchParams: it form-encodes, turning the FEN's spaces into '+'. A parser that doesn't
   // read '+' as a space then sees "...RNBQKBNR+w+KQkq+-+0+1" and matches nothing -- a 200 with an
   // empty move list, which is indistinguishable from "out of book". encodeURIComponent gives %20.
@@ -244,6 +275,7 @@ async function explorerLookup({fen, db}) {
     try {
       const url = `${host}${cfg.path}?${params}`;
       const r = await fetch(url, {signal: ctl.signal});
+      if (lichess_note_response(r, 'explorer')) { out = {error: `HTTP ${r.status}`}; break; } // don't try the other host
       out = r.ok ? await r.json() : {error: `HTTP ${r.status}`};
       // log the REQUEST, not just the verdict: "no moves" is indistinguishable from "wrong FEN"
       // without seeing exactly what was asked for
