@@ -54,7 +54,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.137'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.138'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {

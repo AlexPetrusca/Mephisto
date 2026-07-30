@@ -64,6 +64,12 @@ function flip_fen_turn(fen) {
 
 let is_calculating = false;
 let pending_stops = 0; // bestmoves still owed by searches we abandoned -- drop that many (see abandon_search)
+// Remote/native supersession. `pending_stops` only protects the WASM path -- on_engine_response
+// returns early for is_remote(), so a request issued for an OLD position used to be acted on
+// whenever it resolved late, playing a move computed for a position that is no longer on the board.
+// Every remote analysis carries the generation it was issued in; a resolved response from an older
+// generation is dropped. Bumped when a new analysis is issued and when a search is abandoned.
+let remote_gen = 0;
 let search_active = false; // a 'go' was issued whose bestmove hasn't arrived yet (is_calculating can't be
                            // used for this: it flips false on the first info line, not on bestmove)
 let last_pos = {startFen: null, moves: ''}; // the position's own start + UCI move list, for Copy PGN
@@ -986,7 +992,25 @@ function flush_engine_options() {
 function abandon_search() {
     if (search_active) pending_stops++;
     search_active = false;
+    remote_gen++; // a remote/native request still in flight is now for a position we've left
     send_engine_uci('stop');
+}
+
+// Claim the current generation for a remote/native analysis about to be issued, and return a wrapper
+// that only lets a callback run if that generation is STILL current. A host request is a promise, not
+// a stream we can cancel -- `stop` does not unmake it, so a request issued for an old position still
+// resolves, and before this guard its bestmove was played into whatever position had replaced it. In
+// a puzzle that is a guaranteed miss: our move flips the board to their scripted reply, the reply
+// lands, and the superseded search resolves two plies late.
+function remote_result_gate() {
+    const gen = ++remote_gen;
+    return (fn) => (v) => {
+        if (gen !== remote_gen) {
+            console.log('Mephisto: dropping a superseded remote result (the position moved on)');
+            return;
+        }
+        fn(v);
+    };
 }
 
 // The restart budget is for a build that traps REPEATEDLY -- three crashes in quick succession mean
@@ -2416,10 +2440,11 @@ function on_new_pos(fen, startFen, moves) {
         const rt = (config.help_mode || !config.autoplay || config.manual_mode
                     || (config.ponder && !our_turn)) ? 3600000 : movetime;
         const send_analysis = () => {
+            const fresh = remote_result_gate(); // drop this result if the position moves on first
             if (moves) {
-                request_remote_analysis(startFen, rt, moves).then(on_engine_response).catch(on_remote_error);
+                request_remote_analysis(startFen, rt, moves).then(fresh(on_engine_response)).catch(fresh(on_remote_error));
             } else {
-                request_remote_analysis(fen, rt).then(on_engine_response).catch(on_remote_error);
+                request_remote_analysis(fen, rt).then(fresh(on_engine_response)).catch(fresh(on_remote_error));
             }
         };
         // The host reads MultiPV out of its stored options, not out of the analyse request, so the
