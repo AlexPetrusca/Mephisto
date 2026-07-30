@@ -249,8 +249,14 @@ async function initPanel(root, tabId) {
     });
     panel_body()?.classList.toggle('mephisto-dark', config.dark_mode); // dark theme (set in Appearance)
     apply_compact();
-    // keep autoplay running when the tab is backgrounded: start/resume the keep-alive tone on any
-    // panel click and whenever visibility flips, so it's already playing before you tab away
+    // Keep-alive tone. Chrome applies intensive timer throttling to a hidden tab after ~5 minutes,
+    // which is what actually stops a backgrounded game -- an inaudible oscillator makes the tab count
+    // as playing audio, and audible tabs are exempt.
+    //
+    // Gated on BACKGROUND PLAY, not on Autoplay. It used to run whenever Autoplay was on, which meant
+    // a tab that defers its moves anyway (Background Play off, the default) was still marked audible
+    // -- Chrome puts a speaker icon on the tab strip for that, so it bought nothing and added a
+    // visible tell. Now it runs only when you have actually asked to play in the background.
     document.addEventListener('pointerdown', () => keep_alive(keep_alive_wanted(), true), true); // gesture: may create
     document.addEventListener('visibilitychange', () => keep_alive(keep_alive_wanted())); // resume-only (no create)
     push_config();
@@ -361,7 +367,7 @@ async function initPanel(root, tabId) {
                 // position lands on OUR turn, they just moved -- their spend = their clock at the
                 // start of their turn minus now (they get the increment back after moving). When it
                 // lands on THEIR turn, our move went through -- mark where their clock starts.
-                const ourColor = (board.orientation() === 'white') ? 'w' : 'b';
+                const ourColor = (our_side() === 'white') ? 'w' : 'b';
                 if (turn === ourColor) {
                     opp_spend = (opp_clock_mark != null && last_clocks?.theirs != null)
                         ? Math.max(0, opp_clock_mark - last_clocks.theirs + (last_clocks.increment || 0))
@@ -408,19 +414,19 @@ async function initPanel(root, tabId) {
         // Re-assert the keep-alive tone. Chrome can SUSPEND an AudioContext in a hidden tab, and
         // nothing revived it -- the only other caller is visibilitychange, which by definition does
         // not fire while you are still away. Once the tone lapses the tab is throttled again and a
-        // backgrounded game quietly stops. Resume-only, and a no-op when it is already running.
+        // backgrounded game quietly stops. Resume-only (no gesture here), and a no-op when the
+        // context is already running or Background Play is off.
         keep_alive(keep_alive_wanted());
     }, Math.max(1000, config.fen_refresh));
-
-    watch_config_changes();
-    // a reload (Engine/Variant/Elo) rebuilds this script -- bring back any position that was set
-    restore_setup_state();
 
     // Update check: one message to the SW, which caches for 12h. Silent unless there is genuinely a
     // newer release -- a failed or rate-limited check leaves the notice hidden, exactly as if the
     // build were current. Clicking it opens the release page via the background (window.open from a
     // content script runs in the SITE's context and gets swallowed).
     check_for_update();
+    watch_config_changes();
+    // a reload (Engine/Variant/Elo) rebuilds this script -- bring back any position that was set
+    restore_setup_state();
 
     // register button click listeners
     PANEL_ROOT.getElementById('analyze').addEventListener('click', () => {
@@ -463,7 +469,7 @@ async function initPanel(root, tabId) {
         last_eval.fen = '';   // treat whatever comes back as a brand-new position
         prev_ply_count = 0;   // treat it as a fresh game...
         opp_spend = opp_clock_mark = last_our_eval = null; // ...and clear stale clock/mirror/humanize pacing
-        abandon_search(); // the stopped search still flushes a bestmove -- for the position we're discarding
+        abandon_search(); // L1: the stopped search still flushes a bestmove -- for the position we're discarding
         fen_request_inflight = false; // don't let an in-flight poll's 500ms guard swallow the re-query
         push_config();        // resets the content-script's push dedupe + triggers an immediate push
         request_fen();        // and poll right now as well -- fires immediately now the guard is clear
@@ -471,6 +477,9 @@ async function initPanel(root, tabId) {
     PANEL_ROOT.getElementById('selftest')?.addEventListener('click', run_self_test);
     PANEL_ROOT.getElementById('setupfen')?.addEventListener('click', toggle_setup_fen);
     PANEL_ROOT.getElementById('snapfen')?.addEventListener('click', () => snap_position());
+    // Flip the READ position. The board reader has no way to know which way round the board on
+    // screen was, so it assumes White at the bottom; one click corrects it rather than making the
+    // user retype a FEN.
     // click a move in the panel line to walk back to it; playing from there overwrites the rest
     PANEL_ROOT.getElementById('panel-line')?.addEventListener('click', (e) => {
         const idx = e.target?.dataset?.idx;
@@ -478,12 +487,18 @@ async function initPanel(root, tabId) {
         panel_line_goto(parseInt(idx, 10));
     });
     PANEL_ROOT.getElementById('snap_follow')?.addEventListener('click', snap_follow_toggle);
-    // Flip the READ position. The board reader has no way to know which way round the board on
-    // screen was, so it assumes White at the bottom; one click corrects it.
     PANEL_ROOT.getElementById('setup_fen_flip')?.addEventListener('click', () => {
         const box = PANEL_ROOT.getElementById('setup_fen_input');
         const current = (box?.value || setup_fen || '').trim();
         if (!current) return;
+        // "This board is being shown from the other side." That is ONE fact with two consequences,
+        // so the button applies both: the recogniser maps the image's top-left to a8 no matter which
+        // way the board was drawn, so the DATA needs turning round -- and the VIEW needs turning with
+        // it, or the picture jumps 180 degrees away from the screen it is supposed to mirror. Doing
+        // only the data (what this did) left you reading a black-side board off white-side
+        // coordinates: the pieces looked right, a1 was labelled bottom-left, and it was the labels
+        // and the FEN that were wrong.
+        setup_view = (setup_view === 'black') ? 'white' : 'black';
         const flipped = rotate_fen_180(current);
         if (box) box.value = flipped;
         apply_setup_fen();
@@ -583,8 +598,9 @@ function init_quick_settings() {
             keep_alive(keep_alive_wanted(), true); // this change is a user gesture -> can (re)start the tone now
             if (key === 'help_mode' && !elem.checked) request_clear_hint();
             if (key === 'eval_bar' && !elem.checked) request_clear_eval_bar();
+            // the strip is drawn by drawEvalBar, so clearing and letting the next eval redraw is
+            // enough -- clear_eval_bar removes both overlays and the live bar comes straight back
             if (key === 'eval_history') request_clear_eval_bar();
-            if (key === 'tablebase') tablebase_data = null; // a stale answer must not survive a toggle
             if (key === 'explorer' || key === 'book_play') {
                 // turning either on mid-game should look this position up right away rather than
                 // waiting for the next move; the out-of-book latch is per game, so clear it too
@@ -592,11 +608,21 @@ function init_quick_settings() {
                 render_explorer();
                 if (last_eval.fen) request_explorer(last_eval.fen);
             }
-            if (key === 'humanize' && !is_remote()) {
-                // humanize picks among alternative lines, so it needs MultiPV headroom;
-                // re-apply and restart the search under the new setting
+            if (key === 'tablebase') {
+                tablebase_data = null; // a stale answer must not survive a toggle
+                if (last_eval.fen) request_tablebase(last_eval.fen);
+            }
+            if (key === 'humanize') {
+                // humanize picks among alternative lines, so it needs MultiPV headroom; re-apply
+                // the line count (which drops back to config.multiple_lines when it's turned off,
+                // so the engine stops searching the wide list) and restart under the new setting.
                 abandon_search();
-                send_engine_uci(`setoption name MultiPV value ${effective_multipv()}`);
+                if (is_remote()) {
+                    remote_multipv_set = effective_multipv();
+                    request_remote_configure({MultiPV: remote_multipv_set}).catch(() => { remote_multipv_set = null; });
+                } else {
+                    send_engine_uci(`setoption name MultiPV value ${effective_multipv()}`);
+                }
                 last_eval.fen = '';
             }
             if (['help_mode', 'autoplay', 'clock_mode', 'mirror_mode', 'manual_mode'].includes(key)) {
@@ -612,7 +638,7 @@ function init_quick_settings() {
                 // by the request's `time`, so there is nothing to harvest and it must re-ask), our
                 // turn only (the opponent's-turn search returns THEIR move), and only when no other
                 // mode is independently forcing the infinite search.
-                const our = (board.orientation() === 'white') ? 'w' : 'b';
+                const our = (our_side() === 'white') ? 'w' : 'b';
                 const harvest = key === 'autoplay' && elem.checked && search_active && !is_remote()
                     && !config.help_mode && !config.manual_mode
                     && last_eval.fen && last_eval.fen.split(' ')[1] === our;
@@ -675,7 +701,7 @@ function init_quick_settings() {
             config[key] = value;
             save(key, value);
             if (key === 'threads') queue_engine_option('Threads', value);
-            if (key === 'memory') queue_engine_option('Hash', Math.min(value, is_remote() ? value : 512));
+            if (key === 'memory') queue_engine_option('Hash', value); // flush_engine_options clamps for WASM
             if (key === 'multiple_lines') {
                 if (is_remote()) {
                     remote_multipv_set = effective_multipv();
@@ -726,7 +752,7 @@ function init_quick_settings() {
         const ml = PANEL_ROOT.getElementById('qs_maia_level');
         if (ml) ml.value = config.maia_level;
     }
-    // Maia-3 Elo slider: one model conditioned on a target Elo, applied LIVE via setoption (no reload).
+    // Maia-3 Elo slider: live-applied via setoption (SelfElo/OppoElo) -- no net reload -- then re-analyse.
     const maia3Row = PANEL_ROOT.getElementById('qs_maia3_row');
     if (maia3Row) {
         maia3Row.style.display = isMaia3 ? '' : 'none';
@@ -843,6 +869,11 @@ async function ensure_offscreen_engine(engineName) {
 
 async function initialize_engine(reuseWarm = false) {
     pending_stops = 0; // a crashed/replaced engine never flushes what it owed; don't eat the new engine's first result
+    // Options queued for the PREVIOUS engine are not this engine's. flush_engine_options only runs
+    // in the WASM branch of on_new_pos, so anything queued while a native engine was selected sat
+    // here untouched until a WASM engine picked it up and applied it -- including a Hash the WASM
+    // heap cannot allocate. This function is about to push the right values for the new engine.
+    pending_engine_options = {};
     search_active = false;
     // Fingerprint every engine-affecting setting. If NONE changed since the last init, a reopen can
     // skip engine setup ENTIRELY: the engine is still loaded, still configured, and its hash is warm,
@@ -857,8 +888,9 @@ async function initialize_engine(reuseWarm = false) {
         console.log('Engine warm — reused as-is (no reconfigure)');
         return;
     }
-    // Net stays loaded when only the engine + variant are unchanged (the net depends on just those);
-    // a settings-only change (threads/hash/lines/elo) still reconfigures but skips the reload.
+    // Net stays loaded only when its IDENTITY is unchanged: engine + variant (+ maia_level, since a
+    // Maia rating switch loads a different .onnx). A settings-only change (threads/hash/lines/elo)
+    // still reconfigures but skips the reload.
     const warm = reuseWarm && engine_ready && config.engine === last_init_engine
         && config.variant === last_init_variant && config.maia_level === last_init_maia;
     if (WASM_ENGINES.includes(config.engine)) {
@@ -876,15 +908,19 @@ async function initialize_engine(reuseWarm = false) {
             "Threads": config.threads,
             "MultiPV": effective_multipv(), // bumped for Humanize (needs alt-line headroom), like WASM
             "Premove": !!config.premove, // PM-01 opt-in; engines without the option skip it
-            // remote-engine.py skips options the engine doesn't declare, so this is safe everywhere
-            ...(config.variant === 'fischerandom' ? {"UCI_Chess960": true} : {}),
-            // variant for the native Fairy host (real UCI engines without UCI_Variant just ignore it)
-            ...(config.variant && config.variant !== 'chess' ? {"UCI_Variant": config.variant} : {}),
+            // remote-engine.py skips options the engine doesn't declare, so this is safe everywhere.
+            // ALWAYS sent, never omitted-when-standard: the host keeps the last configure it was
+            // given (engine_options is a dict it only ever writes into), so leaving these out on the
+            // way BACK to Standard left it building Chess960 or Fairy boards for a standard game --
+            // the variant was a one-way door. The host handles the explicit standard values
+            // (UCI_Variant 'chess' drops the variant net) and skips options an engine doesn't declare.
+            "UCI_Chess960": config.variant === 'fischerandom',
+            "UCI_Variant": config.variant || 'chess',
             ...(config.elo > 0 && config.elo <= 3190 ? {"UCI_LimitStrength": true, "UCI_Elo": config.elo} : {}),
         }).catch(on_remote_error);
         remote_multipv_set = effective_multipv(); // baseline just configured; don't re-push it
     } else {
-        // WASM engines can't allocate the big hash the slider now allows (2 GB) -- their heap is
+        // WASM engines can't allocate the big hash the slider now allows (4 GB) -- their heap is
         // capped, so clamp to 512 MB here. Native engines (remote branch above) get the full value.
         send_engine_uci(`setoption name Hash value ${Math.min(config.memory, 512)}`);
         send_engine_uci(`setoption name Threads value ${config.threads}`);
@@ -983,8 +1019,13 @@ function flush_engine_options() {
     pending_engine_options = {};
     for (const name in opts) {
         if (is_remote()) continue; // the native path sends these through request_remote_configure
-        send_engine_uci(`setoption name ${name} value ${opts[name]}`);
-        if (name === 'Threads') search_threads_set = opts[name]; // keep the per-turn tracker honest
+        // Clamp HERE, not where the value was queued. The queue site can only see the engine that
+        // was selected when the slider moved; this runs against the engine that will actually
+        // receive it. A WASM heap is capped, so the 4 GB the slider allows has to come down to the
+        // same 512 MB initialize_engine applies -- otherwise the queued value silently undoes it.
+        const value = (name === 'Hash') ? Math.min(opts[name], 512) : opts[name];
+        send_engine_uci(`setoption name ${name} value ${value}`);
+        if (name === 'Threads') search_threads_set = value; // keep the per-turn tracker honest
     }
     return opts;
 }
@@ -1031,11 +1072,19 @@ function note_engine_healthy() {
     engine_restarts = 0;
 }
 
-
 function on_engine_error(message) {
     console.error(message);
     if (engine_restarting) return;
-    if (!/RuntimeError|Aborted|worker sent an error/.test(String(message))) return;
+    // Two different things arrive here: a CRASH of a running engine (restartable, the regex below)
+    // and a failure to LOAD one at all -- a missing net, a model that won't fetch, a bad build. The
+    // second kind fell through the regex and was dropped, so the panel just sat on its progress bar
+    // with the single most useful sentence already in hand. Say it, whatever kind it is.
+    update_best_move(`Engine error — ${String(message).slice(0, 120)}`);
+    if (!/RuntimeError|Aborted|worker sent an error/.test(String(message))) {
+        engine_ready = false; // a load that failed is not a warm engine; make the next open re-init
+        toggle_calculating(false); // nothing is coming, so stop pretending a search is running
+        return;
+    }
     if (engine_restarts >= 3) {
         // ponytail: cap restarts — a build that keeps trapping (some wasm builds on some machines) shouldn't loop forever
         update_best_move('Engine keeps crashing — pick a different engine in Settings.');
@@ -1083,7 +1132,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         toggle_calculating(false);
         return;
     } else if (config.simon_says_mode) {
-        if (toplay.toLowerCase() === board.orientation()) {
+        if (toplay.toLowerCase() === our_side()) {
             const startSquare = best.substring(0, 2);
             const startPiece = board.position()[startSquare];
             const startPieceType = (startPiece) ? startPiece.substring(1) : null;
@@ -1100,12 +1149,12 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         // "Pondering -- Black to play, ..." rather than looking like a stalled search on our move.
         // Maia is a single forward pass -- it can't deepen, so it never really ponders; every other
         // engine (WASM, native SF/Fairy, remote) does.
-        const pondering = config.ponder && toplay.toLowerCase() !== board.orientation()
+        const pondering = config.ponder && toplay.toLowerCase() !== our_side()
             && config.engine !== 'maia' && config.engine !== 'maia3';
         update_best_move(`${pondering ? 'Pondering — ' : ''}${toplay} to play, best move is ${best}`);
     }
 
-    if (toplay.toLowerCase() === board.orientation()) {
+    if (toplay.toLowerCase() === our_side()) {
         last_eval.bestmove = best;
         last_eval.threat = threat;
         if (config.simon_says_mode) {
@@ -1129,7 +1178,12 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                 draw_threat();
             }
         }
-        if (!config.help_mode && config.autoplay && isTerminal) {
+        // Manual Mode plays on YOUR keypress and nothing else. It normally never reaches here because
+        // its search is `go infinite` and so emits no bestmove -- but Maia/Maia-3 are a single forward
+        // pass that answers a `go` regardless of the limit, so on those engines Manual Mode was
+        // autoplaying by itself. State the contract here instead of relying on the engine to withhold
+        // a bestmove, the way every other move-path guard already lists the mode.
+        if (!config.help_mode && !config.manual_mode && config.autoplay && isTerminal) {
             // SAFETY: only autoplay a move that actually moves OUR piece and is legal right now.
             // If the turn was mis-scraped we'd otherwise play the opponent's best move as ours.
             if (premove_reply_playable(last_eval.fen, best)) {
@@ -1137,7 +1191,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                 // a clock-aware mode alone still shapes the timing (budget / opponent mirror).
                 // Never in puzzle mode, whose PV playback must follow the engine line exactly.
                 // Book move (weighted random over the human distribution) outranks the engine's pick
-                // while we're still in book -- Move priority: Book > Humanize > engine best. It only
+                // while we're still in book -- Move priority: Tablebase > Book > Humanize > engine. It only
                 // replaces WHICH move is played; the timing below is untouched, so Clock/Mirror/
                 // Humanize still pace it exactly as they would have. Null whenever the lookup hasn't
                 // landed, we're out of book, or every candidate failed the games/engine filters.
@@ -1147,7 +1201,9 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                 }
                 // Tablebase outranks everything: at <=7 men the position is SOLVED, so this is not a
                 // preference the engine could out-search, it is the move. Same shape as the book --
-                // it replaces only WHICH move is played, never the timing.
+                // it replaces only WHICH move is played, never the timing, so Clock/Mirror/Humanize
+                // still pace it exactly as they would have. Null whenever the probe is off, out of
+                // range, or hasn't landed yet, in which case nothing here changes.
                 const tb = tablebase_pick(last_eval.fen);
                 if (tb && !premove_reply_playable(last_eval.fen, tb)) {
                     console.warn('Mephisto: ignoring a tablebase move that is not ours/legal here:', tb);
@@ -1213,13 +1269,20 @@ function update_eval_bar(line) {
     bar.style.bottom = flipped ? 'auto' : '0';
     bar.style.height = `${frac * 100}%`;
 
+    // Eval history: one entry per POSITION seen this game, as the same 0..1 white-share the live bar
+    // uses, so the strip and the bar are the same quantity drawn two ways. Keyed by the position's
+    // move count so a re-analysis of the same position overwrites rather than appends -- the panel
+    // re-evaluates constantly (every info line, every fallback poll) and appending would turn a
+    // 40-move game into thousands of bands.
     record_eval_history(frac);
 
     // mirror the bar onto the site board (chess.com-style: score inside, on the winning side's end)
     if (config.eval_bar) {
         const text = ('mate' in line) ? `M${Math.abs(line.mate)}` : (Math.abs(line.score) / 100).toFixed(1);
         request_draw_eval_bar({frac, text, winningWhite: frac >= 0.5,
-                               history: config.eval_history ? eval_history : null});
+                               history: config.eval_history ? eval_history : null,
+                               phases: config.eval_history
+                                   ? game_phases(premove_tracker.startFen, premove_tracker.moves) : null});
     }
 }
 
@@ -1262,7 +1325,8 @@ function on_engine_evaluation(info) {
     if (npsEl && nps_is_trustworthy(l0)) {
         npsEl.textContent = format_nps(l0.nps);
         // Calibration samples ride the same filter -- it already rejects the impossible readings the
-        // opening milliseconds of a search produce. Depth-gated on top.
+        // opening milliseconds of a search produce. Depth-gated on top: an early iteration's nps is
+        // real but unrepresentative, and the point is to measure this machine at speed.
         if (Number.isFinite(l0.depth) && l0.depth >= 12) record_nps_sample(l0.nps);
     }
     if ('mate' in info.lines[0]) {
@@ -1398,8 +1462,15 @@ function on_engine_response(message) {
 
     if (pending_stops > 0) {
         // output of a search we abandoned; UCI ordering ends each one with its flushed bestmove, so
-        // one bestmove settles one owed stop -- the rest of that search's info lines are dropped too
-        if (message.startsWith('bestmove')) pending_stops--;
+        // one bestmove settles one owed stop -- the rest of that search's info lines are dropped too.
+        // Clearing search_active matters as much as the decrement: this branch RETURNS, so it used to
+        // skip the `search_active = false` below and leave the flag set on a search that had just
+        // ended. The next abandon_search then charged a stop for a search owing nothing, and that
+        // off-by-one is PERMANENT -- every later bestmove is eaten and the panel never moves again
+        // for the rest of the session. A `go` that produces no bestmove at all is enough to start it
+        // (Maia is a single forward pass: if it rejects, nothing is ever emitted). The next `go`
+        // sets the flag again, so this is safe for the ordinary supersession case.
+        if (message.startsWith('bestmove')) { pending_stops--; search_active = false; }
         return;
     }
 
@@ -1554,6 +1625,23 @@ function is_legal_position(fen) {
             return false; // pawns cannot stand on the back ranks
         }
     }
+    // A castling right with no king or rook behind it is not an unusual position, it is a corrupt
+    // FEN, and it is the same class of hazard as the missing king above: the bundled WASM Stockfish
+    // reads the right, looks for the rook, and never answers -- the panel then waits on a bestmove
+    // that is not coming. Standard chess only; in 960 the rook is not on a corner by definition.
+    if (config.variant === 'chess') {
+        const CASTLE_HOME = {K: ['e1', 'h1', 'w'], Q: ['e1', 'a1', 'w'],
+                             k: ['e8', 'h8', 'b'], q: ['e8', 'a8', 'b']};
+        for (const right of (fen.split(' ')[2] || '-')) {
+            if (right === '-') continue;
+            const home = CASTLE_HOME[right];
+            if (!home) return false; // not a castling character at all
+            const [kingSq, rookSq, color] = home;
+            const king = chess.get(kingSq), rook = chess.get(rookSq);
+            if (!king || king.type !== 'k' || king.color !== color) return false;
+            if (!rook || rook.type !== 'r' || rook.color !== color) return false;
+        }
+    }
     return true;
 }
 
@@ -1585,7 +1673,7 @@ function premove_reply_playable(fen, uci) {
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci ?? '')) return false;
     try {
         const chess = new Chess(config.variant, fen);
-        const our = (board.orientation() === 'white') ? 'w' : 'b';
+        const our = (our_side() === 'white') ? 'w' : 'b';
         const piece = chess.get(uci.slice(0, 2));
         if (!piece || piece.color !== our) return false; // never our-play the opponent's (or an empty) square
         if (fen.split(' ')[1] === our) {                 // our turn -> the reply must be legal immediately
@@ -1655,7 +1743,7 @@ function maybe_premove_forced_reply(line) {
     if (!premove_certified(line)) return;
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(line.reply ?? '')) return;
     const mover = (premove_tracker.fen.split(' ')[1] === 'w') ? 'white' : 'black';
-    if (mover === board.orientation()) return; // only while the opponent is to move
+    if (mover === our_side()) return; // only while the opponent is to move
     if (premove_tracker.safe === undefined) {
         // cached per position; certification pins (pred, reply) via the depth-13 snapshot,
         // so at most one pair can ever be checked here per position
@@ -1707,7 +1795,7 @@ function premove_instant_reply(new_fen, new_moves) {
     if (premove_tracker.premoved) return null; // already queued as a real site premove
     if (!premove_tracker.fen || premove_tracker.fen !== last_eval.fen) return null;
     const mover = (new_fen.split(' ')[1] === 'w') ? 'white' : 'black';
-    if (mover !== board.orientation()) return null; // the certified reply must be OUR move
+    if (mover !== our_side()) return null; // the certified reply must be OUR move
     let certified = 0;
     for (let idx = 0; idx < premove_lines; idx++) {
         const line = premove_tracker.lines[idx];
@@ -1742,7 +1830,9 @@ function premove_instant_reply(new_fen, new_moves) {
 
 // While pondering we don't know which move the opponent will pick -- and they won't mirror the
 // engine's #1 -- so ponder the top 5 candidate replies: it warms the TT for whichever they play and
-// lets Premove certify a reply to any of them. Narrow it when the position is forcing, where the
+// lets Premove certify a reply to any of them. Applies to every engine: the caller sits above the
+// engine branch in on_new_pos, and the native path pushes the matching MultiPV to its host.
+// Narrow it when the position is forcing, where the
 // realistic replies are few and the width is better spent on depth: 1-2 legal moves (a real forced
 // move), or a recapture of the piece we just moved (lastUci's destination is capturable).
 function ponder_line_count(fen, lastUci) {
@@ -1784,7 +1874,7 @@ const SETUP_STASH_KEY = 'setup_fen_stash';
 function stash_setup_state() {
     try {
         if (setup_fen) {
-            MephistoConfig.set(SETUP_STASH_KEY, JSON.stringify({fen: setup_fen, crop: snap_crop}));
+            MephistoConfig.set(SETUP_STASH_KEY, JSON.stringify({fen: setup_fen, crop: snap_crop, view: setup_view}));
         } else {
             MephistoConfig.set(SETUP_STASH_KEY, JSON.stringify(null));
         }
@@ -1797,6 +1887,7 @@ function restore_setup_state() {
         if (!raw?.fen || !is_legal_position(raw.fen)) return false;
         setup_fen = raw.fen;
         snap_crop = raw.crop || null;
+        setup_view = (raw.view === 'white' || raw.view === 'black') ? raw.view : null;
         const row = PANEL_ROOT.getElementById('setup-fen-row');
         if (row) row.style.display = '';
         const input = PANEL_ROOT.getElementById('setup_fen_input');
@@ -1805,6 +1896,7 @@ function restore_setup_state() {
         update_snap_follow_button();
         try {
             turn = setup_fen.split(' ')[1] || 'w';
+            board.orientation(setup_view || (turn === 'w' ? 'white' : 'black'));
             board.position(setup_fen);
             update_turn_badge(setup_fen);
         } catch (e) { /* board not ready yet */ }
@@ -1814,7 +1906,6 @@ function restore_setup_state() {
         return false;
     }
 }
-
 let explorer_empty_streak = 0; // consecutive empty lookups; 3 = genuinely out of book
 
 // --- Syzygy tablebase --------------------------------------------------------------------------
@@ -1955,13 +2046,18 @@ function book_pick(fen) {
 
 // cp score per first-move-of-PV, from the lines the engine has already returned for this position.
 // Mate scores collapse to a large cp so a mate never loses the veto comparison.
+// Scores are OURS, not White's. `line.score`/`line.mate` are stored WHITE-relative (see the
+// (turn === 'w' ? 1 : -1) flip in the info parsers), so book_pick's `Math.max(...)` was picking the
+// line best for WHITE. As Black that is the line worst for us: the veto then kept the blunders and
+// discarded the good book moves, and only as Black -- correct as White, so invisible half the time.
+// line_cp_ours is the flip every other consumer already goes through, including mate-in-0.
 function engine_line_scores() {
     const out = {};
     for (const line of last_eval.lines || []) {
         if (!line?.pv) continue;
         const uci = pv_moves(line.pv)[0];
         if (!uci) continue;
-        const cp = ('mate' in line) ? (line.mate > 0 ? 100000 : -100000) : line.score;
+        const cp = line_cp_ours(line);
         if (typeof cp === 'number') out[uci] = cp;
     }
     return out;
@@ -2129,6 +2225,23 @@ function play_on_panel_board(from, to, promotion) {
 // down. The result is usually still a LEGAL position, so nothing downstream can catch it -- it just
 // quietly analyses a different game. Detecting the orientation from pixels is not reliable, so this
 // is offered as one click instead of guessed at.
+// Which way up the panel draws a HELD position (a typed FEN or one read off the screen), or null to
+// derive it from the side to move as before. It is remembered across follow ticks and panel rebuilds,
+// because a board being watched on a screen does not turn round between plies -- and re-deriving it
+// from the turn meant the view flipped every single move.
+let setup_view = null;
+
+// The colour the panel is ANSWERING FOR, which is not the same question as which way the board is
+// drawn. On a live game they coincide: the side the page shows us is the side we play. On a held
+// position there is no "us" -- the answer wanted is always for whoever is to move -- and that is what
+// apply_setup_fen used to encode by forcing the orientation to follow the turn. Splitting the two is
+// what lets Flip board turn the VIEW round without the panel concluding it now plays the other
+// colour and going quiet. For a live game this returns exactly board.orientation(), as before.
+function our_side() {
+    if (setup_fen) return (turn === 'w') ? 'white' : 'black';
+    return board.orientation();
+}
+
 function rotate_fen_180(fen) {
     try {
         const parts = fen.split(' ');
@@ -2153,6 +2266,7 @@ function rotate_fen_180(fen) {
         }
         parts[0] = rows.join('/');
         parts[3] = '-'; // any en-passant square is meaningless once the board has turned
+        parts[2] = '-'; // ...and so are castling rights: they name squares the pieces have left
         return parts.join(' ');
     } catch (e) {
         return fen;
@@ -2167,7 +2281,7 @@ function rotate_fen_180(fen) {
 // to re-scan before one. Each pass is the ordinary recognise path with detection skipped, so it is
 // as cheap as it can be, and a scan that reads the SAME position does nothing at all -- an unchanged
 // board must not restart the search on every tick.
-const SNAP_FOLLOW_MS = 500;
+const SNAP_FOLLOW_MS = 250;
 let snap_follow_timer = null;
 let snap_follow_busy = false;
 
@@ -2176,16 +2290,29 @@ function snap_following() {
 }
 
 function snap_follow_stop() {
-    if (snap_follow_timer !== null) clearInterval(snap_follow_timer);
+    if (snap_follow_timer !== null) clearTimeout(snap_follow_timer);
     snap_follow_timer = null;
     update_snap_follow_button();
 }
 
 function snap_follow_start() {
     if (snap_following() || !snap_crop) return;
-    snap_follow_timer = setInterval(snap_follow_tick, SNAP_FOLLOW_MS);
+    // Chained, NOT setInterval. A read is a full-tab PNG capture plus a 59MB ONNX pass, and
+    // chrome.tabs.captureVisibleTab is throttled by Chrome to about 2 calls/second -- so a fixed
+    // 250ms clock did not produce 4 reads/second, it produced quota errors and ticks dropped by the
+    // busy flag, which is why the panel ran behind a video. Firing the next read when the last one
+    // FINISHES runs the pipeline flat out at whatever rate it can actually sustain.
+    const loop = async () => {
+        if (snap_follow_timer === null) return;
+        const t0 = Date.now();
+        await snap_follow_tick();
+        snap_last_read_ms = Date.now() - t0;
+        if (snap_follow_timer === null) return;
+        snap_follow_timer = setTimeout(loop, Math.max(SNAP_FOLLOW_MS - snap_last_read_ms, 0));
+    };
+    snap_follow_timer = setTimeout(loop, 0);
     update_snap_follow_button();
-    setup_fen_msg('Following the screen — re-reading that area twice a second');
+    setup_fen_msg(`Following the screen · ${SNAP_FOLLOW_MS}ms`); // terse: it sits above the buttons
 }
 
 function snap_follow_toggle() {
@@ -2193,17 +2320,90 @@ function snap_follow_toggle() {
     else snap_follow_start();
 }
 
+// Which single legal move turns `prevFen` into the placement we just read off the screen? Returns the
+// FULL fen after that move -- side to move, ep square, castling rights and counters all derived rather
+// than guessed -- or null when nothing explains the read.
+//
+// Null is the important return. At this poll rate a settled board is one ply from the last one, so a
+// placement that NO legal move produces is not a position: it is a frame caught mid-animation, or a
+// square the recogniser got wrong. Skipping it is free (the next read is 250ms away) and accepting it
+// is not: the panel would analyse a position that never existed, and any turn flip made on the way in
+// would stay wrong for good.
+//
+// The second pass is what lets the colour sort itself out. A capture is seeded White-to-move because
+// the recogniser reports pieces and nothing else; if the ply only makes sense as Black's, that IS the
+// evidence that the seed was wrong, so it is adopted rather than left for the king switch.
+function follow_infer_ply(prevFen, placement) {
+    if (!prevFen) return null;
+    const from_side = (fen) => {
+        try {
+            const chess = new Chess(config.variant, fen);
+            const hits = [];
+            for (const san of chess.moves()) {
+                chess.move(san);
+                if (chess.fen().split(' ')[0] === placement) hits.push(chess.fen());
+                chess.undo();
+                if (hits.length > 1) return null; // ambiguous -- take nothing rather than a coin flip
+            }
+            return (hits.length === 1) ? hits[0] : null;
+        } catch (e) { return null; }
+    };
+    return from_side(prevFen) || from_side(flip_fen_turn(prevFen));
+}
+
+let snap_last_read_ms = 0;     // how long the last capture+recognise round trip actually took
+let snap_last_error = null;    // dedupe the read-failure warning
+let snap_unexplained = 0;      // consecutive reads no single legal move explains
+const SNAP_RESEED_AFTER = 8;   // ~2s at 250ms: long enough to ride out an animation, short enough to recover
+
 async function snap_follow_tick() {
     if (snap_follow_busy || !snap_crop) return;   // a slow read must not stack up behind itself
+    if (document.hidden) return;                  // nothing of ours is on screen to read (see below)
     snap_follow_busy = true;
     try {
         const res = await chrome.runtime.sendMessage({captureAndRecognize: {crop: snap_crop}});
-        if (!res || res.error || !res.placement) return;
-        // keep whatever side-to-move and rights the current position has: only the PIECES moved
-        const rest = (setup_fen || '').split(' ').slice(1).join(' ') || 'w - - 0 1';
-        const fen = `${res.placement} ${rest}`;
-        if (fen === setup_fen) return;             // nothing changed -- do not restart the search
-        if (!is_legal_position(fen)) return;       // a frame caught mid-animation; the next tick retries
+        if (res?.error) {
+            // Surfaced, not swallowed. The usual one is Chrome's captureVisibleTab quota (~2/sec),
+            // and a silent skip made that look like "the recogniser is slow" rather than "we asked
+            // too often". Throttled reads are normal, so say it once rather than every tick.
+            if (res.error !== snap_last_error) {
+                snap_last_error = res.error;
+                console.warn('Mephisto: screen read failed:', res.error);
+            }
+            return;
+        }
+        snap_last_error = null;
+        if (!res || !res.placement) return;
+        const prev = (setup_fen || '').split(' ');
+        if (setup_fen && res.placement === prev[0]) return; // unchanged -- do not restart the search
+        // Work out WHICH ply was played, rather than assuming one was. follow_infer_ply replays every
+        // legal move from the position we hold and keeps the one that lands on what we just read, so
+        // the side to move, the en-passant square, the castling rights and the move counters all come
+        // out right -- and, just as importantly, the read is CONFIRMED. A bare "the pieces changed, so
+        // flip the colour" cannot tell a ply from a single misread square, and one misread would put
+        // the colour permanently out of phase for the rest of the session with nothing to correct it.
+        // It also self-corrects the STARTING colour: the recogniser cannot see whose move it is, so a
+        // capture is seeded White-to-move, and if the first ply only makes sense as a Black move the
+        // inference says so and adopts it. That is the colour switching itself, instead of being your job.
+        let fen = follow_infer_ply(setup_fen, res.placement);
+        if (fen) {
+            snap_unexplained = 0;
+        } else {
+            // Nothing legal explains the read. Usually that is a frame caught mid-animation and the
+            // next tick resolves it -- but not always, and "wait for a read I can explain" was a trap:
+            // if the board jumped more than one ply (a video scrubbed, a new game, a position the
+            // recogniser got wrong once), NOTHING is ever one ply from what we hold and following
+            // stops dead while still claiming to follow. So give up explaining after a short run and
+            // take the position as read, seeding the turn the same way a fresh capture does.
+            if (++snap_unexplained < SNAP_RESEED_AFTER) return;
+            snap_unexplained = 0;
+            const prev = (setup_fen || '').split(' ');
+            fen = `${res.placement} ${prev[1] || 'w'} - - 0 1`;
+            if (!is_legal_position(fen)) fen = flip_fen_turn(fen);
+            console.warn('Mephisto: could not explain the board as one move -- re-seeding from what is on screen');
+            setup_fen_msg('Re-seeded · check the side to move');
+        }
+        if (!is_legal_position(fen)) return;       // belt and braces; the inference only plays legal moves
         setup_fen = fen;
         stash_setup_state();
         const input = PANEL_ROOT.getElementById('setup_fen_input');
@@ -2406,7 +2606,7 @@ function on_new_pos(fen, startFen, moves) {
     // move is picked. Cleared at the top of this function, so a non-pacing move shows nothing.
     // Manual Mode times the move itself (you press the key), so no auto-countdown.
     if (config.autoplay && !config.help_mode && !config.puzzle_mode && !config.manual_mode
-        && ((turn === 'w') ? 'white' : 'black') === board.orientation()) {
+        && ((turn === 'w') ? 'white' : 'black') === our_side()) {
         const est = estimated_move_total_ms(fen);
         if (est) {
             // pre-roll the humanize outcome so the countdown shows the coming move from the start
@@ -2415,7 +2615,7 @@ function on_new_pos(fen, startFen, moves) {
         }
     }
     // whose move is it -- drives the ponder budget (remote/native) and the per-turn thread cap (WASM)
-    const our_turn = ((turn === 'w') ? 'white' : 'black') === board.orientation();
+    const our_turn = ((turn === 'w') ? 'white' : 'black') === our_side();
     // Ponder width, hoisted ABOVE the engine branch because it is engine-agnostic. It used to live in
     // the WASM branch only, so on a native engine Pondering never actually widened the candidate list
     // and premove_lines stayed at 2 -- the width bought nothing there.
@@ -2469,8 +2669,17 @@ function on_new_pos(fen, startFen, moves) {
         // the NEW position, so if the old search was for the opponent's side (they replied mid-search)
         // that stale bestmove would otherwise be automoved as OUR move
         abandon_search();
+        // Threads/Hash changed while a search was running: apply them NOW, in the gap between the
+        // stop above and the go below. That is the only point UCI allows it.
+        //
+        // BEFORE the per-turn cap, not after. It used to run after, so on the opponent's turn the cap
+        // sent `Threads 2` and the flush immediately sent the slider's full value straight over the
+        // top of it -- two contradictory setoptions back to back, the background search running at
+        // full cores, and search_threads_set left equal to the full count so nothing ever corrected
+        // it. Flushing first makes the cap the last word, which is the whole point of the cap.
+        flush_engine_options();
         // Thread budget per turn: our move gets the full count; the opponent's turn is background
-        // work, so drop to 1 thread unless Pondering is on (then keep full strength -- see the go
+        // work, so it is capped unless Pondering is on (then keep full strength -- see the go
         // below, which also lets a ponder run infinite for the whole opponent think). Maia is a single
         // forward pass with no Threads option, so leave it alone. Only re-push when the target changes.
         if (config.engine !== 'maia' && config.engine !== 'maia3') {
@@ -2490,14 +2699,13 @@ function on_new_pos(fen, startFen, moves) {
                 search_threads_set = want_threads;
             }
         }
-        // Threads/Hash changed while a search was running: apply them NOW, in the gap between the
-        // stop above and the go below. That is the only point UCI allows it.
-        flush_engine_options();
         // Re-assert the line count every move: humanize_rates() is read fresh per pick, so turning
         // the Mistakes/Blunders sliders on has to widen the engine's list NOW (see
         // effective_multipv). Set at engine init only, those sliders would silently do nothing until
-        // the next re-init -- the exact trap that made the whole mix look broken. The remote/native
-        // path already sends it per request. Free between searches; we just stopped one.
+        // the next re-init -- the exact trap that made the whole mix look broken. Free between
+        // searches; we just stopped one. (The remote/native path reaches the same width a different
+        // way: an analyse request carries only {fen, time, moves}, so MultiPV goes to the host via
+        // request_remote_configure -- see the awaited push in that branch.)
         // Pondering overrides the width: the opponent's turn is searched over their top few candidate
         // replies (ponder_line_count), not our configured line count -- premove_lines mirrors it so an
         // instant reply can be certified for any of them.
@@ -2523,7 +2731,7 @@ function on_new_pos(fen, startFen, moves) {
     clear_book_annotations(); // stale book arrows go now; the new position's lookup redraws them
     if (config.simon_says_mode) {
         const toplay = (turn === 'w') ? 'White' : 'Black';
-        if (toplay.toLowerCase() !== board.orientation()) {
+        if (toplay.toLowerCase() !== our_side()) {
             draw_moves();
             request_console_log('Best Move: ' + last_eval.bestmove);
         }
@@ -2574,7 +2782,13 @@ function apply_castling_rights(fen) {
             if (home('h8', 'r', 'b')) rights += 'k';
             if (home('a8', 'r', 'b')) rights += 'q';
         }
-        if (!rights) return fen;
+        // An empty inference CLEARS the field, it does not leave the old one standing. The piece-only
+        // rebuild arms KQkq before placing pieces, and chess.js assigns those bits 960-style to
+        // whatever squares the kings and rooks land on -- so a position with both kings off their home
+        // squares kept rights that no rook backs. chess.js will then happily generate a castle from
+        // them (a rook endgame with kings on d4/d6 offered O-O), while the engine, which ignores
+        // unbacked rights, never suggests it. For standard chess this inference is the whole truth.
+        rights = rights || '-';
         const fields = fen.split(' ');
         if (fields[2] === rights) return fen;
         fields[2] = rights;
@@ -3508,7 +3722,7 @@ function opp_alert_on_new_pos(newFen) {
     opp_alert_armed = null;
     if (!config.opp_alert || !last_pos_eval || last_pos_eval.fen === newFen) return;
     if (last_pos_eval.depth < OPP_ALERT_MIN_DEPTH) return; // shallow "before" -> don't trust it
-    const our = (board.orientation() === 'white') ? 'w' : 'b';
+    const our = (our_side() === 'white') ? 'w' : 'b';
     if (last_pos_eval.sideToMove !== our) { // it was the OPPONENT to move -> they just made this move
         // keep the "before" fen too, so we can render their move in SAN at fire time
         opp_alert_armed = {beforeCpWhite: last_pos_eval.cpWhite, oppColor: last_pos_eval.sideToMove,
@@ -3538,7 +3752,6 @@ function opp_alert_maybe_fire() {
     if (label) send_to_active_tab({oppAlert: true, label, drop: Math.round(drop), san, uci});
 }
 
-
 // ---- Manual Mode: play the engine's current best move on YOUR keypress (the play-move hotkey).
 // The search runs `go infinite` in Manual Mode, so it never fires on its own; this is the trigger.
 // Returns whether it CONSUMED the key: true whenever Manual Mode is on (so the play-move key -- e.g.
@@ -3548,7 +3761,7 @@ function manual_play() {
     if (!config.manual_mode) return false; // not our concern -> let the key through (Space scrolls)
     // only on OUR turn, and only a move that's actually ours + legal right now (same guard autoplay
     // uses). last_eval.bestmove is set only on our turn, so a stale opponent-turn value can't leak.
-    const our = (board.orientation() === 'white') ? 'w' : 'b';
+    const our = (our_side() === 'white') ? 'w' : 'b';
     if (last_eval.fen?.split(' ')[1] === our) {
         const best = last_eval.bestmove || last_eval.lines?.[0]?.move;
         if (best && premove_reply_playable(last_eval.fen, best)) {
@@ -3609,7 +3822,7 @@ function request_automove(move, think = null, manual = false) {
     // position's side-to-move (== our colour) rather than letting the content-script re-derive the
     // turn from fragile DOM highlights (which throws on e.g. the lichess analysis board, silently
     // skipping verification). last_eval.fen is the current position (on_new_pos ran before this).
-    const our = (board.orientation() === 'white') ? 'w' : 'b';
+    const our = (our_side() === 'white') ? 'w' : 'b';
     const verify = (last_eval.fen?.split(' ')[1] === our);
     const deselect = safe_deselect_square(last_eval.fen, move);
     // Read the think/move timing FRESH from storage on every move (the options page shares this
@@ -3810,6 +4023,7 @@ function set_turn_switch(turn) {
     if (thumb) thumb.innerHTML = black ? '&#9818;' : '&#9812;'; // ♚ / ♔
 }
 
+
 // ask the content-script to read the variant off the current game page; cb(variant | null)
 function request_detect_variant(cb) {
     if (IS_CONTENT_SCRIPT) { // same realm -> ask content-script.js straight out
@@ -3902,7 +4116,7 @@ const LIVE_CONFIG_KEYS = [
     'autoplay', 'premove', 'ponder', 'tablebase', 'background_play', 'hide_opponent',
     'explorer', 'book_play', 'explorer_db', 'help_mode', 'humanize', 'clock_mode', 'mirror_mode',
     'manual_mode', 'eval_bar', 'eval_history', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
-    'computer_evaluation', 'multiple_lines', 'compute_time', 'move_time', 'move_variance',
+    'computer_evaluation', 'multiple_lines', 'compute_time', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
 ];
 
@@ -4022,6 +4236,10 @@ function draw_moves() {
     }
 }
 
+// Book arrows, in their own layer so they COEXIST with the engine's: draw_moves() clears
+// move+response on every depth update, and anything drawn there would flicker away with it.
+// One colour (the panel's teal accent, distinct from the five LINE_COLORS and the red threat) with
+// the width carrying popularity -- so the main line reads as the main line at a glance.
 // One colour per book move, like the engine's per-rank line colours -- all five chosen to clash with
 // neither LINE_COLORS nor the red threat arrow, so a book arrow is never mistaken for an engine line.
 const BOOK_COLORS = ['#14b8a6', '#ec4899', '#22d3ee', '#a3e635', '#fb7185'];
@@ -4212,7 +4430,8 @@ async function request_debugger_click(x, y, tabId, travelMs) {
     // click -- isTrusted can't tell it from a human one (issue #35 §2). The background traces a
     // mouseMoved cursor path over travelMs before the click (M2); awaiting it paces the move.
     const id = await resolve_click_tab(tabId);
-    if (!id) return;
+    if (!id) { console.warn('[Mephisto/bg] click dropped: no tab id resolved'); return; }
+    if (document.hidden) console.log('[Mephisto/bg] CDP click ->', {tab: id, x: Math.round(x), y: Math.round(y)});
     try {
         const r = await chrome.runtime.sendMessage({cdpClick: true, tabId: id, x, y, travelMs});
         if (r && r.error) console.warn('CDP click failed:', r.error);
@@ -4275,8 +4494,13 @@ function maybe_suggest_calibration() {
         const sorted = [...samples].sort((a, b) => a - b);
         const median = sorted[Math.floor(sorted.length / 2)];
         const want = suggested_compute_time(median);
-        // only worth mentioning if it is a real difference, not a rounding nudge
-        save('calibrate_pending', 'false'); // spent: offered once, taken or not
+        // only worth mentioning if it is a real difference, not a rounding nudge.
+        // NOTE the two shapes: `calibrate_pending` / `calibrated` are RAW strings -- that is how the
+        // service worker writes the flag (background-script.js `{calibrate_pending: 'true'}`) and how
+        // both guards above read it -- while every ordinary config key is JSON. `save` (JSON) is also
+        // not in scope here: it is local to init_quick_settings, so calling it threw a ReferenceError
+        // straight into the catch below and this notice has never once been shown.
+        MephistoConfig.set('calibrate_pending', 'false'); // spent: offered once, taken or not
         if (Math.abs(want - config.compute_time) < Math.max(100, config.compute_time * 0.25)) return;
         const el = PANEL_ROOT.getElementById('calibrate-notice');
         if (!el) return;
@@ -4286,8 +4510,8 @@ function maybe_suggest_calibration() {
         el.onclick = (e) => {
             e.preventDefault();
             config.compute_time = want;
-            save('compute_time', want);
-            save('calibrated', 'true');
+            MephistoConfig.set('compute_time', JSON.stringify(want)); // ordinary config key -> JSON
+            MephistoConfig.set('calibrated', 'true');                 // raw flag, read as === 'true'
             const box = PANEL_ROOT.getElementById('qs_search');
             if (box) box.value = want;
             el.hidden = true;
@@ -4328,6 +4552,10 @@ function is_remote() {
 // intermediate frames; the promise resolves on 'done'.
 let native_bg_port = null;
 let native_bg_port_name = null; // which engine that port was opened for
+// Panel-local, and only ever panel-local: the service worker renumbers every request onto its own
+// sequence before it reaches the shared host and renumbers the reply back on the way in. So two panels
+// both counting from 1 is fine now -- which it was NOT before, when replies were broadcast and matched
+// on this number at the far end, and each tab happily took the other's evaluation.
 let native_seq = 0;
 const native_pending = new Map(); // id -> {resolve, reject, onInfo}
 
@@ -4426,8 +4654,8 @@ function on_native_info(info, fen) {
     // `info.bound` marks an aspiration re-search: its pv is unresolved, so it must not reach the
     // depth-13/14 snapshots -- but it IS still displayed, which is why the host flags rather than
     // swallows it. Dropping them left the panel with no updates at all through those windows.
-    if (config.premove && !info.bound && info.pv && info.pv[0] != null
-            && pvIdx < premove_lines && Number.isInteger(info.depth)) {
+    if (config.premove && info.pv && info.pv[0] != null
+            && !info.bound && pvIdx < premove_lines && Number.isInteger(info.depth)) {
         const pred = String(info.pv[0]), reply = (info.pv[1] != null) ? String(info.pv[1]) : '';
         const line = premove_tracker.lines[pvIdx] || (premove_tracker.lines[pvIdx] = {});
         if (info.depth === PREMOVE_DEPTH_PREV) line.dPrev = `${pred} ${reply}`;
@@ -4521,15 +4749,23 @@ self.MephistoPanel = {
     // returns the handler's value so a click can be awaited (the click branch returns its dispatch promise)
     onContentMessage: (msg) => { try { return PANEL_MSG_HANDLER && PANEL_MSG_HANDLER(msg, {}); } catch (e) { console.warn('Mephisto: content->panel failed', e); } },
     // Called by the content-script when the panel closes (X button, panel-style change, page unload).
-    // STOP everything so nothing burns CPU while closed -- abandon_search() sends `stop`, and
-    // PANEL_BOOTED=false makes every incoming position push inert (see the guard atop PANEL_MSG_HANDLER),
-    // which halts new analysis, autoplay and premove. We deliberately keep the engine PROCESS warm:
-    // the offscreen WASM engine and the native host stay loaded so REOPENING is instant instead of
-    // paying a net reload / host relaunch. Real tab close still frees it -- background tabs.onRemoved
-    // disposes the offscreen engine, and the native Port dies with the page (its onDisconnect kills
-    // the host), so a warm idle engine can never outlive its tab.
+    // Closing means CLOSED. abandon_search() stops the search, PANEL_BOOTED=false makes every
+    // incoming position push inert, the engine is shut down, and the held position is forgotten.
+    //
+    // The engine used to be kept warm here so reopening skipped the net reload / host relaunch --
+    // USER CALL: that is not the trade they want. A closed panel now costs nothing at all, and
+    // reopening pays a normal engine init.
+    //
+    // The captured/typed position used to survive too, restored on the next open. Same call: closing
+    // is how you say you are done with it. The stash still carries a position across a same-session
+    // panel REBUILD (changing Engine or Variant tears the panel down and puts it straight back), which
+    // is a different thing and was a real bug when it lost your board -- that behaviour stays.
     suspend: () => {
         try { abandon_search(); } catch (e) { /* ignore */ }
+        setup_fen = null; snap_crop = null; setup_view = null;
+        try { snap_follow_stop(); } catch (e) { /* ignore */ }
+        try { stash_setup_state(); } catch (e) { /* ignore */ } // setup_fen is null -> clears the stash
+        try { stop_current_engine(); } catch (e) { /* ignore */ }
         // Drop any manual turn override so reopening auto-adjusts to the current position's real side.
         turn_override = null;
         turn_detected_prev = null;

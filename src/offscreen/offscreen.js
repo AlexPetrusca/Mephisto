@@ -39,6 +39,13 @@ const variantNnueMap = {
 
 const clients = {}; // clientId -> engine instance
 const pending = {}; // clientId -> uci lines sent before the engine finished loading (see below)
+// clientId -> load generation. A Fairy net takes seconds to fetch, so a second `init` (switching
+// engine or variant twice in a row) can start while the first is still awaiting -- and the two
+// publish in COMPLETION order, not request order. The loser overwrote clients[] with the engine the
+// panel had already moved on from, and the winner's worker was left running with nothing pointing at
+// it. Each load claims a generation and abandons itself if a newer one has since started; a dispose
+// bumps it too, so a teardown mid-load can't be undone by the load finishing afterwards.
+const epoch = {};
 
 function send(clientId, payload) {
     try { chrome.runtime.sendMessage({fromOffscreen: true, clientId, ...payload}); } catch (e) { /* no receiver */ }
@@ -102,6 +109,7 @@ async function fetchNnue(base, nnue, onProgress) {
 }
 
 function disposeClient(clientId) {
+    epoch[clientId] = (epoch[clientId] || 0) + 1; // invalidate any load still in flight
     const engine = clients[clientId];
     if (!engine) return;
     try { engine.uci && engine.uci('quit'); } catch (e) { /* */ }
@@ -113,13 +121,22 @@ function disposeClient(clientId) {
 // popup.js initialize_engine EXACTLY (incl. Fairy's UCI_Variant-before-NNUE quirk); everything after
 // (Hash/Threads/MultiPV/Elo/ucinewgame/isready) stays in the popup and arrives as 'uci' commands.
 async function initEngine(clientId, engineName, variant, maiaLevel) {
-    disposeClient(clientId);
+    disposeClient(clientId); // also bumps the generation, so ours is the newest from here on
+    const gen = epoch[clientId];
+    // True once a newer init (or a dispose) has superseded this load. Checked after every await, and
+    // again immediately before publishing, since that is the moment that would do the damage.
+    const superseded = () => epoch[clientId] !== gen;
+    const abandon = (engine) => {
+        try { engine?.uci && engine.uci('quit'); } catch (e) { /* */ }
+        try { engine?.terminate && engine.terminate(); } catch (e) { /* */ }
+    };
     // Maia: not a Stockfish WASM build -- a UCI adapter running one onnxruntime forward pass of the
     // selected lc0 Maia net (no search). Same interface, so the panel drives it like any engine.
     if (engineName === 'maia' || engineName === 'maia3') {
         const engine = engineName === 'maia3'
             ? await (await import('/src/offscreen/maia3.js')).createMaia3Engine((line) => send(clientId, { kind: 'line', line }), maiaLevel)
             : await (await import('/src/offscreen/maia.js')).createMaiaEngine(maiaLevel || '1500', (line) => send(clientId, { kind: 'line', line }));
+        if (superseded()) return abandon(engine);
         clients[clientId] = engine;
         const queued = pending[clientId] || []; delete pending[clientId];
         for (const line of queued) { try { engine.uci(line); } catch (e) { send(clientId, { kind: 'error', error: String(e) }); } }
@@ -130,6 +147,7 @@ async function initEngine(clientId, engineName, variant, maiaLevel) {
     const base = enginePath.substring(0, enginePath.lastIndexOf('/'));
     const module = await import(enginePath);
     const engine = await module.default();
+    if (superseded()) return abandon(engine);
     engine.listen = (line) => send(clientId, {kind: 'line', line});
     engine.onError = (e) => send(clientId, {kind: 'error', error: String(e)});
     // NOTE: do NOT publish to clients[] yet. The panel no longer waits for us, so uci can arrive
@@ -141,7 +159,13 @@ async function initEngine(clientId, engineName, variant, maiaLevel) {
             engine.uci(`setoption name UCI_Variant value ${variant}`);
             const net = variantNnueMap[variant] || variantNnueMap['chess'];
             const note = (m) => send(clientId, {kind: 'line', line: `info string ${m}`});
-            engine.setNnueBuffer(new Uint8Array(await fetchNnue(base, net, note)), 0);
+            // Fairy's nets live one level down in nnue/, unlike mainline SF's, which sit beside the
+            // .js. Fetching them from `base` missed every one of them: the .partN probe missed too,
+            // and remoteNetUrl only serves official nn-<hash> nets, so this THREW -- before the
+            // publish below, so the engine was never registered and every command the panel sent
+            // queued in `pending` forever. Fairy WASM could not load at all. (bench.html:25 has
+            // always used the nnue/ path; only this copy of the path was wrong.)
+            engine.setNnueBuffer(new Uint8Array(await fetchNnue(`${base}/nnue`, net, note)), 0);
         } else {
             const nets = [];
             for (let i = 0; ; i++) { const n = engine.getRecommendedNnue(i); if (!n || nets.includes(n)) break; nets.push(n); }
@@ -154,6 +178,7 @@ async function initEngine(clientId, engineName, variant, maiaLevel) {
     // Fully loaded: publish it and flush everything the panel sent while we were loading, in order.
     // The panel doesn't block on us any more, so its board paints instantly even for Fairy (whose
     // per-variant NNUE takes a while) -- the engine just catches up with the queued commands.
+    if (superseded()) return abandon(engine);
     clients[clientId] = engine;
     const queued = pending[clientId] || [];
     delete pending[clientId];

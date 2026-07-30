@@ -48,13 +48,19 @@ try {
     });
 } catch (e) { /* extension context not ready; popup falls back to active-tab messaging */ }
 
-const LOCAL_CACHE = 'mephisto.startPosCache';
+// These two keys live in the SITE's localStorage (they are read synchronously while the panel is
+// being built, which chrome.storage cannot do), so the site can read them. Named for what they are
+// and nothing else -- `mephisto.*` was a one-grep giveaway in the very storage the README promises
+// carries no extension keys, which is the same discipline the injected nodes already follow
+// ("no id / class / attributes to grep for"). Renaming orphans the old values; the panel falls back
+// to its default geometry once and the cache refills on the next scrape.
+const LOCAL_CACHE = 'ui.sp.cache';
 const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-e8*****b-b-f8*****b-n-g8*****' +
     'b-r-h8*****b-p-a7*****b-p-b7*****b-p-c7*****b-p-d7*****b-p-e7*****b-p-f7*****b-p-g7*****b-p-h7*****' +
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.138'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.139'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -239,6 +245,14 @@ document.addEventListener('keydown', (e) => {
     if (!self.MephistoPanel?.isBooted?.()) return; // no in-page panel -> don't swallow the site's keys
     const t = e.target;
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return; // typing
+    // ...but a key pressed inside OUR panel never looks like typing from out here: the shadow root is
+    // mode:'closed', so the event is retargeted to the host DIV and composedPath() stops there. The
+    // test above therefore passed for every keystroke into the panel's own FEN box, and typing a FEN
+    // fired a hotkey per character. We hold the closed root, so ask it who actually has focus.
+    if (t === overlayHost) {
+        const focused = overlayRoot?.activeElement;
+        if (focused && (focused.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName))) return;
+    }
     const pressed = hotkeyString(e);
     const bindings = MephistoConfig.hotkeys();
     for (const action in bindings) {
@@ -277,7 +291,7 @@ const panelH = () => panelCompact ? COMPACT_H : (POPUP_H + (panelBook ? BOOK_H :
 const POPUP_W = 568;       // the popup page's fixed layout size (popup.css html,body)
 const POPUP_H = 672; // matches popup.css body height (whichever column is taller)
 const OVERLAY_SCALE = 0.8; // default render scale for fresh installs; resizing the panel persists a width
-const OVERLAY_BOX_KEY = 'mephisto.overlayBox'; // per-site localStorage: {left, top, width}
+const OVERLAY_BOX_KEY = 'ui.pnl.box'; // per-site localStorage: {left, top, width} -- see LOCAL_CACHE
 
 // 1b (anti-detection): every injected node -- the panel + its chrome-extension:// iframe, the
 // restore badge, the on-board hint arrows and the eval bar -- lives inside a single CLOSED shadow
@@ -1079,6 +1093,14 @@ function chesscomSquareOf(el) {
     return m ? String.fromCharCode('a'.charCodeAt(0) + parseInt(m[1]) - 1) + m[2] : null;
 }
 
+// Last ACCEPTED chess.com piece-only scrape, for the second torn-read guard in scrapePositionPuz.
+// A tear is "the highlight pair moved but the pieces didn't"; these hold what to compare against.
+let lastPuzPlacement = '';
+let lastPuzHighlight = '';
+let puzTearKey = '';
+let puzTearCount = 0;
+const PUZ_TEAR_RETRIES = 3; // a real tear closes in a frame or two; anything that persists is real
+
 function scrapePositionPuz() {
     if (isAnimating()) {
         throw Error("Board is animating. Can't scrape.")
@@ -1103,9 +1125,36 @@ function scrapePositionPuz() {
         // The last move IS on the page, as the two highlighted squares: ship it and let the popup
         // decide whether it was a double pawn push. Best-effort -- no highlights (the puzzle's
         // opening position) just means there is no ep right to declare.
+        const placement = res; // pieces only, before any lm- suffix -- the torn-read comparison key
+        let highlightKey = '';
         try {
             const [from, to] = getLastMoveHighlights().map(chesscomSquareOf);
             if (from && to) {
+                highlightKey = `${from}${to}`;
+                // SECOND TORN-READ GUARD, and the one that actually catches a QUIET move.
+                // getLastMoveHighlights swaps from/to so that `to` is whichever end holds a piece
+                // (the DOM order of .highlight is arbitrary, so that swap is how the destination is
+                // identified at all). The consequence is that the `occupied.has(from)` test below is
+                // structurally unable to fire for a quiet move: in a torn read the only occupied end
+                // IS the origin, so the swap renames it `to` and `from` is the empty square. It only
+                // ever caught CAPTURES, where the captured piece keeps the destination occupied so no
+                // swap happens. A torn quiet move sailed through as a REVERSED last move.
+                //
+                // What a tear cannot fake: every real move moves a piece. So if the highlight pair
+                // changed since the last accepted scrape while the placement did not, the highlight
+                // overlay has been updated and the pieces have not -- exactly the gap. Bounded by
+                // PUZ_TEAR_RETRIES so a state that PERSISTS is accepted rather than stalling the
+                // panel forever (the failure mode the guard below is deliberately shaped to avoid).
+                const tearKey = `${placement}|${highlightKey}`;
+                if (lastPuzPlacement && placement === lastPuzPlacement && highlightKey !== lastPuzHighlight) {
+                    puzTearCount = (puzTearKey === tearKey) ? puzTearCount + 1 : 1;
+                    puzTearKey = tearKey;
+                    if (puzTearCount <= PUZ_TEAR_RETRIES) {
+                        throw Error('Board mid-update (highlight moved but no piece did).');
+                    }
+                } else {
+                    puzTearKey = ''; puzTearCount = 0;
+                }
                 // TORN-READ GUARD. Pieces come from `.piece.square-NN` classes and the last move from
                 // the separate `.highlight` overlays -- two independent bits of DOM that chess.com does
                 // not update in one paint. In the gap the highlight can already name the opponent's
@@ -1130,6 +1179,10 @@ function scrapePositionPuz() {
             if (/mid-update/.test(e.message)) throw e; // torn read: must NOT be scraped at all
             /* no readable last move -- fall through with pieces only, as before */
         }
+        // Only an ACCEPTED read updates the baseline; a rejected one threw above, so the next attempt
+        // still compares against the last position we actually believed.
+        lastPuzPlacement = placement;
+        lastPuzHighlight = highlightKey;
     } else {
         const pieceMap = {pawn: 'p', rook: 'r', knight: 'n', bishop: 'b', queen: 'q', king: 'k'};
         const colorMap = {white: 'w', black: 'b'};
@@ -1557,9 +1610,17 @@ function getMoveRecords() {
             }
         }
     }
-    // every known selector came up empty -> read the moves off the re-anchored container instead
-    // (a renamed tag inside an otherwise-intact move list lands here rather than above)
-    if (!moves?.length && (site === 'lichess' || site === 'chesscom')) {
+    // Every known selector came up empty -> read the moves off the re-anchored container instead
+    // (a renamed tag inside an otherwise-intact move list lands here rather than above).
+    //
+    // ...but ONLY when the move list itself is missing. "No moves" and "our selector is broken" are
+    // different states and this used to conflate them: an EMPTY move list is completely normal -- a
+    // fresh analysis board, move 0 of a game, a puzzle -- and treating it as a broken selector sent
+    // the structural scan hunting for anything that looks like moves. On a lichess analysis board it
+    // duly found the ENGINE'S PRINCIPAL VARIATION (div.pv, ten SAN spans) and the panel replayed
+    // lichess's suggested line as if it had been played, analysing a position from a game that never
+    // happened. If the container is there and holds nothing, nothing is what it means.
+    if (!moves?.length && !knownMoveContainer() && (site === 'lichess' || site === 'chesscom')) {
         const recovered = recoverMoveContainer();
         if (recovered) moves = sanChildren(recovered);
     }
@@ -1576,6 +1637,8 @@ function getMoveRecords() {
 // came up empty, so a working scrape can never be affected.
 const SAN_TEXT = /^(?:[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?|O-O(?:-O)?)[+#]?$/;
 const RECOVER_MIN_MOVES = 6; // a real game's list -- not a stray "e4" in prose or a 2-move puzzle
+// Containers that hold ENGINE OUTPUT rather than played moves. Excluded from the structural scan.
+const ENGINE_LINE_SEL = '.pv, .ceval, .analyse__ceval, .engine, [class*="pv-"]';
 let recoveredMoves = null;   // cached container the scan found
 let lastRecoverScan = 0;     // throttle: don't rescan the whole DOM on every poll
 
@@ -1596,6 +1659,11 @@ function recoverMoveContainer() {
         if (el.children.length) continue; // the SAN sits on a leaf
         const t = el.textContent.trim();
         if (!t || t.length > 8 || !SAN_TEXT.test(t)) continue;
+        // An engine's suggested line is made of SAN too, and there is nothing about its SHAPE that
+        // says it is not a game -- so the shape-based scan cannot tell them apart and has to be told.
+        // These are lines the site is PROPOSING, not moves anybody played; adopting one makes the
+        // panel analyse a game that does not exist. (lichess: div.pv / span.pv-san under .ceval.)
+        if (el.closest(ENGINE_LINE_SEL)) continue;
         const p = el.parentElement;
         if (p) counts.set(p, (counts.get(p) || 0) + 1);
     }
@@ -1609,7 +1677,9 @@ function recoverMoveContainer() {
     return (recoveredMoves = best);
 }
 
-function getMoveContainer() {
+// The site's own selectors, with NO structural fallback -- "is there a move list on this page at
+// all", asked separately from "what is in it". getMoveContainer adds the fallback on top.
+function knownMoveContainer() {
     let moveContainer;
     if (site === 'taketaketake') {
         return getBoard(); // unused on this site (scrapePositionTT bypasses the DOM paths)
@@ -1623,12 +1693,16 @@ function getMoveContainer() {
             || document.querySelector('l4x') // live game (older lichess DOM)
             || document.querySelector('.tview2'); // analysis / puzzle / training
     }
+    return moveContainer;
+}
+
+function getMoveContainer() {
     // nothing matched on a site that should have a move list -> try the structural re-anchor before
     // letting scrapePosition fall through to the puzzle path and quietly drop the move history
-    if (!moveContainer && (site === 'lichess' || site === 'chesscom')) {
-        moveContainer = recoverMoveContainer();
-    }
-    return moveContainer;
+    const known = knownMoveContainer();
+    if (known) return known;
+    if (site === 'lichess' || site === 'chesscom') return recoverMoveContainer();
+    return undefined;
 }
 
 function getLastMoveHighlights() {
@@ -2091,6 +2165,14 @@ async function simulateMoveVerified(move, deselect, verify, think = null, retrie
         return simulateMoveVerified(move, deselect, verify, 0, retries - 1, before);
     }
     console.warn(`Mephisto: move '${move}' failed to register after retries`);
+    // Giving up used to be a DEAD END. The board is unchanged, so the next scrape produces the same
+    // key as the last push -- lastPushKey swallows it here, and even if it got through, the popup's
+    // own `last_eval.fen !== fen` guard swallows it there. Nothing re-analysed and nothing re-tried:
+    // the panel simply sat on a position it had already answered, with the answer unplayed. Clear
+    // both dedupes the way the mismatch abort does, so the position is pushed again as a resume.
+    lastPushKey = lastDisplayKey = null;
+    resumePush = true;
+    schedulePush();
 }
 
 // Double premove: click each of our forced moves from->to back-to-back, no verify and no waiting for

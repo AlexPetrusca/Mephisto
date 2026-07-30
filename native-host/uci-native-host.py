@@ -189,9 +189,21 @@ def do_analyse(data, mid):
             for mv in data['moves'].split():
                 board.push(chess.Move.from_uci(mv))
         limit = chess.engine.Limit(time=data['time'] / 1000)
-        multipv = int(engine_options.get('MultiPV', 1))
+        try:
+            multipv = int(engine_options.get('MultiPV', 1))
+        except (TypeError, ValueError):
+            multipv = 1
         if 'multipv' not in engine.options:
             multipv = 1
+        else:
+            # Humanize asks for MultiPV 20; some engines declare a smaller max (python-chess
+            # rejects an out-of-range value: "expected value for option 'MultiPV' to be at
+            # most N"). Clamp to what this engine actually accepts.
+            opt = engine.options['MultiPV']
+            if opt.max is not None:
+                multipv = min(multipv, opt.max)
+            if opt.min is not None:
+                multipv = max(multipv, opt.min)
         terminal = not any(board.legal_moves)  # game-over is a property of the POSITION
         in_check = board.is_check()            # terminal + in_check = checkmate, not stalemate
         with engine.analysis(board, limit, multipv=multipv) as analysis:

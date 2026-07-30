@@ -22,6 +22,8 @@
                             <option value="stockfish-11-hce">Stockfish 11 HCE WASM</option>
                             <option value="fairy-native">Fairy-Stockfish (local, full power — setup required)</option>
                             <option value="fairy-stockfish-14-nnue">Fairy Stockfish 14 WASM</option>
+                            <option value="maia">Maia (human-like)</option>
+                            <option value="maia3">Maia-3 (600-2600)</option>
                             <option value="remote">Remote Engine</option>
                         </select>
                     </label>
@@ -97,7 +99,7 @@
                     <label>
                         Memory (<span class="value"></span> MB)
                         <p class="range-field">
-                            <input id="memory_range" type="range" min="32" max="2048" step="32">
+                            <input id="memory_range" type="range" min="32" max="4096" step="32">
                         </p>
                     </label>
                 </div>
@@ -201,8 +203,8 @@
                                              it's the opponent's turn, so a deeper reply is ready the moment they move
                                              over their top 5 candidate replies -- they won't play the engine's #1 -- narrowing to 1-2 on a
                                              forced move or recapture (pairs with Premove for instant answers). OFF (default): the opponent's turn
-                                             is still analysed for premove/threat/help, but capped to 1 thread so idle
-                                             time isn't a full-core burn."
+                                             is still analysed for premove/threat/help, but capped to 2 threads so idle
+                                             time isn't a full-core burn (never more than the Threads slider)."
                         >
                             Pondering <i class="material-icons info-tooltip">info</i>
                         </label>

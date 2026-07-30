@@ -47,22 +47,47 @@ export class SettingsPage {
 
     // localstorage values push/pull
     pullConfigValues() {
-        this.formElements.forEach(formElement => {
-            const localStorageVal = MephistoConfig.get(formElement.name);
-            if (localStorageVal) {
-                formElement.setValue(JSON.parse(localStorageVal));
-            } else {
-                formElement.setValue(formElement.default);
-            }
-        });
+        // Populating the form is a READ. setValue dispatches change/input so the page's own listeners
+        // (section visibility and so on) stay in step, but those same events reach the persist
+        // listener below -- so merely OPENING this page wrote every field back. That is harmless when
+        // the value round-trips, and destructive when it does not: a stored value with no <option>
+        // renders as the fallback, and the fallback was then saved over the real setting. Suppress
+        // persistence for the duration; a genuine edit happens after this returns.
+        this.populating = true;
+        try {
+            this.formElements.forEach(formElement => {
+                const localStorageVal = MephistoConfig.get(formElement.name);
+                if (localStorageVal) {
+                    formElement.setValue(JSON.parse(localStorageVal));
+                } else {
+                    formElement.setValue(formElement.default);
+                }
+            });
+        } finally {
+            this.populating = false;
+        }
+    }
+
+    // The ONE place a form value becomes the JSON string the rest of the extension stores. Both call
+    // sites used to hand-build it -- `"${value}"` for strings, the raw value otherwise -- which is
+    // not JSON in two ordinary cases: a number field left empty (or typed into badly) stores the
+    // empty string, and a string containing a double quote stores broken JSON. Either one throws in
+    // the panel's JSON.parse at boot, and the field it belongs to is not the only casualty.
+    // getValue() returns a STRING for input/range/select regardless of what the default's type says,
+    // so the coercion has to happen here rather than being assumed upstream.
+    serializeValue(formElement) {
+        const raw = formElement.getValue();
+        if (formElement.valueType === 'number') {
+            const n = Number(raw);
+            return JSON.stringify((raw === '' || !Number.isFinite(n)) ? formElement.default : n);
+        }
+        if (formElement.valueType === 'string') return JSON.stringify(String(raw));
+        return JSON.stringify(raw); // boolean (checkbox) -- already the right type
     }
 
     pushConfigValues() {
         this.formElements.forEach(formElement => {
-            const formValue = (formElement.valueType === 'string')
-                ? `"${formElement.getValue()}"`
-                : formElement.getValue();
-            MephistoConfig.set(formElement.name, formValue);
+            MephistoConfig.set(formElement.name, this.serializeValue(formElement));
         });
     }
 
@@ -70,10 +95,8 @@ export class SettingsPage {
     registerFormElement(name, description, type, defaultValue) {
         const formElement = new FormElement(name, description, type, defaultValue);
         formElement.registerChangeListener(() => {
-            const formValue = (formElement.valueType === 'string')
-                ? `"${formElement.getValue()}"`
-                : formElement.getValue();
-            MephistoConfig.set(formElement.name, formValue);
+            if (this.populating) return; // a form being filled from storage must not write back
+            MephistoConfig.set(formElement.name, this.serializeValue(formElement));
         });
         this.formElements.push(formElement);
         return formElement;

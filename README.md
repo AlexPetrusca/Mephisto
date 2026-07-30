@@ -326,7 +326,7 @@ id changed — re-run the install command.
 
 ### Safe Premove
 
-- While the opponent thinks, certifies a reply to their **predicted** move (stable at depth 6 / 9 / 10+).
+- While the opponent thinks, certifies a reply to their **predicted** move (identical at depth 13, depth 14 and the latest depth).
 - Exact predicted move → fires **instantly**; anything else → normal search, so a wrong guess costs nothing.
 - Forced moves and true recaptures → queued as a real site premove; an illegal one auto-cancels, so it never fires in the wrong position.
 - **Double premove** (chess.com, standard) — when the line is forced *two* moves deep, both replies queue at once. Every branch is forced, so neither can misfire; less than fully forced → a single premove.
@@ -537,8 +537,10 @@ closed for you).
 - **Human‑shaped clicks** — a move is a bare *from → to*, exactly like a human plays it: no lead click on an empty
   square, and the timings are randomized. Clicks land on a center‑weighted distribution within each square, via
   trusted input (`isTrusted` cannot distinguish them from real clicks).
-- **No config in the site's storage** — settings live in `chrome.storage.local`, never the page's `localStorage`, so
-  the site can't read the extension's keys.
+- **No config in the site's storage** — settings live in `chrome.storage.local`, never the page's `localStorage`.
+  Two values do sit in the page's storage, because they're read while the panel is being built: the panel's
+  position/size and a cache of game start positions. Neither is named after the extension and neither holds a
+  setting, so there's no key to grep for.
 - **Background Play → Off** (default) — moves only fire while the tab is focused and visible, so there's no
   "moved while tabbed away" anomaly.
 

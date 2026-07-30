@@ -43,7 +43,16 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.captureAndRecognize) {
     (async () => {
       try {
-        const dataUri = await chrome.tabs.captureVisibleTab({format: 'png'});
+        // Capture the window the ASKER is in, and only if the asker is the tab being shown there.
+        // captureVisibleTab with no windowId grabs the active tab of the last-focused window, so a
+        // panel whose Follow-screen loop kept ticking after you switched tabs was handed a DIFFERENT
+        // tab's pixels -- and fed them to the recogniser, which happily read a placement out of
+        // whatever was on screen and restarted that panel's search on someone else's board. Every
+        // other route in this file is careful to address the sender's tab; this one was not.
+        const tab = sender.tab;
+        if (!tab || tab.id == null) return sendResponse({error: 'no sender tab'});
+        if (!tab.active) return sendResponse({error: 'tab is not visible'});
+        const dataUri = await chrome.tabs.captureVisibleTab(tab.windowId, {format: 'png'});
         await ensureOffscreen();
         const res = await chrome.runtime.sendMessage({recognizeBoard: {dataUri, crop: msg.captureAndRecognize.crop}});
         sendResponse(res || {error: 'no response from recogniser'});
@@ -495,6 +504,18 @@ const NATIVE_HOSTS = {
 };
 const nativePorts = {};              // port name -> native stdio Port
 const popupPortsByName = {};         // port name -> Set of popup Ports
+// ONE native host serves every tab -- that is the point, they share one engine process -- and replies
+// used to be BROADCAST to all of them, matched by id at the far end. But each panel numbers its own
+// requests from 1, so two tabs both had a request 1 in flight and each accepted the other's frames as
+// its own: evaluations, and the bestmove that follows them, delivered to the wrong board.
+//
+// The ids are therefore rewritten here rather than trusted. Every request going out is given an id
+// unique to THIS worker, and the reply is renumbered back to whatever the asking panel called it. That
+// makes the routing exact instead of probable: two panels may both use id 1 and it still cannot be
+// ambiguous, which "make the panels pick different numbers" could only ever make unlikely.
+// outer id -> {port, innerId}
+const nativeRequestOwner = new Map();
+let nativeSeq = 0;
 
 function ensureNative(name) {
   if (nativePorts[name]) return nativePorts[name];
@@ -503,6 +524,18 @@ function ensureNative(name) {
   nativePorts[name] = np;
   const peers = () => popupPortsByName[name] || new Set();
   np.onMessage.addListener(frame => {
+    const owner = (frame && frame.id != null) ? nativeRequestOwner.get(frame.id) : null;
+    if (owner) {
+      // An `info` frame is one of many for this request; anything else is its terminal reply, so the
+      // id is spent. Also dropped when the port disconnects, so a request that never completes
+      // (engine died mid-search) cannot pin the entry forever.
+      if (!frame.info) nativeRequestOwner.delete(frame.id);
+      // renumber back to what the asking panel called it -- it knows nothing of our numbering
+      try { owner.port.postMessage({...frame, id: owner.innerId}); } catch (e) { nativeRequestOwner.delete(frame.id); }
+      return;
+    }
+    // No known owner: an unsolicited frame, or one whose asker has gone. Broadcast as before --
+    // this is the path `{fatal: ...}` and any host-initiated message takes.
     for (const p of peers()) { try { p.postMessage(frame); } catch (e) { /* port gone */ } }
   });
   np.onDisconnect.addListener(() => {
@@ -521,6 +554,7 @@ chrome.runtime.onConnect.addListener(port => {
   (popupPortsByName[name] = popupPortsByName[name] || new Set()).add(port);
   port.onDisconnect.addListener(() => {
     popupPortsByName[name].delete(port);
+    for (const [id, o] of nativeRequestOwner) { if (o.port === port) nativeRequestOwner.delete(id); }
     // Last popup using this engine went away (you switched engines, or closed the page). Shut the
     // native host DOWN so a lingering search -- e.g. a long pure-analysis, or any in-flight go --
     // can't keep burning all cores and throttle the engine you just selected. It relaunches on next use.
@@ -531,7 +565,13 @@ chrome.runtime.onConnect.addListener(port => {
   });
   port.onMessage.addListener(req => {
     try {
-      ensureNative(name).postMessage(req);
+      let out = req;
+      if (req && req.id != null) {
+        const outer = ++nativeSeq;
+        nativeRequestOwner.set(outer, {port, innerId: req.id});
+        out = {...req, id: outer};
+      }
+      ensureNative(name).postMessage(out);
     } catch (e) {
       try { port.postMessage({id: req && req.id, error: String(e)}); } catch (_) { /* */ }
     }

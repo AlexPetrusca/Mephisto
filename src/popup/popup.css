@@ -839,7 +839,10 @@ body.mephisto-compact #alt-lines {
     text-decoration: none;
     cursor: pointer;
 }
-#update-notice:hover, #update-notice[hidden] { display: none; }
+/* `[hidden]` only. `:hover` was grouped in here, which meant the notice vanished the instant the
+   pointer touched it -- so the one thing it exists for, being clicked, was impossible. */
+#update-notice[hidden] { display: none; }
+#update-notice:hover { text-decoration: underline; }
 
 /* Same treatment as the update notice: hidden unless there is something worth saying. */
 #calibrate-notice {
