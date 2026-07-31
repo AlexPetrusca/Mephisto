@@ -449,8 +449,9 @@ Deliberately **not** Chrome's `chrome.i18n`, which follows the browser's UI loca
 the point here is a language you choose. One flat JSON per language under `src/i18n/locales/`, with English underneath
 every other as the fallback, so an untranslated string renders in English rather than blank.
 
-Engine names, board and piece themes, and chess notation are left alone on purpose. The long explanatory tooltips on
-the settings page are still English for now.
+Every string is translated, including the long explanatory tooltips on the settings page — the ones that explain what
+a setting actually does are the ones worth having in your own language. Engine names, board and piece themes, and
+chess notation are left alone on purpose.
 
 ## Supported sites & modes
 
@@ -639,8 +640,8 @@ No schedule — added whenever I feel like it. Everything shipped is under **Imp
   that sound alike (Clock Mode vs Mirror Time vs Humanize, Premove vs Pondering).
 - [ ] **A few short videos** — some of this only makes sense in motion: a premove firing, Humanize pacing a move, the
   screen reader following a board. Thirty seconds each.
-- [ ] **Translate the README** — the interface speaks fourteen languages ([Languages](#languages)); the documentation
-  speaks one. The long help tooltips are in the same position.
+- [ ] **Translate the README** — the interface speaks fourteen languages ([Languages](#languages)), tooltips and all;
+  the documentation still speaks one.
 
 **Footprint**
 - [ ] **Shrink the page footprint further** — keep reducing what a site can passively detect. The list under
