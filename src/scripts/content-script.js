@@ -60,7 +60,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.140'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.141'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -156,8 +156,14 @@ function handleExtensionMessage(response, sender, sendResponse) {
             bgLog('DROPPED: board no longer matches the analysed position');
             mismatchAborts++;
             console.warn(`Mephisto: board changed since the analysed position -- move dropped, re-scraping (${mismatchAborts} so far)`);
-            lastPushKey = lastDisplayKey = null; // the position we are re-pushing may be the same one
-            schedulePush();
+            // BOTH dedupes, not just ours. Clearing lastPushKey lets the re-push leave here, but the
+            // popup has its own guard (`last_eval.fen !== fen`) and the position we are re-pushing is
+            // very often the SAME one -- so without `resume` the push arrived and was silently
+            // swallowed at the far end. That is the whole "it drops the move and then never
+            // re-scrapes" failure: the warning above fired, and nothing ever followed it.
+            lastPushKey = lastDisplayKey = null;
+            resumePush = true;
+            pushWhenSettled();
             return;
         }
         // apply the think/move timing the popup read FRESH from storage for this move, so changing the
@@ -1518,6 +1524,23 @@ function startPositionObserver() {
 // of mutations). Re-arms on later mutations, so a settling burst always ends with one final scrape
 // ~30ms after its LAST mutation; during a continuous burst this samples at most ~33/s, and a
 // mid-animation sample is rejected by the scrapers ('no') without being pushed.
+// Re-push once the board has stopped moving.
+//
+// schedulePush's 30ms debounce is far shorter than a piece animation (~200ms on lichess), so a
+// re-push fired from the mismatch guard lands mid-flight, reads a half-moved board, and mismatches
+// again -- a loop that gets TIGHTER the faster we answer. That is why it shows up now: a move from
+// the puzzle database is issued in the same tick as the position that produced it, with no search in
+// between to let the board settle, so the guard meets an animation every time instead of rarely.
+//
+// An animating board is not a changed board, it is a board mid-repaint. Bounded, so a site that
+// animates forever (or a stuck class) still gets its push rather than nothing at all.
+function pushWhenSettled(tries = 12) {
+    let moving = false;
+    try { moving = isAnimating(); } catch (e) { /* no board -- nothing to wait for */ }
+    if (!moving || tries <= 0) { schedulePush(); return; }
+    setTimeout(() => pushWhenSettled(tries - 1), 40);
+}
+
 function schedulePush() {
     if (pushDebounce) return;
     pushDebounce = setTimeout(() => {
