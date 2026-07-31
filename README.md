@@ -684,16 +684,35 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
 **Implemented** below.
 
 **Engines & analysis**
+- [ ] **Cloud evaluation** — ask Lichess's cloud-eval API for a position instead of searching it locally. It
+  returns a deep, already-computed evaluation instantly for positions that have been analysed before, which is
+  most opening and popular middlegame positions, and nothing at all for the rest. Would slot in beside the
+  tablebase probe: another optional source that outranks the local search when it has an answer, costs nothing
+  when it doesn't, and never delays a move. Off by default like the tablebase — it sends the position to a
+  third party.
 - [ ] **lc0 (Leela) in the browser** — Leela's neural-net engine as a WASM alternative to Stockfish. A large
   download for play that isn't stronger; mainly for comparing styles.
 
 **Variants & packaging**
 - [ ] **Duck Chess autoplay polish** — make the duck-placement step work end to end (detection and analysis already do).
 
+**Interface & docs**
+- [ ] **Rework the UI** — the panel has grown a control at a time and it shows: twenty-odd quick-settings rows in
+  one scrolling column, with no grouping and no sense of which settings matter most. Wants a proper pass over the
+  layout rather than another row bolted on.
+- [ ] **Translate the README** — the interface speaks fourteen languages ([Languages](#languages)) and the
+  documentation still only speaks one. The long help tooltips on the settings page are in the same position and
+  would go with it.
+
 **Robustness**
+- [ ] **Bug fixes** — an open-ended entry, deliberately. Several of the sharpest bugs so far were invisible
+  rather than loud: autoplay that skipped a move with nothing logged, an engine that never loaded, a veto that
+  was inverted only for Black. Reports of *"it did nothing"* are worth more than they sound.
 - [ ] **ChessBase Tactics: on-board arrows + autoplay** — analysis works; drawing on the board and clicking it
   do not. ChessBase renders its own board with no class to match, and finding it by shape was both slow (the
   search runs on hot paths) and unreliable. Needs the real markup to anchor on.
+
+More to come.
 
 ### Blocked upstream
 
