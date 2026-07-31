@@ -482,6 +482,8 @@ Both also size the engine's search to the time they'll spend, so the wait become
 
 ### Puzzle database
 
+![A 3900-rated Lichess puzzle solved from the database — the readout names its source](docs/puzzle-database.png)
+
 Puzzle Mode plays a searched move, and a searched move is not always the puzzle's answer — a puzzle has exactly one
 line that scores, and an objectively stronger move still fails it. Import Lichess's puzzle database and the panel
 looks the position up instead: on a hit the whole solution is known, so it plays it with **no search at all**, move
