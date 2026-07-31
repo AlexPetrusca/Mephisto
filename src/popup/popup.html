@@ -76,17 +76,17 @@
         <label><input id="qs_autoplay" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span data-i18n-tip="panel.tip.while_the_opponent_thinks_certify" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.premove" data-i18n-tip="panel.tip.while_the_opponent_thinks_certify" class="qs-label tooltipped" data-position="left"
               data-tooltip="While the opponent thinks, certify a reply to their predicted move (stable across depths 13/14/latest, max 2 candidates). If they play exactly that move, answer instantly; anything else searches normally. If the reply could never be legal after any other opponent move (forced moves, recaptures), it's queued as a real premove immediately -- an illegal premove gets auto-cancelled. Never fires in a wrong position. Needs Autoplay.">Premove</span>
         <label><input id="qs_premove" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span data-i18n-tip="panel.tip.show_how_humans_actually_played" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.explorer" data-i18n-tip="panel.tip.show_how_humans_actually_played" class="qs-label tooltipped" data-position="left"
               data-tooltip="Show how humans actually played this opening (lichess database): the opening name plus the most-played replies with their win/draw/loss split. Read-out only -- it never changes which move you play. Standard chess only; stops once the game leaves book.">Explorer</span>
         <label><input id="qs_explorer" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span data-i18n-tip="panel.tip.play_the_opening_from_the" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.book_moves" data-i18n-tip="panel.tip.play_the_opening_from_the" class="qs-label tooltipped" data-position="left"
               data-tooltip="Play the opening from the database instead of the engine's pick: a WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the same line every game. A move must be played in at least 20 games AND rate within 40cp of the engine's best, so it varies without playing worse. Falls back to the engine move if the lookup hasn't arrived. Priority — Move: Book > Humanize > engine best. Needs Autoplay.">Book Moves</span>
         <label><input id="qs_book" type="checkbox"><span class="lever"></span></label>
     </div>
@@ -95,42 +95,42 @@
         <label><input id="qs_puzzle" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span data-i18n-tip="panel.tip.draws_the_best_move_as" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.help_mode" data-i18n-tip="panel.tip.draws_the_best_move_as" class="qs-label tooltipped" data-position="left"
               data-tooltip="Draws the best move as an arrow on the game board so you can play it yourself. Overrides Autoplay while on.">Help Mode</span>
         <label><input id="qs_help" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch">
-        <span data-i18n-tip="panel.tip.show_a_vertical_evaluation_bar" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.eval_bar" data-i18n-tip="panel.tip.show_a_vertical_evaluation_bar" class="qs-label tooltipped" data-position="left"
               data-tooltip="Show a vertical evaluation bar to the left of the game board, with the score shown inside it (chess.com-style).">Eval Bar</span>
         <label><input id="qs_evalbar" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch">
-        <span data-i18n-tip="panel.tip.a_graph_under_the_board" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.eval_history" data-i18n-tip="panel.tip.a_graph_under_the_board" class="qs-label tooltipped" data-position="left"
               data-tooltip="A graph under the board showing the whole game so far: white's advantage above the midline, black's below, with the opening/middlegame/endgame boundaries marked. Needs Eval Bar.">Eval History</span>
         <label><input id="qs_evalhist" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch">
-        <span data-i18n-tip="panel.tip.with_7_or_fewer_pieces" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.tablebase" data-i18n-tip="panel.tip.with_7_or_fewer_pieces" class="qs-label tooltipped" data-position="left"
               data-tooltip="With 7 or fewer pieces left the position is solved: ask lichess's Syzygy tablebase for the perfect move instead of trusting the search. Outranks the engine and the opening book. Off by default -- it sends the position to a third party. Never delays a move.">Tablebase</span>
         <label><input id="qs_tablebase" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span data-i18n-tip="panel.tip.play_like_a_human_instant" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.humanize" data-i18n-tip="panel.tip.play_like_a_human_instant" class="qs-label tooltipped" data-position="left"
               data-tooltip="Play like a human: instant recaptures and forced moves, quick obvious moves, long thinks in critical positions -- and occasionally a second-best move, a mistake, or (rarely) a blunder. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Humanize</span>
         <label><input id="qs_humanize" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span data-i18n-tip="panel.tip.read_the_game_clock_off" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.clock_mode" data-i18n-tip="panel.tip.read_the_game_clock_off" class="qs-label tooltipped" data-position="left"
               data-tooltip="Read the game clock off the page and budget every move to it: roughly time/30 plus 60% of the increment, shrinking the engine search too, near-instant when short on time. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Clock Mode</span>
         <label><input id="qs_clock" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span data-i18n-tip="panel.tip.pace_to_the_opponent_instead" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.mirror_time" data-i18n-tip="panel.tip.pace_to_the_opponent_instead" class="qs-label tooltipped" data-position="left"
               data-tooltip="Pace to the opponent instead: spend what they spent on their last move, minus 10%, staying just ahead on the clock (30% extra haste when behind). Uses the Clock Mode budget for the first move / when their spend is unknown. Recaptures and forced moves stay instant. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Mirror Time</span>
         <label><input id="qs_mirror" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span data-i18n-tip="panel.tip.the_engine_keeps_thinking_until" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.manual_mode" data-i18n-tip="panel.tip.the_engine_keeps_thinking_until" class="qs-label tooltipped" data-position="left"
               data-tooltip="The engine keeps thinking until YOU press the play-move hotkey (Spacebar by default), then it plays the best move it has found. Your own timing — overrides Clock/Mirror/Humanize timing and never fires on its own. Rebind the key in Settings → Hotkeys.">Manual Mode</span>
         <label><input id="qs_manual" type="checkbox"><span class="lever"></span></label>
     </div>
@@ -160,7 +160,7 @@
         <input id="qs_maia3_elo" class="browser-default" type="range" min="600" max="2600" step="50">
     </div>
     <div class="qs-row" id="qs_maia_row">
-        <span data-i18n-tip="panel.tip.which_maia_network_to_use" class="qs-label tooltipped" data-position="left"
+        <span data-i18n="panel.maia_level" data-i18n-tip="panel.tip.which_maia_network_to_use" class="qs-label tooltipped" data-position="left"
               data-tooltip="Which Maia network to use. Each is trained on human games at that rating, so it plays like a human of that strength — human-like mistakes, not a strong engine told to play badly. Changing this loads a different net.">Maia Level</span>
         <select id="qs_maia_level" class="browser-default">
             <option value="1100">1100</option>

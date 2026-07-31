@@ -151,7 +151,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.mephisto_plays_as_the_brain" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.hand_brain_mode" data-i18n-tip="set.tip.mephisto_plays_as_the_brain" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Mephisto plays as the &quot;Brain&quot;, choosing which piece type to
                                              move, and you play as the &quot;Hand&quot;, selecting the specific legal
                                              move for that piece."
@@ -180,7 +180,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.while_the_opponent_thinks_certify" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="panel.premove" data-i18n-tip="set.tip.while_the_opponent_thinks_certify" class="switch-label tooltipped" data-position="right"
                                data-tooltip="While the opponent thinks, certify a reply to their predicted move.
                                              If they play exactly that move, answer instantly; anything else searches
                                              normally. Never fires in a wrong position. On chess.com, when the
@@ -198,7 +198,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.use_the_opponent_s_thinking" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.pondering" data-i18n-tip="set.tip.use_the_opponent_s_thinking" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Use the opponent's thinking time. ON: keep searching at full threads while
                                              it's the opponent's turn, so a deeper reply is ready the moment they move
                                              over their top 5 candidate replies -- they won't play the engine's #1 -- narrowing to 1-2 on a
@@ -216,7 +216,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.with_7_or_fewer_pieces" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.endgame_tablebase" data-i18n-tip="set.tip.with_7_or_fewer_pieces" class="switch-label tooltipped" data-position="right"
                                data-tooltip="With 7 or fewer pieces left the position is SOLVED, and Mephisto asks
                                              lichess's Syzygy tablebase for the perfect move instead of trusting the
                                              search. It outranks the engine and the opening book. OFF by default: it
@@ -234,7 +234,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.name_the_tactic_behind_the" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.explain_moves" data-i18n-tip="set.tip.name_the_tactic_behind_the" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Name the tactic behind the engine's move -- a fork, a promotion, a capture
                                              that wins material, mate -- on its own line under the evaluation.
                                              Deliberately conservative: pins, skewers and discovered attacks can't be
@@ -251,7 +251,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.blurs_your_opponent_s_username" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.hide_opponent_name" data-i18n-tip="set.tip.blurs_your_opponent_s_username" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Blurs your opponent's username and avatar on the page, so a
                                              screenshot or a screen share does not expose a real person. Purely
                                              cosmetic and local -- the site sees nothing different. This is the
@@ -268,7 +268,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.show_how_humans_actually_played" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.opening_explorer" data-i18n-tip="set.tip.show_how_humans_actually_played" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Show how humans actually played this opening (lichess database): the opening
                                              name plus the most-played replies and their win/draw/loss split, in a block
                                              under the analysis lines. Read-out only -- it never changes which move you
@@ -284,7 +284,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.play_the_opening_from_the" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.play_book_moves" data-i18n-tip="set.tip.play_the_opening_from_the" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Play the opening from the database instead of the engine's pick: a
                                              WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the
                                              same line every game -- an engine that always plays the same first move is
@@ -319,7 +319,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.when_off_default_moves_only" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.background_play" data-i18n-tip="set.tip.when_off_default_moves_only" class="switch-label tooltipped" data-position="right"
                                data-tooltip="When OFF (default), moves only fire while this tab is focused and visible --
                                              a human doesn't play while tabbed away, so this avoids a 'moved in the
                                              background' anomaly. A move that comes due while you're away is re-issued
@@ -338,7 +338,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.instead_of_autoplaying_all_analysi" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="panel.help_mode" data-i18n-tip="set.tip.instead_of_autoplaying_all_analysi" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Instead of autoplaying, all analysis arrows are drawn directly on the
                                              site's board while the engine keeps evaluating -- play the move yourself
                                              when ready. Overrides Autoplay while on."
@@ -353,7 +353,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.play_like_a_human_instant" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="panel.humanize" data-i18n-tip="set.tip.play_like_a_human_instant" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Play like a human: instant recaptures and forced moves, quick obvious
                                              moves, long thinks in critical positions -- and occasionally a second-best
                                              move, a mistake, or (rarely) a blunder.
@@ -371,7 +371,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.read_the_game_clock_off" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="panel.clock_mode" data-i18n-tip="set.tip.read_the_game_clock_off" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Read the game clock off the page and budget thinking + search to it:
                                              roughly time/30 plus 60% of the increment per move, near-instant when
                                              short on time.
@@ -389,7 +389,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.pace_to_the_opponent_instead" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="panel.mirror_time" data-i18n-tip="set.tip.pace_to_the_opponent_instead" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Pace to the opponent instead: spend what they spent on their last
                                              move, minus 10%, staying just ahead on the clock (30% extra haste
                                              when behind). Falls back to the Clock Mode budget when their spend
@@ -408,7 +408,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.the_engine_keeps_thinking_until" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="panel.manual_mode" data-i18n-tip="set.tip.the_engine_keeps_thinking_until" class="switch-label tooltipped" data-position="right"
                                data-tooltip="The engine keeps thinking until YOU press the play-move hotkey (Spacebar
                                              by default -- rebind it under Hotkeys below), then it plays the best move it
                                              has found. Your own timing: overrides the Clock/Mirror/Humanize timing and
@@ -423,7 +423,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                        <label data-i18n-tip="set.tip.flash_a_small_toast_over" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.opponent_mistake_alert" data-i18n-tip="set.tip.flash_a_small_toast_over" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Flash a small toast over the board when your OPPONENT plays an inaccuracy,
                                              mistake or blunder -- judged by the same Lichess win% method the move mix
                                              uses (30/20/10% win-chance drop). Only fires when both positions were
@@ -438,7 +438,7 @@
                         </label>
                     </div>
                     <div class="section switch">
-                    <label data-i18n-tip="set.tip.mephisto_optimizes_for_solving_che" class="switch-label tooltipped" data-position="right"
+                    <label data-i18n="panel.puzzle_mode" data-i18n-tip="set.tip.mephisto_optimizes_for_solving_che" class="switch-label tooltipped" data-position="right"
                            data-tooltip="Mephisto optimizes for solving chess puzzles as quickly as possible, at the
                                          expense of accuracy. This should be enabled when autoplaying puzzle minigames,
                                          like Chess.com's Puzzle Rush and Lichess's Puzzle Storm."
@@ -455,7 +455,7 @@
                     <!-- Puzzle database. Not a setting (nothing to toggle): importing the file IS
                          turning it on, and with no file imported nothing below changes at all. -->
                     <div class="section">
-                        <label data-i18n-tip="set.tip.load_lichess_s_puzzle_database" class="switch-label tooltipped" data-position="right"
+                        <label data-i18n="set.puzzle_database" data-i18n-tip="set.tip.load_lichess_s_puzzle_database" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Load Lichess's puzzle database so Puzzle Mode plays the KNOWN solution
                                              instead of the engine's guess. The engine's best move and the puzzle's
                                              intended move are not always the same, and only one of them scores.
@@ -482,7 +482,7 @@
                         <p id="puzzle_db_status"></p>
                     </div>
                     <div class="section switch">
-                            <label data-i18n-tip="set.tip.mephisto_takes_control_of_the" class="switch-label tooltipped" data-position="right"
+                            <label data-i18n="set.python_backend" data-i18n-tip="set.tip.mephisto_takes_control_of_the" class="switch-label tooltipped" data-position="right"
                                    data-tooltip="Mephisto takes control of the mouse pointer to perform automated moves.
                                                  NOTE: mephisto-clicker.py (in &quot;src/scripts&quot;) must be running
                                                  for this to work. You may need to grant specific permissions for
@@ -499,7 +499,7 @@
                         </div>
                 </div>
                 <div class="section" id="humanize-mix">
-                    <span data-i18n-tip="set.tip.humanize_move_mix_how_often" class="switch-label tooltipped" data-position="right"
+                    <span data-i18n="set.humanize_move_mix" data-i18n-tip="set.tip.humanize_move_mix_how_often" class="switch-label tooltipped" data-position="right"
                           data-tooltip="Humanize move mix: how often each quality of move is played. Make the seven
                                         values add up to 100 -- the Total row shows what to add or remove. Each category
                                         is a band of how-much-worse-than-best, set in centipawns just below (Move-Quality
@@ -612,7 +612,7 @@
                 <div class="flex-group">
                     <div class="section">
                         <label>
-                            <span data-i18n-tip="set.tip.mephisto_will_always_wait_at" class="switch-label tooltipped" data-position="right"
+                            <span data-i18n="set.simulated_think_time_ms" data-i18n-tip="set.tip.mephisto_will_always_wait_at" class="switch-label tooltipped" data-position="right"
                                 data-tooltip="Mephisto will always wait at least this long after fully evaluating a
                                               position (determined by Search Time) to make a move."
                             >
@@ -623,7 +623,7 @@
                     </div>
                     <div class="section">
                         <label>
-                            <span data-i18n-tip="set.tip.mephisto_will_wait_a_random" class="switch-label tooltipped" data-position="right"
+                            <span data-i18n="set.simulated_think_time_variance_ms" data-i18n-tip="set.tip.mephisto_will_wait_a_random" class="switch-label tooltipped" data-position="right"
                                 data-tooltip="Mephisto will wait a random extra amount of time, up to this amount, on
                                               top of Simulated Think Time."
                             >
@@ -636,7 +636,7 @@
                 <div class="flex-group">
                     <div class="section">
                         <label>
-                            <span data-i18n-tip="set.tip.mephisto_will_always_take_at" class="switch-label tooltipped" data-position="right"
+                            <span data-i18n="set.simulated_move_time_ms" data-i18n-tip="set.tip.mephisto_will_always_take_at" class="switch-label tooltipped" data-position="right"
                                   data-tooltip="Mephisto will always take at least this long to perform the mouse
                                                 actions of a single move."
                             >
@@ -647,7 +647,7 @@
                     </div>
                     <div class="section">
                         <label>
-                            <span data-i18n-tip="set.tip.mephisto_will_take_a_random" class="switch-label tooltipped" data-position="right"
+                            <span data-i18n="set.simulated_move_time_variance_ms" data-i18n-tip="set.tip.mephisto_will_take_a_random" class="switch-label tooltipped" data-position="right"
                                   data-tooltip="Mephisto will take a random extra amount of time, up to this amount,
                                                 on top of Simulated Move Time."
                             >
