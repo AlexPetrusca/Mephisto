@@ -230,7 +230,7 @@ shuts the previous local engine down so the one you pick gets the whole CPU.
 ```bash
 brew install stockfish fairy-stockfish        # or download the Apple-Silicon build from stockfishchess.org
 python3 -m pip install chess
-native-host/install-native.sh --ext-id YOUR_EXTENSION_ID
+native-host/install.sh --ext-id YOUR_EXTENSION_ID
 ```
 (A binary downloaded from the web is quarantined by Gatekeeper — the installer clears that for its copy.
 If you point at one yourself, `chmod +x` it and, if macOS blocks it, `xattr -d com.apple.quarantine <path>`.)
@@ -239,7 +239,7 @@ If you point at one yourself, `chmod +x` it and, if macOS blocks it, `xattr -d c
 ```bash
 sudo apt install stockfish          # Debian/Ubuntu; or your distro's package / a release binary
 python3 -m pip install chess
-native-host/install-native.sh --ext-id YOUR_EXTENSION_ID
+native-host/install.sh --ext-id YOUR_EXTENSION_ID
 ```
 (Fairy-Stockfish: install `fairy-stockfish`, build it, or pass `--fairy /path/to/binary`.)
 
@@ -273,56 +273,50 @@ id changed — re-run the install command.
 
 ## Analysis features
 
-- **Multiple lines** — show the top 1–5 candidate moves (MultiPV), each drawn on the board with its evaluation.
+- **Multiple lines** — the top 1–5 candidate moves (MultiPV), each drawn on the board with its evaluation.
 
   ![Three candidate lines, each with its own coloured arrow](docs/multiple-lines.png)
 
-- **Show computer evaluation** — display the numeric score / eval bar (turn off for a cleaner board).
-- **Eval bar** — a chess.com‑style vertical bar beside the board, from your perspective, with the score inside it.
-- **Threat analysis** — also show the opponent's strongest reply, so you can see what they're threatening.
-- **Search time** — how long the engine thinks per move (also the ceiling for continuous analysis).
-- **Threads / Memory** — tune engine strength vs. resource use.
-- **"Hand & Brain" mode** — Mephisto plays the *Brain* (tells you which piece type to move); you play the *Hand*
-  (choose the actual move).
-- **Continuous analysis** — with Autoplay off, the engine keeps analyzing indefinitely instead of stopping after
-  the search time.
-- **Read a position off the screen** — the camera button captures the tab, finds the board and loads it. Works on any site (a video, a diagram, an image); drag a box around the board if auto-detection misses. Runs locally — nothing is uploaded. **Flip board** turns it 180° if the board was shown from Black's side, and the panel names the squares the reader was least sure of, so a misread piece is something you're told about rather than something you have to spot.
+- **Eval bar** — a chess.com-style vertical bar beside the board, from your perspective, score inside it.
+- **Threat analysis** — also shows the opponent's strongest reply, so you can see what they're threatening.
+- **Search time · Threads · Memory** — how long the engine thinks per move, and what it may use to do it.
+- **"Hand & Brain"** — Mephisto plays the *Brain* (names the piece type); you play the *Hand*.
+- **Continuous analysis** — with Autoplay off, the engine keeps going instead of stopping at the search time.
+- **Move confidence** — how much better the best move is than the second: `· clearly best (+3.7)`, `· +0.35 over #2`,
+  `· several equal`, `· only move`. "Only move" and "six moves are all fine" used to render identically. Read off the
+  MultiPV lines already on screen, so it costs no extra search.
+- **Read a position off the screen** — the camera button captures the tab, finds the board and loads it. Any site — a
+  video, a diagram, an image — and nothing is uploaded. Drag a box around the board if auto-detection misses.
 
   ![Reading a position straight off a YouTube video](docs/read-from-screen.png)
 
-- **Playable panel board** — click or drag pieces on the panel's board to walk a line (with underpromotion). Re-detect goes back to the live game.
+- **Playable panel board** — click or drag pieces to walk a line (with underpromotion); click a piece to see its legal
+  moves. Every move is kept as a line you can click back into, and playing a different move truncates the rest.
+  Re-detect returns to the live game.
+
   ![The opening explorer, with each book move drawn on the board](docs/opening-explorer.png)
 
-- **Opening Explorer** — shows how humans played the opening (Lichess database): the opening name, the most-played
-  replies with their win/draw/loss split, and coloured arrows on the board. Pick the database — Masters, all
-  Lichess games, or a club rating band. Read-out only; standard chess. See **Play Book Moves** below to actually
-  play from it.
-
----
+- **Opening Explorer** — how humans played the opening (Lichess database): the name, the most-played replies with
+  their win/draw/loss split, and coloured arrows. Pick Masters, all Lichess, or a club rating band. Read-out only;
+  see **Play Book Moves** to play from it.
 
 ## Automated play
 
 - **Autoplay** — Mephisto plays the engine's move for you automatically.
-- **Help Mode** — instead of autoplaying, all analysis arrows are mirrored onto the site's board while the engine
-  keeps evaluating; you play the move yourself when ready. Overrides Autoplay while on.
-- **Puzzle Mode** — optimizes for solving puzzles as fast as possible (Puzzle Rush / Puzzle Storm).
-  Every move it plays is a move it actually searched, and it never analyses the opponent's turn.
-  A chess.com puzzle page ships no move list, so the position has to be rebuilt from the pieces alone
-  — which loses everything that isn't a piece on a square. Both are recovered from the board:
-  **en passant** from the last-move highlight, and **castling rights** from the king and rook still
-  standing on their home squares. Without them an ep capture is illegal and neither side can castle in
-  *any* puzzle, so the engine evaluates a position that isn't the one on screen.
-- **Play Book Moves** — plays the opening from the Opening Explorer instead of the engine's pick: a
-  *weighted-random* choice among the popular replies, so you don't repeat the same line every game. A move must
-  appear in at least 20 games and rate within 40cp of the engine's best, so the variety never costs you a worse
-  move. The lookup runs in the background and never delays a move; out of book, the engine takes over. Needs Autoplay.
-- **Background Play** (off by default) — with it off, moves only fire while the game tab is **focused and visible**;
-  a move that comes due while you're tabbed away is deferred until you come back — and is re-issued as soon as you
-  do, rather than leaving the tab sitting there. Humans don't play while looking at another tab. Turn it on to keep
-  autoplay, premove, the opening book and the tablebase probe running while the tab is hidden. One caveat worth
-  knowing: Chrome throttles timers in a silent background tab after a few minutes, so keeping one alive means marking
-  it as playing audio — the tab shows a **speaker icon** while this is on. That only happens when Background Play is
-  actually enabled.
+- **Help Mode** — mirrors the analysis arrows onto the site's board and keeps evaluating; you play the move yourself.
+  Overrides Autoplay while on.
+- **Puzzle Mode** — optimizes for solving speed (Puzzle Rush, Storm, Racer). Every move is one it actually searched,
+  and it never analyses the opponent's turn. A puzzle page ships no move list, so the position is rebuilt from the
+  pieces alone — **en passant** is recovered from the last-move highlight and **castling rights** from the king and
+  rook still on their home squares, because without them an ep capture is illegal and nobody can castle in *any*
+  puzzle.
+- **Play Book Moves** — plays the opening from the Explorer instead of the engine's pick: *weighted-random* among the
+  popular replies, so you don't repeat the same line every game. A move needs 20+ games and must rate within 40cp of
+  the engine's best, so variety never costs you a worse move. Never delays a move; out of book the engine takes over.
+- **Background Play** (off by default) — with it off, moves fire only while the game tab is focused and visible, and a
+  move that comes due while you're away is deferred and re-issued when you return. Humans don't play while looking at
+  another tab. Turn it on to keep autoplay, premove, the book and the tablebase running in a hidden tab — Chrome
+  throttles silent background tabs, so the tab is marked as playing audio and shows a **speaker icon** while this is on.
 
 ### Safe Premove
 
@@ -331,117 +325,54 @@ id changed — re-run the install command.
 - Forced moves and true recaptures → queued as a real site premove; an illegal one auto-cancels, so it never fires in the wrong position.
 - **Double premove** (chess.com, standard) — when the line is forced *two* moves deep, both replies queue at once. Every branch is forced, so neither can misfire; less than fully forced → a single premove.
 
-### Settings apply immediately
-
-A setting changed on the options page now reaches an open panel straight away — no reload. The panel's
-own switches update to match, and the change reaches the page for the very next move. Engine, variant,
-threads and memory are the exceptions: those need the engine rebuilt, so they still reload the panel.
-
 ### Endgame tablebase
 
-Off by default — **Tablebase** in the panel's Quick Settings (hotkey **T**), or **Settings → General → Endgame Tablebase**. With **7 or fewer pieces** on the board the position is
-*solved*, so Mephisto asks lichess's Syzygy tables for the perfect move rather than trusting the search.
-
-- Outranks both the engine and the opening book — a solved position has an answer, not a preference.
-- The readout says what it found: `— tablebase: win in 13`, `— tablebase: draw`.
-- Off by default because it sends the position to a third party. The tables are hundreds of gigabytes, so a network
-  probe is the only shippable form; it runs in the service worker, so the page itself makes no request.
-- Never awaited — if the answer is late the engine's move is played and the probe is skipped for that move.
-
-### Move confidence
-
-The panel says how much better the best move is than the second, not just what it is — `· clearly best (+3.7)`,
-`· +0.35 over #2`, `· several equal`, or `· only move` when there is genuinely one legal reply. "Only move" and
-"six moves are all fine" are completely different situations that used to render identically. Read off the MultiPV
-lines already on screen; it needs no extra search, and stays silent at **Multi Lines = 1** rather than widening one.
+Off by default — **Tablebase** in Quick Settings (hotkey **T**), or **Settings → General → Endgame Tablebase**. With
+**7 or fewer pieces** the position is *solved*, so Mephisto asks lichess's Syzygy tables for the perfect move instead
+of trusting the search. It outranks both the engine and the book — a solved position has an answer, not a preference —
+and the readout says what it found (`— tablebase: win in 13`). Off by default because it sends the position to a third
+party; it runs in the service worker, so the page itself makes no request, and it's never awaited.
 
 ### Eval history graph
 
-The **whole game so far** as a curve under the board, in the shape of Lichess's computer-analysis graph: white's
-advantage above the midline, black's below, the area between filled, and a cursor on the move you're at. Swings and the
-move it turned on are visible without scrubbing the move list.
+The whole game as a curve under the board, shaped like Lichess's computer-analysis graph: white's advantage above the
+midline, black's below, a cursor on the move you're at. It also marks where the **opening ends and the middlegame and
+endgame begin**, using Lichess's own division rules (ported from scalachess's `Divider`). A phase is only marked when
+it actually happened, so a game that never leaves the opening is labelled once rather than carved into three.
 
-It also marks where the **opening ends and the middlegame and endgame begin**, using Lichess's own division rules
-(ported from scalachess's `Divider`): the middlegame starts at the first position with 10 or fewer major and minor
-pieces, *or* a back rank down to fewer than four pieces, *or* a piece-mixing score above 150; the endgame starts at the
-first position with 6 or fewer. A phase only gets a divider when it actually happened, so a game that never leaves the
-opening is labelled once rather than carved into three.
-
-Its own toggle directly under **Eval Bar** in Quick Settings, with hotkey **Y**. A takeback truncates it; a new game
-clears it. Needs Eval Bar on, since it's drawn alongside it.
+Own toggle under **Eval Bar**, hotkey **Y**. Needs Eval Bar on, since it's drawn alongside it.
 
 ### Explain moves
 
-Opt in under **Settings → General → Explain Moves**. Names the tactic behind the engine's choice — a fork,
-a promotion, a capture that wins material, mate — on its own line under the evaluation, kept clear of the
-opponent-mistake toast.
+Opt in under **Settings → General → Explain Moves**. Names the tactic behind the engine's choice — a fork, a
+promotion, a capture that wins material, mate — on its own line under the evaluation.
 
-Deliberately conservative. Only motifs that can be established from the position itself are named; pins,
-skewers and discovered attacks need a judgement this can't make reliably, so they aren't guessed at. When
-nothing is certain it says nothing — a confidently wrong explanation teaches the wrong thing.
+Deliberately conservative: only motifs establishable from the position itself. Pins, skewers and discovered attacks
+need a judgement this can't make reliably, so they aren't guessed at. When nothing is certain it says nothing — a
+confidently wrong explanation teaches the wrong thing.
 
-### Reading a board is a guess, and says so
+### Smaller things, and why they're there
 
-The board reader maps the image's top-left corner to a8, so a board shown from **Black's** side comes
-out rotated — and a rotated position is usually still *legal*, which means nothing downstream can
-object to it. **Flip board** corrects it in one click. Auto-detecting the orientation isn't reliable
-(most positions are legal both ways up), and silently picking wrong is exactly the failure this is
-meant to prevent.
-
-The reader also reports its own least-confident squares — `least sure: e4 pawn 62%` — from the
-probabilities it already computes and used to discard. A misread square produces a legal position too,
-so this is the only warning you'd otherwise get.
-
-### Follow the screen
-
-After reading a board off the screen, a **Follow screen** button appears. It re-reads the *same area*
-twice a second, so a board playing there — a video, a stream, another app — keeps the panel in step
-without capturing each move by hand. A scan that reads the same position does nothing, so an unchanged
-board never restarts the search, and a frame caught mid-animation is skipped rather than analysed.
-
-The button only exists after a capture, because it needs the area that capture found.
-
-### Quieter about other people's servers
-
-The opening explorer and the endgame tablebase both talk to lichess, and they now share one rate-limit
-gate: if either is told to back off, both go quiet for as long as lichess asks, rather than carrying on
-independently. A cooldown is invisible — the engine's move is played as usual, you just don't get a book
-or tablebase answer for it.
-
-### Settings no longer interrupt a search
-
-**Threads** and **Hash** can't be changed while a search is running — UCI forbids it, and both tear down
-the engine's internal state. They're now applied at the *next* search instead of restarting the panel,
-so the search you're watching finishes on the settings it began with. Line count and the fallback poll
-apply immediately. Only Engine, Variant and the Elo cap still rebuild the panel — and a position you
-captured survives even that.
-
-### Panel move line
-
-Every move you play on the panel board is kept as a line you can walk. Click any move to go back to that
-point and carry on from there — and playing a *different* move overwrites the rest, so trying the other
-idea doesn't leave the old continuation dangling behind it. A single line, not a tree: "let me take that
-back and try the other move" is the thing being asked for, and truncation answers it exactly.
-
-Click a piece and its legal moves are shown — a dot on an empty square, a ring around a capture. A piece
-with no legal moves still highlights, so you can tell it's pinned or blocked rather than that the click
-missed.
-
-### Board/engine mismatch guard
-
-The board is re-read immediately before every click and the move dropped if the position changed since
-the search started — the board and the analysis come from independent bits of DOM that a site doesn't
-update in one paint, so "the position I analysed" and "the position on screen" can quietly diverge. A
-scrape that can't be taken at all (mid-animation) counts as a mismatch too: unverifiable is not the
-same as unchanged.
-
-### Machine calibration
-
-The shipped defaults are a number, not a measurement: the same 300 ms is a shallow search on a laptop and a deep one on
-a 24-core desktop, so "the defaults" mean different playing strengths on different machines. Equal *nodes* travel; equal
-milliseconds don't. Mephisto measures the NPS your machine actually reaches during normal play — no separate benchmark —
-and once it has a stable reading offers the search time that would hit the reference node count. It **suggests**, and
-applies only on a click, once per install.
+- **A board reading is a guess, and says so.** The screen reader maps the image's top-left to a8, so a board shown
+  from Black's side comes out rotated — and a rotated position is usually still *legal*, so nothing downstream can
+  object. **Flip board** fixes it in one click. It also names its least-confident squares (`least sure: e4 pawn 62%`),
+  which is the only warning a misread would otherwise give you.
+- **Follow the screen.** After a capture, a **Follow screen** button re-reads the same area twice a second, so a board
+  playing there — a video, a stream, another app — keeps the panel in step. An unchanged position never restarts the
+  search, and a frame caught mid-animation is skipped rather than analysed.
+- **Board/engine mismatch guard.** The board is re-read immediately before every click and the move dropped if the
+  position moved on: board and analysis come from independent bits of DOM that a site doesn't update in one paint. A
+  scrape that can't be taken at all counts as a mismatch too — unverifiable is not the same as unchanged.
+- **Settings apply immediately.** A change on the options page reaches an open panel straight away, and the panel's own
+  switches follow. Engine, variant, threads and memory are the exceptions — those need the engine rebuilt.
+- **Threads and Hash don't interrupt a search.** UCI forbids changing them mid-search and both tear down engine state,
+  so they're applied at the *next* search instead of restarting the panel.
+- **Quieter about other people's servers.** The explorer and the tablebase share one rate-limit gate: if either is told
+  to back off, both go quiet for as long as lichess asks. A cooldown is invisible — you just don't get a book or
+  tablebase answer for that move.
+- **Machine calibration.** The shipped defaults are a number, not a measurement: the same 300 ms is a shallow search on
+  a laptop and a deep one on a 24-core desktop. Mephisto measures the NPS your machine actually reaches during normal
+  play and offers the search time that would hit the reference node count. It suggests; it applies only on a click.
 
 ### Pondering
 
@@ -456,7 +387,6 @@ Off by default (**Settings → General → Pondering**). Uses the opponent's thi
 Make automated play look like a real person instead of a flawless engine:
 
 ![The move mix and move-quality thresholds, with live accuracy estimates](docs/humanize.png)
-
 
 - **Move mix** — seven sliders set how often it plays the **top move**, a **2nd / 3rd / 4th line**, an **inaccuracy**, a **mistake**, or a **blunder**.
 - **Thresholds** — a separate section sets, in centipawns, how far each may stray, with a **live Lichess accuracy estimate** ([win-% model](https://lichess.org/page/accuracy)) of the win-chance drop. Defaults match Lichess's labels: **110cp = Inaccuracy, 230cp = Mistake, 377cp = Blunder**.
@@ -495,8 +425,9 @@ line that scores, and an objectively stronger move still fails it. Import Liches
 looks the position up instead: on a hit the whole solution is known, so it plays it with **no search at all**, move
 by move, and the board arrow shows that move rather than an engine guess.
 
-Lichess only. Chess.com's Puzzle Rush positions are not in that file, so a lookup there will essentially never hit
-and Puzzle Mode falls back to the engine exactly as before.
+Works on Training, **Storm and Racer**. Lichess only, and it does not even ask anywhere else. The database is built from Lichess games, so a Chess.com or
+BlitzTactics position is not in it and never will be — looking one up there would be a guaranteed miss per position,
+so those sites skip the lookup entirely and Puzzle Mode falls back to the engine exactly as before.
 
 The file is not bundled — it is about a gigabyte, and the release zip is already large enough. Download
 `lichess_db_puzzle.csv.zst` from [database.lichess.org](https://database.lichess.org/#puzzles), decompress it
@@ -509,21 +440,17 @@ IndexedDB on your machine. If the import is interrupted nothing is lost — run 
 
 ## Languages
 
-The panel and the settings pages are translated. **Settings → Appearance → Language**, English by default, applied
-immediately without a reload.
+**Settings → Appearance → Language**, English by default, applied immediately without a reload.
 
 English, Deutsch, Español, Français, Português, Italiano, Nederlands, Polski, Türkçe, Русский, 中文, हिन्दी, 日本語,
-한국어 — each listed in its own language, because a list written in English does not help someone looking for theirs.
+한국어 — each listed in its own language, because a list written in English doesn't help someone looking for theirs.
 
-This is deliberately **not** Chrome's own `chrome.i18n`, which picks the browser's UI locale and gives you no way to
-override it; the whole point here is a language you choose. Each language is one flat JSON file under
-`src/i18n/locales/`, and English sits underneath every other as the fallback — a string that has not been translated
-yet renders in English rather than blank, so nothing ever breaks by being missing.
+Deliberately **not** Chrome's `chrome.i18n`, which follows the browser's UI locale and gives you no way to override it;
+the point here is a language you choose. One flat JSON per language under `src/i18n/locales/`, with English underneath
+every other as the fallback, so an untranslated string renders in English rather than blank.
 
 Engine names, board and piece themes, and chess notation are left alone on purpose. The long explanatory tooltips on
 the settings page are still English for now.
-
----
 
 ## Supported sites & modes
 
@@ -532,7 +459,7 @@ the settings page are still English for now.
 | Site | Analysis | Bot play / Autoplay | Premove | Puzzles | Online play | Variants |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Chess.com** | ✅ | ✅ incl. Play Bots | ✅ | ✅ Puzzle Rush / Storm | ✅ | ✅ 3‑Check, King of the Hill, Crazyhouse, Antichess (Giveaway), Atomic, Horde, Racing Kings, **Duck, Minihouse, Seirawan (S‑Chess), Chaturanga** — plus Chess960 |
-| **Lichess** | ✅ | ✅ incl. AI & "From Position" | ✅ | ✅ Puzzle Storm | ✅ live & correspondence | ✅ Crazyhouse, King of the Hill, Three‑Check, Antichess, Atomic, Horde, Racing Kings — plus Chess960 |
+| **Lichess** | ✅ | ✅ incl. AI & "From Position" | ✅ | ✅ Storm · Racer · Training | ✅ live & correspondence | ✅ Crazyhouse, King of the Hill, Three‑Check, Antichess, Atomic, Horde, Racing Kings — plus Chess960 |
 | **TakeTakeTake** | ✅ | ✅ bot games | ✅ | — | ✅ Lichess‑backed | — |
 | **BlitzTactics** | ✅ | ✅ | — | ✅ puzzle streams | — | — |
 | **ChessBase Tactics** | ✅ | — | — | ✅ Solve / Sprint | — | — |
@@ -688,70 +615,52 @@ footprint. See the [disclaimer](#️-read-this-first--disclaimer--fair-play).)
 
 ## Roadmap
 
-No schedule — added whenever I feel like it. Only the not-yet-built items live here; everything shipped is under
-**Implemented** below.
+No schedule — added whenever I feel like it. Everything shipped is under **Implemented** below.
 
 **Engines & analysis**
-- [ ] **Cloud evaluation** — ask Lichess's cloud-eval API for a position instead of searching it locally. It
-  returns a deep, already-computed evaluation instantly for positions that have been analysed before, which is
-  most opening and popular middlegame positions, and nothing at all for the rest. Would slot in beside the
-  tablebase probe: another optional source that outranks the local search when it has an answer, costs nothing
-  when it doesn't, and never delays a move. Off by default like the tablebase — it sends the position to a
-  third party.
-- [ ] **More engines to choose from** — the lineup is Stockfish plus Fairy plus the two Maia families, which
-  covers *strong* and *human-like* and not much in between. Other open-source engines have genuinely different
-  styles, and the ones that build to WASM could ship in-browser while anything with a native binary already works
-  through the native host or the remote bridge today. Variety of character, not more strength.
-- [ ] **lc0 (Leela) in the browser** — Leela's neural-net engine as a WASM alternative to Stockfish. A large
-  download for play that isn't stronger; mainly for comparing styles.
+- [ ] **Cloud evaluation** — ask Lichess's cloud-eval API for a position instead of searching it. Instant deep
+  evaluations for positions already analysed (most openings), nothing for the rest. Would slot in beside the tablebase:
+  optional, outranks the local search when it has an answer, never delays a move. Off by default — it leaves your machine.
+- [ ] **More engines** — the lineup is Stockfish, Fairy and the two Maia families, which covers *strong* and
+  *human-like* and not much between. Variety of character, not more strength.
+- [ ] **lc0 (Leela) in the browser** — a WASM alternative to Stockfish. Large download, not stronger; for comparing styles.
 
 **Variants & packaging**
 - [ ] **Duck Chess autoplay polish** — make the duck-placement step work end to end (detection and analysis already do).
 
 **Interface & docs**
-- [ ] **Rework the UI** — the panel has grown a control at a time and it shows: twenty-odd quick-settings rows in
-  one scrolling column, with no grouping and no sense of which settings matter most. Wants a proper pass over the
-  layout rather than another row bolted on.
-- [ ] **Rewrite the README** — 780-odd lines and 55 headings, accreted a section per release, so it reads as a
-  changelog pretending to be documentation. What someone needs on arrival (what this is, install it, the three
-  things to switch on) is buried among things only I care about. Wants restructuring around the reader, not
-  around the order it was built in — and it should come before the translation, or the translation just
-  multiplies the problem by fourteen.
-- [ ] **More screenshots** — most features here are visual and the README describes them in prose. Nearly every
-  section would be clearer with a picture of the thing actually running: the eval graph, the opening explorer
-  overlay, the board reader, the settings page.
-- [ ] **Explain things better** — several sections assume you already know why a feature exists. Worth a pass
-  that leads with *what problem this solves for you* before the mechanism, especially for the options that sound
-  alike (Clock Mode vs Mirror Time vs Humanize, Premove vs Pondering).
-- [ ] **A few short videos** — some of this only makes sense in motion: a premove firing instantly, Humanize
-  pacing a move, the screen reader following a board. Thirty seconds each, no commentary needed.
-- [ ] **Translate the README** — the interface speaks fourteen languages ([Languages](#languages)) and the
-  documentation still only speaks one. The long help tooltips on the settings page are in the same position and
-  would go with it.
+- [ ] **Rework the UI** — the panel grew a control at a time and it shows: twenty-odd quick-settings rows in one
+  scrolling column, no grouping, no sense of which matter most. Wants a layout pass, not another row bolted on.
+- [ ] **Rewrite the README** — still organised around the order things were built rather than around the reader. Should
+  come before the translation, or the translation multiplies the problem by fourteen.
+- [ ] **More screenshots** — most features here are visual and described in prose. The eval graph, the explorer
+  overlay, the board reader and the settings page would each be clearer as a picture.
+- [ ] **Explain things better** — lead with *what problem this solves* before the mechanism, especially for the options
+  that sound alike (Clock Mode vs Mirror Time vs Humanize, Premove vs Pondering).
+- [ ] **A few short videos** — some of this only makes sense in motion: a premove firing, Humanize pacing a move, the
+  screen reader following a board. Thirty seconds each.
+- [ ] **Translate the README** — the interface speaks fourteen languages ([Languages](#languages)); the documentation
+  speaks one. The long help tooltips are in the same position.
 
 **Footprint**
 - [ ] **Shrink the page footprint further** — keep reducing what a site can passively detect. The list under
-  [Page footprint](#page-footprint) is most of the way through: no iframe, no extension URLs, a closed shadow
-  root, no branded storage keys, human-shaped clicks. What is left is small and fiddly — hardening the one
-  rendezvous the MAIN-world probes still need, and tightening how scraped positions are sanitised.
-  **Being straight about the ceiling:** this is passive fingerprinting only, and the client side is nearly
-  exhausted. What actually catches engine use is server-side behavioural analysis — move-match rates against
-  engine choice, and timing distributions that look nothing like a person's. Humanize, Clock Mode and Mirror
-  Time are the levers that touch *that*, and no amount of DOM hygiene substitutes for them. Nothing here makes
-  the extension undetectable; see the [disclaimer](#️-read-this-first--disclaimer--fair-play).
+  [Page footprint](#page-footprint) is most of the way there; what's left is hardening the one rendezvous the
+  MAIN-world probes still need, and tightening how scraped positions are sanitised.
+  **Being straight about the ceiling:** this is passive fingerprinting only, and the client side is nearly exhausted.
+  What actually catches engine use is server-side behavioural analysis — move-match rates and timing distributions that
+  look nothing like a person's. Humanize, Clock Mode and Mirror Time are the levers that touch *that*. Nothing here
+  makes the extension undetectable; see the [disclaimer](#️-read-this-first--disclaimer--fair-play).
 
 **Robustness**
-- [ ] **Bug fixes** — an open-ended entry, deliberately. Several of the sharpest bugs so far were invisible
-  rather than loud: autoplay that skipped a move with nothing logged, an engine that never loaded, a veto that
-  was inverted only for Black. Reports of *"it did nothing"* are worth more than they sound.
-- [ ] **ChessBase Tactics: on-board arrows + autoplay** — analysis works; drawing on the board and clicking it
-  do not. ChessBase renders its own board with no class to match, and finding it by shape was both slow (the
-  search runs on hot paths) and unreliable. Needs the real markup to anchor on.
+- [ ] **Bug fixes** — open-ended, deliberately. Several of the sharpest bugs so far were invisible rather than loud:
+  autoplay that skipped a move with nothing logged, an engine that never loaded, a veto inverted only for Black.
+  Reports of *"it did nothing"* are worth more than they sound.
+- [ ] **ChessBase Tactics: on-board arrows + autoplay** — analysis works; drawing and clicking do not. ChessBase renders
+  its own board with no class to match, and finding it by shape was slow and unreliable. Needs the real markup.
 
 **Anything else**
-- [ ] **Whatever you want it to do** — the wishlist is open. Most of what is in this project arrived because
-  something was annoying in a real game rather than because it was planned, so a "could it just…" is a perfectly
-  good starting point. Open an issue; small ideas are usually the ones that land.
+- [ ] **Whatever you want it to do** — most of what's here arrived because something was annoying in a real game, not
+  because it was planned. Open an issue; small ideas are usually the ones that land.
 
 More to come.
 
@@ -770,36 +679,41 @@ Not waiting on work here — no engine supports these, so there is nothing to bu
 
 Shipped and in the current build.
 
-- [x] **Maia-3 (human-like play)** (v3.1.95, upgraded to the 23M model in v3.1.96) — pick **Engine → Maia-3** and set a **target Elo (600–2600)** with the slider. This is [Maia-3](https://github.com/CSSLab/maia3), a transformer trained on human games and conditioned on rating — one model, so sliding the Elo changes strength instantly (no reload). Runs entirely in the browser as a single ONNX forward pass per move (onnxruntime-web, no server); its moves reproduce the CSSLab Maia-3 reference exactly. Ships the **23M-parameter** variant (~60% move-match to real human play, measured on rated games — a few points above the smaller 5M net). Multi Lines shows the top human-likely candidates.
-- [x] **Maia (human-like play)** (v3.1.93) — pick **Engine → Maia** and a rating band (**1100–1900**, plus a community-trained **2200**). These are the [Maia](https://maiachess.com/) neural nets trained on real human games, so they play like a human of that rating — human-like mistakes, not a strong engine told to play badly. Runs entirely in the browser as a single ONNX forward pass per move (onnxruntime-web, no lc0, no server); moves match the lc0 reference implementation. Changing the band loads a different net. (The 2200 net is [@CallOn84](https://github.com/CallOn84/LeelaNets)'s Maia-architecture net; 1100–1900 are the original CSSLab Maia-1 nets.)
-- [x] **Copy FEN / Copy PGN** (v3.1.73) — buttons that copy the position, or the whole game (with `SetUp`/`FEN` tags for a custom start).
-- [x] **Compact / expanded panel** (v3.1.73) — the **▣** title-bar button collapses the panel to the move + score; remembered.
-- [x] **Export / import settings** (v3.1.73) — **Settings → General** writes/loads the whole config as a JSON file.
-- [x] **Native-engine health badge** (v3.1.55) — a dot showing whether the native host answered (hidden for WASM engines).
-- [x] **Smart default threads** (v3.1.55) — new installs default to your CPU's cores − 1 (capped at 24).
-- [x] **Graceful "unsupported variant" message** (v3.1.73) — says so instead of analysing the wrong position.
-- [x] **Manual mode** (v3.1.84) — the engine thinks until you press the play-move key (**Space**), then plays its best move.
-- [x] **Configurable hotkeys** (v3.1.84) — **Settings → Hotkeys**; single-letter defaults, each toggle shows its key, carried in export/import.
+- [x] **Maia-3** (v3.1.95, 23M model in v3.1.96) — **Engine → Maia-3** plus a **600–2600** Elo slider. A
+  [transformer trained on human games](https://github.com/CSSLab/maia3) and conditioned on rating, so one model covers
+  the whole range and sliding changes strength instantly. One in-browser ONNX pass per move; reproduces the CSSLab
+  reference exactly (~60% move-match to real human play).
+- [x] **Maia** (v3.1.93) — **Engine → Maia** and a rating band (**1100–1900**, plus a community-trained **2200**).
+  The [Maia](https://maiachess.com/) nets, trained on human games — human-like mistakes, not a strong engine told to
+  play badly. In-browser ONNX; matches the lc0 reference.
+- [x] **Pondering** (v3.1.107) — think on the opponent's clock, at full threads over their top 5 replies. With it off,
+  the opponent's turn is capped at two threads, so idle waiting costs *less* than it used to.
+- [x] **Opening Explorer + book play** (v3.1.119) — human opening data, coloured arrows, and optional weighted-random
+  book moves with a 20-game floor and a 40cp engine check.
+- [x] **Read a position off the screen** (v3.1.124) — camera button; any site, two ONNX models, entirely local.
+- [x] **Playable panel board** (v3.1.124) — click or drag to walk a line, with underpromotion.
+- [x] **Set up a position** (v3.1.119) — paste a FEN to analyse anything instead of the page.
+- [x] **Setup / From-Position capture** (v3.1.125) — a custom-start game reads correctly even when loaded mid-game.
+- [x] **On-demand nets** (v3.1.125) — an unbundled net downloads on first use and caches; a full install still works offline.
+- [x] **Auto-recover on DOM changes** (v3.1.119) — if a site renames its move-list tags, the move list is found structurally.
+- [x] **Double premove** (v3.1.107) — chess.com, standard chess: when the line is forced two moves deep, both replies queue at once.
+- [x] **Instant reopen, warm engine** (v3.1.92) — closing the panel stops the search but keeps the engine loaded; an
+  unchanged reopen skips all setup.
+- [x] **Turn switch** (v3.1.92) — king-glyph toggle at the top of the panel; sticky per position, auto-tracks each move.
+- [x] **Human cursor travel** (v3.1.90) — every synthetic click is preceded by an eased, jittered pointer path, inside
+  the Move Time budget.
+- [x] **Manual mode** (v3.1.84) — the engine thinks until you press **Space**.
+- [x] **Configurable hotkeys** (v3.1.84) — **Settings → Hotkeys**; each toggle shows its key, carried in export/import.
 
   ![The hotkeys page, each action rebindable](docs/hotkeys.png)
 
-- [x] **Opponent Mistake Alert** (v3.1.84) (the roadmap's *Blunder alert*) — opt-in toast over the board for the opponent's inaccuracy/mistake/blunder (Lichess win%, depth-gated).
-- [x] **Self-test button** (v3.1.84) — beside Re-detect; checks scraping, the engine, and the native host.
-- [x] **Human cursor travel** (v3.1.90) — every synthetic click is preceded by an eased, jittered `mouseMoved` path from the cursor's last position; travel time consumes the Move Time budget so the whole click sequence fits inside whatever number you set.
-- [x] **Faster response** (v3.1.91) — no "Calculating…" placeholder; the panel shows only the progress bar until the first `info depth 1` line arrives (~a few ms), then streams the real eval, move and best-line from depth 1 onward.
-- [x] **Turn switch** (v3.1.92) — a small king-glyph toggle at the top of the panel (replacing the "Quick Settings" title) shows the side to move and flips it on tap. Sticky per position so you can switch back and forth, auto-tracks each move, and resets on close. Replaces the earlier on-board pill + Auto/White/Black dropdown.
-- [x] **Pondering** (v3.1.107) — the roadmap's *Ponder / background analysis*. Opt in under **Settings → General → Pondering**: the opponent's turn is then searched at full threads for their *whole* think, across their **top 5 candidate replies** (narrowing to 1–2 when the position is forced or a recapture), so a deeper answer is ready the moment they move — and Premove can certify an instant reply to any of those five. The roadmap's CPU/battery cost is handled by the default rather than ignored: with Pondering **off**, the opponent's turn is capped at **two threads** (never above your Threads setting), so idle waiting now costs *less* than it used to, not more. Your own move always gets the full thread count, and analysis-only work is never throttled. Works with the in-browser and native Stockfish/Fairy builds and the remote engine; Maia is a single forward pass and can't deepen, so it's excluded.
-- [x] **Opening Explorer** (v3.1.119) — **Settings → General → Opening Explorer**, or the **Explorer** toggle in the panel. Shows how humans played the opening: the opening name, the most-played replies with their win/draw/loss split, and coloured arrows on the board. Turn on **Play Book Moves** to play a *weighted-random* book move instead of the engine's pick — so you don't repeat the same line every game — with a 20-game floor and an engine check (within 40cp of best) so the variety never costs you a worse move. Pick the **Opening Database** (Masters / all Lichess / club 1600–2200). The lookup runs in the background and never delays a move; standard chess only.
-- [x] **Set up a position** (v3.1.119) — grid button in the panel row: paste a **FEN** to analyse any position instead of the page. Stops following the page while set; click again (or Re-detect) to go back.
-- [x] **Setup / From-Position capture** (v3.1.125) — a game that started from a custom position is read correctly even when you load it mid-game. The start is recovered from the page rather than only being captured at move 0, so a refresh no longer replays the game from the standard start.
-- [x] **On-demand nets** (v3.1.125) — a net that isn't bundled is downloaded on first use from the Stockfish project's own net server and cached permanently, so a build can ship without the large nets. Anything already bundled is used as-is and never fetched: a full install behaves exactly as before and still works offline.
-- [x] **Read a position off the screen** (v3.1.124) — the roadmap's *Board from a screenshot*. The camera button captures the tab, finds the board and loads it into the panel. Works on **any site** — a YouTube video, a diagram, a screenshot — not just chess sites. If auto-detection misses, drag a box around the board. Runs entirely on your machine (two ONNX models, no upload).
-- [x] **Playable panel board** (v3.1.124) — click or drag pieces on the panel's own board to walk a line, with an underpromotion picker. The panel stops following the page while you do; Re-detect returns to the live game.
-- [x] **Auto-recover on DOM changes** (v3.1.119) — if a site renames its move-list tags, Mephisto finds the move list structurally instead of silently seeing nothing.
-- [x] **Double premove** (v3.1.107) — on chess.com (standard chess), when the line is forced two moves deep, both of your replies are queued at once instead of one at a time. Every branch in that chain is forced, so neither queued move can fire in a position it wasn't meant for; anything less falls back to a single premove.
-- [x] **Instant reopen, warm engine** (v3.1.92) — closing the panel with X stops the search (frees CPU) but keeps the engine loaded, so reopening is instant instead of reloading the neural net. A fingerprint of the engine settings means an unchanged reopen skips *all* setup (no net reload, no `ucinewgame` hash clear); a settings change reconfigures without reloading. A real tab close still frees the engine.
-
----
+- [x] **Opponent Mistake Alert** (v3.1.84) — opt-in toast for the opponent's inaccuracy/mistake/blunder (Lichess win%, depth-gated).
+- [x] **Self-test button** (v3.1.84) — checks scraping, the engine and the native host.
+- [x] **Copy FEN / Copy PGN · compact panel · export/import settings** (v3.1.73) — position or whole game to the
+  clipboard; **▣** collapses the panel; the whole config as a JSON file.
+- [x] **Native-engine health badge · smart default threads** (v3.1.55) — a dot showing whether the native host
+  answered; new installs default to cores − 1 (capped at 24).
+- [x] **Faster response** (v3.1.91) — no "Calculating…" placeholder; the real eval streams from depth 1.
 
 ## Contributing
 
@@ -809,7 +723,6 @@ Ideas, bug reports, and PRs are all welcome — open an issue or a pull request.
 
 **Board recognition** uses two models from [Chess_diagram_to_FEN](https://github.com/tsoj/Chess_diagram_to_FEN)
 by Jost Triller (MIT), converted to ONNX — see `lib/engine/vision/` for the licence and details.
-
 
 This project's own source code (and the original [Mephisto](https://github.com/AlexPetrusca/Mephisto)
 by Alexandru Petrusca) is under the **MIT License** ([`LICENSE`](LICENSE)). But it **bundles copyleft
