@@ -2,10 +2,10 @@
     <div class="col s12 m7 offset-m1 xl6 offset-xl1 offset-right-m1">
         <div id="form-container" class="big-section">
             <div id="board_and_pieces" class="scrollspy">
-                <h3 class="header">Board and Pieces</h3>
+                <h3 data-i18n="set.board_and_pieces" class="header">Board and Pieces</h3>
                 <div class="section">
                     <label>
-                        Pieces:
+                        <span data-i18n="set.pieces">Pieces:</span>
                         <select name="pieces" id="pieces_select">
                             <option value="wikipedia.svg" data-icon="/res/chesspieces/wikipedia/wN.svg">Wikipedia</option>
                             <option value="neo.png" data-icon="/res/chesspieces/neo/wN.png">Neo</option>
@@ -26,7 +26,7 @@
                 </div>
                 <div class="section">
                     <label>
-                        Board:
+                        <span data-i18n="set.board">Board:</span>
                         <select name="board" id="board_select">
                             <option value="brown" data-icon="/res/chessboards/previews/brown.png">Brown</option>
                             <option value="red" data-icon="/res/chessboards/previews/red.png">Red</option>
@@ -45,28 +45,40 @@
                     </label>
                 </div>
                 <div class="section switch">
-                    <label class="switch-label">Coordinates:</label>
+                    <label data-i18n="set.coordinates" class="switch-label">Coordinates:</label>
                     <label>
-                        Off
+                        <span data-i18n="ui.off">Off</span>
                         <input id="coordinates_checkbox" type="checkbox">
                         <span class="lever"></span>
-                        On
+                        <span data-i18n="ui.on">On</span>
                     </label>
                 </div>
                 <div class="section switch">
-                    <label class="switch-label">Dark Mode:</label>
+                    <label data-i18n="set.dark_mode" class="switch-label">Dark Mode:</label>
                     <label>
-                        Off
+                        <span data-i18n="ui.off">Off</span>
                         <input id="dark_mode_checkbox" type="checkbox">
                         <span class="lever"></span>
-                        On
+                        <span data-i18n="ui.on">On</span>
+                    </label>
+                </div>
+            </div>
+            <div id="language" class="scrollspy">
+                <h3 data-i18n="set.language" class="header">Language</h3>
+                <div class="section">
+                    <label>
+                        <span data-i18n-tip="set.tip.language" class="tooltipped" data-position="right"
+                              data-tooltip="The language of the panel and these settings. Engine names, board themes and chess notation stay as they are.">
+                            <span data-i18n="set.language">Language</span> <i class="material-icons info-tooltip">info</i>
+                        </span>
+                        <select name="language" id="language_select"></select>
                     </label>
                 </div>
             </div>
         </div>
         <div class="big-section">
             <div class="flex-group flex-small-gap">
-                <button id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
+                <button data-i18n="set.restore_defaults" id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
             </div>
         </div>
     </div>
@@ -74,7 +86,10 @@
         <div class="toc-wrapper pin-top">
             <ul id="toc" class="section table-of-contents">
                 <li>
-                    <a href="#board_and_pieces">Board and Pieces</a>
+                    <a data-i18n="set.board_and_pieces" href="#board_and_pieces">Board and Pieces</a>
+                </li>
+                <li>
+                    <a data-i18n="set.language" href="#language">Language</a>
                 </li>
             </ul>
         </div>

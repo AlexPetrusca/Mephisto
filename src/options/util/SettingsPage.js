@@ -35,7 +35,11 @@ export class SettingsPage {
         // cache before touching the forms -- reading early gave stale values, and any later change
         // then pushed those stale values back, silently reverting settings made in the panel.
         await MephistoConfig.ready;
+        // Translate before init(): Materialize snapshots select options and tooltip text when it
+        // initialises them, so a page translated afterwards would show half the old language.
+        await window.mephistoApplyLanguage?.();
         this.init();
+        MephistoI18n.apply(document); // the page's own markup, which only exists after init()
         this.pullConfigValues();
     }
 

@@ -1,3 +1,12 @@
+// The puzzle database lives in the EXTENSION's IndexedDB, and this worker is the only context the
+// panel can reach that has it: the panel runs in the page's isolated world, whose indexedDB is the
+// SITE's. Same file the options page uses for the import, so the key format cannot drift apart.
+importScripts('/src/scripts/puzzle-db.js');
+// The language list + the locale loader, shared with the options page and the panel so there is one
+// definition of which codes exist -- which is also what makes the fetch safe, since `lang` arrives
+// from a setting.
+importScripts('/src/i18n/i18n.js');
+
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if ((msg.from === 'content') && (msg.subject === 'showPageAction')) {
     chrome.pageAction.show(sender.tab.id);
@@ -36,6 +45,34 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
   if (msg.tablebaseLookup) {
     tablebaseLookup(msg.tablebaseLookup).then(sendResponse).catch(e => sendResponse({error: String(e)}));
+    return true; // async sendResponse
+  }
+  // One local IndexedDB read. No network and no cache: it is already a disk lookup, and a puzzle
+  // position is asked about once.
+  if (msg.puzzleLookup) {
+    PuzzleDB.lookup(msg.puzzleLookup.fen)
+      .then(solution => sendResponse({solution}))
+      .catch(e => sendResponse({error: String(e)}));
+    return true; // async sendResponse
+  }
+  if (msg.puzzleDbCount) {
+    PuzzleDB.count().then(count => sendResponse({count})).catch(e => sendResponse({error: String(e)}));
+    return true; // async sendResponse
+  }
+  // The panel asks for its UI strings. It runs in the page's isolated world, where fetching an
+  // extension URL is blocked (web_accessible_resources is deliberately empty), so the worker reads
+  // the file. English rides along as the fallback, so one round trip covers both.
+  if (msg.i18nStrings) {
+    (async () => {
+      const lang = msg.i18nStrings.lang;
+      const [strings, en] = await Promise.all([
+        MephistoI18n.fetchLocale(lang).catch(() => null),
+        lang === MephistoI18n.DEFAULT_LANG
+          ? Promise.resolve(null)
+          : MephistoI18n.fetchLocale(MephistoI18n.DEFAULT_LANG).catch(() => null),
+      ]);
+      sendResponse({strings, en});
+    })();
     return true; // async sendResponse
   }
   // Panel asks to read the board off the screen. The SW is the only context that can capture a tab;

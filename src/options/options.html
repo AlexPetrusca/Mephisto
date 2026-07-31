@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="/lib/materialize/materialize.min.css">
     <script src="/lib/materialize/materialize.min.js"></script>
     <script src="/src/scripts/config-store.js"></script>
+    <script src="/src/scripts/puzzle-db.js"></script>
+    <script src="/src/i18n/i18n.js"></script>
     <script type="module" src="framework/require.js"></script>
     <script type="module" src="options.js"></script>
 </head>
@@ -31,22 +33,22 @@
                 <img id="logo" src="../../res/mephisto_stack_lowercase.png" alt="alt" />
             </a>
         </li>
-        <li class="bold"><a id="getting-started" href="#getting-started" class="menu-item waves-effect waves-pink">Getting Started</a></li>
+        <li class="bold"><a id="getting-started" href="#getting-started" class="menu-item waves-effect waves-pink" data-i18n="nav.getting_started">Getting Started</a></li>
         <li class="no-padding">
             <ul class="collapsible collapsible-accordion">
                 <li class="bold">
-                    <a class="collapsible-header waves-effect waves-pink" tabindex="0">Settings</a>
+                    <a class="collapsible-header waves-effect waves-pink" tabindex="0" data-i18n="nav.settings">Settings</a>
                     <div class="collapsible-body">
                         <ul>
-                            <li><a id="settings/general" href="#settings/general" class="menu-item waves-effect waves-pink">General</a></li>
-                            <li><a id="settings/appearance" href="#settings/appearance" class="menu-item waves-effect waves-pink">Appearance</a></li>
+                            <li><a id="settings/general" href="#settings/general" class="menu-item waves-effect waves-pink" data-i18n="nav.general">General</a></li>
+                            <li><a id="settings/appearance" href="#settings/appearance" class="menu-item waves-effect waves-pink" data-i18n="nav.appearance">Appearance</a></li>
                         </ul>
                     </div>
                 </li>
             </ul>
         </li>
-        <li class="bold"><a id="about" href="#about" class="menu-item waves-effect waves-pink">About</a></li>
-        <li class="bold"><a id="disclaimers" href="#disclaimers" class="menu-item waves-effect waves-pink">Disclaimers</a></li>
+        <li class="bold"><a id="about" href="#about" class="menu-item waves-effect waves-pink" data-i18n="nav.about">About</a></li>
+        <li class="bold"><a id="disclaimers" href="#disclaimers" class="menu-item waves-effect waves-pink" data-i18n="nav.disclaimers">Disclaimers</a></li>
     </ul>
 </header>
 <main id="content">

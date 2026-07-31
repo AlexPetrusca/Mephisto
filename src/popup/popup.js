@@ -63,6 +63,37 @@ function flip_fen_turn(fen) {
 }
 
 let is_calculating = false;
+// UI language. `i18n(key, english, vars)` -- the English is written at the call site so the source
+// still reads as English prose and a missing key can never render blank.
+const i18n = (key, dflt, vars) => MephistoI18n.t(key, dflt, vars);
+
+// The panel cannot read the locale files itself: it runs in the page's isolated world, where a fetch
+// of a chrome-extension:// URL is blocked (web_accessible_resources is deliberately empty). The
+// service worker reads them and sends both the chosen language and English underneath it.
+function load_language(lang) {
+    return new Promise((resolve) => {
+        try {
+            chrome.runtime.sendMessage({i18nStrings: {lang}}, (res) => {
+                if (!chrome.runtime.lastError && res && !res.error) {
+                    MephistoI18n.setFallback(res.en || res.strings);
+                    MephistoI18n.setStrings(lang, res.strings || res.en);
+                }
+                resolve();
+            });
+        } catch (e) {
+            resolve(); // extension context gone -- English, which is what the markup already says
+        }
+    });
+}
+
+// Re-translate the panel in place. Cheap (it walks the panel's own small DOM) and it is the only
+// thing a language change needs, since every string in the markup carries its key.
+function apply_language() {
+    MephistoI18n.apply(PANEL_ROOT);
+    annotate_hotkey_labels(); // the "(A)" suffixes are appended to label text -- redo them after
+    update_best_move(null);   // re-render the readout with the new confidence/tablebase suffixes
+}
+
 let pending_stops = 0; // bestmoves still owed by searches we abandoned -- drop that many (see abandon_search)
 // Remote/native supersession. `pending_stops` only protects the WASM path -- on_engine_response
 // returns early for is_remote(), so a request issued for an OLD position used to be acted on
@@ -232,6 +263,7 @@ async function initPanel(root, tabId) {
         book_play: JSON.parse(MephistoConfig.get('book_play')) || false,
         explorer_db: JSON.parse(MephistoConfig.get('explorer_db') || '"masters"'),
         puzzle_mode: JSON.parse(MephistoConfig.get('puzzle_mode')) || false,
+        language: JSON.parse(MephistoConfig.get('language')) || 'en',
         help_mode: JSON.parse(MephistoConfig.get('help_mode')) || false,
         eval_bar: JSON.parse(MephistoConfig.get('eval_bar')) || false,
         python_autoplay_backend: JSON.parse(MephistoConfig.get('python_autoplay_backend')) || false,
@@ -309,6 +341,7 @@ async function initPanel(root, tabId) {
         if (MY_TAB_ID && sender.tab && sender.tab.id !== MY_TAB_ID) return;
         if (response.fenresponse) { // reply received -> the poll interval may fire the next request
             fen_request_inflight = false;
+            sync_puzzle_mode_to_page(response.puzzlePage);
             clearTimeout(fen_request_timer);
             if (response.clocks) last_clocks = {...response.clocks, at: Date.now()}; // for Clock Mode budgeting
         }
@@ -511,6 +544,11 @@ async function initPanel(root, tabId) {
     // tooltips (replaces Materialize's M.Tooltip -- Materialize's JS looks elements up via `document`
     // and can't run in a shadow root; this queries a passed root instead). PANEL_ROOT/PANEL_TIP_HOST
     // default to `document`/`document.body` in the iframe; the shadow-root phase passes the root.
+    // Translate BEFORE the hotkey suffixes and the tooltips: annotate_hotkey_labels appends to the
+    // label text, and Materialize snapshots data-tooltip when a tooltip is initialised, so both have
+    // to run on already-translated markup.
+    await load_language(config.language || MephistoI18n.DEFAULT_LANG);
+    MephistoI18n.apply(PANEL_ROOT);
     annotate_hotkey_labels(); // show each toggle's shortcut next to it, e.g. "Autoplay (A)"
     init_tooltips(PANEL_ROOT, PANEL_TIP_HOST);
 
@@ -1079,7 +1117,7 @@ function on_engine_error(message) {
     // and a failure to LOAD one at all -- a missing net, a model that won't fetch, a bad build. The
     // second kind fell through the regex and was dropped, so the panel just sat on its progress bar
     // with the single most useful sentence already in hand. Say it, whatever kind it is.
-    update_best_move(`Engine error — ${String(message).slice(0, 120)}`);
+    update_best_move(i18n('panel.msg.engine_error', 'Engine error — {detail}', {detail: String(message).slice(0, 120)}));
     if (!/RuntimeError|Aborted|worker sent an error/.test(String(message))) {
         engine_ready = false; // a load that failed is not a warm engine; make the next open re-init
         toggle_calculating(false); // nothing is coming, so stop pretending a search is running
@@ -1087,7 +1125,7 @@ function on_engine_error(message) {
     }
     if (engine_restarts >= 3) {
         // ponytail: cap restarts — a build that keeps trapping (some wasm builds on some machines) shouldn't loop forever
-        update_best_move('Engine keeps crashing — pick a different engine in Settings.');
+        update_best_move(i18n('panel.msg.engine_keeps_crashing', 'Engine keeps crashing — pick a different engine in Settings.'));
         return;
     }
     engine_restarts++;
@@ -1095,7 +1133,7 @@ function on_engine_error(message) {
     engine_restarting = true;
     engine = null; // drop the dead instance; send_engine_uci becomes a no-op meanwhile
     engine_ready = false; // a reopen mid-restart must do a full init, not warm-reuse the dead engine
-    update_best_move(`Engine crashed — restarting (attempt ${engine_restarts}/3)`);
+    update_best_move(i18n('panel.msg.engine_restarting', 'Engine crashed — restarting (attempt {n}/3)', {n: engine_restarts}));
     initialize_engine()
         .then(() => { last_eval = {fen: '', activeLines: 0, lines: []}; }) // force re-analysis on next fen poll
         .catch((e) => console.error('Engine restart failed:', e))
@@ -1108,24 +1146,28 @@ function on_engine_best_move(best, threat, isTerminal=false) {
     }
 
     console.log('EVALUATION:', JSON.parse(JSON.stringify(last_eval)));
-    const piece_name_map = {P: 'Pawn', R: 'Rook', N: 'Knight', B: 'Bishop', Q: 'Queen', K: 'King'};
-    const toplay = (turn === 'w') ? 'White' : 'Black';
-    const next = (turn === 'w') ? 'Black' : 'White';
+    const piece_name_map = {
+        P: i18n('piece.pawn', 'Pawn'), R: i18n('piece.rook', 'Rook'), N: i18n('piece.knight', 'Knight'),
+        B: i18n('piece.bishop', 'Bishop'), Q: i18n('piece.queen', 'Queen'), K: i18n('piece.king', 'King'),
+    };
+    const white = i18n('color.white', 'White'), black = i18n('color.black', 'Black');
+    const toplay = (turn === 'w') ? white : black;
+    const next = (turn === 'w') ? black : white;
     if (!best || best === '(none)') { // game over (or crashed search) — there is no move to draw or play
         const pvLine = last_eval.lines[0] || {};
         if ('mate' in pvLine) {
-            update_evaluation('Checkmate!');
+            update_evaluation(i18n('panel.msg.checkmate', 'Checkmate!'));
             if (config.variant === 'antichess') {
-                update_best_move(`${toplay} Wins`);
+                update_best_move(i18n('panel.msg.wins', '{side} Wins', {side: toplay}));
             } else {
-                update_best_move(`${next} Wins`);
+                update_best_move(i18n('panel.msg.wins', '{side} Wins', {side: next}));
             }
         } else {
-            update_evaluation('Stalemate!');
+            update_evaluation(i18n('panel.msg.stalemate', 'Stalemate!'));
             if (config.variant === 'antichess') {
-                update_best_move(`${toplay} Wins`);
+                update_best_move(i18n('panel.msg.wins', '{side} Wins', {side: toplay}));
             } else {
-                update_best_move('Draw');
+                update_best_move(i18n('panel.msg.draw', 'Draw'));
             }
         }
         clear_next_move_eta(); // game over: no move coming, drop any countdown started at search time
@@ -1151,7 +1193,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         // engine (WASM, native SF/Fairy, remote) does.
         const pondering = config.ponder && toplay.toLowerCase() !== our_side()
             && config.engine !== 'maia' && config.engine !== 'maia3';
-        update_best_move(`${pondering ? 'Pondering — ' : ''}${toplay} to play, best move is ${best}`);
+        update_best_move(`${pondering ? i18n('panel.msg.pondering', 'Pondering — ') : ''}` + i18n('panel.msg.to_play_best', '{side} to play, best move is {move}', {side: toplay, move: best}));
     }
 
     if (toplay.toLowerCase() === our_side()) {
@@ -1191,7 +1233,8 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                 // a clock-aware mode alone still shapes the timing (budget / opponent mirror).
                 // Never in puzzle mode, whose PV playback must follow the engine line exactly.
                 // Book move (weighted random over the human distribution) outranks the engine's pick
-                // while we're still in book -- Move priority: Tablebase > Book > Humanize > engine. It only
+                // while we're still in book -- Move priority: Puzzle DB > Tablebase > Book > Humanize > engine.
+                // It only
                 // replaces WHICH move is played; the timing below is untouched, so Clock/Mirror/
                 // Humanize still pace it exactly as they would have. Null whenever the lookup hasn't
                 // landed, we're out of book, or every candidate failed the games/engine filters.
@@ -1208,11 +1251,14 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                 if (tb && !premove_reply_playable(last_eval.fen, tb)) {
                     console.warn('Mephisto: ignoring a tablebase move that is not ours/legal here:', tb);
                 }
+                // No puzzle-database branch here on purpose: a position the database knows is played
+                // by maybe_play_puzzle_move before any search starts, so if we have reached a
+                // bestmove at all, the database did not have this position.
                 const tb_ok = tb && premove_reply_playable(last_eval.fen, tb);
                 const played = tb_ok ? tb
                     : (book && premove_reply_playable(last_eval.fen, book)) ? book : best;
                 if (tb_ok && tb !== best) console.log(`Tablebase: playing ${tb} over ${best} (solved position)`);
-                if (played !== best) console.log(`Book: playing ${played} over ${best} (weighted random)`);
+                if (!tb_ok && played !== best) console.log(`Book: playing ${played} over ${best} (weighted random)`);
                 if ((config.humanize || clock_aware()) && !config.puzzle_mode) {
                     const pick = humanize_pick(best);
                     if (played !== best) pick.move = played; // book wins the move, humanize keeps the clock
@@ -1892,7 +1938,7 @@ function restore_setup_state() {
         if (row) row.style.display = '';
         const input = PANEL_ROOT.getElementById('setup_fen_input');
         if (input) input.value = setup_fen;
-        setup_fen_msg('Restored the position you had set — Re-detect to follow the page again');
+        setup_fen_msg(i18n('panel.fen.restored', 'Restored the position you had set — Re-detect to follow the page again'));
         update_snap_follow_button();
         try {
             turn = setup_fen.split(' ')[1] || 'w';
@@ -1970,12 +2016,133 @@ function tablebase_label() {
     if (!tablebase_data || tablebase_data.fen !== last_eval.fen) return '';
     const c = tablebase_data.category;
     const n = Math.abs(tablebase_data.dtm ?? tablebase_data.dtz ?? 0);
-    if (c === 'win') return `tablebase: win in ${n}`;
-    if (c === 'loss') return `tablebase: lost in ${n}`;
-    if (c === 'draw') return 'tablebase: draw';
-    if (c === 'cursed-win') return `tablebase: win in ${n} (50-move drawn)`;
-    if (c === 'blessed-loss') return 'tablebase: loss (50-move drawn)';
+    if (c === 'win') return i18n('panel.tb.win', 'tablebase: win in {n}', {n});
+    if (c === 'loss') return i18n('panel.tb.loss', 'tablebase: lost in {n}', {n});
+    if (c === 'draw') return i18n('panel.tb.draw', 'tablebase: draw');
+    if (c === 'cursed-win') return i18n('panel.tb.cursed', 'tablebase: win in {n} (50-move drawn)', {n});
+    if (c === 'blessed-loss') return i18n('panel.tb.blessed', 'tablebase: loss (50-move drawn)');
     return '';
+}
+
+// --- Lichess puzzle database ---------------------------------------------------------------------
+// Opt-in, and opting in is importing the file (Settings -> Puzzle Database). With nothing imported
+// every lookup misses and Puzzle Mode behaves exactly as it always has.
+//
+// Why it is worth having: the engine's best move and the puzzle's INTENDED move are not the same
+// thing. A puzzle has one scored answer, and a stronger move that isn't it still loses the puzzle.
+// When the position is in the database the whole solution is known, so there is nothing to search.
+//
+// The read has to go through the service worker. This panel runs in the page's ISOLATED WORLD, and
+// an isolated world's indexedDB belongs to the SITE -- the extension's database is not reachable
+// from here at all, however the code is arranged.
+//
+// A hit is expanded ONCE into every our-turn position of the line, so plies 2, 3, 4... answer from
+// memory with no further round-trip. If the opponent ever leaves the line the position simply isn't
+// in the map, the lookup misses, and the engine plays -- no special case needed.
+let puzzle_solutions = null;   // Map(placement+stm -> our uci) for the line we last matched
+let puzzle_asked = null;       // the position the last request was for (don't re-ask on every poll)
+
+function puzzle_db_enabled() {
+    // Standard chess only: the database is lichess's standard puzzle set, and the key is a plain
+    // placement, so a variant position could in principle collide with a standard one.
+    return config.puzzle_mode && (!config.variant || config.variant === 'chess');
+}
+
+function puzzle_key(fen) {
+    const parts = String(fen).split(' ');
+    return `${parts[0]} ${parts[1] || 'w'}`;
+}
+
+// Walk the solution from the position it was stored against, recording OUR move for each of our
+// turns. The stored line alternates ours/theirs starting with ours, so our positions are the even
+// steps. chess.js is what makes the intermediate positions trustworthy -- unlike the import, this
+// runs once per puzzle, not six million times.
+function puzzle_expand(fen, solution) {
+    const map = new Map();
+    try {
+        const chess = new Chess(config.variant, fen);
+        const moves = solution.split(' ').filter(Boolean);
+        for (let i = 0; i < moves.length; i++) {
+            if (i % 2 === 0) map.set(puzzle_key(chess.fen()), moves[i]);
+            const m = moves[i];
+            if (!chess.move({from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4]})) break;
+        }
+    } catch (e) {
+        return map; // a line that doesn't replay gives back whatever it managed; the rest just misses
+    }
+    return map;
+}
+
+// Fire-and-forget, exactly like the tablebase probe: the move path never awaits it, it either has an
+// answer by the time a move is due or it doesn't.
+function request_puzzle_solution(fen) {
+    if (!puzzle_db_enabled()) return;
+    if (puzzle_solutions?.has(puzzle_key(fen))) return; // already covered by the line in hand
+    if (puzzle_asked === puzzle_key(fen)) return;       // asked once; the answer is coming or was null
+    puzzle_asked = puzzle_key(fen);
+    chrome.runtime.sendMessage({puzzleLookup: {fen}}, (res) => {
+        if (chrome.runtime.lastError || !res || res.error || !res.solution) return;
+        puzzle_solutions = puzzle_expand(fen, res.solution);
+        console.log(`Puzzle DB: solution known -- ${res.solution}`);
+        update_best_move_suffix();
+        // The answer landed after on_new_pos ran: draw it and play it now.
+        if (last_eval.fen === fen) draw_moves();
+        maybe_play_puzzle_move(fen);
+    });
+}
+
+// Our move in THIS position per the database, or null.
+function puzzle_pick(fen) {
+    if (!puzzle_db_enabled()) return null;
+    const uci = puzzle_solutions?.get(puzzle_key(fen));
+    return /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci ?? '') ? uci : null;
+}
+
+// Play the known move NOW, without waiting for the engine.
+//
+// This started out hanging off the engine's bestmove handler, next to the tablebase and book picks,
+// and that was wrong twice over. It made the whole feature depend on a search TERMINATING -- so with
+// Autoplay's `go movetime` it merely wasted the search, and on any path that does not produce a
+// terminal bestmove nothing was ever played at all. Worse, the gate around that block tests whether
+// the ENGINE's move is playable, so a database move could be discarded because the engine's own
+// suggestion was unusable. And it defeats the point: when the position is in the database the entire
+// solution is known, and there is nothing left for a search to decide.
+//
+// Is there a known move for this position that we are allowed to play right now? Split from the
+// action because on_new_pos has to decide whether to start a search BEFORE it is in a state where
+// the move can actually be issued.
+//
+// Same safety the engine's own moves get: the move must belong to US and be legal here. A database
+// hit is a position match, not proof that this board is that position.
+function puzzle_move_ready(fen) {
+    if (!config.autoplay || config.help_mode || config.manual_mode || config.simon_says_mode) return null;
+    const uci = puzzle_pick(fen);
+    if (!uci) return null;
+    if (!premove_reply_playable(fen, uci)) {
+        console.warn('Mephisto: ignoring a puzzle move that is not ours/legal here:', uci);
+        return null;
+    }
+    return uci;
+}
+
+// Called at the end of on_new_pos AND from the lookup callback -- on the first position of a puzzle
+// the answer arrives a moment after on_new_pos has already run. No latch of its own: a second call
+// for the same position is what a FAILED move needs (the content-script re-pushes it), and a double
+// click is already impossible -- the content-script's `moving` guard drops it.
+function maybe_play_puzzle_move(fen) {
+    const uci = puzzle_move_ready(fen);
+    if (!uci) return false;
+    console.log(`Puzzle DB: playing ${uci} (known solution, no search)`);
+    abandon_search(); // no search is wanted here, and none of its output should arrive behind ours
+    toggle_calculating(false);
+    update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci}));
+    request_automove(uci);
+    return true;
+}
+
+// Appended to the move readout, so a database move is never silently substituted for the engine's.
+function puzzle_label() {
+    return puzzle_pick(last_eval.fen) ? i18n('panel.puzzle_db_label', 'puzzle database') : '';
 }
 
 function explorer_enabled() {
@@ -2124,7 +2291,7 @@ function panel_line_goto(idx) {
     if (input) input.value = fen;
     const row = PANEL_ROOT.getElementById('setup-fen-row');
     if (row) row.style.display = '';
-    setup_fen_msg('Walking the panel line — play a move to continue from here, Re-detect to follow the page');
+    setup_fen_msg(i18n('panel.fen.walking_line', 'Walking the panel line — play a move to continue from here, Re-detect to follow the page'));
     last_eval.fen = ''; prev_ply_count = 0;
     abandon_search();
     try {
@@ -2203,7 +2370,7 @@ function play_on_panel_board(from, to, promotion) {
     if (row) row.style.display = '';
     const input = PANEL_ROOT.getElementById('setup_fen_input');
     if (input) input.value = next;
-    setup_fen_msg('Playing on the panel board — Re-detect to follow the page again');
+    setup_fen_msg(i18n('panel.fen.panel_board', 'Playing on the panel board — Re-detect to follow the page again'));
     last_eval.fen = ''; prev_ply_count = 0;
     opp_spend = opp_clock_mark = last_our_eval = null;
     explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
@@ -2312,11 +2479,11 @@ function snap_follow_start() {
     };
     snap_follow_timer = setTimeout(loop, 0);
     update_snap_follow_button();
-    setup_fen_msg(`Following the screen · ${SNAP_FOLLOW_MS}ms`); // terse: it sits above the buttons
+    setup_fen_msg(i18n('panel.fen.following', 'Following the screen · {ms}ms', {ms: SNAP_FOLLOW_MS})); // terse: it sits above the buttons
 }
 
 function snap_follow_toggle() {
-    if (snap_following()) { snap_follow_stop(); setup_fen_msg('Stopped following'); }
+    if (snap_following()) { snap_follow_stop(); setup_fen_msg(i18n('panel.fen.stopped_following', 'Stopped following')); }
     else snap_follow_start();
 }
 
@@ -2401,7 +2568,7 @@ async function snap_follow_tick() {
             fen = `${res.placement} ${prev[1] || 'w'} - - 0 1`;
             if (!is_legal_position(fen)) fen = flip_fen_turn(fen);
             console.warn('Mephisto: could not explain the board as one move -- re-seeding from what is on screen');
-            setup_fen_msg('Re-seeded · check the side to move');
+            setup_fen_msg(i18n('panel.fen.reseeded', 'Re-seeded · check the side to move'));
         }
         if (!is_legal_position(fen)) return;       // belt and braces; the inference only plays legal moves
         setup_fen = fen;
@@ -2414,7 +2581,7 @@ async function snap_follow_tick() {
     } catch (e) {
         // the tab went away, or the offscreen recogniser is not up -- stop rather than spin
         snap_follow_stop();
-        setup_fen_msg('Stopped following (the capture failed)');
+        setup_fen_msg(i18n('panel.fen.follow_failed', 'Stopped following (the capture failed)'));
     } finally {
         snap_follow_busy = false;
     }
@@ -2433,12 +2600,12 @@ async function snap_position(crop) {
     setup_fen_msg('');
     const row = PANEL_ROOT.getElementById('setup-fen-row');
     if (row) row.style.display = '';
-    setup_fen_msg('Reading the board from the screen…');
+    setup_fen_msg(i18n('panel.fen.reading', 'Reading the board from the screen…'));
     let res;
     try {
         res = await chrome.runtime.sendMessage({captureAndRecognize: {crop}});
     } catch (e) {
-        setup_fen_msg(`Capture failed (${e})`);
+        setup_fen_msg(i18n('panel.fen.capture_failed', 'Capture failed ({detail})', {detail: e}));
         return;
     }
     if (!res || res.error) {
@@ -2453,7 +2620,7 @@ async function snap_position(crop) {
     // the turn, and the FEN box is right there showing what was read).
     const fen = `${res.placement} w - - 0 1`;
     if (!is_legal_position(fen)) {
-        setup_fen_msg('Read a position that is not legal — try dragging a box around the board');
+        setup_fen_msg(i18n('panel.fen.illegal_read', 'Read a position that is not legal — try dragging a box around the board'));
         request_drag_select();
         return;
     }
@@ -2475,6 +2642,7 @@ async function snap_position(crop) {
     explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
     abandon_search();
     turn = 'w';
+    setup_view = null;          // a new capture has not been told which way up it is yet
     board.orientation('white');
     on_new_pos(fen, fen, '');
 }
@@ -2510,7 +2678,7 @@ function apply_setup_fen() {
     try {
         parsed = new Chess(config.variant, fen).fen();
     } catch (e) {
-        setup_fen_msg('Not a valid FEN');
+        setup_fen_msg(i18n('panel.fen.not_valid', 'Not a valid FEN'));
         return;
     }
     // chess.js SILENTLY falls back to the standard start position for input it can't read, so a
@@ -2518,28 +2686,32 @@ function apply_setup_fen() {
     // game. The piece placement round-trips exactly, so compare it: if it doesn't match what was
     // typed, chess.js substituted its default and the input was never a FEN.
     if (parsed.split(' ')[0] !== fen.split(/\s+/)[0]) {
-        setup_fen_msg('Not a valid FEN');
+        setup_fen_msg(i18n('panel.fen.not_valid', 'Not a valid FEN'));
         return;
     }
     if (!is_legal_position(parsed)) {
-        setup_fen_msg('Illegal position');
+        setup_fen_msg(i18n('panel.fen.illegal', 'Illegal position'));
         return;
     }
     setup_fen = parsed;
     stash_setup_state();
-    setup_fen_msg('Set — the panel is no longer following the page');
+    setup_fen_msg(i18n('panel.fen.set', 'Set — the panel is no longer following the page'));
     // treat it as a brand-new game so no stale pacing/premove/book state carries over
     last_eval.fen = ''; prev_ply_count = 0;
     opp_spend = opp_clock_mark = last_our_eval = null;
     explorer_out_of_book = false; explorer_data = null;
     abandon_search();
     turn = parsed.split(' ')[1];
-    board.orientation(turn === 'w' ? 'white' : 'black');
+    // The view is sticky once chosen (Flip board), and only DERIVED from the turn when it has never
+    // been set. Deriving it every time meant the board spun round on every ply of a followed game --
+    // which is also why our_side() exists: what the panel answers for no longer rides on this.
+    board.orientation(setup_view || (turn === 'w' ? 'white' : 'black'));
     on_new_pos(parsed, parsed, '');
 }
 
 function clear_setup_fen() {
     panel_line_reset(''); // back to the live game -- the walked line is finished with
+    setup_view = null;    // the page decides the orientation again
     snap_crop = null;
     snap_follow_stop();
     stash_setup_state(); // clears the stash: a reload must NOT bring the position back
@@ -2574,7 +2746,12 @@ function on_new_pos(fen, startFen, moves) {
     // fire the book lookup NOW so the answer has the whole search to arrive; never awaited
     request_explorer(fen);
     request_tablebase(fen);
+    request_puzzle_solution(fen);
     prev_ply_count = ply_count;
+    // Do we already know this position's move (ply 2+ of a solution looked up a move ago)? Decided
+    // HERE so the engine branch below can be skipped, but PLAYED at the very end of this function --
+    // request_automove reads last_eval, and last_eval only describes this position once we get there.
+    const puzzle_known = puzzle_move_ready(fen);
     toggle_calculating(true);
     // SIZE THE SEARCH TO THE PACE. When a clock-aware mode intends to spend, say, 1.2s on this move,
     // the engine should SEARCH ~1.2s (minus a margin to play it) rather than find a shallow move in
@@ -2629,7 +2806,7 @@ function on_new_pos(fen, startFen, moves) {
     // feed, and the bestmove it produces moves one of THEIR pieces, which premove_reply_playable
     // rejects anyway. It only burns cores and leaves a search in flight that the real position then
     // has to supersede. Stop whatever is running and wait for their move instead.
-    if (config.puzzle_mode && !our_turn) {
+    if (puzzle_known || (config.puzzle_mode && !our_turn)) {
         abandon_search();
     } else if (is_remote()) {
         // pure analysis (Help Mode / Autoplay off) keeps deepening like the WASM `go infinite`: give
@@ -2738,6 +2915,10 @@ function on_new_pos(fen, startFen, moves) {
     }
     last_eval = {fen, activeLines: 0, lines: new Array(config.multiple_lines),
         lastMove: moves ? moves.trim().split(' ').pop() : null}; // opp's last move (humanize recapture check)
+    // A known solution means no search ran, so nothing else will ever call draw_moves for this
+    // position -- the arrow has to be drawn from here or there is no arrow at all.
+    if (puzzle_pick(fen)) draw_moves();
+    if (puzzle_known) maybe_play_puzzle_move(fen);
 }
 
 // Restore the en-passant square on a position that was rebuilt from PIECES ALONE (chess.com
@@ -2833,11 +3014,11 @@ function apply_ep_square(fen, lastMove) {
 
 function parse_position_from_response(txt) {
     const prefixMap = {
-        li: 'Game detected on Lichess.org',
-        cc: 'Game detected on Chess.com',
-        bt: 'Game detected on BlitzTactics.com',
-        tt: 'Game detected on TakeTakeTake',
-        cb: 'Position detected on ChessBase Tactics'
+        li: i18n('panel.detected_on', 'Game detected on {site}', {site: 'Lichess.org'}),
+        cc: i18n('panel.detected_on', 'Game detected on {site}', {site: 'Chess.com'}),
+        bt: i18n('panel.detected_on', 'Game detected on {site}', {site: 'BlitzTactics.com'}),
+        tt: i18n('panel.detected_on', 'Game detected on {site}', {site: 'TakeTakeTake'}),
+        cb: i18n('panel.position_detected_on', 'Position detected on {site}', {site: 'ChessBase Tactics'}),
     };
 
     function parse_position_from_moves(txt, startFen = null) {
@@ -3066,18 +3247,18 @@ function move_confidence_label() {
         if (!last_eval.fen || config.simon_says_mode) return '';
         // a single legal move is "only move" regardless of what the engine reports
         const legal = new Chess(config.variant, last_eval.fen).moves().length;
-        if (legal === 1) return 'only move';
+        if (legal === 1) return i18n('panel.conf.only_move', 'only move');
         const a = last_eval.lines?.[0], b = last_eval.lines?.[1];
         if (!a || !b) return '';                       // Multi Lines = 1, or line 2 not in yet
         // mate scores don't subtract meaningfully against centipawns
         if (a.mate != null || b.mate != null) {
-            return (a.mate != null && b.mate == null) ? 'only line that mates' : '';
+            return (a.mate != null && b.mate == null) ? i18n('panel.conf.only_line_mates', 'only line that mates') : '';
         }
         if (typeof a.score !== 'number' || typeof b.score !== 'number') return '';
         const gap = Math.abs(a.score - b.score);
-        if (gap >= CONFIDENCE_ONLY_MOVE_CP) return `clearly best (+${(gap / 100).toFixed(1)})`;
-        if (gap <= CONFIDENCE_EQUAL_CP) return 'several equal';
-        return `+${(gap / 100).toFixed(2)} over #2`;
+        if (gap >= CONFIDENCE_ONLY_MOVE_CP) return i18n('panel.conf.clearly_best', 'clearly best (+{gap})', {gap: (gap / 100).toFixed(1)});
+        if (gap <= CONFIDENCE_EQUAL_CP) return i18n('panel.conf.several_equal', 'several equal');
+        return i18n('panel.conf.over_second', '+{gap} over #2', {gap: (gap / 100).toFixed(2)});
     } catch (e) {
         return ''; // unparseable variant fen etc. -- the readout is better bare than wrong
     }
@@ -3091,7 +3272,7 @@ function readout_extras() {
     // Both labels return BARE text and the separator is added here. They used to carry their own
     // leading '—' / '·', so which punctuation started the line depended on which label happened to
     // be present -- and stripping it back off needed a regex that missed the em dash.
-    const extra = [tablebase_label(), move_confidence_label()].filter(Boolean).join(' · ');
+    const extra = [puzzle_label(), tablebase_label(), move_confidence_label()].filter(Boolean).join(' · ');
     return extra ? `<span class="line1-extra">${extra}</span>` : '';
 }
 
@@ -3624,11 +3805,12 @@ function set_move_countdown(target, source, category = null) {
         const left = eta_target - Date.now();
         const suffix = eta_category ? ` · ${eta_category}` : ''; // humanize: which move it plays next
         if (left <= 50) {
-            el.textContent = `Playing now (${eta_source})${suffix}`;
+            el.textContent = i18n('panel.eta.now', 'Playing now ({source}){suffix}', {source: eta_source, suffix});
             clearInterval(eta_timer);
             return;
         }
-        el.textContent = `Playing in ${(left / 1000).toFixed(1)}s (${eta_source})${suffix}`;
+        el.textContent = i18n('panel.eta.in', 'Playing in {secs}s ({source}){suffix}',
+        {secs: (left / 1000).toFixed(1), source: eta_source, suffix});
     };
     tick();
     eta_timer = setInterval(tick, 100);
@@ -3813,6 +3995,34 @@ function do_hotkey(action) {
     box.checked = !box.checked;
     box.dispatchEvent(new Event('change'));
     return true;
+}
+
+// Follow the page in and out of Puzzle Mode, the way the variant detector follows a variants page
+// onto Fairy-Stockfish. Arriving at lichess/training or chess.com/puzzles switches it on; leaving
+// switches it back off.
+//
+// The off half matters more than the on half. Puzzle Mode changes how the panel plays quite a lot --
+// one move at a time, the opponent's turn not analysed, Premove disabled -- so leaving it latched on
+// when you go back to a real game would be a worse bug than never having offered this. It is only
+// undone if WE were the one who turned it on: a manual choice is never overridden.
+let auto_puzzle_mode = false; // did this panel switch Puzzle Mode on for a puzzle page?
+
+function sync_puzzle_mode_to_page(onPuzzlePage) {
+    if (onPuzzlePage == null) return;              // site the content-script does not classify
+    if (onPuzzlePage === !!config.puzzle_mode) {   // already where it should be
+        if (!onPuzzlePage) auto_puzzle_mode = false;
+        return;
+    }
+    if (!onPuzzlePage && !auto_puzzle_mode) return; // you turned it on yourself -- leave it alone
+    const box = PANEL_ROOT.getElementById('qs_puzzle');
+    if (!box) return;
+    auto_puzzle_mode = onPuzzlePage;
+    // Flip the checkbox and fire its change event rather than writing config directly: that is the
+    // one path that also saves, pushes to the content-script and re-renders, and it is what the
+    // hotkeys use for the same reason.
+    box.checked = onPuzzlePage;
+    box.dispatchEvent(new Event('change'));
+    console.log(`Puzzle Mode ${onPuzzlePage ? 'on' : 'off'} — following the page`);
 }
 
 function request_automove(move, think = null, manual = false) {
@@ -4136,6 +4346,7 @@ function watch_config_changes() {
                 if (key === 'eval_bar' && !value) request_clear_eval_bar();
                 if (key === 'eval_history') request_clear_eval_bar(); // redrawn by the next eval
                 if (key === 'tablebase') tablebase_data = null;       // a stale answer must not survive
+                if (key === 'language') load_language(value).then(apply_language);
                 // these change the go mode / search budget -- restart under the new setting
                 if (['help_mode', 'autoplay', 'clock_mode', 'mirror_mode', 'manual_mode'].includes(key)) {
                     abandon_search();
@@ -4171,6 +4382,20 @@ function push_config() {
 }
 
 function draw_moves() {
+    // A known puzzle solution replaces the engine's arrow entirely -- and it is the only arrow there
+    // is, since a database hit skips the search, so last_eval.lines is empty and the loop below would
+    // draw nothing at all. Not gated on Autoplay the way playing the move is: Help Mode wants to be
+    // SHOWN the answer, which is exactly when an arrow is the whole point.
+    const solution = puzzle_pick(last_eval.fen);
+    if (solution) {
+        clear_annotations();
+        draw_move(solution, line_color(0), PANEL_ROOT.getElementById('move-annotations'), 0.25);
+        if (config.help_mode) {
+            engine_hint_arrows = [{move: solution, width: 0.25, color: line_color(0)}];
+            push_hint_arrows();
+        }
+        return;
+    }
     if (last_eval.lines[0] == null) return;
 
     function strokeFunc(line) {
@@ -4504,7 +4729,7 @@ function maybe_suggest_calibration() {
         if (Math.abs(want - config.compute_time) < Math.max(100, config.compute_time * 0.25)) return;
         const el = PANEL_ROOT.getElementById('calibrate-notice');
         if (!el) return;
-        el.textContent = `This machine measures ${(median / 1e6).toFixed(1)}M nps — ` +
+        el.textContent = i18n('panel.calibrated', 'This machine measures {nps}M nps — ', {nps: (median / 1e6).toFixed(1)}) +
             `Search Time ${want}ms matches the reference strength (now ${config.compute_time}ms). Tap to apply.`;
         el.hidden = false;
         el.onclick = (e) => {
@@ -4528,7 +4753,8 @@ function check_for_update() {
         chrome.runtime.sendMessage({updateCheck: true}, (res) => {
             // the version compare lives in the SW (isNewer) -- one implementation, not two
             if (chrome.runtime.lastError || !res || res.error || !res.latest || !res.newer) return;
-            el.textContent = `Update available — v${res.latest} (you have v${res.current})`;
+            el.textContent = i18n('panel.update_available', 'Update available — v{latest} (you have v{current})',
+      {latest: res.latest, current: res.current});
             el.hidden = false;
             el.onclick = (e) => {
                 e.preventDefault();
@@ -4681,7 +4907,9 @@ function on_native_info(info, fen) {
             // progress bar in the move line forever, so the panel looked like it was still loading
             // while the eval and depth were plainly updating. Say what's actually happening instead.
             is_calculating = false;
-            update_best_move(Number.isInteger(info.depth) ? `Searching (depth ${info.depth})` : 'Searching');
+            update_best_move(Number.isInteger(info.depth)
+        ? i18n('panel.msg.searching_depth', 'Searching (depth {depth})', {depth: info.depth})
+        : i18n('panel.msg.searching', 'Searching'));
         }
     }
 }

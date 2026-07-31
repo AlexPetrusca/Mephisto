@@ -3,7 +3,7 @@
   "manifest_version": 3,
   "name": "Mephisto Chess Extension",
   "description": "Next best move analysis for your favorite chess websites",
-  "version": "3.1.139",
+  "version": "3.1.140",
   "homepage_url": "https://github.com/AlexPetrusca/Mephisto",
   "author": "Alex Petrusca",
   "icons": {
@@ -31,6 +31,7 @@
     "debugger",
     "nativeMessaging",
     "storage",
+    "unlimitedStorage",
     "offscreen",
     "activeTab",
     "scripting"
@@ -47,6 +48,7 @@
         "lib/lru.min.js",
         "lib/chess.js",
         "src/scripts/config-store.js",
+        "src/i18n/i18n.js",
         "src/scripts/panel-board.js",
         "src/popup/popup.js",
         "src/scripts/content-script.js"

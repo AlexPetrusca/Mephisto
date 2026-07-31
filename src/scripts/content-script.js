@@ -60,7 +60,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.139'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.140'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -113,7 +113,8 @@ function handleExtensionMessage(response, sender, sendResponse) {
             orient = getOrientation();
         }
         try {
-            sendToPanel({ dom: res, orient: orient, clocks: scrapeClocks(), fenresponse: true });
+            sendToPanel({ dom: res, orient: orient, clocks: scrapeClocks(), fenresponse: true,
+                          puzzlePage: isPuzzlePage() });
         } catch (e) {
             // extension was reloaded — this orphaned content-script can't reach it anymore
         }
@@ -164,15 +165,27 @@ function handleExtensionMessage(response, sender, sendResponse) {
         if (response.timing) Object.assign(config, response.timing);
         beginMoving(response.think);
         try {
-            if (config.puzzle_mode) {
-                console.log(response.pv);
+            // Dispatch on the SHAPE OF THE MESSAGE, never on our own copy of the config.
+            //
+            // This used to branch on `config.puzzle_mode`, but the popup picked the shape it sent
+            // from ITS copy of the config and these are two separately-synced snapshots. Whenever
+            // they disagreed -- the window around any Puzzle Mode toggle, hotkey or options page,
+            // and the panel's config is a snapshot -- the wrong reader ran: `simulatePvMoves`
+            // against a message carrying `move`, or `simulateMoveVerified` against one carrying
+            // `pv`. Either way the argument was undefined, no click was ever issued, and
+            // `.finally(endMoving)` tidied up behind it, so autoplay simply skipped a move with
+            // nothing stuck and nothing logged. The sender already decided; read what it sent.
+            if (response.pv) {
                 simulatePvMoves(response.pv).finally(endMoving);
             } else if (response.premoves) {
-                console.log(response.premoves);
                 simulatePremoveSequence(response.premoves).finally(endMoving);
-            } else {
-                console.log(response.move);
+            } else if (response.move) {
                 simulateMoveVerified(response.move, response.deselect, response.verify, response.think ?? null).finally(endMoving);
+            } else {
+                // No move in a message that claimed to carry one. Nothing to click, so release the
+                // guard rather than sitting on it until the watchdog.
+                endMoving();
+                console.warn('Mephisto: automove with no move to play -- ignored');
             }
         } catch (e) {
             endMoving(); // a sync throw (e.g. board vanished) must not leave `moving` stuck true
@@ -1100,6 +1113,19 @@ let lastPuzHighlight = '';
 let puzTearKey = '';
 let puzTearCount = 0;
 const PUZ_TEAR_RETRIES = 3; // a real tear closes in a frame or two; anything that persists is real
+
+// Are we on a puzzle page? From the URL, because the SCRAPE cannot tell: a lichess puzzle has a
+// real move list (.tview2), so it comes through the ordinary `fen***` path exactly like a game --
+// only chess.com's puzzles, which ship no move list at all, fall to the `puz***` prefix.
+//
+// Puzzle Rush / Storm / Racer / Streak are included: they are puzzles, played under a clock.
+function isPuzzlePage() {
+    const path = location.pathname;
+    if (site === 'lichess') return /^\/(training|storm|racer|streak)(\/|$)/.test(path);
+    if (site === 'chesscom') return /^\/(puzzles|lessons\/practice)(\/|$)/.test(path);
+    if (site === 'blitztactics') return true; // the whole site is puzzles
+    return false;
+}
 
 function scrapePositionPuz() {
     if (isAnimating()) {

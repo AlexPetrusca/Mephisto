@@ -12,6 +12,19 @@ applyTheme();
 MephistoConfig.ready.then(applyTheme); // re-apply once chrome.storage (source of truth) is loaded
 window.mephistoApplyTheme = applyTheme;
 
+// UI language, same shape as the theme: applied to whatever is on screen and re-applied live when
+// the Appearance setting changes. This page swaps its content per route, so each page re-applies on
+// render too (SettingsPage.onInit) -- this covers the shell (sidebar, title) and a live change.
+async function applyLanguage(lang) {
+    await MephistoI18n.use(lang || JSON.parse(MephistoConfig.get('language') || '"en"'));
+    MephistoI18n.apply(document);
+    document.documentElement.lang = MephistoI18n.lang;
+    // Materialize copies data-tooltip into its own element when a tooltip is created, so an already
+    // initialised tooltip keeps the old text until it is rebuilt.
+    M.Tooltip.init(document.querySelectorAll('.tooltipped'), {enterDelay: 1000});
+}
+window.mephistoApplyLanguage = applyLanguage;
+
 document.addEventListener('DOMContentLoaded', function () {
     applyTheme();
     let activeScrollspies;

@@ -480,6 +480,43 @@ Both also size the engine's search to the time they'll spend, so the wait become
 
 ---
 
+### Puzzle database
+
+Puzzle Mode plays a searched move, and a searched move is not always the puzzle's answer — a puzzle has exactly one
+line that scores, and an objectively stronger move still fails it. Import Lichess's puzzle database and the panel
+looks the position up instead: on a hit the whole solution is known, so it plays it with **no search at all**, move
+by move, and the board arrow shows that move rather than an engine guess.
+
+Lichess only. Chess.com's Puzzle Rush positions are not in that file, so a lookup there will essentially never hit
+and Puzzle Mode falls back to the engine exactly as before.
+
+The file is not bundled — it is about a gigabyte, and the release zip is already large enough. Download
+`lichess_db_puzzle.csv.zst` from [database.lichess.org](https://database.lichess.org/#puzzles), decompress it
+(`unzstd lichess_db_puzzle.csv.zst` — browsers have no zstd decoder, which is why this one step is yours), then pick
+the `.csv` under **Settings → General → Puzzle Database**. It is about six million positions and takes roughly half
+an hour to import, once, with a live count as it goes. Nothing is sent anywhere; it is stored in the extension's own
+IndexedDB on your machine. If the import is interrupted nothing is lost — run it again and it fills in the rest.
+
+---
+
+## Languages
+
+The panel and the settings pages are translated. **Settings → Appearance → Language**, English by default, applied
+immediately without a reload.
+
+English, Deutsch, Español, Français, Português, Italiano, Nederlands, Polski, Türkçe, Русский, 中文, हिन्दी, 日本語,
+한국어 — each listed in its own language, because a list written in English does not help someone looking for theirs.
+
+This is deliberately **not** Chrome's own `chrome.i18n`, which picks the browser's UI locale and gives you no way to
+override it; the whole point here is a language you choose. Each language is one flat JSON file under
+`src/i18n/locales/`, and English sits underneath every other as the fallback — a string that has not been translated
+yet renders in English rather than blank, so nothing ever breaks by being missing.
+
+Engine names, board and piece themes, and chess notation are left alone on purpose. The long explanatory tooltips on
+the settings page are still English for now.
+
+---
+
 ## Supported sites & modes
 
 ![TakeTakeTake, whose board is a WebGPU canvas with no DOM to scrape](docs/taketaketake.png)
@@ -496,6 +533,97 @@ Both also size the engine's search to the time they'll spend, so the wait become
 - **Bot play / Autoplay** — Mephisto plays the engine's move for you, including against the site's computer bots.
 - **Online play** — live games against other people; **Puzzles** — Puzzle Mode optimizes for solving speed.
 - **Variants** — variant games auto‑detect and switch to Fairy‑Stockfish; Chess960 runs on any mainline Stockfish.
+
+---
+
+## Every setting explained
+
+Everything on the options page (the extension's own tab — right‑click the toolbar icon → **Options**, or the gear in
+the panel). The quick‑settings column inside the floating panel is a subset of these and writes to the same storage,
+so changing one changes the other. Everything applies to the **next move** without a reload unless noted.
+
+### Settings → General → Engine
+
+| Setting | What it does |
+| --- | --- |
+| **Engine** | Which engine analyses the position. The in‑browser WebAssembly builds need nothing installed; the "(local, full power)" entries talk to a real engine binary on your machine and only appear once their native host is installed. Switching engine reloads the panel, because the net and the UCI options have to be rebuilt. |
+| **Elo** | Caps the engine's playing strength, sent as `UCI_LimitStrength` + `UCI_Elo`. The usable range follows the selected engine (Stockfish dev/18: 1320–3190, Stockfish 11: 1350–2850, Fairy: 500–2850) and out‑of‑range values are ignored rather than clamped. `0` means no cap — full strength. |
+| **Variant** | Which chess variant the position is read and analysed as. Variant games are auto‑detected on the page and switch to Fairy‑Stockfish by themselves, so you rarely set this by hand. Chess960 is the exception: every mainline Stockfish plays it via `UCI_Chess960`, so it survives an engine switch. |
+| **Search Time (ms)** | How long the engine thinks per move when nothing else is setting the pace. Clock Mode, Mirror Time and Humanize all override it — whichever is enabled first decides the duration. Recaptures and forced moves ignore it entirely and play immediately. |
+| **Fallback Poll Interval (ms)** | Position changes are detected instantly and event‑driven; this is only a slow safety net that repairs a missed update. 1000 ms is fine and lowering it buys nothing. |
+| **Multiple Lines** | How many candidate lines the engine reports (MultiPV), each drawn as its own coloured arrow. More lines means the search is split across them, so depth drops — 1 is strongest. Humanize raises this automatically when it needs alternatives to choose from. |
+| **Threads** | CPU threads the search may use. The default leaves one core for the browser. On the opponent's turn this is capped at 2 unless Pondering is on, so idle time is not a full‑core burn. |
+| **Memory** | Transposition‑table size in MB. In‑browser engines are clamped to 512 MB whatever the slider says — that is the WebAssembly heap limit, not a choice — while native engines get the full value. More memory helps long searches and analysis far more than blitz. |
+| **Panel Style** | **Floating panel** is the draggable window over the board; it lives in the page, so a site can detect it more easily, and Autoplay and Premove need it. **Toolbar popup** renders in the browser's own chrome and leaves no trace in the page, but it closes when you click the board — analysis only. |
+
+### Settings → General → Analysis
+
+| Setting | What it does |
+| --- | --- |
+| **Show Computer Evaluation** | Shows the numeric score, depth, nps and the win/draw/loss split under the panel board. Turn it off for a smaller, quieter panel. |
+| **Show Threat Analysis** | Draws a red arrow for the opponent's best reply — what they are threatening if you pass. Costs a second search per position. |
+| **"Hand & Brain" Mode** | Mephisto plays the *Brain*: it names only the piece **type** to move and you pick the actual move. A training mode — it deliberately withholds the move itself, so Autoplay does nothing while it is on. |
+
+### Settings → General → Autoplay
+
+| Setting | What it does |
+| --- | --- |
+| **Autoplay** | Plays the engine's move on the site's board for you, by clicking. Everything else in this section that plays a move needs this on. Off means the panel only ever shows you things. |
+| **Premove** | While the opponent thinks, the engine certifies a reply to their *predicted* move; if they play exactly that, the answer is instant. Anything else searches normally, and a reply that could never be legal after some other opponent move is queued as a real site premove. On Chess.com, when the line is forced two deep, both of your replies are queued at once. |
+| **Pondering** | Keeps searching at full threads during the opponent's turn, across their top five candidate replies, so a deeper answer is ready the moment they move. Off, their turn is still analysed for premove and threat, but capped at 2 threads. Costs CPU continuously — it pairs best with Premove. |
+| **Endgame Tablebase** | At 7 pieces or fewer the position is *solved*, so Mephisto asks Lichess's Syzygy tablebase for the perfect move instead of trusting the search. It outranks the engine and the opening book. Off by default because it sends the position to a third party; the lookup never delays a move. |
+| **Explain Moves** | Names the tactic behind the engine's move — a fork, a promotion, a capture that wins material, mate — on its own line. Deliberately conservative: pins, skewers and discovered attacks cannot be established from the position alone, so it stays quiet rather than guessing. A confidently wrong explanation teaches the wrong thing. |
+| **Hide Opponent Name** | Blurs your opponent's username and avatar so a screenshot or screen share does not expose a real person. Purely cosmetic and local — the site sees nothing different. This is the one option that adds a style element to the page, which is why it is off by default. |
+| **Opening Explorer** | Shows how humans actually played this opening (Lichess database): the opening name, the most‑played replies and their win/draw/loss split, plus coloured arrows on the board. Read‑out only — it never changes which move is played. Standard chess only, and it stops once the game leaves book. |
+| **Play Book Moves** | Plays the opening from the database instead of the engine's pick, weighted‑random among the popular replies — an engine that always plays the same first move is itself a tell. A candidate needs at least 20 games and must rate within 40 cp of the engine's best, so variety never costs you a worse move. If the lookup is late the engine's move is played; it never delays a move. |
+| **Opening Database** | Which games the book data comes from. *Masters* is the cleanest opening play; the Lichess sets are ordinary online games and look more like a normal opponent. Pick the club band to match a typical rating pool. |
+| **Background Play** | Off, moves only fire while the tab is focused and visible — a human does not play while tabbed away, and a move that comes due meanwhile is re‑issued when you return. On keeps Autoplay and Premove running in a hidden tab. Chrome throttles silent background tabs, so keeping one alive marks it as playing audio and the tab shows a speaker icon. |
+| **Help Mode** | Draws the analysis arrows on the site's own board and plays nothing — you make the move yourself. Overrides Autoplay while it is on. This is the mode to use if you want the engine's opinion without it touching the board. |
+| **Humanize** | Plays like a person rather than an engine: instant recaptures, quick obvious moves, long thinks in critical positions, and occasionally a second‑best move, a mistake or a blunder. The mix and the thresholds are yours to set below. It changes both *which* move is played and *how long* it takes. |
+| **Clock Mode** | Reads the game clock off the page and budgets each move to it — roughly time/30 plus 60% of the increment, shrinking the engine search to match, and near‑instant when short on time. It sets the pace, not the move. |
+| **Mirror Time** | Paces to the opponent instead: spend what they spent on their last move minus 10%, so you stay just ahead on the clock, with 30% extra haste when behind. Falls back to the Clock Mode budget when their spend is unknown. Outranks Clock Mode when both are on. |
+| **Manual Mode** | The engine thinks indefinitely and plays nothing until *you* press the play‑move hotkey (Spacebar by default). Your own timing — it overrides Clock/Mirror/Humanize and never fires on its own. |
+| **Opponent Mistake Alert** | Flashes a small toast over the board when your **opponent** plays an inaccuracy, mistake or blunder, judged by the same Lichess win% method the move mix uses. It only fires when both positions were searched deep enough to trust, so it will not invent blunders from shallow evals. |
+| **Puzzle Mode** | Optimizes for solving puzzles fast rather than perfectly: one searched move at a time, and the opponent's scripted reply is not analysed at all. Turns itself on when you open a puzzle page on Lichess or Chess.com and back off when you leave — unless you set it yourself, which is never overridden. |
+| **Puzzle Database** | Loads Lichess's puzzle database so Puzzle Mode plays the *known* solution instead of the engine's guess — the engine's best move and the puzzle's intended move are not always the same, and only one of them scores. Lichess only; Chess.com's Puzzle Rush positions are not in that file. It is not bundled (about a gigabyte), so you download and import it yourself, and it never leaves your machine — see [Puzzle database](#puzzle-database) below. |
+| **Python Backend** | Moves the mouse pointer for real via a local Python helper instead of synthesising clicks in the page. Needs `mephisto-clicker.py` running and PyAutoGUI permissions granted. Almost nobody needs this — the built‑in click path is better in every way that matters. |
+
+### Settings → General → Humanize tuning
+
+Only relevant when **Humanize** is on. All of it applies to the very next move — no reload.
+
+| Setting | What it does |
+| --- | --- |
+| **Humanize Move Mix (%)** | How often each quality of move is played, across seven categories from *Top move* down to *Blunders*. They must add up to 100; the Total row tells you what to add or remove. Giving any share to *Third line* or worse forces a wider search so a move that bad exists to pick — which costs depth, so a pure Top + Second mix stays cheaper. |
+| **Move‑Quality Thresholds (cp)** | How much worse than the best move each category may be, in centipawns (100 cp = 1 pawn). Each value is the *top* of its band and the category above it is the bottom, so the bands tile without gaps. The defaults sit exactly on Lichess's own win‑drop boundaries — ~10% inaccuracy, ~20% mistake, ~30% blunder. |
+| **Simulated Think Time (ms)** | The minimum wall‑clock delay after the position is fully evaluated before the move is played. This is the floor, not the total. |
+| **Simulated Think Time Variance (ms)** | A random extra delay on top of Simulated Think Time, up to this much. Constant, identical timing is itself a tell — this is what breaks it up. |
+| **Simulated Move Time (ms)** | How long the mouse actions of a single move take, from the first click to the last. Promotions get a third leg and are budgeted accordingly. |
+| **Simulated Move Time Variance (ms)** | A random extra amount on top of Simulated Move Time, same idea as the think‑time variance. |
+
+### Settings → General → Hotkeys
+
+| Setting | What it does |
+| --- | --- |
+| **Hotkeys** | One rebindable key per action, live while you are on the game page and the floating panel is open. Click a key and the next key you press becomes the binding — **Esc** cancels, **Backspace/Delete** clears it. Defaults are single letters (the play‑move key is Spacebar); if one clashes with a shortcut the site itself uses, rebind it with any Ctrl/Alt/Shift/Meta combination. |
+
+### Settings → General → buttons
+
+| Button | What it does |
+| --- | --- |
+| **Restore Defaults** | Resets every setting on this page to its shipped default. It does not touch the puzzle database or your hotkeys. |
+| **Export Settings** | Writes every setting, including hotkeys and the humanize tuning, to a JSON file. |
+| **Import Settings** | Reads one back. Values that no longer exist are ignored rather than restored. |
+
+### Settings → Appearance
+
+| Setting | What it does |
+| --- | --- |
+| **Pieces** | The piece set drawn on the panel's own board. Purely cosmetic and panel‑only — the site's board is never restyled. |
+| **Board** | The board colours for the panel's board, same idea. Both are previewed in the dropdown. |
+| **Coordinates** | Shows file letters and rank numbers around the panel board. |
+| **Dark Mode** | Dark theme for the panel and for this settings page. |
+| **Language** | The language of the panel and these settings. English is the default; fourteen languages ship, each listed in its own language, and switching applies immediately without a reload. Engine names, board themes and chess notation deliberately stay as they are — see [Languages](#languages). |
 
 ---
 

@@ -37,6 +37,7 @@ class GeneralSettings extends SettingsPage {
         this.initHumanizeThresholds();
         this.initUiMode();
         this.initHotkeys();
+        this.initPuzzleDb();
         this.registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
         this.registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
         this.registerFormElement('think_time', 'Simulated Think Time (ms):', 'input', 0);
@@ -263,6 +264,70 @@ class GeneralSettings extends SettingsPage {
             set(r, load(r.key, r.dflt), false);
             r.range.addEventListener('input', () => set(r, r.range.value));
             r.num.addEventListener('change', () => set(r, r.num.value));
+        });
+    }
+
+    // Puzzle database import. NOT a FormElement: what is stored is an IndexedDB of six million
+    // positions, not a config value, so it has nothing to push, pull or export. The import runs HERE
+    // rather than in the offscreen document because a File cannot survive chrome.runtime.sendMessage
+    // (it is JSON-serialized, not structure-cloned) -- and this page is extension-origin, so it
+    // writes the very same database the service worker reads.
+    initPuzzleDb() {
+        const btn = document.getElementById('puzzle_db_btn');
+        const clearBtn = document.getElementById('puzzle_db_clear_btn');
+        const file = document.getElementById('puzzle_db_file');
+        const status = document.getElementById('puzzle_db_status');
+        if (!btn || !file || !status) return; // stale cached page html
+        const n = (x) => x.toLocaleString();
+        const idle = async () => {
+            try {
+                const count = await PuzzleDB.count();
+                status.textContent = count
+                    ? `${n(count)} puzzle positions loaded.`
+                    : 'No puzzle database loaded — Puzzle Mode uses the engine.';
+            } catch (e) {
+                status.textContent = `Could not read the database: ${e}`;
+            }
+        };
+        idle();
+        btn.addEventListener('click', () => file.click());
+        clearBtn?.addEventListener('click', async () => {
+            status.textContent = 'Removing…';
+            try { await PuzzleDB.clear(); } catch (e) { /* reported by idle() */ }
+            idle();
+        });
+        file.addEventListener('change', async () => {
+            const f = file.files[0];
+            file.value = ''; // re-picking the SAME file must fire 'change' again
+            if (!f) return;
+            // The published file is .zst and browsers have no zstd decoder (DecompressionStream does
+            // gzip and deflate only), so say which one is wanted rather than failing at row 1 with a
+            // parse error that reads like a corrupt download.
+            if (/\.zst$/i.test(f.name)) {
+                status.textContent = 'That is the compressed file. Decompress it first: ' +
+                    'unzstd lichess_db_puzzle.csv.zst — then pick the .csv.';
+                return;
+            }
+            btn.disabled = clearBtn.disabled = true;
+            status.textContent = 'Reading… (this takes a few minutes; leave this page open)';
+            try {
+                const t0 = Date.now();
+                const res = await PuzzleDB.importCsv(f, ({rows, kept}) => {
+                    const mins = (Date.now() - t0) / 60000;
+                    status.textContent = `Importing… ${n(kept)} positions from ${n(rows)} puzzles ` +
+                        `(${mins.toFixed(1)} min)`;
+                });
+                // COUNT, not `kept`. The key is the position, and two puzzles can be generated from
+                // the same one, so the store holds slightly fewer records than rows read -- reporting
+                // `kept` would claim a number the database does not contain.
+                const stored = await PuzzleDB.count();
+                status.textContent = `Done — ${n(stored)} puzzle positions loaded from ` +
+                    `${n(res.rows)} puzzles. Puzzle Mode will play the known solution.`;
+            } catch (e) {
+                status.textContent = `Import failed: ${e}`;
+            } finally {
+                btn.disabled = clearBtn.disabled = false;
+            }
         });
     }
 }

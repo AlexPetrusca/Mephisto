@@ -2,16 +2,16 @@
     <div class="col s12 m7 offset-m1 xl6 offset-xl1 offset-right-m1">
         <div id="form_container" class="big-section">
             <div id="engine" class="scrollspy">
-                <h3 class="header">Engine</h3>
+                <h3 data-i18n="panel.engine" class="header">Engine</h3>
                 <div class="section">
                     <label>
-                        <span id="engine-label-tooltiped" class="hidden tooltipped" data-position="right"
+                        <span data-i18n-tip="set.tip.mephisto_communicates_with_a_chess" id="engine-label-tooltiped" class="hidden tooltipped" data-position="right"
                               data-tooltip="Mephisto communicates with a chess engine running locally on your machine
                                             to evaluate positions. NOTE: remote-engine.py (in &quot;src/scripts&quot;)
                                             must be running and configured properly for this to work.">
                             Engine <i class="material-icons info-tooltip">info</i>
                         </span>
-                        <span id="engine-label-untooltiped">
+                        <span data-i18n="panel.engine" id="engine-label-untooltiped">
                             Engine
                         </span>
                         <select name="engine" id="engine_select">
@@ -30,7 +30,7 @@
                 </div>
                 <div class="section" id="elo_section">
                     <label>
-                        <span class="tooltipped" data-position="right"
+                        <span data-i18n-tip="set.tip.cap_the_engine_s_playing" class="tooltipped" data-position="right"
                               data-tooltip="Cap the engine's playing strength to a target Elo (sent as
                                             UCI_LimitStrength + UCI_Elo). The valid range follows the engine
                                             (SF dev/18: 1320-3190, SF 11: 1350-2850, Fairy: 500-2850), and
@@ -42,34 +42,34 @@
                 </div>
                 <div class="section">
                     <label>
-                        Variant
+                        <span data-i18n="panel.variant">Variant</span>
                         <select name="variant" id="variant_select">
-                            <option value="chess">Chess</option>
-                            <option value="fischerandom">Chess960</option>
-                            <option value="crazyhouse">Crazyhouse</option>
-                            <option value="kingofthehill">King of the Hill</option>
-                            <option value="3check">Three-Check</option>
-                            <option value="antichess">Antichess</option>
-                            <option value="atomic">Atomic</option>
-                            <option value="horde">Horde</option>
-                            <option value="racingkings">Racing Kings</option>
-                            <option value="duck">Duck</option>
-                            <option value="minihouse">Minihouse</option>
-                            <option value="seirawan">Seirawan (S-Chess)</option>
-                            <option value="chaturanga">Chaturanga</option>
+                            <option data-i18n="set.chess" value="chess">Chess</option>
+                            <option data-i18n="panel.chess960" value="fischerandom">Chess960</option>
+                            <option data-i18n="panel.crazyhouse" value="crazyhouse">Crazyhouse</option>
+                            <option data-i18n="panel.king_of_the_hill" value="kingofthehill">King of the Hill</option>
+                            <option data-i18n="set.three_check" value="3check">Three-Check</option>
+                            <option data-i18n="panel.antichess" value="antichess">Antichess</option>
+                            <option data-i18n="panel.atomic" value="atomic">Atomic</option>
+                            <option data-i18n="panel.horde" value="horde">Horde</option>
+                            <option data-i18n="panel.racing_kings" value="racingkings">Racing Kings</option>
+                            <option data-i18n="panel.duck" value="duck">Duck</option>
+                            <option data-i18n="panel.minihouse" value="minihouse">Minihouse</option>
+                            <option data-i18n="panel.seirawan_s_chess" value="seirawan">Seirawan (S-Chess)</option>
+                            <option data-i18n="panel.chaturanga" value="chaturanga">Chaturanga</option>
                         </select>
                     </label>
                 </div>
                 <div class="flex-group">
                     <div class="section">
                         <label>
-                            Search Time (ms)
+                            <span data-i18n="set.search_time_ms">Search Time (ms)</span>
                             <input id="compute_time_input" type="number">
                         </label>
                     </div>
                     <div class="section">
                         <label>
-                            <span class="tooltipped" data-position="right"
+                            <span data-i18n-tip="set.tip.position_changes_are_detected_inst" class="tooltipped" data-position="right"
                                   data-tooltip="Position changes are detected instantly (event-driven). This is only
                                                 a slow safety-net poll that heals a missed update; 1000ms is fine."
                             >
@@ -81,7 +81,7 @@
                 </div>
                 <div class="section">
                     <label>
-                        Multiple Lines (<span class="value"></span>)
+                        <span data-i18n="set.multiple_lines">Multiple Lines</span> (<span class="value"></span>)
                         <p class="range-field">
                             <input id="multiple_lines_range" type="range" min="1" max="5" step="1">
                         </p>
@@ -89,7 +89,7 @@
                 </div>
                 <div class="section">
                     <label>
-                        Threads (<span class="value"></span>)
+                        <span data-i18n="panel.threads">Threads</span> (<span class="value"></span>)
                         <p class="range-field">
                             <input id="threads_range" type="range" min="1" max="24" step="1">
                         </p>
@@ -97,7 +97,7 @@
                 </div>
                 <div class="section">
                     <label>
-                        Memory (<span class="value"></span> MB)
+                        <span data-i18n="panel.memory">Memory</span> (<span class="value"></span> MB)
                         <p class="range-field">
                             <input id="memory_range" type="range" min="32" max="4096" step="32">
                         </p>
@@ -105,7 +105,7 @@
                 </div>
                 <div class="section">
                     <label>
-                        <span class="tooltipped" data-position="right"
+                        <span data-i18n-tip="set.tip.how_the_mephisto_panel_is" class="tooltipped" data-position="right"
                               data-tooltip="How the Mephisto panel is shown. Floating = the draggable window over the
                                             board; it lives in the page, so a chess site can detect it more easily.
                                             Toolbar popup = the classic bubble in the browser toolbar; it leaves NO
@@ -113,18 +113,18 @@
                             Panel Style <i class="material-icons info-tooltip">info</i>
                         </span>
                         <select name="ui_mode" id="ui_mode_select">
-                            <option value="floating">Floating panel (over the board)</option>
-                            <option value="popup">Toolbar popup (safer — no page footprint)</option>
+                            <option data-i18n="set.floating_panel_over_the_board" value="floating">Floating panel (over the board)</option>
+                            <option data-i18n="set.toolbar_popup_safer_no_page" value="popup">Toolbar popup (safer — no page footprint)</option>
                         </select>
                     </label>
-                    <p style="margin: 6px 0 0; font-size: 12px; line-height: 1.4;">
+                    <p data-i18n-html="set.note.the_panel_button_row_bottom" style="margin: 6px 0 0; font-size: 12px; line-height: 1.4;">
                         The panel button row (bottom left) also has a <b>set-up-position</b> button &mdash; the
                         grid icon beside Self-test. It opens a box to paste a <b>FEN</b>: press Enter and that
                         position is analysed instead of the board on the page. While one is set the panel stops
                         following the page so it cannot be overwritten; click the button again (or Re-detect)
                         to return to the live game. An invalid or illegal FEN is refused with a reason.
                     </p>
-                    <p id="ui_mode_note" style="margin: 6px 0 0; font-size: 12px; line-height: 1.4;">
+                    <p data-i18n-html="set.note.the_floating_panel_is_embedded" id="ui_mode_note" style="margin: 6px 0 0; font-size: 12px; line-height: 1.4;">
                         ⚠️ The <b>floating panel</b> is embedded in the web page, which makes the extension easier for a
                         chess site to detect. The <b>toolbar popup</b> runs entirely in the browser and leaves no page
                         footprint — the safer choice for pure <b>analysis</b>. Note: the popup closes when you click the
@@ -133,25 +133,25 @@
                 </div>
                 <div class="flex-group">
                     <div class="section switch">
-                        <label class="switch-label">Show Computer Evaluation</label>
+                        <label data-i18n="set.show_computer_evaluation" class="switch-label">Show Computer Evaluation</label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="computer_evaluation_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label">Show Threat Analysis</label>
+                        <label data-i18n="set.show_threat_analysis" class="switch-label">Show Threat Analysis</label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="threat_analysis_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.mephisto_plays_as_the_brain" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Mephisto plays as the &quot;Brain&quot;, choosing which piece type to
                                              move, and you play as the &quot;Hand&quot;, selecting the specific legal
                                              move for that piece."
@@ -159,28 +159,28 @@
                             "Hand & Brain" Mode <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="simon_says_mode_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                 </div>
             </div>
             <div id="autoplay" class="scrollspy">
-                <h3 class="header">Autoplay</h3>
+                <h3 data-i18n="panel.autoplay" class="header">Autoplay</h3>
                 <div class="flex-group">
                     <div class="section switch">
-                        <label class="switch-label">Autoplay</label>
+                        <label data-i18n="panel.autoplay" class="switch-label">Autoplay</label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="autoplay_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.while_the_opponent_thinks_certify" class="switch-label tooltipped" data-position="right"
                                data-tooltip="While the opponent thinks, certify a reply to their predicted move.
                                              If they play exactly that move, answer instantly; anything else searches
                                              normally. Never fires in a wrong position. On chess.com, when the
@@ -191,14 +191,14 @@
                             Premove <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="premove_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.use_the_opponent_s_thinking" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Use the opponent's thinking time. ON: keep searching at full threads while
                                              it's the opponent's turn, so a deeper reply is ready the moment they move
                                              over their top 5 candidate replies -- they won't play the engine's #1 -- narrowing to 1-2 on a
@@ -209,14 +209,14 @@
                             Pondering <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="ponder_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.with_7_or_fewer_pieces" class="switch-label tooltipped" data-position="right"
                                data-tooltip="With 7 or fewer pieces left the position is SOLVED, and Mephisto asks
                                              lichess's Syzygy tablebase for the perfect move instead of trusting the
                                              search. It outranks the engine and the opening book. OFF by default: it
@@ -227,14 +227,14 @@
                             Endgame Tablebase <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="tablebase_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.name_the_tactic_behind_the" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Name the tactic behind the engine's move -- a fork, a promotion, a capture
                                              that wins material, mate -- on its own line under the evaluation.
                                              Deliberately conservative: pins, skewers and discovered attacks can't be
@@ -244,14 +244,14 @@
                             Explain Moves <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="move_reason_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.blurs_your_opponent_s_username" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Blurs your opponent's username and avatar on the page, so a
                                              screenshot or a screen share does not expose a real person. Purely
                                              cosmetic and local -- the site sees nothing different. This is the
@@ -261,14 +261,14 @@
                             Hide Opponent Name <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="hide_opponent_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.show_how_humans_actually_played" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Show how humans actually played this opening (lichess database): the opening
                                              name plus the most-played replies and their win/draw/loss split, in a block
                                              under the analysis lines. Read-out only -- it never changes which move you
@@ -277,14 +277,14 @@
                             Opening Explorer <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="explorer_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.play_the_opening_from_the" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Play the opening from the database instead of the engine's pick: a
                                              WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the
                                              same line every game -- an engine that always plays the same first move is
@@ -297,181 +297,48 @@
                             Play Book Moves <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="book_play_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section">
                         <label>
-                            <span class="tooltipped" data-position="right"
+                            <span data-i18n-tip="set.tip.which_games_the_opening_data" class="tooltipped" data-position="right"
                                   data-tooltip="Which games the opening data comes from. Masters is the cleanest opening
                                                 play. The Lichess sets are ordinary online games, so they look more like
                                                 a normal opponent -- pick the club band to match a typical rating pool.">
                                 Opening Database <i class="material-icons info-tooltip">info</i>
                             </span>
                             <select name="explorer_db" id="explorer_db_select">
-                                <option value="masters">Masters database</option>
-                                <option value="lichess">Lichess &mdash; all rated games</option>
-                                <option value="club">Lichess &mdash; club (1600-2200)</option>
+                                <option data-i18n="set.masters_database" value="masters">Masters database</option>
+                                <option data-i18n="set.lichess_all_rated_games" value="lichess">Lichess &mdash; all rated games</option>
+                                <option data-i18n="set.lichess_club_1600_2200" value="club">Lichess &mdash; club (1600-2200)</option>
                             </select>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
-                               data-tooltip="Blurs your opponent's username and avatar on the page, so a
-                                             screenshot or a screen share does not expose a real person. Purely
-                                             cosmetic and local -- the site sees nothing different. This is the
-                                             one option that adds a style element to the page, so it is off
-                                             unless you turn it on."
-                        >
-                            Hide Opponent Name <i class="material-icons info-tooltip">info</i>
-                        </label>
-                        <label>
-                            Off
-                            <input id="hide_opponent_checkbox" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                    <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
-                               data-tooltip="Show how humans actually played this opening (lichess database): the opening
-                                             name plus the most-played replies and their win/draw/loss split, in a block
-                                             under the analysis lines. Read-out only -- it never changes which move you
-                                             play. Standard chess only, and it stops once the game leaves book."
-                        >
-                            Opening Explorer <i class="material-icons info-tooltip">info</i>
-                        </label>
-                        <label>
-                            Off
-                            <input id="explorer_checkbox" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                    <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
-                               data-tooltip="Play the opening from the database instead of the engine's pick: a
-                                             WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the
-                                             same line every game -- an engine that always plays the same first move is
-                                             itself a tell. A candidate must appear in at least 20 games AND rate within
-                                             40cp of the engine's own best, so the variety never costs you a worse move.
-                                             If the lookup hasn't arrived by the time the move is due, the engine move is
-                                             played instead -- it never delays a move. Priority -- Move: Book > Humanize
-                                             > engine best. Needs Autoplay."
-                        >
-                            Play Book Moves <i class="material-icons info-tooltip">info</i>
-                        </label>
-                        <label>
-                            Off
-                            <input id="book_play_checkbox" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                    <div class="section">
-                        <label>
-                            <span class="tooltipped" data-position="right"
-                                  data-tooltip="Which games the opening data comes from. Masters is the cleanest opening
-                                                play. The Lichess sets are ordinary online games, so they look more like
-                                                a normal opponent -- pick the club band to match a typical rating pool.">
-                                Opening Database <i class="material-icons info-tooltip">info</i>
-                            </span>
-                            <select name="explorer_db" id="explorer_db_select">
-                                <option value="masters">Masters database</option>
-                                <option value="lichess">Lichess &mdash; all rated games</option>
-                                <option value="club">Lichess &mdash; club (1600-2200)</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
-                               data-tooltip="Blurs your opponent's username and avatar on the page, so a
-                                             screenshot or a screen share does not expose a real person. Purely
-                                             cosmetic and local -- the site sees nothing different. This is the
-                                             one option that adds a style element to the page, so it is off
-                                             unless you turn it on."
-                        >
-                            Hide Opponent Name <i class="material-icons info-tooltip">info</i>
-                        </label>
-                        <label>
-                            Off
-                            <input id="hide_opponent_checkbox" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                    <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
-                               data-tooltip="Show how humans actually played this opening (lichess database): the opening
-                                             name plus the most-played replies and their win/draw/loss split, in a block
-                                             under the analysis lines. Read-out only -- it never changes which move you
-                                             play. Standard chess only, and it stops once the game leaves book."
-                        >
-                            Opening Explorer <i class="material-icons info-tooltip">info</i>
-                        </label>
-                        <label>
-                            Off
-                            <input id="explorer_checkbox" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                    <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
-                               data-tooltip="Play the opening from the database instead of the engine's pick: a
-                                             WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the
-                                             same line every game -- an engine that always plays the same first move is
-                                             itself a tell. A candidate must appear in at least 20 games AND rate within
-                                             40cp of the engine's own best, so the variety never costs you a worse move.
-                                             If the lookup hasn't arrived by the time the move is due, the engine move is
-                                             played instead -- it never delays a move. Priority -- Move: Book > Humanize
-                                             > engine best. Needs Autoplay."
-                        >
-                            Play Book Moves <i class="material-icons info-tooltip">info</i>
-                        </label>
-                        <label>
-                            Off
-                            <input id="book_play_checkbox" type="checkbox">
-                            <span class="lever"></span>
-                            On
-                        </label>
-                    </div>
-                    <div class="section">
-                        <label>
-                            <span class="tooltipped" data-position="right"
-                                  data-tooltip="Which games the opening data comes from. Masters is the cleanest opening
-                                                play. The Lichess sets are ordinary online games, so they look more like
-                                                a normal opponent -- pick the club band to match a typical rating pool.">
-                                Opening Database <i class="material-icons info-tooltip">info</i>
-                            </span>
-                            <select name="explorer_db" id="explorer_db_select">
-                                <option value="masters">Masters database</option>
-                                <option value="lichess">Lichess &mdash; all rated games</option>
-                                <option value="club">Lichess &mdash; club (1600-2200)</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.when_off_default_moves_only" class="switch-label tooltipped" data-position="right"
                                data-tooltip="When OFF (default), moves only fire while this tab is focused and visible --
                                              a human doesn't play while tabbed away, so this avoids a 'moved in the
-                                             background' anomaly. Turn ON to keep autoplay/premove running when the tab
-                                             is hidden or unfocused."
+                                             background' anomaly. A move that comes due while you're away is re-issued
+                                             when you return. Turn ON to keep autoplay/premove running when the tab is
+                                             hidden or unfocused. Note that keeping a hidden tab running requires
+                                             marking it as playing audio (Chrome throttles silent background tabs), so
+                                             the tab shows a speaker icon while this is on."
                         >
                             Background Play <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="background_play_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.instead_of_autoplaying_all_analysi" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Instead of autoplaying, all analysis arrows are drawn directly on the
                                              site's board while the engine keeps evaluating -- play the move yourself
                                              when ready. Overrides Autoplay while on."
@@ -479,14 +346,14 @@
                             Help Mode <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="help_mode_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.play_like_a_human_instant" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Play like a human: instant recaptures and forced moves, quick obvious
                                              moves, long thinks in critical positions -- and occasionally a second-best
                                              move, a mistake, or (rarely) a blunder.
@@ -497,14 +364,14 @@
                             Humanize <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="humanize_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.read_the_game_clock_off" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Read the game clock off the page and budget thinking + search to it:
                                              roughly time/30 plus 60% of the increment per move, near-instant when
                                              short on time.
@@ -515,14 +382,14 @@
                             Clock Mode <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="clock_mode_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.pace_to_the_opponent_instead" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Pace to the opponent instead: spend what they spent on their last
                                              move, minus 10%, staying just ahead on the clock (30% extra haste
                                              when behind). Falls back to the Clock Mode budget when their spend
@@ -534,14 +401,14 @@
                             Mirror Time <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="mirror_mode_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.the_engine_keeps_thinking_until" class="switch-label tooltipped" data-position="right"
                                data-tooltip="The engine keeps thinking until YOU press the play-move hotkey (Spacebar
                                              by default -- rebind it under Hotkeys below), then it plays the best move it
                                              has found. Your own timing: overrides the Clock/Mirror/Humanize timing and
@@ -549,14 +416,14 @@
                             Manual Mode <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="manual_mode_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                        <label class="switch-label tooltipped" data-position="right"
+                        <label data-i18n-tip="set.tip.flash_a_small_toast_over" class="switch-label tooltipped" data-position="right"
                                data-tooltip="Flash a small toast over the board when your OPPONENT plays an inaccuracy,
                                              mistake or blunder -- judged by the same Lichess win% method the move mix
                                              uses (30/20/10% win-chance drop). Only fires when both positions were
@@ -564,14 +431,14 @@
                             Opponent Mistake Alert <i class="material-icons info-tooltip">info</i>
                         </label>
                         <label>
-                            Off
+                            <span data-i18n="ui.off">Off</span>
                             <input id="opp_alert_checkbox" type="checkbox">
                             <span class="lever"></span>
-                            On
+                            <span data-i18n="ui.on">On</span>
                         </label>
                     </div>
                     <div class="section switch">
-                    <label class="switch-label tooltipped" data-position="right"
+                    <label data-i18n-tip="set.tip.mephisto_optimizes_for_solving_che" class="switch-label tooltipped" data-position="right"
                            data-tooltip="Mephisto optimizes for solving chess puzzles as quickly as possible, at the
                                          expense of accuracy. This should be enabled when autoplaying puzzle minigames,
                                          like Chess.com's Puzzle Rush and Lichess's Puzzle Storm."
@@ -579,14 +446,43 @@
                         Puzzle Mode <i class="material-icons info-tooltip">info</i>
                     </label>
                     <label>
-                        Off
+                        <span data-i18n="ui.off">Off</span>
                         <input id="puzzle_mode_checkbox" type="checkbox">
                         <span class="lever"></span>
-                        On
+                        <span data-i18n="ui.on">On</span>
                     </label>
                 </div>
+                    <!-- Puzzle database. Not a setting (nothing to toggle): importing the file IS
+                         turning it on, and with no file imported nothing below changes at all. -->
+                    <div class="section">
+                        <label data-i18n-tip="set.tip.load_lichess_s_puzzle_database" class="switch-label tooltipped" data-position="right"
+                               data-tooltip="Load Lichess's puzzle database so Puzzle Mode plays the KNOWN solution
+                                             instead of the engine's guess. The engine's best move and the puzzle's
+                                             intended move are not always the same, and only one of them scores.
+                                             Lichess only -- Chess.com's Puzzle Rush positions are not in this file.
+                                             The database is not bundled (it is about a gigabyte), so download it
+                                             yourself and pick the file here. It is stored on this machine and
+                                             nothing is ever sent anywhere."
+                        >
+                            Puzzle Database <i class="material-icons info-tooltip">info</i>
+                        </label>
+                        <p data-i18n-html="set.note.download_lichess_db_puzzle_csv">
+                            Download <b>lichess_db_puzzle.csv.zst</b> from
+                            <a href="https://database.lichess.org/#puzzles" target="_blank">database.lichess.org</a>, decompress it
+                            (<code>unzstd lichess_db_puzzle.csv.zst</code>), then pick the <b>.csv</b> here.
+                            It is about six million positions, so the import takes <b>roughly half an
+                            hour</b> — leave this page open. It only has to be done once, and if it is
+                            interrupted nothing is lost: run it again and it picks up what is missing.
+                        </p>
+                        <div class="flex-group flex-small-gap">
+                            <button data-i18n="set.load_puzzle_database" id="puzzle_db_btn" class="waves-effect waves-light btn">Load Puzzle Database</button>
+                            <button data-i18n="set.remove" id="puzzle_db_clear_btn" class="waves-effect waves-light btn">Remove</button>
+                            <input id="puzzle_db_file" type="file" accept="text/csv,.csv" style="display: none">
+                        </div>
+                        <p id="puzzle_db_status"></p>
+                    </div>
                     <div class="section switch">
-                            <label class="switch-label tooltipped" data-position="right"
+                            <label data-i18n-tip="set.tip.mephisto_takes_control_of_the" class="switch-label tooltipped" data-position="right"
                                    data-tooltip="Mephisto takes control of the mouse pointer to perform automated moves.
                                                  NOTE: mephisto-clicker.py (in &quot;src/scripts&quot;) must be running
                                                  for this to work. You may need to grant specific permissions for
@@ -595,15 +491,15 @@
                                 Python Backend <i class="material-icons info-tooltip">info</i>
                             </label>
                             <label>
-                                Off
+                                <span data-i18n="ui.off">Off</span>
                                 <input id="python_autoplay_backend_checkbox" type="checkbox">
                                 <span class="lever"></span>
-                                On
+                                <span data-i18n="ui.on">On</span>
                             </label>
                         </div>
                 </div>
                 <div class="section" id="humanize-mix">
-                    <span class="switch-label tooltipped" data-position="right"
+                    <span data-i18n-tip="set.tip.humanize_move_mix_how_often" class="switch-label tooltipped" data-position="right"
                           data-tooltip="Humanize move mix: how often each quality of move is played. Make the seven
                                         values add up to 100 -- the Total row shows what to add or remove. Each category
                                         is a band of how-much-worse-than-best, set in centipawns just below (Move-Quality
@@ -618,48 +514,48 @@
                         Humanize Move Mix (%) <i class="material-icons info-tooltip">info</i>
                     </span>
                     <div class="mix-row">
-                        <span class="mix-label">Top move</span>
+                        <span data-i18n="set.top_move" class="mix-label">Top move</span>
                         <p class="range-field"><input id="humanize_top_mixrange" type="range" min="0" max="100" step="1"></p>
                         <input id="humanize_top_mixnum" type="number" min="0" max="100" step="1">
                     </div>
                     <div class="mix-row">
-                        <span class="mix-label">Second line</span>
+                        <span data-i18n="set.second_line" class="mix-label">Second line</span>
                         <p class="range-field"><input id="humanize_second_mixrange" type="range" min="0" max="100" step="1"></p>
                         <input id="humanize_second_mixnum" type="number" min="0" max="100" step="1">
                     </div>
                     <div class="mix-row">
-                        <span class="mix-label">Third line</span>
+                        <span data-i18n="set.third_line" class="mix-label">Third line</span>
                         <p class="range-field"><input id="humanize_third_mixrange" type="range" min="0" max="100" step="1"></p>
                         <input id="humanize_third_mixnum" type="number" min="0" max="100" step="1">
                     </div>
                     <div class="mix-row">
-                        <span class="mix-label">Fourth line</span>
+                        <span data-i18n="set.fourth_line" class="mix-label">Fourth line</span>
                         <p class="range-field"><input id="humanize_fourth_mixrange" type="range" min="0" max="100" step="1"></p>
                         <input id="humanize_fourth_mixnum" type="number" min="0" max="100" step="1">
                     </div>
                     <div class="mix-row">
-                        <span class="mix-label">Inaccuracies</span>
+                        <span data-i18n="set.inaccuracies" class="mix-label">Inaccuracies</span>
                         <p class="range-field"><input id="humanize_inaccuracy_mixrange" type="range" min="0" max="100" step="1"></p>
                         <input id="humanize_inaccuracy_mixnum" type="number" min="0" max="100" step="1">
                     </div>
                     <div class="mix-row">
-                        <span class="mix-label">Mistakes</span>
+                        <span data-i18n="set.mistakes" class="mix-label">Mistakes</span>
                         <p class="range-field"><input id="humanize_mistake_mixrange" type="range" min="0" max="100" step="1"></p>
                         <input id="humanize_mistake_mixnum" type="number" min="0" max="100" step="1">
                     </div>
                     <div class="mix-row">
-                        <span class="mix-label">Blunders</span>
+                        <span data-i18n="set.blunders" class="mix-label">Blunders</span>
                         <p class="range-field"><input id="humanize_blunder_mixrange" type="range" min="0" max="100" step="1"></p>
                         <input id="humanize_blunder_mixnum" type="number" min="0" max="100" step="1">
                     </div>
                     <div class="mix-row mix-total-row">
-                        <span class="mix-label">Total</span>
+                        <span data-i18n="set.total" class="mix-label">Total</span>
                         <span id="humanize_mix_total"></span>
                     </div>
                 </div>
                 <div class="section" id="humanize-thresholds">
                     <label>
-                        <span class="tooltipped" data-position="right"
+                        <span data-i18n-tip="set.tip.how_much_worse_than_the" class="tooltipped" data-position="right"
                               data-tooltip="How much worse than the best move each category may be, in centipawns
                                             (100cp = 1 pawn). Each is the top of its band; the bottom is the category
                                             above it, so Second line is 0 up to its value, Third from there up to its
@@ -671,42 +567,42 @@
                         </span>
                     </label>
                     <div class="cp-row">
-                        <div class="cp-head"><span class="cp-name">Second line</span><span class="cp-readout" id="humanize_cp_second_readout"></span></div>
+                        <div class="cp-head"><span data-i18n="set.second_line" class="cp-name">Second line</span><span class="cp-readout" id="humanize_cp_second_readout"></span></div>
                         <div class="cp-controls">
                             <p class="range-field"><input id="humanize_cp_second_range" type="range" min="0" max="800" step="5"></p>
                             <input id="humanize_cp_second_num" type="number" min="0" max="800" step="5">
                         </div>
                     </div>
                     <div class="cp-row">
-                        <div class="cp-head"><span class="cp-name">Third line</span><span class="cp-readout" id="humanize_cp_third_readout"></span></div>
+                        <div class="cp-head"><span data-i18n="set.third_line" class="cp-name">Third line</span><span class="cp-readout" id="humanize_cp_third_readout"></span></div>
                         <div class="cp-controls">
                             <p class="range-field"><input id="humanize_cp_third_range" type="range" min="0" max="800" step="5"></p>
                             <input id="humanize_cp_third_num" type="number" min="0" max="800" step="5">
                         </div>
                     </div>
                     <div class="cp-row">
-                        <div class="cp-head"><span class="cp-name">Fourth line</span><span class="cp-readout" id="humanize_cp_fourth_readout"></span></div>
+                        <div class="cp-head"><span data-i18n="set.fourth_line" class="cp-name">Fourth line</span><span class="cp-readout" id="humanize_cp_fourth_readout"></span></div>
                         <div class="cp-controls">
                             <p class="range-field"><input id="humanize_cp_fourth_range" type="range" min="0" max="800" step="5"></p>
                             <input id="humanize_cp_fourth_num" type="number" min="0" max="800" step="5">
                         </div>
                     </div>
                     <div class="cp-row">
-                        <div class="cp-head"><span class="cp-name">Inaccuracy</span><span class="cp-readout" id="humanize_cp_inaccuracy_readout"></span></div>
+                        <div class="cp-head"><span data-i18n="set.inaccuracy" class="cp-name">Inaccuracy</span><span class="cp-readout" id="humanize_cp_inaccuracy_readout"></span></div>
                         <div class="cp-controls">
                             <p class="range-field"><input id="humanize_cp_inaccuracy_range" type="range" min="0" max="800" step="5"></p>
                             <input id="humanize_cp_inaccuracy_num" type="number" min="0" max="800" step="5">
                         </div>
                     </div>
                     <div class="cp-row">
-                        <div class="cp-head"><span class="cp-name">Mistake</span><span class="cp-readout" id="humanize_cp_mistake_readout"></span></div>
+                        <div class="cp-head"><span data-i18n="set.mistake" class="cp-name">Mistake</span><span class="cp-readout" id="humanize_cp_mistake_readout"></span></div>
                         <div class="cp-controls">
                             <p class="range-field"><input id="humanize_cp_mistake_range" type="range" min="0" max="800" step="5"></p>
                             <input id="humanize_cp_mistake_num" type="number" min="0" max="800" step="5">
                         </div>
                     </div>
                     <div class="cp-row">
-                        <div class="cp-head"><span class="cp-name">Blunder</span><span class="cp-readout" id="humanize_cp_blunder_readout"></span></div>
+                        <div class="cp-head"><span data-i18n="set.blunder" class="cp-name">Blunder</span><span class="cp-readout" id="humanize_cp_blunder_readout"></span></div>
                         <div class="cp-controls">
                             <p class="range-field"><input id="humanize_cp_blunder_range" type="range" min="0" max="800" step="5"></p>
                             <input id="humanize_cp_blunder_num" type="number" min="0" max="800" step="5">
@@ -716,7 +612,7 @@
                 <div class="flex-group">
                     <div class="section">
                         <label>
-                            <span class="switch-label tooltipped" data-position="right"
+                            <span data-i18n-tip="set.tip.mephisto_will_always_wait_at" class="switch-label tooltipped" data-position="right"
                                 data-tooltip="Mephisto will always wait at least this long after fully evaluating a
                                               position (determined by Search Time) to make a move."
                             >
@@ -727,7 +623,7 @@
                     </div>
                     <div class="section">
                         <label>
-                            <span class="switch-label tooltipped" data-position="right"
+                            <span data-i18n-tip="set.tip.mephisto_will_wait_a_random" class="switch-label tooltipped" data-position="right"
                                 data-tooltip="Mephisto will wait a random extra amount of time, up to this amount, on
                                               top of Simulated Think Time."
                             >
@@ -740,7 +636,7 @@
                 <div class="flex-group">
                     <div class="section">
                         <label>
-                            <span class="switch-label tooltipped" data-position="right"
+                            <span data-i18n-tip="set.tip.mephisto_will_always_take_at" class="switch-label tooltipped" data-position="right"
                                   data-tooltip="Mephisto will always take at least this long to perform the mouse
                                                 actions of a single move."
                             >
@@ -751,7 +647,7 @@
                     </div>
                     <div class="section">
                         <label>
-                            <span class="switch-label tooltipped" data-position="right"
+                            <span data-i18n-tip="set.tip.mephisto_will_take_a_random" class="switch-label tooltipped" data-position="right"
                                   data-tooltip="Mephisto will take a random extra amount of time, up to this amount,
                                                 on top of Simulated Move Time."
                             >
@@ -763,8 +659,8 @@
                 </div>
             </div>
             <div id="hotkeys" class="scrollspy">
-                <h3 class="header">Hotkeys</h3>
-                <p style="margin: 0 0 10px; font-size: 13px; line-height: 1.4;">
+                <h3 data-i18n="set.hotkeys" class="header">Hotkeys</h3>
+                <p data-i18n-html="set.note.keyboard_shortcuts_that_work_while" style="margin: 0 0 10px; font-size: 13px; line-height: 1.4;">
                     Keyboard shortcuts that work while you're on the game page (they only fire when the floating panel
                     is open). Click a key to rebind it — the next key you press (with any Ctrl/Alt/Shift/Meta) becomes
                     the binding; press <b>Esc</b> to cancel, or <b>Backspace/Delete</b> to clear it. Defaults are
@@ -773,15 +669,15 @@
                 </p>
                 <div id="hotkey_rows"></div>
                 <div class="section">
-                    <button id="hotkey_reset_btn" class="waves-effect waves-light btn-small">Reset hotkeys to defaults</button>
+                    <button data-i18n="set.reset_hotkeys_to_defaults" id="hotkey_reset_btn" class="waves-effect waves-light btn-small">Reset hotkeys to defaults</button>
                 </div>
             </div>
         </div>
         <div class="big-section">
             <div class="flex-group flex-small-gap">
-                <button id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
-                <button id="export_btn" class="waves-effect waves-light btn">Export Settings</button>
-                <button id="import_btn" class="waves-effect waves-light btn">Import Settings</button>
+                <button data-i18n="set.restore_defaults" id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
+                <button data-i18n="set.export_settings" id="export_btn" class="waves-effect waves-light btn">Export Settings</button>
+                <button data-i18n="set.import_settings" id="import_btn" class="waves-effect waves-light btn">Import Settings</button>
                 <!-- the real file picker; the visible button clicks it (a bare file input can't be
                      styled to match, and Materialize's file field needs its JS) -->
                 <input id="import_file" type="file" accept="application/json,.json" style="display: none">
@@ -792,10 +688,10 @@
         <div class="toc-wrapper pin-top">
             <ul id="toc" class="section table-of-contents">
                 <li>
-                    <a href="#engine">Engine</a>
+                    <a data-i18n="panel.engine" href="#engine">Engine</a>
                 </li>
                 <li>
-                    <a href="#autoplay">Autoplay</a>
+                    <a data-i18n="panel.autoplay" href="#autoplay">Autoplay</a>
                 </li>
             </ul>
         </div>

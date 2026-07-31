@@ -18,14 +18,14 @@
 
 
 <body>
-<button id="config" class="waves-effect waves-light btn tooltipped" data-position="left" data-tooltip="Settings">
+<button data-i18n-tip="panel.tip.settings" id="config" class="waves-effect waves-light btn tooltipped" data-position="left" data-tooltip="Settings">
     <i class="mp-icon">⚙</i>
 </button>
-<button id="recheck" class="waves-effect waves-light btn tooltipped" data-position="left"
+<button data-i18n-tip="panel.tip.re_detect_the_game_rescan" id="recheck" class="waves-effect waves-light btn tooltipped" data-position="left"
         data-tooltip="Re-detect the game: rescan the page and restart the analysis">
     <i class="mp-icon">↻</i>
 </button>
-<button id="setupfen" class="waves-effect waves-light btn tooltipped" data-position="left"
+<button data-i18n-tip="panel.tip.set_up_a_position_paste" id="setupfen" class="waves-effect waves-light btn tooltipped" data-position="left"
         data-tooltip="Set up a position: paste a FEN to analyse it instead of the board on the page. While a position is set the panel stops following the page; click again (or Re-detect) to go back to the live game.">
     <!-- inline SVG, not a glyph: the same tofu problem the self-test icon documents -->
     <svg class="mp-svg-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
@@ -33,7 +33,7 @@
         <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
     </svg>
 </button>
-<button id="snapfen" class="waves-effect waves-light btn tooltipped" data-position="left"
+<button data-i18n-tip="panel.tip.read_the_position_off_the" id="snapfen" class="waves-effect waves-light btn tooltipped" data-position="left"
         data-tooltip="Read the position off the screen: captures this tab, finds the board and loads it into the panel. Works on any site (a video, a diagram, an image). If no board is found you can drag a box around it.">
     <svg class="mp-svg-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -41,20 +41,20 @@
         <circle cx="12" cy="13" r="4"/>
     </svg>
 </button>
-<button id="selftest" class="waves-effect waves-light btn tooltipped" data-position="left"
+<button data-i18n-tip="panel.tip.self_test_check_scraping_the" id="selftest" class="waves-effect waves-light btn tooltipped" data-position="left"
         data-tooltip="Self-test: check scraping, the engine, and the native host">
     <!-- inline SVG (not a font glyph): a heartbeat/pulse line renders identically everywhere, unlike
          the emoji it replaced which showed as a tofu box in many panel fonts -->
     <svg class="mp-svg-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2-6 3 12 2-6h5"/></svg>
 </button>
-<button id="analyze" class="waves-effect waves-light btn tooltipped" data-position="right" data-tooltip="Analysis Board">
+<button data-i18n-tip="panel.tip.analysis_board" id="analyze" class="waves-effect waves-light btn tooltipped" data-position="right" data-tooltip="Analysis Board">
     <i class="mp-icon">⧉</i>
 </button>
-<button id="copyfen" class="waves-effect waves-light btn tooltipped" data-position="right" data-tooltip="Copy the current FEN">
+<button data-i18n-tip="panel.tip.copy_the_current_fen" id="copyfen" class="waves-effect waves-light btn tooltipped" data-position="right" data-tooltip="Copy the current FEN">
     <i class="mp-icon mp-label">FEN</i>
 </button>
-<button id="copypgn" class="waves-effect waves-light btn tooltipped" data-position="right"
+<button data-i18n-tip="panel.tip.copy_the_game_so_far" id="copypgn" class="waves-effect waves-light btn tooltipped" data-position="right"
         data-tooltip="Copy the game so far as PGN">
     <i class="mp-icon mp-label">PGN</i>
 </button>
@@ -72,70 +72,70 @@
         </div>
     </div>
     <div class="qs-row switch qs-compact">
-        <span class="qs-label">Autoplay</span>
+        <span data-i18n="panel.autoplay" class="qs-label">Autoplay</span>
         <label><input id="qs_autoplay" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.while_the_opponent_thinks_certify" class="qs-label tooltipped" data-position="left"
               data-tooltip="While the opponent thinks, certify a reply to their predicted move (stable across depths 13/14/latest, max 2 candidates). If they play exactly that move, answer instantly; anything else searches normally. If the reply could never be legal after any other opponent move (forced moves, recaptures), it's queued as a real premove immediately -- an illegal premove gets auto-cancelled. Never fires in a wrong position. Needs Autoplay.">Premove</span>
         <label><input id="qs_premove" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.show_how_humans_actually_played" class="qs-label tooltipped" data-position="left"
               data-tooltip="Show how humans actually played this opening (lichess database): the opening name plus the most-played replies with their win/draw/loss split. Read-out only -- it never changes which move you play. Standard chess only; stops once the game leaves book.">Explorer</span>
         <label><input id="qs_explorer" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.play_the_opening_from_the" class="qs-label tooltipped" data-position="left"
               data-tooltip="Play the opening from the database instead of the engine's pick: a WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the same line every game. A move must be played in at least 20 games AND rate within 40cp of the engine's best, so it varies without playing worse. Falls back to the engine move if the lookup hasn't arrived. Priority — Move: Book > Humanize > engine best. Needs Autoplay.">Book Moves</span>
         <label><input id="qs_book" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch">
-        <span class="qs-label">Puzzle Mode</span>
+        <span data-i18n="panel.puzzle_mode" class="qs-label">Puzzle Mode</span>
         <label><input id="qs_puzzle" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.draws_the_best_move_as" class="qs-label tooltipped" data-position="left"
               data-tooltip="Draws the best move as an arrow on the game board so you can play it yourself. Overrides Autoplay while on.">Help Mode</span>
         <label><input id="qs_help" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.show_a_vertical_evaluation_bar" class="qs-label tooltipped" data-position="left"
               data-tooltip="Show a vertical evaluation bar to the left of the game board, with the score shown inside it (chess.com-style).">Eval Bar</span>
         <label><input id="qs_evalbar" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.a_graph_under_the_board" class="qs-label tooltipped" data-position="left"
               data-tooltip="A graph under the board showing the whole game so far: white's advantage above the midline, black's below, with the opening/middlegame/endgame boundaries marked. Needs Eval Bar.">Eval History</span>
         <label><input id="qs_evalhist" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.with_7_or_fewer_pieces" class="qs-label tooltipped" data-position="left"
               data-tooltip="With 7 or fewer pieces left the position is solved: ask lichess's Syzygy tablebase for the perfect move instead of trusting the search. Outranks the engine and the opening book. Off by default -- it sends the position to a third party. Never delays a move.">Tablebase</span>
         <label><input id="qs_tablebase" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.play_like_a_human_instant" class="qs-label tooltipped" data-position="left"
               data-tooltip="Play like a human: instant recaptures and forced moves, quick obvious moves, long thinks in critical positions -- and occasionally a second-best move, a mistake, or (rarely) a blunder. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Humanize</span>
         <label><input id="qs_humanize" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.read_the_game_clock_off" class="qs-label tooltipped" data-position="left"
               data-tooltip="Read the game clock off the page and budget every move to it: roughly time/30 plus 60% of the increment, shrinking the engine search too, near-instant when short on time. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Clock Mode</span>
         <label><input id="qs_clock" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.pace_to_the_opponent_instead" class="qs-label tooltipped" data-position="left"
               data-tooltip="Pace to the opponent instead: spend what they spent on their last move, minus 10%, staying just ahead on the clock (30% extra haste when behind). Uses the Clock Mode budget for the first move / when their spend is unknown. Recaptures and forced moves stay instant. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Mirror Time</span>
         <label><input id="qs_mirror" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row switch qs-compact">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.the_engine_keeps_thinking_until" class="qs-label tooltipped" data-position="left"
               data-tooltip="The engine keeps thinking until YOU press the play-move hotkey (Spacebar by default), then it plays the best move it has found. Your own timing — overrides Clock/Mirror/Humanize timing and never fires on its own. Rebind the key in Settings → Hotkeys.">Manual Mode</span>
         <label><input id="qs_manual" type="checkbox"><span class="lever"></span></label>
     </div>
     <div class="qs-row">
-        <span class="qs-label">Engine</span>
+        <span data-i18n="panel.engine" class="qs-label">Engine</span>
         <select id="qs_engine" class="browser-default">
             <option value="sf-native">Stockfish (local)</option>
             <option value="stockfish-dev-nnue">SF Dev WASM</option>
@@ -150,17 +150,17 @@
         </select>
     </div>
     <div class="qs-row" id="qs_elo_row">
-        <span class="qs-label tooltipped" data-position="left"
-              data-tooltip="Cap the engine's strength to a target Elo (UCI_LimitStrength + UCI_Elo). The slider stops follow the selected engine's own range (SF dev/18: 1320-3190, SF 11: 1350-2850, Fairy: 500-2850). Both ends mean full strength (no cap): Off on the far left, or past the engine's own max on the far right.">Elo (<span id="qs_elo_val">Off / Full Strength</span>)</span>
+        <span data-i18n-tip="panel.tip.cap_the_engine_s_strength" class="qs-label tooltipped" data-position="left"
+              data-tooltip="Cap the engine's strength to a target Elo (UCI_LimitStrength + UCI_Elo). The slider stops follow the selected engine's own range (SF dev/18: 1320-3190, SF 11: 1350-2850, Fairy: 500-2850). Both ends mean full strength (no cap): Off on the far left, or past the engine's own max on the far right."><span data-i18n="panel.elo">Elo</span> (<span id="qs_elo_val" data-i18n="panel.off_full_strength">Off / Full Strength</span>)</span>
         <input id="qs_elo" class="browser-default" type="range" min="0" max="1" step="1">
     </div>
     <div class="qs-row" id="qs_maia3_row">
-        <span class="qs-label tooltipped" data-position="left"
-              data-tooltip="Maia-3 target rating. One transformer model conditioned on the Elo you set, so it plays like a human of that strength — anywhere from 600 to 2600, in fine steps. Changing it applies instantly (no reload).">Maia-3 Elo (<span id="qs_maia3_val">1500</span>)</span>
+        <span data-i18n-tip="panel.tip.maia_3_target_rating_one" class="qs-label tooltipped" data-position="left"
+              data-tooltip="Maia-3 target rating. One transformer model conditioned on the Elo you set, so it plays like a human of that strength — anywhere from 600 to 2600, in fine steps. Changing it applies instantly (no reload)."><span data-i18n="panel.maia3_elo">Maia-3 Elo</span> (<span id="qs_maia3_val">1500</span>)</span>
         <input id="qs_maia3_elo" class="browser-default" type="range" min="600" max="2600" step="50">
     </div>
     <div class="qs-row" id="qs_maia_row">
-        <span class="qs-label tooltipped" data-position="left"
+        <span data-i18n-tip="panel.tip.which_maia_network_to_use" class="qs-label tooltipped" data-position="left"
               data-tooltip="Which Maia network to use. Each is trained on human games at that rating, so it plays like a human of that strength — human-like mistakes, not a strong engine told to play badly. Changing this loads a different net.">Maia Level</span>
         <select id="qs_maia_level" class="browser-default">
             <option value="1100">1100</option>
@@ -176,47 +176,47 @@
         </select>
     </div>
     <div class="qs-row" id="qs_variant_row">
-        <span class="qs-label">Variant</span>
+        <span data-i18n="panel.variant" class="qs-label">Variant</span>
         <div class="qs-pair">
             <select id="qs_variant" class="browser-default">
-                <option value="chess">Standard</option>
-                <option value="fischerandom">Chess960</option>
-                <option value="crazyhouse">Crazyhouse</option>
-                <option value="kingofthehill">King of the Hill</option>
-                <option value="3check">Three-check</option>
-                <option value="antichess">Antichess</option>
-                <option value="atomic">Atomic</option>
-                <option value="horde">Horde</option>
-                <option value="racingkings">Racing Kings</option>
-                <option value="duck">Duck</option>
-                <option value="minihouse">Minihouse</option>
-                <option value="seirawan">Seirawan (S-Chess)</option>
-                <option value="chaturanga">Chaturanga</option>
+                <option data-i18n="panel.standard" value="chess">Standard</option>
+                <option data-i18n="panel.chess960" value="fischerandom">Chess960</option>
+                <option data-i18n="panel.crazyhouse" value="crazyhouse">Crazyhouse</option>
+                <option data-i18n="panel.king_of_the_hill" value="kingofthehill">King of the Hill</option>
+                <option data-i18n="panel.three_check" value="3check">Three-check</option>
+                <option data-i18n="panel.antichess" value="antichess">Antichess</option>
+                <option data-i18n="panel.atomic" value="atomic">Atomic</option>
+                <option data-i18n="panel.horde" value="horde">Horde</option>
+                <option data-i18n="panel.racing_kings" value="racingkings">Racing Kings</option>
+                <option data-i18n="panel.duck" value="duck">Duck</option>
+                <option data-i18n="panel.minihouse" value="minihouse">Minihouse</option>
+                <option data-i18n="panel.seirawan_s_chess" value="seirawan">Seirawan (S-Chess)</option>
+                <option data-i18n="panel.chaturanga" value="chaturanga">Chaturanga</option>
             </select>
             <button id="qs_variant_detect" title="Detect the variant from the current game">&#8635;</button>
         </div>
     </div>
     <div class="qs-row">
-        <span class="qs-label">Search / Fallback Poll (ms)</span>
+        <span data-i18n="panel.search_fallback_poll_ms" class="qs-label">Search / Fallback Poll (ms)</span>
         <div class="qs-pair">
             <input id="qs_search" class="browser-default" type="number" min="50" max="30000" step="25">
             <input id="qs_fen" class="browser-default" type="number" min="1000" max="10000" step="500">
         </div>
     </div>
     <div class="qs-row">
-        <span class="qs-label">Threads (<span id="qs_threads_val">8</span>)</span>
+        <span class="qs-label"><span data-i18n="panel.threads">Threads</span> (<span id="qs_threads_val">8</span>)</span>
         <input id="qs_threads" class="browser-default" type="range" min="1" max="24" step="1">
     </div>
     <div class="qs-row">
-        <span class="qs-label">Memory (<span id="qs_memory_val">512</span> MB)</span>
+        <span class="qs-label"><span data-i18n="panel.memory">Memory</span> (<span id="qs_memory_val">512</span> MB)</span>
         <input id="qs_memory" class="browser-default" type="range" min="32" max="4096" step="32">
     </div>
     <div class="qs-row">
-        <span class="qs-label">Multi Lines (<span id="qs_lines_val">1</span>)</span>
+        <span class="qs-label"><span data-i18n="panel.multi_lines">Multi Lines</span> (<span id="qs_lines_val">1</span>)</span>
         <input id="qs_lines" class="browser-default" type="range" min="1" max="5" step="1">
     </div>
     <div class="qs-row">
-        <span class="qs-label">Move Time ± Var (ms)</span>
+        <span data-i18n="panel.move_time_var_ms" class="qs-label">Move Time ± Var (ms)</span>
         <div class="qs-pair">
             <input id="qs_move" class="browser-default" type="number" min="0" step="25">
             <input id="qs_move_var" class="browser-default" type="number" min="0" step="25">
@@ -224,7 +224,7 @@
     </div>
 </div>
 
-<div id="game-detection">No Chess Game Detected</div>
+<div data-i18n="panel.no_chess_game_detected" id="game-detection">No Chess Game Detected</div>
 <a id="update-notice" href="#" target="_blank" rel="noreferrer" hidden></a>
 <a id="calibrate-notice" href="#" hidden></a>
 
@@ -232,7 +232,7 @@
 <div id="eval-bar"><div id="eval-bar-white"></div></div>
 
 <div id="moves">
-    <div id="chess_line_1">If your chess game is not detected<br>try reloading the page</div>
+    <div id="chess_line_1" data-i18n-html="panel.not_detected_hint">If your chess game is not detected<br>try reloading the page</div>
 </div>
 <div id="nps"></div>
 <div id="evaluation"></div>
@@ -244,9 +244,9 @@
     <input id="setup_fen_input" class="browser-default" type="text" spellcheck="false"
            placeholder="Paste a FEN, then press Enter">
     <span id="setup_fen_msg"></span>
-    <button id="setup_fen_flip" class="waves-effect waves-light btn-flat" type="button"
+    <button data-i18n="panel.flip_board" id="setup_fen_flip" class="waves-effect waves-light btn-flat" type="button"
             title="Rotate the position 180 degrees. The board reader assumes White is at the bottom; if the board on screen was shown from Black's side, the position comes out upside down.">Flip board</button>
-    <button id="snap_follow" class="waves-effect waves-light btn-flat" type="button" hidden
+    <button data-i18n="panel.follow_screen" id="snap_follow" class="waves-effect waves-light btn-flat" type="button" hidden
             title="Re-read the same area of the screen twice a second, so a board that is playing there -- a video, a stream, another app -- keeps the panel in step without capturing each move by hand. Only available after a screen capture, since it needs the area that capture found.">Follow screen</button>
 </div>
 <div id="move-reason" hidden></div>
