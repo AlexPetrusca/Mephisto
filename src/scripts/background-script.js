@@ -11,6 +11,14 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if ((msg.from === 'content') && (msg.subject === 'showPageAction')) {
     chrome.pageAction.show(sender.tab.id);
   }
+  // Background-play tracing from the page. Printed HERE because this worker has its own console in
+  // its own window -- opening DevTools on the game tab would disable the background throttling that
+  // is usually the thing under investigation.
+  if (msg.bgTrace) {
+    const t = new Date().toISOString().slice(11, 23);
+    console.log(`[bg ${t}] ${msg.bgTrace.from} |`, ...msg.bgTrace.args);
+    return;
+  }
   // the content-script asks for its own tab id so its panel talks to ONLY this tab (not whatever
   // tab is active) -- otherwise a background tab's panel would drive the foreground tab. It also
   // keys that tab's offscreen engine (clientId == tabId), so each game tab gets its own instance.
@@ -419,6 +427,10 @@ const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
 // gently bowed, and jittered so it isn't a ruler-straight teleport, and it is spread across
 // travelMs so the motion actually consumes the caller's move-time budget instead of snapping.
 async function cdpMove(target, fromX, fromY, x, y, travelMs) {
+  // travelMs 0 means the caller wants no path at all (a hidden tab -- see dispatchSimulateClick).
+  // Honour that literally: every step here is an awaited round-trip, and the minimum of three was
+  // costing whole seconds in exactly the case the caller is trying to keep cheap.
+  if (travelMs <= 0) return;
   const dist = Math.hypot(x - fromX, y - fromY);
   const steps = Math.max(3, Math.min(40, Math.round(travelMs / 16))); // ~60fps, bounded either way
   const px = dist ? -(y - fromY) / dist : 0, py = dist ? (x - fromX) / dist : 0; // perpendicular unit

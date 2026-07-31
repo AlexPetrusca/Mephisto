@@ -11,9 +11,26 @@ let deferredWhileHidden = false; // an autoplay/premove was held because the tab
 // Background-play tracing. Quiet during normal play -- it only speaks when the tab is NOT active,
 // which is exactly the situation that is hard to observe: you cannot watch the console of the tab
 // you have tabbed away from while it happens, so the trail has to be there when you come back.
+// Background-play tracing. Quiet during normal play -- it only speaks when the tab is NOT active,
+// which is exactly the situation that is hard to observe.
+//
+// It ALSO forwards to the service worker, and that is the point: the page's own console is useless
+// here, because opening DevTools on the tab disables the very background throttling being
+// investigated. The worker has a SEPARATE console in a separate window, so the game tab stays
+// genuinely backgrounded while you read it. Fire-and-forget: tracing must never be able to break the
+// thing it is tracing.
 function bgLog(...args) {
     if (tabActive()) return;
     console.log('[Mephisto/bg]', ...args);
+    try {
+        chrome.runtime.sendMessage({bgTrace: {from: 'content', args: args.map(bgSafe)}}, () => void chrome.runtime.lastError);
+    } catch (e) { /* orphaned content-script */ }
+}
+
+// Messages are JSON-serialized, so anything unserializable would throw away the whole line.
+function bgSafe(v) {
+    if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) return v;
+    try { return JSON.parse(JSON.stringify(v)); } catch (e) { return String(v); }
 }
 
 function tabActive() {
@@ -60,7 +77,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.142'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.159'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -137,8 +154,12 @@ function handleExtensionMessage(response, sender, sendResponse) {
     if (response.automove) {
         // Manual Mode moves (response.manual) are triggered by YOUR keypress, so they're allowed even
         // with Autoplay off. Otherwise: never auto-move if Autoplay was turned off since the message.
-        bgLog('automove received', {move: response.move, premoves: response.premoves,
-            autoplay: config.autoplay, background_play: config.background_play, moving});
+        // `pv` is the shape a PUZZLE move arrives in -- without it this line read
+        // `{move: undefined, premoves: undefined}` for every database move, which is exactly the
+        // case most likely to be under investigation when someone is reading this log.
+        bgLog('automove received', {move: response.move, pv: response.pv, premoves: response.premoves,
+            autoplay: config.autoplay, background_play: config.background_play, moving,
+            visible: document.visibilityState, focused: document.hasFocus()});
         if (!config.autoplay && !response.manual) { bgLog('DROPPED: autoplay is off'); return; }
         // undetectability: don't click while the tab is backgrounded/unfocused -- a human wouldn't
         // move while tabbed away, and "moved while hidden" is an easy anomaly to flag. It's still our
@@ -989,10 +1010,43 @@ function boardStillMatchesAnalysis() {
     return `${getOrientation()}|${res}` === lastPushKey;
 }
 
+// Both "board is animating" aborts below are WAITS, and a wait needs a deadline. chessground
+// animates in ~200ms, so past this the DOM is stuck, not moving -- a piece left tagged `.anim`
+// or parked on a fractional coordinate by an animation that got cut short. Storm/Racer swap the
+// whole position between puzzles and hit that constantly. Unbounded, one stuck piece froze the
+// panel on a dead position FOREVER: it kept re-issuing the old puzzle's move into a board that
+// had moved on, and the half-completed two-click left a piece selected -- the "board gets
+// bugged" report. Same reasoning as PUZ_TEAR_RETRIES below: accept a state that PERSISTS rather
+// than stall the panel. Degrading is safe -- a stuck piece reads at its rounded-off square.
+const ANIM_STALL_MS = 700;
+let animStallSince = 0;
+
+function animationStalled() {
+    const now = Date.now();
+    if (!animStallSince) {
+        animStallSince = now; // first refusal: this is a real animation, wait for it
+        return false;
+    }
+    return now - animStallSince > ANIM_STALL_MS;
+}
+
+let lastScrapeFail = '';
+
 function tryScrapePosition() {
     try {
-        return scrapePosition() || 'no'; // scrapePosition() returns undefined when there is no board
+        const res = scrapePosition(); // undefined when there is no board
+        animStallSince = 0; // scraped clean -- restart the stall clock
+        if (!res || res === 'no') {
+            let pieces = -1;
+            try { pieces = getPieces().length; } catch (e) { /* selector itself failed */ }
+            lastScrapeFail = !getBoard() ? 'no board element' : `board but ${pieces} pieces`;
+        }
+        return res || 'no';
     } catch (e) {
+        // the frame matters as much as the message: an unexpected TypeError anywhere in the scrape
+        // wedges the panel exactly like the deliberate aborts do, but needs a completely different fix
+        lastScrapeFail = String(e && e.message).slice(0, 40)
+            + ' @ ' + String((String(e && e.stack).split('\n')[1] || '').trim()).slice(0, 70);
         return 'no'; // skip the current attempt, if we can't scrape
     }
 }
@@ -1134,7 +1188,7 @@ function isPuzzlePage() {
 }
 
 function scrapePositionPuz() {
-    if (isAnimating()) {
+    if (isAnimating() && !animationStalled()) {
         throw Error("Board is animating. Can't scrape.")
     }
     let res = '';
@@ -1221,7 +1275,7 @@ function scrapePositionPuz() {
         for (const piece of getPieces()) {
             let transform;
             if (piece.classList.contains('dragging')) {
-                transform = document.querySelector('.ghost').style.transform;
+                transform = document.querySelector('.ghost')?.style.transform ?? piece.style.transform;
             } else {
                 transform = piece.style.transform;
             }
@@ -1238,7 +1292,8 @@ function scrapePositionPuz() {
             // position (e.g. "8/8/8/8/8/8/8/NB1QBN1R"). Abort and let the next poll retry.
             const file = Math.round(xyCoords[0]);
             const rank = Math.round(xyCoords[1]);
-            if (Math.abs(xyCoords[0] - file) > 0.1 || Math.abs(xyCoords[1] - rank) > 0.1) {
+            if ((Math.abs(xyCoords[0] - file) > 0.1 || Math.abs(xyCoords[1] - rank) > 0.1)
+                    && !animationStalled()) {
                 throw Error("Board is animating. Can't scrape.");
             }
             const coords = (getOrientation() === 'black')
@@ -1535,8 +1590,14 @@ function startPositionObserver() {
 // An animating board is not a changed board, it is a board mid-repaint. Bounded, so a site that
 // animates forever (or a stuck class) still gets its push rather than nothing at all.
 function pushWhenSettled(tries = 12) {
+    // Never wait in a HIDDEN tab. Chrome throttles timers there to about one a second, and to one a
+    // MINUTE after five minutes hidden -- so this retry chain, which costs 480ms in a visible tab,
+    // costs up to twelve minutes in a backgrounded one. That is the opposite of what Background Play
+    // is for. There is nothing to wait for anyway: the settle-wait exists to dodge a piece animation
+    // that a hidden tab is not painting, and pushPosition already retries a scrape that comes back
+    // transient.
     let moving = false;
-    try { moving = isAnimating(); } catch (e) { /* no board -- nothing to wait for */ }
+    try { moving = !document.hidden && isAnimating(); } catch (e) { /* no board -- nothing to wait for */ }
     if (!moving || tries <= 0) { schedulePush(); return; }
     setTimeout(() => pushWhenSettled(tries - 1), 40);
 }
@@ -1562,6 +1623,8 @@ function pushPosition() {
     if (!config) return;           // no config yet -> can't scrape
     const res = tryScrapePosition();
     if (res === 'no') {            // transient (animating, no board): never push, never dedupe
+        bgLog('scrape returned nothing', {why: lastScrapeFail, retry: noScrapeRetries,
+            giveUp: noScrapeRetries >= NO_SCRAPE_MAX_RETRIES, build: MEPHISTO_BUILD});
         if (noScrapeRetries < NO_SCRAPE_MAX_RETRIES) {
             noScrapeRetries++;
             // reuse pushDebounce so a mutation arriving mid-retry doesn't schedule a second chain
@@ -1569,6 +1632,7 @@ function pushPosition() {
         }
         return;
     }
+    if (noScrapeRetries) bgLog('scrape recovered', {afterRetries: noScrapeRetries});
     noScrapeRetries = 0;
     const orient = getOrientation();
     const key = `${orient}|${res}`;
@@ -1798,10 +1862,15 @@ function getLastMoveHighlights() {
 function getTurn() {
     // Auto-detect the side to move from the board. Any manual override lives in the PANEL now (the
     // header king switch rewrites the parsed FEN's turn), so this stays a pure detector.
-    let toSquare;
-    try {
-        toSquare = getLastMoveHighlights()[1];
-    } catch (e) {
+    // Every read below can come up empty, and NONE of them used to be guarded: `.find` returns
+    // undefined when no piece sits on the last-move destination, which happens whenever the
+    // highlight overlay and the pieces disagree -- constantly on Storm/Racer, where the whole
+    // position is swapped between puzzles. The deref threw out of getTurn, out of the scrape, and
+    // tryScrapePosition turned it into a permanent 'no': the panel froze on the dead position and
+    // spent the rest of the run re-issuing its move into a board that had moved on. There is
+    // already a considered fallback for "the board won't tell us the turn" -- it just sat in a
+    // catch that only covered the first line. Route every failure into it.
+    function turnFromContext() {
         // no last-move highlight to read the turn from. If a move list exists, derive the turn from
         // how many moves have been played. Normally White moved first, so an even count => White to
         // move. But a lichess "From Position" game can START with Black to move -- its cached start
@@ -1826,23 +1895,38 @@ function getTurn() {
         return (getOrientation() === 'black') ? 'w' : 'b'; // chess.com / blitztactics puzzle
     }
 
+    // Storm and Racer never need the guess. Every position the site renders is YOURS to move --
+    // it plays the opponent's reply itself and never stops on it -- and the board is always
+    // oriented with the player at the bottom. Reading the turn off the last-move highlight infers
+    // it from which colour landed on the destination square, which is wrong whenever the overlay
+    // and the pieces disagree, and they disagree constantly here because the whole position is
+    // swapped between puzzles. Orientation is stated by the site, so use it. /training is NOT
+    // included: it renders the opponent's reply as a real position, so there the turn genuinely
+    // alternates and the highlight read is still the right instrument.
+    if (site === 'lichess' && /^\/(storm|racer)(\/|$)/.test(location.pathname)) {
+        return (getOrientation() === 'black') ? 'b' : 'w';
+    }
+
+    let toSquare;
+    try {
+        toSquare = getLastMoveHighlights()[1];
+    } catch (e) {
+        return turnFromContext(); // no last-move highlight to read the turn from
+    }
+
     let turn;
     if (site === 'chesscom') {
         const hlPiece = document.querySelector(`.piece.${toSquare.classList[1]}`);
-        const hlColorType = Array.from(hlPiece.classList).find(c => c.match(/[wb][prnbkq]/));
-        turn = (hlColorType[0] === 'w') ? 'b' : 'w';
-    } else if (site === 'lichess') {
-        const toPiece = Array.from(document.querySelectorAll('.main-board piece'))
+        const hlColorType = hlPiece && Array.from(hlPiece.classList).find(c => c.match(/[wb][prnbkq]/));
+        turn = hlColorType ? ((hlColorType[0] === 'w') ? 'b' : 'w') : null;
+    } else if (site === 'lichess' || site === 'blitztactics') {
+        const scope = (site === 'lichess') ? '.main-board piece' : '.board-area piece';
+        const toPiece = Array.from(document.querySelectorAll(scope))
             .filter(piece => !!piece.classList[1])
             .find(piece => piece.style.transform === toSquare.style.transform);
-        turn = (toPiece.classList.contains('white')) ? 'b' : 'w';
-    } else if (site === 'blitztactics') {
-        const toPiece = Array.from(document.querySelectorAll('.board-area piece'))
-            .filter(piece => !!piece.classList[1])
-            .find(piece => piece.style.transform === toSquare.style.transform);
-        turn = (toPiece.classList.contains('white')) ? 'b' : 'w';
+        turn = toPiece ? (toPiece.classList.contains('white') ? 'b' : 'w') : null;
     }
-    return turn;
+    return turn || turnFromContext();
 }
 
 function getRanksFiles() {
@@ -2062,9 +2146,17 @@ function onPositionLoad(retries = 10) {
 
 // -------------------------------------------------------------------------------------------
 
+// Resolves with the time that ACTUALLY passed, not the time that was asked for. Those are the same
+// number in a foreground tab and wildly different in a background one: Chrome clamps timers in a
+// hidden tab to one per second, so `promiseTimeout(50)` really takes 1000ms. Callers that summed the
+// requested delay to build a deadline were therefore out by 20x -- a "10 second" wait became 200 real
+// seconds, long enough for the move watchdog (which does use real time) to tear the move down
+// underneath them. That is why background play worked with DevTools open and not with it closed:
+// DevTools disables the clamp, so the lie was true exactly while anyone was watching.
 function promiseTimeout(time) {
+    const started = Date.now();
     return new Promise((resolve) => {
-        setTimeout(() => resolve(time), time);
+        setTimeout(() => resolve(Date.now() - started), time);
     });
 }
 
@@ -2099,11 +2191,29 @@ function getRandomSampledXY(bounds, range = 0.8) {
 
 function dispatchSimulateClick(x, y, travelMs = 0) {
     try {
+        // NO CURSOR TRAVEL IN A HIDDEN TAB, for two independent reasons.
+        //
+        // Practical: each step of the travel is its own awaited round-trip into the service worker,
+        // and the background trace showed those costing seconds rather than milliseconds once the tab
+        // is hidden -- 8 steps (travelMs 131) timed out at 3s while 3 steps (travelMs 44) returned in
+        // 77ms. The move sequence awaits every one of them, and that is what wedges `moving` and
+        // stops background play.
+        //
+        // And it is the more faithful behaviour anyway: the travel exists so a click looks like a
+        // human reached for the square (audit M2). But a human who has tabbed away is not moving
+        // their cursor over this board AT ALL -- synthesising a cursor path across a board nobody is
+        // looking at is the anomaly, not the fix for one.
+        if (document.hidden) travelMs = 0;
         // goes to the PANEL (it picks CDP vs the python backend), which is in our own realm when the
         // panel is in-page -- runtime.sendMessage would only reach the extension, never our sibling.
         // travelMs is how long the cursor should take travelling to (x, y) before the click (M2).
         bgLog('dispatching click', {x: Math.round(x), y: Math.round(y), travelMs});
-        return sendToPanel({click: true, x: x, y: y, travelMs});
+        // A click that is dispatched but never returns, and one that returns and changes nothing, are
+        // different failures; the log could not tell them apart.
+        const clickStarted = Date.now();
+        return Promise.resolve(sendToPanel({click: true, x: x, y: y, travelMs}))
+            .then((r) => { bgLog('click returned', {ms: Date.now() - clickStarted, r}); return r; })
+            .catch((e) => { bgLog('click FAILED', {ms: Date.now() - clickStarted, e: String(e)}); throw e; });
     } catch (e) {
         // "Extension context invalidated" -- this content-script was orphaned by an extension reload
         // (a fresh one loads on the next page refresh). Swallow it like the other sendMessage sites.
@@ -2204,7 +2314,9 @@ async function simulateMoveVerified(move, deselect, verify, think = null, retrie
     // original count throughout, and POLL for it to grow instead of a single snapshot.
     if (before === null) before = getMoveRecords()?.length ?? 0;
     await simulateMove(move, ds, think);
-    for (let waited = 0; waited < 1500; waited += 50) { // poll up to 1.5s for the move to register
+    // Real elapsed time, not a count of intended steps -- see promiseTimeout. Under a background
+    // tab's 1s timer clamp the step-counting version polled for 30 real seconds, not 1.5.
+    for (const deadline = Date.now() + 1500; Date.now() < deadline; ) { // poll up to 1.5s
         await promiseTimeout(50);
         if ((getMoveRecords()?.length ?? 0) > before) return; // a move was played -> success
     }
@@ -2294,7 +2406,7 @@ async function simulatePromotionClicks(promotion, travelMs = 250) {
     // promo click on those, leaving the pawn stuck on the 8th rank with the dialog open -- the
     // intermittent "promotion sometimes fails" on lichess. Poll up to ~1.5s for the picker instead.
     let promotionChoice = getPromotionSelection(promotion);
-    for (let waited = 0; !promotionChoice && waited < 1500; waited += 40) {
+    for (const deadline = Date.now() + 1500; !promotionChoice && Date.now() < deadline; ) {
         await promiseTimeout(40);
         promotionChoice = getPromotionSelection(promotion);
     }

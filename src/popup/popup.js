@@ -67,6 +67,20 @@ let is_calculating = false;
 // still reads as English prose and a missing key can never render blank.
 const i18n = (key, dflt, vars) => MephistoI18n.t(key, dflt, vars);
 
+// Background-play tracing from the PANEL side, to the service worker's own console -- see bgLog in
+// the content-script for why not this page's. Silent while the tab is active. Without this half, a
+// silent log is ambiguous: "the panel never issued a move" and "the content-script dropped it" look
+// identical from the other end.
+function bgTrace(...args) {
+    try {
+        if (document.visibilityState === 'visible' && document.hasFocus()) return;
+        chrome.runtime.sendMessage({bgTrace: {from: 'panel', args: args.map((v) => {
+            if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) return v;
+            try { return JSON.parse(JSON.stringify(v)); } catch (e) { return String(v); }
+        })}}, () => void chrome.runtime.lastError);
+    } catch (e) { /* extension context gone */ }
+}
+
 // The panel cannot read the locale files itself: it runs in the page's isolated world, where a fetch
 // of a chrome-extension:// URL is blocked (web_accessible_resources is deliberately empty). The
 // service worker reads them and sends both the chosen language and English underneath it.
@@ -169,6 +183,14 @@ let turn = ''; // 'w' | 'b'
 // to start audio, so this is (re)started from the popup's own clicks and on visibility changes
 // (once the user has interacted, sticky activation lets resume() work even after tabbing away).
 let keep_alive_ctx = null;
+// STICKY ACTIVATION. Browsers refuse to start audio before the user has interacted with the page, but
+// once they have, the permission STICKS -- creating an AudioContext later is allowed and silent.
+// Tracking that is what lets every caller arm the tone, instead of only the two that happen to be
+// user gestures themselves. Without it, turning Background Play on from the OPTIONS PAGE armed
+// nothing: watch_config_changes calls in with allowCreate=false, keep_alive returned immediately at
+// the `!keep_alive_ctx` check, and the setting was on while the exemption that makes it work was
+// not. Whether the feature worked came down to where you had clicked, which nothing told you.
+let user_has_gestured = false;
 // allowCreate is true ONLY when called from a real user gesture -- creating/resuming an AudioContext
 // without one logs Chrome's "AudioContext was not allowed to start" warning, so non-gesture callers
 // (page load, visibilitychange) only resume an already-created context (sticky activation permits that).
@@ -181,7 +203,9 @@ function keep_alive(active, allowCreate = false) {
     try {
         if (active) {
             if (!keep_alive_ctx) {
-                if (!allowCreate) return; // no gesture yet -> don't create (would warn)
+                // `allowCreate` = this call IS a gesture; `user_has_gestured` = one already happened
+                // and the permission stuck. Either is enough; neither means it would warn, so don't.
+                if (!allowCreate && !user_has_gestured) return;
                 keep_alive_ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = keep_alive_ctx.createOscillator();
                 const gain = keep_alive_ctx.createGain();
@@ -289,8 +313,10 @@ async function initPanel(root, tabId) {
     // a tab that defers its moves anyway (Background Play off, the default) was still marked audible
     // -- Chrome puts a speaker icon on the tab strip for that, so it bought nothing and added a
     // visible tell. Now it runs only when you have actually asked to play in the background.
-    document.addEventListener('pointerdown', () => keep_alive(keep_alive_wanted(), true), true); // gesture: may create
-    document.addEventListener('visibilitychange', () => keep_alive(keep_alive_wanted())); // resume-only (no create)
+    const on_gesture = () => { user_has_gestured = true; keep_alive(keep_alive_wanted(), true); };
+    document.addEventListener('pointerdown', on_gesture, true); // gesture: may create
+    document.addEventListener('keydown', on_gesture, true);     // ...and so is a hotkey
+    document.addEventListener('visibilitychange', () => keep_alive(keep_alive_wanted()));
     push_config();
     init_quick_settings();
     maybe_autodetect_variant(); // variant game page -> auto-apply the variant (+ Fairy) once
@@ -544,13 +570,25 @@ async function initPanel(root, tabId) {
     // tooltips (replaces Materialize's M.Tooltip -- Materialize's JS looks elements up via `document`
     // and can't run in a shadow root; this queries a passed root instead). PANEL_ROOT/PANEL_TIP_HOST
     // default to `document`/`document.body` in the iframe; the shadow-root phase passes the root.
-    // Translate BEFORE the hotkey suffixes and the tooltips: annotate_hotkey_labels appends to the
-    // label text, and Materialize snapshots data-tooltip when a tooltip is initialised, so both have
-    // to run on already-translated markup.
-    await load_language(config.language || MephistoI18n.DEFAULT_LANG);
-    MephistoI18n.apply(PANEL_ROOT);
     annotate_hotkey_labels(); // show each toggle's shortcut next to it, e.g. "Autoplay (A)"
     init_tooltips(PANEL_ROOT, PANEL_TIP_HOST);
+    // The locale arrives AFTER the panel is on screen, never before it.
+    //
+    // This used to be awaited up here, and it made opening the panel visibly slower: the fetch is a
+    // round-trip to the service worker, which is usually asleep and has to be woken first, and
+    // nothing rendered until it answered. The markup is already English, so blocking on it bought
+    // exactly one thing -- English users waiting for English. Paint first, translate when it lands.
+    //
+    // Re-running the two calls above afterwards is required, not tidiness: annotate_hotkey_labels
+    // APPENDS the "(A)" suffix to label text, and Materialize snapshots data-tooltip when a tooltip
+    // is initialised, so both have to be redone against the translated markup.
+    if ((config.language || MephistoI18n.DEFAULT_LANG) !== MephistoI18n.DEFAULT_LANG) {
+        load_language(config.language).then(() => {
+            MephistoI18n.apply(PANEL_ROOT);
+            annotate_hotkey_labels();
+            init_tooltips(PANEL_ROOT, PANEL_TIP_HOST);
+        });
+    }
 
     // The content-script's first push (fired ~30ms after push_config above) can arrive before this
     // panel's message handler exists -- it's dropped, but its dedupe key is already recorded, so the
@@ -1225,6 +1263,10 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         // pass that answers a `go` regardless of the limit, so on those engines Manual Mode was
         // autoplaying by itself. State the contract here instead of relying on the engine to withhold
         // a bestmove, the way every other move-path guard already lists the mode.
+        if (isTerminal) {
+            bgTrace('bestmove', {best, autoplay: config.autoplay, help: config.help_mode,
+                manual: config.manual_mode});
+        }
         if (!config.help_mode && !config.manual_mode && config.autoplay && isTerminal) {
             // SAFETY: only autoplay a move that actually moves OUR piece and is legal right now.
             // If the turn was mis-scraped we'd otherwise play the opponent's best move as ours.
@@ -2043,8 +2085,14 @@ let puzzle_solutions = null;   // Map(placement+stm -> our uci) for the line we 
 let puzzle_asked = null;       // the position the last request was for (don't re-ask on every poll)
 
 function puzzle_db_enabled() {
-    // Standard chess only: the database is lichess's standard puzzle set, and the key is a plain
-    // placement, so a variant position could in principle collide with a standard one.
+    // LICHESS ONLY, and that is a resource decision as much as a correctness one. The database is
+    // built from lichess games, so a chess.com or BlitzTactics position is not in it and never will
+    // be -- looking it up there is a message to the service worker and a disk read per position, every
+    // one of them a guaranteed miss. Ask only where an answer can exist.
+    //
+    // Standard chess only for the same reason plus one: the key is a bare placement, so a variant
+    // position could in principle collide with a standard one.
+    if (detected_prefix !== 'li') return false;
     return config.puzzle_mode && (!config.variant || config.variant === 'chess');
 }
 
@@ -2072,6 +2120,27 @@ function puzzle_expand(fen, solution) {
     }
     return map;
 }
+
+// --- Puzzle Storm / Racer -------------------------------------------------------------------------
+// These pages DO ship their whole puzzle set with the page -- exact FEN and full solution for every
+// puzzle, 137 for Storm and 69 for Racer -- which would be better than the database here: no import
+// needed, and an exact FEN on a page that has no move list and therefore has to infer castling and
+// en passant.
+//
+// It was implemented and REVERTED, because re-fetching the URL to read that payload returns a
+// DIFFERENT RUN. Verified against a live board: the position on screen matched NONE of the 137
+// puzzles a fetch returned. Feeding those solutions would play confidently wrong moves -- strictly
+// worse than not having the feature.
+//
+// (The test that made it look safe compared two fetches TO EACH OTHER. Both were new runs, so they
+// agreed with each other and told us nothing about the run being displayed. Compare against the
+// rendered board, never against another copy of the same guess.)
+//
+// The data is only in the page at LOAD time -- lichess deletes its own bootstrap script once it has
+// read it, which is why it cannot be re-read afterwards. A correct implementation would need a
+// content script at `run_at: document_start` capturing that script node before the page removes it.
+// Not built: it is a real change to how the extension injects, and unverified guesses have cost
+// enough today.
 
 // Fire-and-forget, exactly like the tablebase probe: the move path never awaits it, it either has an
 // answer by the time a move is due or it doesn't.
@@ -2137,7 +2206,32 @@ function puzzle_move_ready(fen) {
 // opponent's reply is still moving across the board. That is what made the mismatch guard fire on
 // essentially every puzzle move. Delaying the SEND (rather than sleeping inside the click sequence)
 // also means the content-script's guard judges a board that has settled.
-const PUZZLE_MOVE_DELAY_MS = 100;
+const PUZZLE_MOVE_DELAY_MS = 200;
+// The pending pre-move pause. Superseded rather than stacked: on_new_pos can legitimately run twice
+// for the SAME board -- a re-push flagged as a resume does exactly that -- and two live timers would
+// send the move twice, which the content-script then has to drop on its `moving` guard.
+let puzzle_move_timer = null;
+
+// ...and a watchdog behind it, because the puzzle click path does NOT verify itself.
+//
+// A normal autoplay move goes through simulateMoveVerified: it checks the move list actually grew,
+// retries, and on final failure clears both dedupes so the position is re-analysed. A puzzle move is
+// one UNVERIFIED click. So any single failure -- a dropped click, a mismatch abort, a mid-animation
+// board -- is PERMANENT: the board never changes, so the popup's own `last_eval.fen` dedupe swallows
+// every re-push and nothing ever tries again. That is the difference between a hiccup and a panel
+// that has quietly stopped playing.
+//
+// Capped, and deliberately no engine fallback after the cap: the failure here is in CLICKING, not in
+// choosing the move, and the engine's move would go out through the very same clicks.
+// Bounded by TIME, not by attempts. It counted attempts first, and the log showed why that is
+// wrong: three retries inside four seconds all came back "DROPPED: a previous move is still in
+// progress" -- which is not a failed move, it is a move still happening -- and then it gave up on a
+// position that was about to work. Time is the honest budget: keep offering the move until the board
+// changes or the window closes, and let the content-script drop whatever arrives too early.
+const PUZZLE_MOVE_RETRY_MS = 1500;
+const PUZZLE_MOVE_WINDOW_MS = 9000;
+let puzzle_retry_timer = null;
+let puzzle_retry = {key: null, until: 0};
 
 function maybe_play_puzzle_move(fen) {
     const uci = puzzle_move_ready(fen);
@@ -2146,18 +2240,42 @@ function maybe_play_puzzle_move(fen) {
     abandon_search(); // no search is wanted here, and none of its output should arrive behind ours
     toggle_calculating(false);
     update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci}));
-    setTimeout(() => {
-        // The board can move on inside those 100ms (a fast opponent reply, Re-detect, a new puzzle).
-        // Sending anyway would put a move for the old position on the wire, which the content-script
-        // would then have to catch -- cheaper and clearer to simply not send it: whatever replaced
-        // this position runs its own on_new_pos and plays its own move.
-        if (last_eval.fen !== fen) {
+    clearTimeout(puzzle_move_timer);
+    puzzle_move_timer = setTimeout(() => {
+        // Only skip if the BOARD really moved on. Compared on placement + side to move, not on the
+        // whole FEN: on a puzzle page the castling rights and ep square are inferred and the move
+        // counters are often re-derived, so the FEN string can change while the position in front of
+        // you has not. Comparing strings here meant a cosmetic re-scrape cancelled the move -- and
+        // because this function had already told on_new_pos it was handling things (returning true,
+        // which skips the search), that left the position with NO move and NO search at all.
+        if (puzzle_key(last_eval.fen) !== puzzle_key(fen)) {
             console.log('Puzzle DB: position moved on during the pre-move pause -- not sending');
             return;
         }
         request_automove(uci);
+        watch_puzzle_move(fen, uci);
     }, PUZZLE_MOVE_DELAY_MS);
     return true;
+}
+
+// Did the move we just sent actually land? The only evidence that matters is the board changing, so
+// that is what this waits for: same position still there = it did not land = send it again.
+function watch_puzzle_move(fen, uci) {
+    const key = puzzle_key(fen);
+    // A new position opens a fresh window; the same one keeps the deadline it already had.
+    if (puzzle_retry.key !== key) puzzle_retry = {key, until: Date.now() + PUZZLE_MOVE_WINDOW_MS};
+    clearTimeout(puzzle_retry_timer);
+    puzzle_retry_timer = setTimeout(() => {
+        if (puzzle_key(last_eval.fen) !== key) return; // the board moved on -- the move landed
+        if (Date.now() > puzzle_retry.until) {
+            console.warn(`Mephisto: puzzle move ${uci} did not land within ` +
+                `${PUZZLE_MOVE_WINDOW_MS}ms -- giving up on this position (Re-detect to retry)`);
+            bgTrace('puzzle move gave up', {uci});
+            return;
+        }
+        bgTrace('puzzle move re-issued', {uci, msLeft: puzzle_retry.until - Date.now()});
+        maybe_play_puzzle_move(last_eval.fen);
+    }, PUZZLE_MOVE_RETRY_MS);
 }
 
 // Appended to the move readout, so a database move is never silently substituted for the engine's.
@@ -2767,6 +2885,8 @@ function on_new_pos(fen, startFen, moves) {
     request_explorer(fen);
     request_tablebase(fen);
     request_puzzle_solution(fen);
+    bgTrace('on_new_pos', {turn, autoplay: config.autoplay, puzzle: config.puzzle_mode,
+        known: !!puzzle_pick(fen), fen: fen.split(' ')[0].slice(0, 46)});
     prev_ply_count = ply_count;
     // Do we already know this position's move (ply 2+ of a solution looked up a move ago)? Decided
     // HERE so the engine branch below can be skipped, but PLAYED at the very end of this function --
@@ -4046,6 +4166,7 @@ function sync_puzzle_mode_to_page(onPuzzlePage) {
 }
 
 function request_automove(move, think = null, manual = false) {
+    bgTrace('request_automove', {move, think, puzzle: config.puzzle_mode});
     // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
     // queues a blind premove (it won't appear in the move list until they move), so it must NOT be
     // verified/retried; an on-turn move must be. The popup is authoritative here -- decide from the
@@ -4676,6 +4797,26 @@ async function request_debugger_click(x, y, tabId, travelMs) {
     // mouseMoved cursor path over travelMs before the click (M2); awaiting it paces the move.
     const id = await resolve_click_tab(tabId);
     if (!id) { console.warn('[Mephisto/bg] click dropped: no tab id resolved'); return; }
+    // A click MUST settle. The caller awaits it inside the move sequence, and that sequence is what
+    // clears the content-script's `moving` guard when it finishes -- so a round-trip that never
+    // returns wedges every subsequent move until the 15s stale-latch budget expires. In a hidden tab
+    // that is the difference between playing and stopping. Resolve either way and let the move's own
+    // verification decide whether it worked; a click we cannot confirm is not worse than no click.
+    const settled = await Promise.race([
+        do_debugger_click(id, x, y, travelMs).then(() => 'ok'),
+        new Promise((r) => setTimeout(() => r('timeout'), CLICK_TIMEOUT_MS)),
+    ]);
+    if (settled === 'timeout') {
+        bgTrace('click TIMED OUT', {x: Math.round(x), y: Math.round(y), ms: CLICK_TIMEOUT_MS});
+        console.warn('Mephisto: CDP click did not return in time -- continuing');
+    }
+}
+
+// How long a single click round-trip may take before the move gives up waiting on it. Generous
+// against a woken service worker, far below the stale-`moving` budget it exists to keep us out of.
+const CLICK_TIMEOUT_MS = 3000;
+
+async function do_debugger_click(id, x, y, travelMs) {
     if (document.hidden) console.log('[Mephisto/bg] CDP click ->', {tab: id, x: Math.round(x), y: Math.round(y)});
     try {
         const r = await chrome.runtime.sendMessage({cdpClick: true, tabId: id, x, y, travelMs});
