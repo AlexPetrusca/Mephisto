@@ -482,10 +482,13 @@ Both also size the engine's search to the time they'll spend, so the wait become
 
 ### Puzzle database
 
-![A 3900-rated Lichess puzzle solved from the database — the readout names its source](docs/puzzle-database.png)
+![3999 — as high as the Lichess puzzle rating goes](docs/puzzle-database.png)
 
-*[Watch it run](docs/puzzle-database.mp4) — a minute and a half of Hardest (+600) puzzles at ~3900, solved from
-the database rather than searched. (GitHub plays it in the file view; it will not autoplay inline here.)*
+*3999 is the ceiling: there is no higher number Lichess will show you.*
+
+![Hardest (+600) puzzles solved back to back, from the database rather than searched](docs/puzzle-database.gif)
+
+*[The full clip](docs/puzzle-database.mp4) runs a minute and a half at higher quality.*
 
 Puzzle Mode plays a searched move, and a searched move is not always the puzzle's answer — a puzzle has exactly one
 line that scores, and an objectively stronger move still fails it. Import Lichess's puzzle database and the panel
