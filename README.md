@@ -709,6 +709,17 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
   documentation still only speaks one. The long help tooltips on the settings page are in the same position and
   would go with it.
 
+**Footprint**
+- [ ] **Shrink the page footprint further** — keep reducing what a site can passively detect. The list under
+  [Page footprint](#page-footprint) is most of the way through: no iframe, no extension URLs, a closed shadow
+  root, no branded storage keys, human-shaped clicks. What is left is small and fiddly — hardening the one
+  rendezvous the MAIN-world probes still need, and tightening how scraped positions are sanitised.
+  **Being straight about the ceiling:** this is passive fingerprinting only, and the client side is nearly
+  exhausted. What actually catches engine use is server-side behavioural analysis — move-match rates against
+  engine choice, and timing distributions that look nothing like a person's. Humanize, Clock Mode and Mirror
+  Time are the levers that touch *that*, and no amount of DOM hygiene substitutes for them. Nothing here makes
+  the extension undetectable; see the [disclaimer](#️-read-this-first--disclaimer--fair-play).
+
 **Robustness**
 - [ ] **Bug fixes** — an open-ended entry, deliberately. Several of the sharpest bugs so far were invisible
   rather than loud: autoplay that skipped a move with nothing logged, an engine that never loaded, a veto that
@@ -716,6 +727,11 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
 - [ ] **ChessBase Tactics: on-board arrows + autoplay** — analysis works; drawing on the board and clicking it
   do not. ChessBase renders its own board with no class to match, and finding it by shape was both slow (the
   search runs on hot paths) and unreliable. Needs the real markup to anchor on.
+
+**Anything else**
+- [ ] **Whatever you want it to do** — the wishlist is open. Most of what is in this project arrived because
+  something was annoying in a real game rather than because it was planned, so a "could it just…" is a perfectly
+  good starting point. Open an issue; small ideas are usually the ones that land.
 
 More to come.
 
