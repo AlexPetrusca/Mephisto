@@ -700,6 +700,11 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
 - [ ] **Rework the UI** — the panel has grown a control at a time and it shows: twenty-odd quick-settings rows in
   one scrolling column, with no grouping and no sense of which settings matter most. Wants a proper pass over the
   layout rather than another row bolted on.
+- [ ] **Rewrite the README** — 780-odd lines and 55 headings, accreted a section per release, so it reads as a
+  changelog pretending to be documentation. What someone needs on arrival (what this is, install it, the three
+  things to switch on) is buried among things only I care about. Wants restructuring around the reader, not
+  around the order it was built in — and it should come before the translation, or the translation just
+  multiplies the problem by fourteen.
 - [ ] **Translate the README** — the interface speaks fourteen languages ([Languages](#languages)) and the
   documentation still only speaks one. The long help tooltips on the settings page are in the same position and
   would go with it.
