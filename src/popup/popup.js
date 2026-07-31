@@ -2129,6 +2129,16 @@ function puzzle_move_ready(fen) {
 // the answer arrives a moment after on_new_pos has already run. No latch of its own: a second call
 // for the same position is what a FAILED move needs (the content-script re-pushes it), and a double
 // click is already impossible -- the content-script's `moving` guard drops it.
+// A beat before the first click, and ONLY on a database move.
+//
+// Every other move path has a search in front of it, and that search is what has always been letting
+// the board finish animating before anything gets clicked. A known solution has no search to hide
+// behind: without this the click is issued in the same tick as the scrape that produced it, while the
+// opponent's reply is still moving across the board. That is what made the mismatch guard fire on
+// essentially every puzzle move. Delaying the SEND (rather than sleeping inside the click sequence)
+// also means the content-script's guard judges a board that has settled.
+const PUZZLE_MOVE_DELAY_MS = 100;
+
 function maybe_play_puzzle_move(fen) {
     const uci = puzzle_move_ready(fen);
     if (!uci) return false;
@@ -2136,7 +2146,17 @@ function maybe_play_puzzle_move(fen) {
     abandon_search(); // no search is wanted here, and none of its output should arrive behind ours
     toggle_calculating(false);
     update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci}));
-    request_automove(uci);
+    setTimeout(() => {
+        // The board can move on inside those 100ms (a fast opponent reply, Re-detect, a new puzzle).
+        // Sending anyway would put a move for the old position on the wire, which the content-script
+        // would then have to catch -- cheaper and clearer to simply not send it: whatever replaced
+        // this position runs its own on_new_pos and plays its own move.
+        if (last_eval.fen !== fen) {
+            console.log('Puzzle DB: position moved on during the pre-move pause -- not sending');
+            return;
+        }
+        request_automove(uci);
+    }, PUZZLE_MOVE_DELAY_MS);
     return true;
 }
 
