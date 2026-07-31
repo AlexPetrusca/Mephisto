@@ -690,6 +690,10 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
   tablebase probe: another optional source that outranks the local search when it has an answer, costs nothing
   when it doesn't, and never delays a move. Off by default like the tablebase — it sends the position to a
   third party.
+- [ ] **More engines to choose from** — the lineup is Stockfish plus Fairy plus the two Maia families, which
+  covers *strong* and *human-like* and not much in between. Other open-source engines have genuinely different
+  styles, and the ones that build to WASM could ship in-browser while anything with a native binary already works
+  through the native host or the remote bridge today. Variety of character, not more strength.
 - [ ] **lc0 (Leela) in the browser** — Leela's neural-net engine as a WASM alternative to Stockfish. A large
   download for play that isn't stronger; mainly for comparing styles.
 
@@ -705,6 +709,14 @@ No schedule — added whenever I feel like it. Only the not-yet-built items live
   things to switch on) is buried among things only I care about. Wants restructuring around the reader, not
   around the order it was built in — and it should come before the translation, or the translation just
   multiplies the problem by fourteen.
+- [ ] **More screenshots** — most features here are visual and the README describes them in prose. Nearly every
+  section would be clearer with a picture of the thing actually running: the eval graph, the opening explorer
+  overlay, the board reader, the settings page.
+- [ ] **Explain things better** — several sections assume you already know why a feature exists. Worth a pass
+  that leads with *what problem this solves for you* before the mechanism, especially for the options that sound
+  alike (Clock Mode vs Mirror Time vs Humanize, Premove vs Pondering).
+- [ ] **A few short videos** — some of this only makes sense in motion: a premove firing instantly, Humanize
+  pacing a move, the screen reader following a board. Thirty seconds each, no commentary needed.
 - [ ] **Translate the README** — the interface speaks fourteen languages ([Languages](#languages)) and the
   documentation still only speaks one. The long help tooltips on the settings page are in the same position and
   would go with it.
