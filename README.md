@@ -404,6 +404,10 @@ No schedule — added whenever I feel like it.
 - **More engines** — the lineup covers *strong* and *human-like* and not much between. Variety of character, not
   more strength. **lc0 (Leela)** in WASM would be for comparing styles, not for strength.
 - **Duck Chess autoplay** — detection and analysis work; the duck-placement step doesn't.
+- **4-player chess** (4PC, Chaturaji, 4P Giveaway, Self Partnering) — no longer blocked: a purpose-built
+  engine for four-player boards is in development, so this moves from "nothing to build against" to a real
+  target. Board detection and turn handling come first; the four-seat clock and elimination rules are the
+  parts standard chess logic cannot be bent into.
 - **Rework the panel UI** — it grew a control at a time and it shows. Wants a layout pass, not another row.
 - **Short videos and more screenshots** — a premove firing, Humanize pacing a move, the screen reader following a
   board. Some of this only makes sense in motion.
@@ -419,7 +423,7 @@ No schedule — added whenever I feel like it.
 - **Whatever you want it to do** — most of what's here arrived because something was annoying in a real game.
 
 **Blocked upstream** — no engine supports these, so there's nothing to build against: Fog of War (imperfect
-information), Setup Chess, Spell Chess, 4-player boards, Bughouse and Chess-with-Checkers.
+information), Setup Chess, Spell Chess, Bughouse and Chess-with-Checkers.
 
 <details>
 <summary><b>Recently shipped</b></summary>
