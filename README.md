@@ -43,12 +43,16 @@ Petrusca](https://github.com/AlexPetrusca/Mephisto). Installed from upstream tod
 Chess.com and Lichess redesigns broke every scraper. This fork revives it and goes well past it. Everything the
 original did still works.
 
-New here: modern **Stockfish dev/18** and **Maia / Maia-3** engines · an **Elo cap** · **Humanize**, **Clock Mode**
-and **Mirror Time** · **Safe Premove** and **Pondering** · the **Opening Explorer** and **endgame tablebase** ·
-**Help Mode**, **Manual Mode** and rebindable **hotkeys** · the **eval bar** and **eval history graph** · **screen
-reading** and a **playable panel board** · **Chess.com variants**, **TakeTakeTake** and **Chess960** · a
-**zero-iframe panel** with no page-visible extension URLs · **fourteen languages** · plus move-correctness guards, a
-**puzzle database**, copy FEN/PGN and export/import.
+New here:
+
+- **Engines** — modern **Stockfish dev / 18**, the human-like **Maia** and **Maia-3** nets, and an **Elo cap**.
+- **Playing like a person** — **Humanize**, **Clock Mode** and **Mirror Time**.
+- **Automation** — **Safe Premove**, **Pondering**, **Help Mode**, **Manual Mode** and rebindable **hotkeys**.
+- **Beyond the engine** — the **Opening Explorer**, an **endgame tablebase** and the **puzzle database**.
+- **On screen** — the **eval bar**, the **eval history graph**, **screen reading** and a **playable panel board**.
+- **Coverage** — **Chess.com variants**, **TakeTakeTake**, **Chess960** and **fourteen languages**.
+- **Under the hood** — a **zero-iframe panel** with no page-visible extension URLs, move-correctness guards,
+  copy FEN/PGN and settings export/import.
 
 ---
 
