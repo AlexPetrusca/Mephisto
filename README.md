@@ -479,8 +479,6 @@ No schedule — added whenever I feel like it. Checked means shipped.
 
 ### Planned
 
-- [ ] **Cloud evaluation** — Lichess's cloud-eval API beside the tablebase: instant deep evals for positions already
-  analysed, nothing for the rest. Optional, off by default; it leaves your machine.
 - [ ] **More engines** — the lineup covers *strong* and *human-like* and not much between. Variety of character, not
   more strength. **lc0 (Leela)** in WASM would be for comparing styles, not for strength.
 - [ ] **Duck Chess autoplay** — detection and analysis work; the duck-placement step doesn't.
@@ -505,6 +503,12 @@ No schedule — added whenever I feel like it. Checked means shipped.
 
 **Blocked upstream** — no engine supports these, so there's nothing to build against: Fog of War (imperfect
 information), Setup Chess, Spell Chess, Bughouse and Chess-with-Checkers.
+
+**Looked at and dropped** — *Lichess cloud evaluation.* It's a crowdsourced cache of positions other people's
+browsers have already analysed, not a server-side engine, and its coverage is the problem: deep on openings and
+popular lines, absent on ordinary middlegames. That's the inverse of where extra depth would change a move, and the
+openings are already covered by the [Opening Explorer](#analysis) and book play. Might be worth revisiting for
+post-game review, where the hit rate is higher and the eval is context rather than a move to play.
 
 ### Shipped
 
