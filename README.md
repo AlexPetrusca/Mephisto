@@ -351,7 +351,9 @@ administrator rights needed. Python 3 must be on `PATH`.
 
 > The Windows path is **built and symbol-checked but not yet run on a real Windows machine** — the DLL is
 > cross-compiled and verified in CI-style by `win-crosscheck.sh` in the Tetrarch repo, which is not the same as
-> someone having played a game on it. If something misbehaves, please open an issue. **WSL** works today with no
+> someone having played a game on it. If something misbehaves,
+> [please open an issue](https://github.com/IchNukeDichWeg/Mephisto/issues/new/choose) — see
+> [Contributing](#contributing) for the four stages worth reporting. **WSL** works today with no
 > extra steps, since it's the Linux path above.
 </details>
 
@@ -473,55 +475,81 @@ These reduce *passive* fingerprinting only. See the [disclaimer](#fair-play--rea
 
 ## Roadmap
 
-No schedule — added whenever I feel like it.
+No schedule — added whenever I feel like it. Checked means shipped.
 
-- **Cloud evaluation** — Lichess's cloud-eval API beside the tablebase: instant deep evals for positions already
+### Planned
+
+- [ ] **Cloud evaluation** — Lichess's cloud-eval API beside the tablebase: instant deep evals for positions already
   analysed, nothing for the rest. Optional, off by default; it leaves your machine.
-- **More engines** — the lineup covers *strong* and *human-like* and not much between. Variety of character, not
+- [ ] **More engines** — the lineup covers *strong* and *human-like* and not much between. Variety of character, not
   more strength. **lc0 (Leela)** in WASM would be for comparing styles, not for strength.
-- **Duck Chess autoplay** — detection and analysis work; the duck-placement step doesn't.
-- **Four-player chess, the rest of it** — [it works now](#four-player-chess) on chess.com, but Teams only, the
-  promotion picker isn't wired, elimination hasn't been seen in a real game, and Windows needs a DLL build of
-  Tetrarch's C core. Chaturaji, 4P Giveaway and Self Partnering are untouched.
-- **Rework the panel UI** — it grew a control at a time and it shows. Wants a layout pass, not another row.
-- **Short videos and more screenshots** — a premove firing, Humanize pacing a move, the screen reader following a
+- [ ] **Duck Chess autoplay** — detection and analysis work; the duck-placement step doesn't.
+- [ ] **Four-player chess, the rest of it** — Teams mode works; free-for-all needs engine support, the promotion
+  picker isn't wired, and elimination hasn't been seen in a real game. Chaturaji, 4P Giveaway and Self Partnering
+  are untouched.
+- [ ] **Four-player chess on Windows, confirmed** — built and symbol-checked, never run on a real Windows machine.
+  See [Contributing](#contributing) for the four stages worth reporting.
+- [ ] **Rework the panel UI** — it grew a control at a time and it shows. Wants a layout pass, not another row.
+- [ ] **Short videos and more screenshots** — a premove firing, Humanize pacing a move, the screen reader following a
   board. Some of this only makes sense in motion.
-- **Translate the README** — the interface speaks fourteen languages; the documentation still speaks one.
-- **Shrink the footprint further** — what's left is hardening the one rendezvous the MAIN-world probes need and
+- [ ] **Translate the README** — the interface speaks fourteen languages; the documentation still speaks one.
+- [ ] **Shrink the footprint further** — what's left is hardening the one rendezvous the MAIN-world probes need and
   tightening how scraped positions are sanitised. Being straight about the ceiling: the client side is nearly
   exhausted, and it was never the thing that catches people.
-- **ChessBase Tactics arrows + autoplay** — analysis works; drawing and clicking don't. ChessBase renders its own
+- [ ] **ChessBase Tactics arrows + autoplay** — analysis works; drawing and clicking don't. ChessBase renders its own
   board with no class to match, and finding it by shape was slow and unreliable.
-- **Bug fixes**, open-ended. Several of the sharpest bugs so far were invisible rather than loud: autoplay that
+- [ ] **Bug fixes**, open-ended. Several of the sharpest bugs so far were invisible rather than loud: autoplay that
   skipped a move with nothing logged, an engine that never loaded, a veto inverted only for Black. Reports of *"it
   did nothing"* are worth more than they sound.
-- **Whatever you want it to do** — most of what's here arrived because something was annoying in a real game.
+- [ ] **Whatever you want it to do** — most of what's here arrived because something was annoying in a real game.
 
 **Blocked upstream** — no engine supports these, so there's nothing to build against: Fog of War (imperfect
 information), Setup Chess, Spell Chess, Bughouse and Chess-with-Checkers.
 
-<details>
-<summary><b>Recently shipped</b></summary>
+### Shipped
 
-- **Maia-3** (v3.1.95) — 600–2600 slider, one transformer conditioned on rating; reproduces the
-  [CSSLab reference](https://github.com/CSSLab/maia3) exactly (~60% move-match to human play).
-- **Maia** (v3.1.93) — the original nets, 1100–1900 plus a community-trained 2200. Matches the lc0 reference.
-- **Pondering** (v3.1.107) and **double premove** (v3.1.107).
-- **Opening Explorer + book play** (v3.1.119), **set up a position** (v3.1.119), **auto-recover on DOM changes**
-  (v3.1.119) — if a site renames its move-list tags, the list is found structurally.
-- **Read a position off the screen** and the **playable panel board** (v3.1.124).
-- **From-Position capture** and **on-demand nets** (v3.1.125) — an unbundled net downloads on first use; a full
+- [x] **[Four-player chess](#four-player-chess)** (v3.1.199) — chess.com's 4-player variant, driven by
+  [Tetrarch](https://github.com/IchNukeDichWeg/Tetrarch); 14×14 panel board, team-relative eval, autoplay.
+  Teams mode only.
+- [x] **Four-player chess on Windows** (v3.1.200) — DLL build, `.bat` host shim and a PowerShell installer that
+  registers under `HKCU`. Unconfirmed on real hardware, hence the open item above.
+- [x] **Fourteen languages** (v3.1.160) — every string, switchable live in Settings → Appearance.
+- [x] **Puzzle database** (v3.1.140) — the Lichess puzzle CSV in IndexedDB; known solutions play with no search.
+- [x] **Endgame tablebase**, **move confidence**, **eval history graph** (v3.1.135).
+- [x] **Read a position off the screen** and the **playable panel board** (v3.1.124).
+- [x] **From-Position capture** and **on-demand nets** (v3.1.125) — an unbundled net downloads on first use; a full
   install still works offline.
-- **Instant reopen with a warm engine**, the **turn switch** (v3.1.92), **human cursor travel** (v3.1.90).
-- **Manual mode**, **configurable hotkeys**, **opponent mistake alert**, **self-test button** (v3.1.84).
-- **Copy FEN/PGN, compact panel, export/import** (v3.1.73); **native health badge, smart default threads** (v3.1.55).
-</details>
+- [x] **Opening Explorer + book play**, **set up a position**, **auto-recover on DOM changes** (v3.1.119) — if a
+  site renames its move-list tags, the list is found structurally.
+- [x] **Pondering** and **double premove** (v3.1.107).
+- [x] **Maia-3** (v3.1.95) — 600–2600 slider, one transformer conditioned on rating; reproduces the
+  [CSSLab reference](https://github.com/CSSLab/maia3) exactly (~60% move-match to human play).
+- [x] **Maia** (v3.1.93) — the original nets, 1100–1900 plus a community-trained 2200. Matches the lc0 reference.
+- [x] **Instant reopen with a warm engine**, the **turn switch** (v3.1.92), **human cursor travel** (v3.1.90).
+- [x] **Manual mode**, **configurable hotkeys**, **opponent mistake alert**, **self-test button** (v3.1.84).
+- [x] **Copy FEN/PGN, compact panel, export/import** (v3.1.73); **native health badge, smart default threads**
+  (v3.1.55).
 
 ---
 
 ## Contributing
 
-Ideas, bug reports and PRs are all welcome — open an issue or a pull request.
+**[Open an issue](https://github.com/IchNukeDichWeg/Mephisto/issues/new/choose) for anything** — a bug, a site that
+stopped being scraped correctly, an engine that misbehaves, a feature you want, or just an idea. You don't need a
+diagnosis or a reproduction; "it stopped playing moves on lichess this morning" is a perfectly good issue. PRs are
+welcome too.
+
+**If the Windows four-player setup fails, an issue is especially useful** — it is built and symbol-checked but has
+never been run on a real Windows machine, and native-messaging failures there are silent: Chrome reports the host as
+unavailable and says nothing about why. Testing it in stages turns that into something actionable, so please say
+which one broke:
+
+1. `./setup.sh` under MSYS2 produces `build\tetrarch.dll`
+2. `python -c "from tetrarch import core"` imports without raising
+3. `python uci.py` answers `go` in a plain terminal
+4. the panel finds the engine in Chrome
+
+A report of "stage 3 hangs" is worth far more than "it doesn't work", because each stage has a different cause.
 
 ## License & credits
 

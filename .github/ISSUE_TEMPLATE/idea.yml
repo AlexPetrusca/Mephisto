@@ -1,0 +1,14 @@
+name: Idea or request
+description: A feature, a site to support, an engine to add, or just a thought.
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most of what's in here exists because something was annoying in a real game. Half-formed is fine.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+    validations:
+      required: true

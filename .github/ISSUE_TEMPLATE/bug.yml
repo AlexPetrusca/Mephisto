@@ -1,0 +1,49 @@
+name: Something is broken
+description: A bug, a site that stopped working, an engine misbehaving — no diagnosis needed.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You don't need to know what caused it. Several of the worst bugs here were silent rather
+        than loud — autoplay skipping a move with nothing logged, an engine that never loaded — so
+        "it did nothing" is a real report, not a vague one.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      placeholder: It stopped playing moves on lichess this morning. Panel showed a move, nothing clicked.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the top of the extension's settings page.
+      placeholder: "3.1.200"
+  - type: input
+    id: where
+    attributes:
+      label: Site and browser
+      placeholder: chess.com, Chrome 141 on Windows 11
+  - type: dropdown
+    id: windows-4pc
+    attributes:
+      label: Is this the Windows four-player setup?
+      description: >
+        If so, which stage failed? Native-messaging failures on Windows are silent — Chrome reports
+        the host as unavailable and says nothing about why — so the stage is most of the diagnosis.
+      options:
+        - "No, not four-player on Windows"
+        - "1. setup.sh does not produce build/tetrarch.dll"
+        - "2. `from tetrarch import core` raises"
+        - "3. `python uci.py` does not answer `go` in a terminal"
+        - "4. Engine works in a terminal, but the panel cannot find it"
+  - type: textarea
+    id: console
+    attributes:
+      label: Anything in the console?
+      description: >
+        Optional. Right-click the page → Inspect → Console, and for the worker, chrome://extensions
+        → Mephisto → "service worker". Paste whatever looks relevant.
+      render: text

@@ -1,0 +1,3 @@
+# Freeform issues stay enabled on purpose: "it did nothing this morning" is a useful report, and a
+# required-fields form is a good way to lose it.
+blank_issues_enabled: true
