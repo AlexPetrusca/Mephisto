@@ -37,10 +37,25 @@ def _resolve_repo():
     return os.path.abspath(os.path.join(_DIR, '..', '..', 'Tetrarch'))
 
 def _resolve_python():
+    # On Windows the unix candidates simply do not exist, so this falls through to
+    # sys.executable -- which is the interpreter the .bat shim chose, and therefore
+    # exactly the right one. `python3` is not a command there.
     for cand in ('/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3', sys.executable):
         if cand and os.path.isfile(cand):
             return cand
-    return 'python3'
+    return sys.executable or 'python3'
+
+# WINDOWS: stdio MUST be binary. The CRT translates \n -> \r\n on a text-mode
+# handle, and that byte lands inside the 4-byte length prefix as readily as in the
+# JSON -- so every frame is silently corrupted rather than failing loudly. Chrome
+# just reports the host as unavailable. No-op everywhere else.
+if sys.platform == 'win32':
+    import msvcrt
+    for _f in (sys.stdin, sys.stdout):
+        try:
+            msvcrt.setmode(_f.fileno(), os.O_BINARY)
+        except Exception:
+            pass
 
 # --- native messaging framing (4-byte LE length prefix + UTF-8 JSON) --------- #
 def read_message():
@@ -82,9 +97,13 @@ def _start_engine():
     uci = os.path.join(_repo, 'uci.py')
     if not os.path.isfile(uci):
         raise RuntimeError(f"Tetrarch not found at {_repo} -- set TETRARCH_DIR or native-host/tetrarch-path")
+    # CREATE_NO_WINDOW: without it Windows pops a console for the engine on every
+    # launch, in front of the game. Undefined on other platforms, hence the getattr.
+    flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0
     _proc = subprocess.Popen([_resolve_python(), uci], cwd=_repo,
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                             stderr=subprocess.DEVNULL, text=True, bufsize=1)
+                             stderr=subprocess.DEVNULL, text=True, bufsize=1,
+                             creationflags=flags)
     _send('uci')
     _read_until(lambda l: l.strip() == 'uciok', timeout=30)
     _dbg(f"engine up from {_repo}")

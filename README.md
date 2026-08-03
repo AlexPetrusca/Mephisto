@@ -324,10 +324,35 @@ native-host/install-native.sh --ext-id YOUR_EXTENSION_ID --tetrarch /path/to/Tet
 Drop `--tetrarch` if the Tetrarch checkout sits beside Mephisto's parent folder — that's where the installer looks by
 default. It prints `-> tetrarch: <path>` when it found it and `-- tetrarch: no uci.py at <path>` when it didn't.
 
-**Windows** — **not supported yet**, and not just for the missing registry key. Tetrarch loads its C core as
-`build/libtetrarch.so` with no fallback, and its build script is a shell script using `-shared -fPIC`, so Windows
-needs a `tetrarch.dll` build (MinGW/MSYS2 is the short path) before any of the browser-side wiring matters. The
-browser side would then be the same manual registry work as the native engines above. Use WSL if you want it today.
+**Windows**
+
+Two differences from the above: the C core has to be built as a DLL, and Chrome finds native-messaging hosts through
+the **registry** rather than a folder of manifests — so there's a PowerShell installer instead of the shell one.
+
+Install [MSYS2](https://www.msys2.org), then from its **MINGW64** shell:
+
+```bash
+pacman -S --needed mingw-w64-x86_64-gcc
+```
+
+```bash
+cd /c/path/to/Tetrarch && ./setup.sh
+```
+
+That produces `build\tetrarch.dll`. Then, from PowerShell in the Mephisto folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File native-host\install-tetrarch.ps1 -ExtId YOUR_EXTENSION_ID
+```
+
+Add `-Tetrarch C:\path\to\Tetrarch` if the checkout isn't beside Mephisto's parent folder. The installer copies the
+host into `%LOCALAPPDATA%\Mephisto` and registers it for Chrome, Chromium, Edge, Brave and Vivaldi under `HKCU` — no
+administrator rights needed. Python 3 must be on `PATH`.
+
+> The Windows path is **built and symbol-checked but not yet run on a real Windows machine** — the DLL is
+> cross-compiled and verified in CI-style by `win-crosscheck.sh` in the Tetrarch repo, which is not the same as
+> someone having played a game on it. If something misbehaves, please open an issue. **WSL** works today with no
+> extra steps, since it's the Linux path above.
 </details>
 
 ---
