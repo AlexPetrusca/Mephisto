@@ -487,7 +487,6 @@ No schedule — added whenever I feel like it. Checked means shipped.
   are untouched.
 - [ ] **Four-player chess on Windows, confirmed** — built and symbol-checked, never run on a real Windows machine.
   See [Contributing](#contributing) for the four stages worth reporting.
-- [ ] **Rework the panel UI** — it grew a control at a time and it shows. Wants a layout pass, not another row.
 - [ ] **Short videos and more screenshots** — a premove firing, Humanize pacing a move, the screen reader following a
   board. Some of this only makes sense in motion.
 - [ ] **Translate the README** — the interface speaks fourteen languages; the documentation still speaks one.
@@ -515,6 +514,9 @@ post-game review, where the hit rate is higher and the eval is context rather th
 - [x] **[Four-player chess](#four-player-chess)** (v3.1.199) — chess.com's 4-player variant, driven by
   [Tetrarch](https://github.com/IchNukeDichWeg/Tetrarch); 14×14 panel board, team-relative eval, autoplay.
   Teams mode only.
+- [x] **Panel and settings rework** (v3.1.199) — two tabs instead of a wall of rows, the game and engine status
+  moved into the title bar, `−`/`+` steppers for threads, lines and move time, uniform control heights, one
+  typeface per column, and a settings page grouped into sections.
 - [x] **Four-player chess on Windows** (v3.1.200) — DLL build, `.bat` host shim and a PowerShell installer that
   registers under `HKCU`. Unconfirmed on real hardware, hence the open item above.
 - [x] **Fourteen languages** (v3.1.160) — every string, switchable live in Settings → Appearance.
