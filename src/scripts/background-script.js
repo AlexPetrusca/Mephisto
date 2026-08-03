@@ -3,25 +3,13 @@
 // SITE's. Same file the options page uses for the import, so the key format cannot drift apart.
 importScripts('/src/scripts/puzzle-db.js');
 // The language list + the locale loader, shared with the options page and the panel so there is one
-// definition of which codes exist -- which is also what makes the fetch safe, since `lang` arrives
-// from a setting.
+// definition of which codes exist -- which is also what makes the fetch below safe, since `lang`
+// arrives from a setting.
 importScripts('/src/i18n/i18n.js');
 
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
-  if ((msg.from === 'content') && (msg.subject === 'showPageAction')) {
-    chrome.pageAction.show(sender.tab.id);
-  }
-  // Background-play tracing from the page. Printed HERE because this worker has its own console in
-  // its own window -- opening DevTools on the game tab would disable the background throttling that
-  // is usually the thing under investigation.
-  if (msg.bgTrace) {
-    const t = new Date().toISOString().slice(11, 23);
-    console.log(`[bg ${t}] ${msg.bgTrace.from} |`, ...msg.bgTrace.args);
-    return;
-  }
-  // the content-script asks for its own tab id so its panel talks to ONLY this tab (not whatever
-  // tab is active) -- otherwise a background tab's panel would drive the foreground tab. It also
-  // keys that tab's offscreen engine (clientId == tabId), so each game tab gets its own instance.
+  // the content-script asks for its own tab id so its popup iframe can talk to ONLY this tab
+  // (not whatever tab is active) -- otherwise a background tab's popup drives the foreground tab.
   if (msg.getTabId) {
     sendResponse({tabId: sender.tab?.id});
   }
@@ -57,6 +45,14 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
   // One local IndexedDB read. No network and no cache: it is already a disk lookup, and a puzzle
   // position is asked about once.
+  // Background-play tracing from the page. Printed HERE because this worker has its own console in
+  // its own window -- opening DevTools on the game tab would disable the background throttling that
+  // is usually the thing under investigation.
+  if (msg.bgTrace) {
+    const t = new Date().toISOString().slice(11, 23);
+    console.log(`[bg ${t}] ${msg.bgTrace.from} |`, ...msg.bgTrace.args);
+    return;
+  }
   if (msg.puzzleLookup) {
     PuzzleDB.lookup(msg.puzzleLookup.fen)
       .then(solution => sendResponse({solution}))
@@ -116,10 +112,35 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // Trusted clicks: chrome.debugger is unavailable to a content script, so the panel routes CDP
   // clicks through here now that it lives in the page's isolated world.
   if (msg.cdpClick) {
-    // sender.tab is authenticated by Chrome; never trust a message-supplied tab id (issue #36 §1).
-    const tabId = sender.tab?.id;
+    // sender.tab is authenticated by Chrome; never trust a message-supplied tab id from a CONTENT
+    // SCRIPT (issue #36 §1) -- a hostile page could otherwise steer a click into another tab.
+    //
+    // But the TOOLBAR POPUP is an extension PAGE: it has no sender.tab at all, so this refused every
+    // click it ever made. That is why popup mode could detect a board, analyse it, and never move --
+    // "CDP click failed: no sender tab", once per click, forever.
+    //
+    // The guard is kept and NARROWED rather than dropped. An extension page is our own code at our
+    // own origin, and a web page cannot forge that: Chrome sets sender.id and sender.url itself, and
+    // a content script's sender.url is always the SITE's URL, never chrome-extension://. So a
+    // message-supplied tab id is honoured only when the sender is genuinely one of our own pages.
+    const fromOwnExtensionPage = !sender.tab
+        && sender.id === chrome.runtime.id
+        && typeof sender.url === 'string'
+        && sender.url.startsWith(`chrome-extension://${chrome.runtime.id}/`);
+    const tabId = sender.tab?.id
+        ?? ((fromOwnExtensionPage && Number.isInteger(msg.tabId)) ? msg.tabId : undefined);
     if (!tabId) { sendResponse({error: 'no sender tab'}); return; }
     cdpClick(tabId, msg.x, msg.y, msg.travelMs).then(() => sendResponse({ok: true})).catch(e => sendResponse({error: String(e)}));
+    return true;
+  }
+  // Same tab rules as cdpClick, but attaches only -- no input. A move calls this before it measures
+  // anything, so the debugger infobar is already up and the board has stopped moving.
+  if (msg.cdpWarm) {
+    const own = !sender.tab && sender.id === chrome.runtime.id
+        && typeof sender.url === 'string' && sender.url.startsWith(`chrome-extension://${chrome.runtime.id}/`);
+    const tabId = sender.tab?.id ?? ((own && Number.isInteger(msg.tabId)) ? msg.tabId : undefined);
+    if (!tabId) { sendResponse({error: 'no sender tab'}); return; }
+    cdpAttach(tabId).then(() => sendResponse({ok: true})).catch(e => sendResponse({error: String(e)}));
     return true;
   }
   // The panel can't open the options page itself: it's a content script, so a relative URL resolves
@@ -423,9 +444,9 @@ const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
 
 // Move the synthetic cursor from its last position to (x, y) as a series of mouseMoved events before
 // we click there. A click dispatched with NO preceding mouseMoved is a dead giveaway -- a human's
-// cursor always travels to the square first (audit M2). The path is eased (accelerate, decelerate),
-// gently bowed, and jittered so it isn't a ruler-straight teleport, and it is spread across
-// travelMs so the motion actually consumes the caller's move-time budget instead of snapping.
+// cursor always travels to the square first (issue #36 / audit M2). The path is eased (accelerate,
+// decelerate), gently bowed, and jittered so it isn't a ruler-straight teleport, and it is spread
+// across travelMs so the motion actually consumes the caller's move-time budget instead of snapping.
 async function cdpMove(target, fromX, fromY, x, y, travelMs) {
   // travelMs 0 means the caller wants no path at all (a hidden tab -- see dispatchSimulateClick).
   // Honour that literally: every step here is an awaited round-trip, and the minimum of three was
@@ -446,6 +467,9 @@ async function cdpMove(target, fromX, fromY, x, y, travelMs) {
   }
 }
 
+// How long to let the page settle after the debugger infobar appears. Only ever paid once per tab.
+const ATTACH_SETTLE_MS = 450;
+
 function cdpClick(tabId, x, y, travelMs = 0) {
   return new Promise((resolve, reject) => {
     if (!tabId) return reject(new Error('no tabId'));
@@ -462,14 +486,24 @@ function cdpClick(tabId, x, y, travelMs = 0) {
         resolve();
       } catch (e) { reject(e); }
     };
-    if (attached.has(tabId)) return send();
-    chrome.debugger.attach(target, '1.3', () => {
+    cdpAttach(tabId).then(send, reject);
+  });
+}
+
+// Attach the debugger, resolving only once the page has settled underneath the infobar it raises.
+// Split out from cdpClick so a move can raise the bar BEFORE it measures any squares: the bar shrinks
+// the viewport, chess.com re-sizes the board to fit, and coordinates taken before that point aim at
+// where the square used to be. Idempotent and cached, so only the first call per tab ever waits.
+function cdpAttach(tabId) {
+  if (attached.has(tabId)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    chrome.debugger.attach({tabId}, '1.3', () => {
       // "Another debugger is already attached" is fine -- we stay attached after the first click
       if (chrome.runtime.lastError && !/already attached/i.test(chrome.runtime.lastError.message)) {
         return reject(new Error(chrome.runtime.lastError.message));
       }
       attached.add(tabId);
-      send();
+      setTimeout(resolve, ATTACH_SETTLE_MS);
     });
   });
 }
@@ -509,16 +543,13 @@ async function ensureOffscreen() {
 ensureOffscreen();
 
 // UI mode toggle (Settings -> General). Two ways to show the panel:
-//   'floating' (default) -- an in-page overlay injected on toolbar click. Since N1 it is a closed
-//               shadow root with NO iframe and no extension URLs, but it is still page DOM, so it
-//               remains the larger footprint. Autoplay/Premove need it (they outlive a click).
+//   'floating' (default) -- an in-page overlay injected on toolbar click. Richer UX, but the panel
+//               and its iframe live in the page DOM (a larger, page-detectable footprint).
 //   'popup'    -- the classic toolbar bubble. It renders in the browser's own chrome, so the page
-//               has NO handle to it at all (zero page footprint = the "safer" mode), but it closes
-//               when you click the board -- analysis only.
+//               has NO handle to it at all (zero page footprint = the "safer" mode).
 // Implemented purely with chrome.action.setPopup: when a popup is SET the icon opens the bubble and
-// onClicked never fires; when it's CLEARED onClicked fires and we inject the overlay. Read straight
-// off chrome.storage.local here rather than through MephistoConfig -- this worker has no DOM and the
-// cache would be cold on every spin-up; the get() below re-reads it each time.
+// onClicked never fires; when it's CLEARED onClicked fires and we inject the overlay. The service
+// worker can't read the popup's localStorage, so this one setting lives in chrome.storage.local.
 function applyUiMode(mode) {
   chrome.action.setPopup({popup: mode === 'popup' ? 'src/popup/popup.html' : ''});
 }
@@ -546,10 +577,29 @@ chrome.action.onClicked.addListener(function (tab) {
 // so a host can STREAM many frames per request (one per search depth) to the panel: panel Port <->
 // this worker <-> native stdio port. Keyed by port name so each engine gets its own host. The
 // default WASM engines need none of this; native engines require native-host/install-native.sh.
+function nativeTrace(dir, name, frame) {
+  try {
+    const t = new Date().toISOString().slice(11, 23);
+    const f = frame || {};
+    // the interesting fields, flattened -- a whole `lines` array per info frame is unreadable
+    const brief = {};
+    for (const k of ['id', 'innerId', 'cmd', 'fen', 'time', 'moves', 'bestmove', 'threat',
+                     'done', 'error', 'fatal']) {
+      if (f[k] !== undefined) brief[k] = f[k];
+    }
+    if (f.info) brief.info = `depth ${f.info.depth ?? '?'} pv ${(f.info.pv || []).slice(0, 2).join(' ')}`;
+    if (f.options) brief.options = f.options;
+    if (f.replies) brief.replies = f.replies.length + ' pairs';
+    console.log(`[uci ${t}] ${dir} ${name}`, brief);
+  } catch (e) { /* tracing must never break the relay */ }
+}
+
 const NATIVE_HOSTS = {
   // native-messaging host names allow only [a-z0-9._] -- NO hyphens -> underscores in the app id
   'sf-native': {app: 'com.sf_native.host', label: 'Stockfish (native)'},
   'fairy-native': {app: 'com.fairy_native.host', label: 'Fairy-Stockfish (native)'},
+  // four-player chess -- see native-host/install-native.sh --tetrarch and the README
+  'tetrarch-native': {app: 'com.tetrarch.host', label: 'Tetrarch (4-player)'},
 };
 const nativePorts = {};              // port name -> native stdio Port
 const popupPortsByName = {};         // port name -> Set of popup Ports
@@ -585,11 +635,14 @@ function ensureNative(name) {
     }
     // No known owner: an unsolicited frame, or one whose asker has gone. Broadcast as before --
     // this is the path `{fatal: ...}` and any host-initiated message takes.
+    nativeTrace('<- host', name, frame);
     for (const p of peers()) { try { p.postMessage(frame); } catch (e) { /* port gone */ } }
   });
   np.onDisconnect.addListener(() => {
     const err = chrome.runtime.lastError;
     delete nativePorts[name];
+    console.warn(`[uci] ${name} native host DISCONNECTED`,
+                 chrome.runtime.lastError ? chrome.runtime.lastError.message : '(no error given)');
     const why = `${label} native host unavailable` + (err ? ` (${err.message})` : '') +
       ' — run native-host/install-native.sh once (see the README).';
     for (const p of peers()) { try { p.postMessage({fatal: why}); } catch (e) { /* */ } }
@@ -620,6 +673,7 @@ chrome.runtime.onConnect.addListener(port => {
         nativeRequestOwner.set(outer, {port, innerId: req.id});
         out = {...req, id: outer};
       }
+      nativeTrace('-> host', name, {...out, innerId: req && req.id});
       ensureNative(name).postMessage(out);
     } catch (e) {
       try { port.postMessage({id: req && req.id, error: String(e)}); } catch (_) { /* */ }

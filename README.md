@@ -82,6 +82,7 @@ Everything runs locally via WebAssembly — no server, no account, nothing leave
 | **Fairy-Stockfish 14 NNUE** | Required for [variants](#variants); each variant has its own bundled net. |
 | **Maia-3** | Human-*like*, not throttled: a transformer conditioned on a rating you set live, **600–2600**. |
 | **Maia** | The original Maia-1 nets, one per band (**1100–1900**, plus a **2200**). |
+| **Tetrarch (4-player)** | Four-player chess only — see [four-player chess](#four-player-chess). Needs a one-time install. |
 | **Remote / native** | A real engine binary outside the browser — see [full-power engines](#full-power-native-engines-optional). |
 
 <img src="docs/maia3.png" alt="Maia-3 with the 600-2600 rating slider" width="49%"> <img src="docs/variants.png" alt="Atomic on Lichess, analysed by Fairy-Stockfish" width="49%">
@@ -225,7 +226,7 @@ host otherwise just looks like a panel that never evaluates.
 
 | Site | Analysis | Autoplay | Premove | Puzzles | Online | Variants |
 |---|:---:|:---:|:---:|:---:|:---:|---|
-| **Chess.com** | ✅ | ✅ incl. Play Bots | ✅ | ✅ Rush / Storm | ✅ | 3-Check, KotH, Crazyhouse, Antichess, Atomic, Horde, Racing Kings, **Duck, Minihouse, Seirawan, Chaturanga** + Chess960 |
+| **Chess.com** | ✅ | ✅ incl. Play Bots | ✅ | ✅ Rush / Storm | ✅ | 3-Check, KotH, Crazyhouse, Antichess, Atomic, Horde, Racing Kings, **Duck, Minihouse, Seirawan, Chaturanga** + Chess960, **4-player** |
 | **Lichess** | ✅ | ✅ incl. AI & From Position | ✅ | ✅ Storm · Racer · Training | ✅ live & correspondence | All Lichess variants + Chess960 |
 | **TakeTakeTake** | ✅ | ✅ bot games | ✅ | — | ✅ Lichess-backed | — |
 | **BlitzTactics** | ✅ | ✅ | — | ✅ puzzle streams | — | — |
@@ -277,6 +278,56 @@ engines unless you're comfortable with the registry.
 The installer registers the host for **Chrome, Brave, Edge, Chromium and Vivaldi**. Firefox isn't supported for
 native engines. Any native build unlocks full speed — pick the one matching your CPU (Apple Silicon, AVX2, BMI2);
 the gap between native builds is small, the jump from WASM to any of them is huge.
+</details>
+
+---
+
+## Four-player chess
+
+Chess.com's **4-player chess** (`/variants/4-player-chess`), analysed by
+[Tetrarch](https://github.com/IchNukeDichWeg/Tetrarch) — a purpose-built engine for 14×14 four-seat boards, because
+no two-player engine can be bent into one. Pick **Tetrarch (4-player)** in the engine dropdown; the panel switches to
+it on a four-player board and back to Stockfish when you leave.
+
+The panel swaps its own board for a 14×14 one with the corners cut, rotated so **you** sit at the bottom whichever
+seat you drew, and draws the suggested move as an arrow. The evaluation is normalised to **your team** (Red+Yellow
+against Blue+Green), so it means one thing all game instead of flipping sign every seat. Autoplay works.
+
+> **Teams mode only, for now.** Tetrarch does not search free-for-all, so FFA games are detected and shown but
+> not analysed. Promotion plays the move and leaves the piece picker to you.
+
+<details>
+<summary><b>Setup</b> — macOS, Linux, Windows</summary>
+
+Tetrarch is the one engine with nothing bundled behind it: it needs a checkout and one run of the installer. Until
+then the panel says so under the board rather than pretending to analyse.
+
+You need **Python 3**, a C compiler, and your **extension ID** — `chrome://extensions` with Developer mode on, copy
+the long id under *Mephisto*.
+
+**macOS and Linux**
+
+```bash
+git clone https://github.com/IchNukeDichWeg/Tetrarch
+```
+
+```bash
+cd Tetrarch && ./setup.sh
+```
+
+`setup.sh` builds the C core and installs what it needs (Homebrew, apt, dnf or yum). Then, from the Mephisto folder:
+
+```bash
+native-host/install-native.sh --ext-id YOUR_EXTENSION_ID --tetrarch /path/to/Tetrarch
+```
+
+Drop `--tetrarch` if the Tetrarch checkout sits beside Mephisto's parent folder — that's where the installer looks by
+default. It prints `-> tetrarch: <path>` when it found it and `-- tetrarch: no uci.py at <path>` when it didn't.
+
+**Windows** — **not supported yet**, and not just for the missing registry key. Tetrarch loads its C core as
+`build/libtetrarch.so` with no fallback, and its build script is a shell script using `-shared -fPIC`, so Windows
+needs a `tetrarch.dll` build (MinGW/MSYS2 is the short path) before any of the browser-side wiring matters. The
+browser side would then be the same manual registry work as the native engines above. Use WSL if you want it today.
 </details>
 
 ---
@@ -404,10 +455,9 @@ No schedule — added whenever I feel like it.
 - **More engines** — the lineup covers *strong* and *human-like* and not much between. Variety of character, not
   more strength. **lc0 (Leela)** in WASM would be for comparing styles, not for strength.
 - **Duck Chess autoplay** — detection and analysis work; the duck-placement step doesn't.
-- **4-player chess** (4PC, Chaturaji, 4P Giveaway, Self Partnering) — no longer blocked: a purpose-built
-  engine for four-player boards is in development, so this moves from "nothing to build against" to a real
-  target. Board detection and turn handling come first; the four-seat clock and elimination rules are the
-  parts standard chess logic cannot be bent into.
+- **Four-player chess, the rest of it** — [it works now](#four-player-chess) on chess.com, but Teams only, the
+  promotion picker isn't wired, elimination hasn't been seen in a real game, and Windows needs a DLL build of
+  Tetrarch's C core. Chaturaji, 4P Giveaway and Self Partnering are untouched.
 - **Rework the panel UI** — it grew a control at a time and it shows. Wants a layout pass, not another row.
 - **Short videos and more screenshots** — a premove firing, Humanize pacing a move, the screen reader following a
   board. Some of this only makes sense in motion.

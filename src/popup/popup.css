@@ -5,12 +5,38 @@ html.toolbar-popup {
     zoom: 0.7;
 }
 
+/* --------------------------------------------------------------------------------------------
+   Panel palette. Monochrome except ONE colour: green means "on / acting for you right now".
+   Both themes define the same names, so nothing below needs a `body.mephisto-dark` twin.
+   -------------------------------------------------------------------------------------------- */
+:root {
+    --mp-bg:      #ffffff;
+    --mp-hair:    #f0f1f2;
+    --mp-line:    #cfd2d5;
+    --mp-text:    #14171a;
+    --mp-dim:     #4a5058;
+    --mp-mute:    #8b9198;
+    --mp-on:      #2f7d41;
+    --mp-on-soft: #e4f2e7;
+    --mp-track:   #ccd0d5; /* slider remainder -- must read against --mp-bg on its own */
+}
+body.mephisto-dark {
+    --mp-bg:      #16171b;
+    --mp-hair:    #232629;
+    --mp-line:    #34353d;
+    --mp-text:    #e8eaec;
+    --mp-dim:     #b7bbc0;
+    --mp-mute:    #6b7079;
+    --mp-on:      #3f9d54;
+    --mp-on-soft: #16311e;
+    --mp-track:   #464a54; /* --mp-line (#34353d) was a near-invisible shade on #16171b */
+}
+
 html, body {
     width: 568px; /* 378px left column (14px eval bar + 4px gap + 350px board + margins) + 190px quick settings */
-    height: 672px; /* the taller column: board + score/WDL + 5 alt-lines on the left (~623px, and the
-                      button row sits below that), or the 21 quick settings on the right (~636px with
-                      the tighter rows). Both fit with no dead space -- the row spacing was the real
-                      overflow, not the height. */
+    height: 646px; /* 26px shorter than it was: the status line moved into the title bar, taking a
+                      whole row off the top of the left column. The taller column is still the left
+                      one -- board + score/WDL + alt-lines, with the button row below it. */
     overflow: hidden;
     background-color: rgb(240, 240, 240);
     color: #000; /* stark: pure black in light mode (user: "no grey") */
@@ -378,19 +404,21 @@ html, body {
 #quick-settings {
     position: absolute;
     top: 0;
+    bottom: 0;   /* NOT height:100% -- with no positioned ancestor that resolves to auto */
     right: 0;
-    width: 190px; /* wider than the old 170px so labels + paired inputs breathe */
-    height: 100%;
-    padding: 10px 14px;
+    width: 190px;
     box-sizing: border-box;
     background: #e7e7e7;
     border-left: 1px solid #d0d0d0;
-    overflow-y: auto; /* safety net: a future row should scroll into reach, never be cut off */
     font: 13px 'Roboto', sans-serif;
     line-height: normal;
     text-align: left;
     white-space: normal;
-    overflow-y: auto;
+    /* Three parts: the turn switch + pinned controls, the tab strip, the panels. Only the panels
+       scroll, so Autoplay/engine/strength can never be scrolled away. */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 #quick-settings .qs-title {
@@ -403,16 +431,22 @@ html, body {
 /* Turn switch: sits in the header (replaces the "Quick Settings" title). A king-glyph thumb slides
    left = White / right = Black; tapping flips the side to move. Driven by the analysed position. */
 #quick-settings .qs-title-row {
+    flex: none;
     display: flex;
     justify-content: center;
-    margin-bottom: 8px;
+    padding: 10px 10px 8px;
+    margin: 0;
 }
+/* Now a labelled control, not a bare pill: the pill sits left, the side to move reads beside it.
+   The row is the whole hit target, so the label is as clickable as the switch. */
 .turn-switch {
     position: relative;
-    width: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 46px;   /* room for the absolutely-positioned pill + thumb */
+    width: auto;
     height: 22px;
-    border-radius: 999px;
-    background: #a99fd6;            /* purple track (matches the lever accent family) */
     cursor: pointer;
     user-select: none;
     transition: background 0.15s;
@@ -444,32 +478,127 @@ html, body {
     box-shadow: 0 0 0 2px rgba(38, 166, 154, 0.6);
 }
 
-#quick-settings .qs-row {
-    /* 21 rows now (Explorer and Book Moves joined the list), so the column ran past the bottom of
-       the panel and the last setting was cut off. Tighter rows + a slightly taller panel fit them
-       all without scrolling. */
-    margin-bottom: 6px;
+#quick-settings .qs-pinned {
+    flex: none;
+    padding: 0 10px 8px;
+    border-bottom: 1px solid var(--mp-line);
+}
+#quick-settings .qs-pinned .qs-row.qs-toggle { margin-bottom: 6px; }
+
+#quick-settings .qs-tabs {
+    flex: none;
+    display: flex;
+    border-bottom: 1px solid var(--mp-line);
+}
+#quick-settings .qs-tab {
+    flex: 1;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    font: 13.5px 'Roboto', sans-serif;
+    color: var(--mp-mute);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+#quick-settings .qs-tab:hover { color: var(--mp-text); }
+#quick-settings .qs-tab[aria-selected="true"] {
+    color: var(--mp-text);
+    border-bottom-color: var(--mp-on);
 }
 
-#quick-settings .qs-row.switch {
+#quick-settings .qs-panels {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;   /* the ONLY scroller; at 672px no panel needs it */
+    padding: 6px 10px 10px;
+}
+#quick-settings .qs-panel { display: none; }
+#quick-settings .qs-panel.qs-on { display: block; }
+
+/* a group heading is a line of text over a rule -- no caps, no tracking */
+#quick-settings .qs-group {
+    font-size: 12px;
+    color: var(--mp-mute);
+    margin: 10px 0 4px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--mp-hair);
+}
+#quick-settings .qs-panel > .qs-group:first-child { margin-top: 0; }
+
+#quick-settings .qs-row { margin-bottom: 6px; }
+
+/* EVERY toggle is the same button: a quiet outline when off, filled green when on. The row itself
+   is the indicator, so there is no separate switch to read. The checkbox is still a real checkbox
+   -- the label, the hotkeys and the config binding all keep working -- it is just restyled INTO
+   the button's status dot. */
+#quick-settings .qs-row.qs-toggle {
+    position: relative;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
+    height: 28px;
+    margin-bottom: 4px;
+    padding: 0 9px;
+    border: 1px solid var(--mp-line);
+    border-radius: 4px;
+    background: var(--mp-bg);
+    cursor: pointer;
+    transition: background .09s, border-color .09s;
 }
+#quick-settings .qs-row.qs-toggle:hover { background: var(--mp-hair); }
+#quick-settings .qs-row.qs-toggle:has(.qs-cb:checked) {
+    background: var(--mp-on-soft);
+    border-color: var(--mp-on);
+}
+
+#quick-settings .qs-cb {
+    /* the native box, repainted as the 6px status dot */
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--mp-mute);
+    opacity: 1;          /* Materialize zeroes this for its lever switch */
+    position: static;
+    pointer-events: auto;
+    cursor: pointer;
+    transition: background .09s;
+}
+#quick-settings .qs-cb:checked { background: var(--mp-on); }
+#quick-settings .qs-cb:focus-visible { outline: 1px solid var(--mp-on); outline-offset: 2px; }
 
 #quick-settings .qs-label {
     display: block;
-    font-size: 12px;
+    font-size: 13px;
     margin-bottom: 1px;
+    /* the toggle labels are real <label> elements, and Materialize paints those #9e9e9e */
+    color: var(--mp-text);
 }
 
-#quick-settings .switch .qs-label {
+#quick-settings .qs-toggle .qs-label {
+    flex: 1;
+    min-width: 0;
     margin-bottom: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    font-size: 13.5px;
+    color: var(--mp-dim);
 }
-
-#quick-settings .switch label .lever {
-    margin: 0;
-}
+#quick-settings .qs-toggle:has(.qs-cb:checked) .qs-label { color: var(--mp-text); }
+/* the row LOOKS like one button, so all of it behaves like one -- the label's hit area spans it,
+   and covers the checkbox so a click lands once rather than on both */
+#quick-settings .qs-toggle .qs-label::before { content: ""; position: absolute; inset: 0; }
+/* the "(A)" annotate_hotkey_labels appends goes to the right edge instead of running on */
+#quick-settings .qs-toggle .qs-label .qs-hk { margin-left: auto; padding-left: 6px; }
 
 #quick-settings .qs-pair {
     display: flex;
@@ -488,7 +617,7 @@ html, body {
 #quick-settings #qs_variant_detect {
     flex: 0 0 auto;
     width: 28px;
-    height: 26px;
+    height: 28px;
     padding: 0;
     font-size: 15px;
     line-height: 1;
@@ -503,8 +632,8 @@ html, body {
 #quick-settings select.browser-default,
 #quick-settings input.browser-default {
     width: 100%;
-    height: 26px;
-    font-size: 12px;
+    height: 28px;
+    font-size: 13px;
     background: #fff;
     color: #000;
     border: 1px solid #ccc;
@@ -515,12 +644,45 @@ html, body {
     display: block;
 }
 
+/* Slider: green fill up to the thumb, flat remainder, one round thumb -- the same treatment the
+   options page uses. accent-color alone can't do the two-tone track, so the control is reset and
+   the ELEMENT background painted; `--fill` (0-100%) is set from the value by init_quick_settings,
+   on render and live while dragging. */
 #quick-settings input[type=range].browser-default {
-    height: 20px;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    margin: 10px 0 8px;  /* keeps the row the same height as one with a 28px field */
     padding: 0;
     border: none;
+    border-radius: 2px;
+    background: linear-gradient(to right,
+        var(--mp-on) 0%, var(--mp-on) var(--fill, 0%),
+        var(--mp-track) var(--fill, 0%), var(--mp-track) 100%);
+    cursor: pointer;
+}
+#quick-settings input[type=range].browser-default::-webkit-slider-runnable-track {
     background: transparent;
-    accent-color: #26a69a;
+    border: none;
+    height: 6px;
+}
+#quick-settings input[type=range].browser-default::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--mp-on);
+    border: 2px solid var(--mp-bg);
+    margin-top: -4px;
+    cursor: pointer;
+}
+#quick-settings input[type=range].browser-default::-moz-range-track {
+    background: transparent; border: none; height: 6px;
+}
+#quick-settings input[type=range].browser-default::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--mp-on); border: 2px solid var(--mp-bg); cursor: pointer;
 }
 
 #analyze {
@@ -538,9 +700,7 @@ html, body {
    the 28px button against the 36px analysis button beside it. */
 #copyfen, #copypgn {
     position: absolute;
-    bottom: 9px;
-    height: 28px;
-    line-height: 28px;
+    bottom: 5px;         /* same baseline as every other button in the row */
     width: 46px;
     min-width: 0;
     padding: 0;
@@ -643,8 +803,15 @@ body.mephisto-dark #quick-settings .qs-title {
     border-bottom: 1px solid #2e2f36;
     padding-bottom: 5px;
 }
+
+/* the new furniture in dark mode: the palette handles colour, these carry the surfaces */
+body.mephisto-dark #quick-settings { background: #202127; }
+body.mephisto-dark #quick-settings .qs-group { color: var(--mp-mute); }
+/* :not([type=range]) -- a range is not a field with a background, it is a track PAINTED with one.
+   This rule is a class more specific than the range styling above, so without the exclusion it
+   replaced the track gradient with a flat fill and the slider showed as a thumb on nothing. */
 body.mephisto-dark #quick-settings select.browser-default,
-body.mephisto-dark #quick-settings input.browser-default,
+body.mephisto-dark #quick-settings input.browser-default:not([type=range]),
 body.mephisto-dark #quick-settings #qs_variant_detect {
     background: #16171b;
     color: #fff;
@@ -653,17 +820,19 @@ body.mephisto-dark #quick-settings #qs_variant_detect {
 body.mephisto-dark #quick-settings #qs_variant_detect:hover { background: #202127; }
 body.mephisto-dark #quick-settings select.browser-default:focus,
 body.mephisto-dark #quick-settings input.browser-default:focus {
-    border-color: #26a69a; /* teal accent on focus */
+    border-color: var(--mp-on); /* accent on focus */
     outline: none;
 }
-body.mephisto-dark #quick-settings input[type=range].browser-default {
-    background: transparent;
-}
+/* NO dark-mode background override for the range input. It used to be cleared to transparent here,
+   because back then the slider was a bare accent-color control that only needed the white field
+   background off it. The track is now painted ON the element as a gradient, and this rule -- one
+   class more specific -- silently erased it, leaving a lone green thumb floating on nothing in dark
+   mode. Both themes read the same --mp-track/--mp-on vars, so there is nothing left to override. */
 /* dark, slim scrollbar for the settings panel (default is a bright light bar) */
-body.mephisto-dark #quick-settings::-webkit-scrollbar {
+body.mephisto-dark #quick-settings .qs-panels::-webkit-scrollbar {
     width: 8px;
 }
-body.mephisto-dark #quick-settings::-webkit-scrollbar-thumb {
+body.mephisto-dark #quick-settings .qs-panels::-webkit-scrollbar-thumb {
     background: #34353d;
     border-radius: 4px;
 }
@@ -760,7 +929,7 @@ body.mephisto-dark #alt-lines::-webkit-scrollbar-thumb { background: #34353d; bo
 }
 
 body.mephisto-book:not(.mephisto-compact) {
-    height: 804px; /* 672 + BOOK_H (132) -- keep in sync with content-script.js */
+    height: 778px; /* 646 + BOOK_H (132) -- keep in sync with content-script.js */
 }
 
 body.mephisto-compact {
@@ -776,13 +945,15 @@ body.mephisto-compact #nps,
    compact but these are separate layers, so they'd float over the collapsed panel -- hide them too */
 body.mephisto-compact #move-annotations,
 body.mephisto-compact #response-annotations,
-/* Quick Settings STAYS in compact, but trimmed to the switches you actually flip mid-game
-   (.qs-compact = Autoplay/Premove/Help/Humanize/Clock/Mirror). Everything else -- engine, Elo,
-   variant, threads, memory, the time boxes -- is set-once, so it only clutters a short panel. */
+/* Quick Settings STAYS in compact, trimmed to what gets flipped mid-game. That used to be the
+   .qs-compact rows; it is now exactly the pinned block -- the same idea expressed by the structure
+   rather than by a class sprinkled across the markup. */
 body.mephisto-compact #quick-settings .qs-title,
-body.mephisto-compact #quick-settings .qs-row:not(.qs-compact) {
+body.mephisto-compact #quick-settings .qs-tabs,
+body.mephisto-compact #quick-settings .qs-panels {
     display: none !important;
 }
+body.mephisto-compact #quick-settings .qs-pinned { border-bottom: 0; }
 
 /* Alternative lines survive compact (they're the point of Multi Lines), capped to 3 rows: the
    panel is short, and render_alt_lines already hides the whole block when Multi Lines is 1. */
@@ -877,3 +1048,201 @@ body.mephisto-compact #alt-lines {
 body.mephisto-dark #calibrate-notice { color: #4dd0e1; }
 body.mephisto-dark #update-notice { color: #4dd0e1; }
 body.mephisto-dark #game-detection.unsupported { color: #ff7a70; }
+
+
+/* --------------------------------------------------------------------------------------------
+   Button row. Materialize paints .btn a filled teal block, which made seven of them the loudest
+   thing in the panel -- louder than the move they sit under. Flat and outlined instead: the icons
+   stay legible, they just stop competing with the answer.
+   -------------------------------------------------------------------------------------------- */
+#config, #recheck, #selftest, #setupfen, #snapfen, #analyze, #copyfen, #copypgn {
+    background: var(--mp-bg) !important;
+    color: var(--mp-dim) !important;
+    border: 1px solid var(--mp-line);
+    border-radius: 3px;
+    box-shadow: none !important;
+    height: 28px;        /* ONE height for the whole row -- FEN/PGN used to be 28 while the five
+                            icon buttons were 26, on a different baseline to boot */
+    line-height: 26px;
+    transition: background .09s, color .09s;
+}
+#config:hover, #recheck:hover, #selftest:hover, #setupfen:hover, #snapfen:hover,
+#analyze:hover, #copyfen:hover, #copypgn:hover {
+    background: var(--mp-hair) !important;
+    color: var(--mp-text) !important;
+}
+/* Size pinned per-button, and by ID on purpose. Materialize's `.btn i {font-size: 1.3rem}` (0,1,1)
+   outranks `.mp-label`/`.mp-icon` (0,1,0) AND is bundled after popup.css, so the glyphs were sized
+   in REM against the host page's root font-size -- a site with a large root pushed "FEN"/"PGN" wider
+   than their own buttons. An id selector (1,1,0) wins, in px, the same on every site. */
+#copyfen .mp-label, #copypgn .mp-label {
+    font-size: 11px;
+    line-height: 26px;
+    font-weight: 600;
+    letter-spacing: .3px;
+}
+#config .mp-icon, #recheck .mp-icon, #selftest .mp-icon, #setupfen .mp-icon,
+#snapfen .mp-icon, #analyze .mp-icon { font-size: 19px; line-height: 26px; }
+
+/* --------------------------------------------------------------------------------------------
+   Readout. The move is the answer, so it keeps the weight; everything under it is support and
+   drops to a smaller, quieter, tabular treatment instead of five lines at one size.
+   -------------------------------------------------------------------------------------------- */
+#moves {
+    font: 500 16px/22px -apple-system, 'Roboto', system-ui, sans-serif !important;
+    color: var(--mp-text) !important;
+}
+#evaluation, #nps, #wdl {
+    font: 13px/20px -apple-system, 'Roboto', system-ui, sans-serif !important;
+    color: var(--mp-dim) !important;
+    font-variant-numeric: tabular-nums;
+}
+#nps, #wdl { color: var(--mp-mute) !important; height: 20px; line-height: 20px; }
+#next-move { font: 13px/20px -apple-system, 'Roboto', system-ui, sans-serif !important;
+             color: var(--mp-dim) !important; height: 20px; }
+#move-reason { color: var(--mp-mute) !important;
+               font: 13px/20px -apple-system, 'Roboto', system-ui, sans-serif !important; }
+#alt-lines {
+    /* a step up from 12px: these are the engine's other candidate moves, not a footnote */
+    font: 13.5px/21px -apple-system, 'Roboto', system-ui, sans-serif !important;
+    color: var(--mp-dim) !important;
+    max-height: 108px;
+    font-variant-numeric: tabular-nums;
+}
+#alt-lines .alt-eval { color: var(--mp-text); font-variant-numeric: tabular-nums; font-weight: 600; }
+#alt-lines .alt-moves { color: var(--mp-text) !important; font-weight: 500; }
+/* the continuation: present, readable, and plainly secondary to the move it follows */
+#alt-lines .alt-cont { color: var(--mp-mute) !important; font-weight: 400; }
+
+/* --------------------------------------------------------------------------------------------
+   Turn switch. It kept Materialize's lavender lever, the only stray hue once everything else went
+   monochrome-plus-green. Same palette now; the thumb carries the side to move.
+   -------------------------------------------------------------------------------------------- */
+#quick-settings .turn-switch {
+    background: var(--mp-bg) !important;
+    border: 1px solid var(--mp-line);
+    border-radius: 11px;
+}
+#quick-settings .turn-switch .turn-thumb {
+    background: #f2f0ec;
+    color: #1b1c1f;
+    box-shadow: none;
+    border: 1px solid var(--mp-line);
+}
+#quick-settings .turn-switch.black .turn-thumb { background: #33353a; color: #f2f0ec; }
+#quick-settings .turn-switch:focus-visible { box-shadow: 0 0 0 2px var(--mp-on) !important; }
+
+/* --------------------------------------------------------------------------------------------
+   Number steppers. A -/+ box either side of the field, both the field's own height. They step by
+   the input's own `step` attribute, so the increment lives in the markup beside the min/max it
+   has to respect. The field stays a real number input -- typing works exactly as before.
+   -------------------------------------------------------------------------------------------- */
+#quick-settings .qs-nums .qs-label { margin-bottom: 5px; }
+#quick-settings .qs-stepper {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    margin-top: 5px;     /* the space between the two lines, and above the first */
+}
+#quick-settings .qs-stepper input.browser-default {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+    appearance: textfield;   /* the native spinner would be a second, tinier pair doing the same job */
+}
+#quick-settings .qs-stepper input.browser-default::-webkit-outer-spin-button,
+#quick-settings .qs-stepper input.browser-default::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+#quick-settings .qs-step {
+    flex: none;
+    width: 28px;
+    height: 28px;        /* matches input.browser-default */
+    padding: 0;
+    border: 1px solid var(--mp-line);
+    border-radius: 3px;
+    background: var(--mp-bg);
+    color: var(--mp-dim);
+    font: 15px/1 -apple-system, 'Roboto', system-ui, sans-serif;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: background .09s, color .09s;
+    user-select: none;
+}
+#quick-settings .qs-step:hover { background: var(--mp-hair); color: var(--mp-text); }
+#quick-settings .qs-step:active { background: var(--mp-on-soft); border-color: var(--mp-on); }
+
+
+/* Autoplay armed but overridden by Help Mode or Manual Mode. Not an error -- both legitimately mean
+   "I will play the move myself" -- but with the switches split across tabs you can no longer see the
+   one doing the overriding, so a solid green fill would be a lie. Hollow it out: still armed, not
+   running. The row's title says which mode has it. */
+#quick-settings .qs-row.qs-toggle.qs-overridden {
+    background: var(--mp-bg);
+    border-style: dashed;
+}
+#quick-settings .qs-row.qs-toggle.qs-overridden .qs-cb:checked { background: var(--mp-mute); }
+#quick-settings .qs-row.qs-toggle.qs-overridden .qs-label { color: var(--mp-mute); }
+
+
+/* --------------------------------------------------------------------------------------------
+   Floating panel only. content-script moves #game-detection and #engine-health out of the body and
+   into the title bar, where "Mephisto" already is -- one status line instead of two. That removes
+   a 26px row from the top of the left column, and #eval-bar's top was exactly that row's height.
+   The class is set only by the content script, so the toolbar popup (which has no title bar, and
+   still needs the status where it is) never matches.
+
+   FOUR elements are pinned to that row's height, not one: the eval bar AND the three arrow overlays
+   that sit exactly over the board. Correcting only #eval-bar left every arrow drawn 26px low -- the
+   shaft started below its from-square and the head landed mid-square. They move together or the
+   board and its annotations disagree, so they are one selector list on purpose.
+   -------------------------------------------------------------------------------------------- */
+body.mephisto-bar-host #eval-bar,
+body.mephisto-bar-host #book-annotations,
+body.mephisto-bar-host #move-annotations,
+body.mephisto-bar-host #response-annotations { top: 0; }
+
+
+/* --------------------------------------------------------------------------------------------
+   ONE font per column. The right column had three (Roboto for labels and tabs, ui-monospace for
+   the stepper and slider readouts, the -apple-system stack for the toggles), which read as three
+   different UIs stacked in 190px. Everything inherits the same stack now; the numeric fields keep
+   tabular-nums so columns of digits still line up without a monospace face.
+   -------------------------------------------------------------------------------------------- */
+#quick-settings, #quick-settings * {
+    font-family: -apple-system, 'Roboto', system-ui, sans-serif !important;
+}
+#quick-settings input[type=number],
+#quick-settings .qs-step,
+#quick-settings .value {
+    font-variant-numeric: tabular-nums;
+}
+
+
+/* --------------------------------------------------------------------------------------------
+   Turn switch, labelled. The 44x22 pill is drawn as a ::before so the element itself can be a flex
+   row carrying the text; the thumb keeps its absolute position over that pill.
+   -------------------------------------------------------------------------------------------- */
+#quick-settings .turn-switch::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 44px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--mp-line);
+    transition: background .15s;
+}
+#quick-settings .turn-switch.black::before { background: var(--mp-dim); }
+#quick-settings .turn-switch .turn-side {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--mp-dim);
+    white-space: nowrap;
+}
+#quick-settings .turn-switch:hover .turn-side { color: var(--mp-text); }

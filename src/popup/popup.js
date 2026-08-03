@@ -65,7 +65,15 @@ function flip_fen_turn(fen) {
 let is_calculating = false;
 // UI language. `i18n(key, english, vars)` -- the English is written at the call site so the source
 // still reads as English prose and a missing key can never render blank.
-const i18n = (key, dflt, vars) => MephistoI18n.t(key, dflt, vars);
+const i18n = (key, dflt, vars) => {
+    // NEVER throws. This runs on the scrape/response path as well as on labels, so when i18n.js was
+    // missing from the toolbar popup the first lookup took initPanel down and every later response
+    // with it -- one absent script tag presenting as a dead scraper. English is always a usable
+    // answer, so fall back to the call site's own text rather than propagating.
+    try { return MephistoI18n.t(key, dflt, vars); } catch (e) {
+        return vars ? String(dflt).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : dflt;
+    }
+};
 
 // Background-play tracing from the PANEL side, to the service worker's own console -- see bgLog in
 // the content-script for why not this page's. Silent while the tab is active. Without this half, a
@@ -115,6 +123,13 @@ let pending_stops = 0; // bestmoves still owed by searches we abandoned -- drop 
 // Every remote analysis carries the generation it was issued in; a resolved response from an older
 // generation is dropped. Bumped when a new analysis is issued and when a search is abandoned.
 let remote_gen = 0;
+// The position an analyse is currently OUT for on a native host. The panel supersedes results
+// client-side, but nothing cancels the abandoned search at the host -- `send_engine_uci('stop')` is
+// a no-op for native engines -- so a duplicate push for the SAME position issues a second search
+// that queues behind the first. The panel then drops the first as superseded and waits on a second
+// the host has not begun. Observed as two identical `on_new_pos` lines, one "dropping a superseded
+// remote result", and then silence. One request per position fixes it at the source.
+let native_inflight = null;
 let search_active = false; // a 'go' was issued whose bestmove hasn't arrived yet (is_calculating can't be
                            // used for this: it flips false on the first info line, not on bestmove)
 let last_pos = {startFen: null, moves: ''}; // the position's own start + UCI move list, for Copy PGN
@@ -133,7 +148,14 @@ let prev_ply_count = 0;    // plies in the last-seen position; a drop back to th
 
 // engines that speak native messaging (Chrome auto-launches the host, no server -- see
 // native-host/install-native.sh). The port name == the engine value (see NATIVE_HOSTS).
-const NATIVE_ENGINES = ['sf-native', 'fairy-native'];
+const NATIVE_ENGINES = ['sf-native', 'fairy-native', 'tetrarch-native'];
+// FOUR-PLAYER. Tetrarch plays 14x14 4PC, which chess.js cannot represent at all -- so this
+// engine does NOT ride the normal pipeline: no chess.js legality, no premove, no arrows. It is
+// offered only on chess.com's 4PC pages and drives the bypass lane (see FOURPC_SITES).
+const FOURPC_ENGINES = ['tetrarch-native'];
+// What to fall back to when leaving 4PC with no remembered engine -- bundled, needs no native host,
+// and plays standard chess, which is the whole point of the fallback.
+const FOURPC_FALLBACK_ENGINE = 'stockfish-18-nnue';
 // native engines that ARE full Fairy-Stockfish -> offer the whole variant list, like the WASM Fairy
 const FAIRY_ENGINES = ['fairy-stockfish-14-nnue', 'fairy-native'];
 
@@ -156,7 +178,9 @@ const ELO_RANGE = {
     'stockfish-11-hce': [1350, 2850],
     'fairy-stockfish-14-nnue': [500, 2850],
     // full-power native engines (real Stockfish/Fairy -> same UCI_Elo ranges)
-    'sf-native': [1320, 3190],
+    'sf-dev-native': [1320, 3190],
+    'sf18-native': [1320, 3190],
+    'sf11-native': [1350, 2850],
     'fairy-native': [500, 2850],
     'remote': [1320, 3190], // unknown engine; assume the modern SF range
 };
@@ -227,6 +251,16 @@ async function initPanel(root, tabId) {
     else { PANEL_TIP_HOST = document.body || document.documentElement; }
     if (tabId != null) { MY_TAB_ID = tabId; ENGINE_CLIENT = String(tabId); } // no ?tab= when in-page
     PANEL_BOOTED = true;
+    // The 4PC lane keeps its own dedupe, and popup.js is a CONTENT SCRIPT -- it survives the panel
+    // being closed and reopened on the same page. So `fourpc_last` still held the position on screen,
+    // the reopened panel deduped its very first scrape, and nothing appeared until someone moved or
+    // the page was reloaded. `fourpc_busy` is worse: closing mid-search left it true forever, and
+    // every later position was queued behind a search that would never report.
+    // `board4pc` is the same trap one step further on: the renderer holds a reference to the #board
+    // element it was built against, and a reopened panel builds a NEW one. Left set, `show_4pc_board`
+    // saw a non-null renderer, skipped constructing one, and painted 14x14 into a detached element --
+    // so the panel detected the game, sized the pieces, drew the arrow, and showed the 8x8 board.
+    fourpc_last = ''; fourpc_busy = false; fourpc_pending = null; board4pc = null;
     await MephistoConfig.init(); // load config from chrome.storage.local into the sync cache first
     // load extension configurations from the config store (chrome.storage.local, cached)
     const computeTime = JSON.parse(MephistoConfig.get('compute_time'));
@@ -368,6 +402,7 @@ async function initPanel(root, tabId) {
         if (response.fenresponse) { // reply received -> the poll interval may fire the next request
             fen_request_inflight = false;
             sync_puzzle_mode_to_page(response.puzzlePage);
+            sync_fourpc_engine_to_page(response.fourPCPage);
             clearTimeout(fen_request_timer);
             if (response.clocks) last_clocks = {...response.clocks, at: Date.now()}; // for Clock Mode budgeting
         }
@@ -375,6 +410,12 @@ async function initPanel(root, tabId) {
             // A manually set position OWNS the panel: the page keeps scraping and would otherwise
             // overwrite it on the very next poll (~1s), which is what makes a paste-a-FEN box useless.
             if (setup_fen) return;
+            // FOUR-PLAYER: the payload is a FEN4, not anything chess.js can parse. Route it out of
+            // the normal pipeline before the parse that would throw on it.
+            if (typeof response.dom === 'string' && response.dom.startsWith('4PC:')) {
+                on_new_pos_4pc(response.dom.slice(4));
+                return;
+            }
             if (board.orientation() !== response.orient) {
                 board.orientation(response.orient);
             }
@@ -451,6 +492,18 @@ async function initPanel(root, tabId) {
             }
         } else if (response.pullConfig) {
             push_config();
+        } else if (response.warm) {
+            // Attach the debugger BEFORE the move measures any squares. Only meaningful for the CDP
+            // clicker -- the python backend moves the real mouse and raises no infobar.
+            if (config.python_autoplay_backend) return;
+            // NO EARLY RETURN ON A MISSING TAB ID. The in-page panel is handed an empty sender
+            // (`PANEL_MSG_HANDLER(msg, {})`), so there is no id here and never was -- bailing on it
+            // meant the in-page panel, which is every real game, never warmed at all. Send regardless
+            // and let the worker fall back to its own authenticated sender.tab, exactly as the click
+            // path already does; the id below only matters for the toolbar popup, which has no tab.
+            return chrome.runtime.sendMessage({cdpWarm: true, tabId: sender?.tab?.id})
+                .then(r => { if (r && r.error) console.warn('CDP warm failed:', r.error); })
+                .catch(() => {});
         } else if (response.click) {
             // click the GAME tab (the content-script's sender tab), not whatever tab is active --
             // otherwise a move firing while you're on another tab (e.g. chrome://extensions) dispatches
@@ -654,8 +707,50 @@ function init_tooltips(queryRoot, appendTo) {
     });
 }
 
+// Move a number input by one of its own steps, clamped to its own min/max. The amount is NOT
+// hard-coded here: it comes from the element's `step`, so the increment lives in the markup beside
+// the bounds it must respect. Dispatching `change` is the part that matters -- the config binding
+// listens for exactly that, so a stepped value saves and pushes just like a typed one.
+function step_number_input(input, dir) {
+    const step = Number(input.step) || 1;
+    const min = (input.min === '' || input.min == null) ? -Infinity : Number(input.min);
+    const max = (input.max === '' || input.max == null) ? Infinity : Number(input.max);
+    const now = Number(input.value);
+    const next = (Number.isFinite(now) ? now : 0) + step * dir;
+    input.value = String(Math.min(max, Math.max(min, next)));
+    input.dispatchEvent(new Event('change', {bubbles: true}));
+    return input.value;
+}
+
 function init_quick_settings() {
     const save = (key, value) => MephistoConfig.set(key, JSON.stringify(value));
+    // Tab strip. Pure show/hide -- no state to persist and nothing to sync, since every control
+    // inside the panels is bound by id exactly as it was when they all sat in one column.
+    const tabs = [...PANEL_ROOT.querySelectorAll('.qs-tab')];
+    for (const tab of tabs) {
+        tab.addEventListener('click', () => {
+            for (const t of tabs) {
+                const on = t === tab;
+                t.setAttribute('aria-selected', String(on));
+                PANEL_ROOT.getElementById(t.dataset.panel)?.classList.toggle('qs-on', on);
+            }
+        });
+    }
+    // Threads is a count of real cores, so the stepper must not be able to reach a number this
+    // machine cannot use. The markup's max=24 is the engine-side cap; the machine's own core count
+    // is usually lower and wins. Same ceiling MephistoConfig.defaultThreads() picks from, so the
+    // default always sits inside the range the -/+ buttons can walk.
+    const threadsInput = PANEL_ROOT.getElementById('qs_threads');
+    if (threadsInput) {
+        threadsInput.max = String(Math.max(1, Math.min(24, navigator.hardwareConcurrency || 8)));
+    }
+    // -/+ steppers: the button names its input and its direction; the amount comes from the input.
+    for (const btn of PANEL_ROOT.querySelectorAll('.qs-step')) {
+        btn.addEventListener('click', () => {
+            const input = PANEL_ROOT.getElementById(btn.dataset.for);
+            if (input) step_number_input(input, Number(btn.dataset.d));
+        });
+    }
     // toggles apply live
     for (const [id, key] of [['qs_autoplay', 'autoplay'], ['qs_premove', 'premove'],
                              ['qs_puzzle', 'puzzle_mode'], ['qs_help', 'help_mode'],
@@ -673,6 +768,8 @@ function init_quick_settings() {
             save(key, elem.checked);
             keep_alive(keep_alive_wanted(), true); // this change is a user gesture -> can (re)start the tone now
             if (key === 'help_mode' && !elem.checked) request_clear_hint();
+            if (key === 'help_mode' || key === 'manual_mode' || key === 'autoplay') mark_autoplay_overridden();
+            if (key === 'autoplay' && elem.checked) fourpc_last = '';   // replay the board on screen
             if (key === 'eval_bar' && !elem.checked) request_clear_eval_bar();
             // the strip is drawn by drawEvalBar, so clearing and letting the next eval redraw is
             // enough -- clear_eval_bar removes both overlays and the live bar comes straight back
@@ -845,18 +942,16 @@ function init_quick_settings() {
                 send_engine_uci(`setoption name SelfElo value ${v}`);
                 send_engine_uci(`setoption name OppoElo value ${v}`);
                 abandon_search();
-                last_eval.fen = '';
+                last_eval.fen = '';   // re-analyse the current position at the new rating
                 push_config();
             });
         }
     }
-    const eloRowEl = PANEL_ROOT.getElementById('qs_elo_row');
-    if (eloRowEl) eloRowEl.style.display = (isMaia || isMaia3) ? 'none' : '';
-    // The Variant selector: full list for Fairy-Stockfish; Standard + Chess960 for everything else
-    // (mainline SF speaks UCI_Chess960); hidden for Maia. The "detect" button reads the variant off the page.
+    const eloRow = PANEL_ROOT.getElementById('qs_elo_row');
+    if (eloRow) eloRow.style.display = (isMaia || isMaia3 || NO_ELO_ENGINES.includes(config.engine)) ? 'none' : '';
     const variantRow = PANEL_ROOT.getElementById('qs_variant_row');
     if (variantRow) {
-        if (isMaia || isMaia3) {
+        if (isMaia || NO_CHESS960_ENGINES.includes(config.engine)) {
             variantRow.style.display = 'none';
         } else {
             const fairy = FAIRY_ENGINES.includes(config.engine);
@@ -906,13 +1001,27 @@ function init_quick_settings() {
         eloSlider.addEventListener('change', () => { save('elo', stops[+eloSlider.value]); panel_reload(); });
     }
     // range sliders show their value in the label while dragging ('change' above still does the
-    // save+reload when the thumb is released)
-    for (const id of ['qs_lines', 'qs_threads', 'qs_memory']) {
+    // save+reload when the thumb is released). Only Memory is still a slider -- Threads and Multi
+    // Lines are steppers now, and a stepper shows its value in the field itself.
+    for (const id of ['qs_memory']) {
         const slider = PANEL_ROOT.getElementById(id);
         const label = PANEL_ROOT.getElementById(`${id}_val`);
         if (!slider || !label) continue;
         label.textContent = slider.value;
         slider.addEventListener('input', () => { label.textContent = slider.value; });
+    }
+    // The green fill up to the thumb is a gradient stop CSS cannot compute -- only the element knows
+    // its own value -- so it is set here as `--fill`. Runs LAST in this function, after the Elo and
+    // Maia sliders have had their real min/max/value assigned above; a slider painted before that
+    // would show a fill for the placeholder range.
+    const paint_range = (r) => {
+        const min = Number(r.min) || 0, max = Number(r.max);
+        const span = (max - min) || 1;
+        r.style.setProperty('--fill', ((Number(r.value) - min) / span * 100) + '%');
+    };
+    for (const r of PANEL_ROOT.querySelectorAll('input[type=range]')) {
+        paint_range(r);
+        r.addEventListener('input', () => paint_range(r));
     }
 }
 
@@ -983,7 +1092,7 @@ async function initialize_engine(reuseWarm = false) {
             "Hash": config.memory,
             "Threads": config.threads,
             "MultiPV": effective_multipv(), // bumped for Humanize (needs alt-line headroom), like WASM
-            "Premove": !!config.premove, // PM-01 opt-in; engines without the option skip it
+            "Premove": !!config.premove, // opt-in; engines without the option skip it
             // remote-engine.py skips options the engine doesn't declare, so this is safe everywhere.
             // ALWAYS sent, never omitted-when-standard: the host keeps the last configure it was
             // given (engine_options is a dict it only ever writes into), so leaving these out on the
@@ -1013,14 +1122,17 @@ async function initialize_engine(reuseWarm = false) {
             send_engine_uci('setoption name UCI_Chess960 value true');
         }
         // Strength cap: every Stockfish/Fairy build clamps UCI_Elo to its own range, so send it raw.
-        // Cap only within the engine's own range; 0 (Off) or anything above its max (the "3200+"
-        // slider stop) means full strength -> leave limiting off.
-        const eloMax = (ELO_RANGE[config.engine] || [1320, 3190])[1];
-        if (config.elo > 0 && config.elo <= eloMax) {
-            send_engine_uci('setoption name UCI_LimitStrength value true');
-            send_engine_uci(`setoption name UCI_Elo value ${config.elo}`);
-        } else {
-            send_engine_uci('setoption name UCI_LimitStrength value false');
+        // The native troll engines don't declare the option. 0 = full strength (leave limiting off).
+        if (!NO_ELO_ENGINES.includes(config.engine)) {
+            // Cap only within the engine's own range; 0 (Off) or anything above its max (the
+            // "3200+" slider stop) means full strength -> leave limiting off.
+            const eloMax = (ELO_RANGE[config.engine] || [1320, 3190])[1];
+            if (config.elo > 0 && config.elo <= eloMax) {
+                send_engine_uci('setoption name UCI_LimitStrength value true');
+                send_engine_uci(`setoption name UCI_Elo value ${config.elo}`);
+            } else {
+                send_engine_uci('setoption name UCI_LimitStrength value false');
+            }
         }
         send_engine_uci('ucinewgame');
         send_engine_uci('isready');
@@ -1110,6 +1222,17 @@ function abandon_search() {
     if (search_active) pending_stops++;
     search_active = false;
     remote_gen++; // a remote/native request still in flight is now for a position we've left
+    // ...and release the native in-flight slot with it. Bumping remote_gen commits us to DROPPING
+    // that request's result, so continuing to treat it as "the search covering this position" is
+    // wrong by definition: send_analysis refuses to issue a second search while native_inflight
+    // holds the same posKey, so the panel sat waiting on a result it had already decided to discard.
+    //
+    // That is what "toggling Autoplay breaks the engine" was. With Autoplay OFF the native budget is
+    // an hour (`rt = 3600000`, the pure-analysis rail), and the watchdog that would free the slot is
+    // only armed for `rt < 60000` -- so nothing came back and nothing new was issued until the
+    // abandoned hour-long search finally answered. Clearing here is safe: both the `.finally` settle
+    // and the watchdog re-check `native_inflight === posKey`, so neither can clobber a newer request.
+    native_inflight = null;
     send_engine_uci('stop');
 }
 
@@ -1267,6 +1390,21 @@ function on_engine_best_move(best, threat, isTerminal=false) {
             bgTrace('bestmove', {best, autoplay: config.autoplay, help: config.help_mode,
                 manual: config.manual_mode});
         }
+        // Every reason autoplay can decline, said out loud in the PAGE console. This is the last
+        // silent branch in the move path: a terminal bestmove arrives, the gate refuses, and nothing
+        // is printed anywhere -- which is indistinguishable from the engine never answering.
+        if (isTerminal && config.autoplay && !config.help_mode && !config.manual_mode
+                && !premove_reply_playable(last_eval.fen, best)) {
+            const f = String(last_eval.fen || '');
+            console.warn('Mephisto: NOT autoplaying', best, '-- premove_reply_playable said no.',
+                {fen: f, sideToMove: f.split(' ')[1], ourSide: our_side(),
+                 pieceOnFrom: (() => { try { return new Chess(config.variant, f).get(best.slice(0, 2)); }
+                                       catch (e) { return 'unreadable'; } })()});
+        }
+        if (isTerminal && config.autoplay && (config.help_mode || config.manual_mode)) {
+            console.warn('Mephisto: NOT autoplaying', best,
+                config.help_mode ? '-- Help Mode is on' : '-- Manual Mode is on');
+        }
         if (!config.help_mode && !config.manual_mode && config.autoplay && isTerminal) {
             // SAFETY: only autoplay a move that actually moves OUR piece and is legal right now.
             // If the turn was mis-scraped we'd otherwise play the opponent's best move as ours.
@@ -1341,6 +1479,14 @@ function on_engine_best_move(best, threat, isTerminal=false) {
 function update_eval_bar(line) {
     const bar = PANEL_ROOT.getElementById('eval-bar-white');
     if (!bar || !line) return;
+    // Reclaim the colours if the 4PC lane painted this bar red/blue. Those are inline styles on the
+    // same two elements, so without this a normal game inherits Team Red vs Team Blue until the panel
+    // happens to be rebuilt.
+    if (bar.style.background) {
+        bar.style.background = '';
+        const wrap = PANEL_ROOT.getElementById('eval-bar');
+        if (wrap) wrap.style.background = '';
+    }
     let frac; // white's share of the bar; scores/mates are white-relative here
     if ('mate' in line) {
         // mate 0 = the side to move IS checkmated, so the sign carries no direction
@@ -1533,8 +1679,15 @@ function render_alt_lines() {
         const evalTxt = ('mate' in line) ? `#${line.mate}` : (line.score / 100).toFixed(2);
         // colour the eval to match this line's board arrow, so the panel is a legend for the arrows.
         // inline style -- beats the dark-mode `#alt-lines .alt-eval` colour rule (no !important there).
+        // The line's OWN move carries the weight; the continuation behind it is context, so it is
+        // dimmed rather than competing with it at equal strength. 7 plies = the move plus the next
+        // six. A short pv just yields a shorter tail, and a 1-ply pv none at all.
+        const sans = san_preview(last_eval.fen, line.pv, 7).split(' ').filter(Boolean);
+        const head = sans[0] || '';
+        const cont = sans.slice(1).join(' ');
         rows.push(`<div class="alt-line"><span class="alt-eval" style="color:${line_color(i)}">${evalTxt}</span> ` +
-            `<span class="alt-moves">${san_preview(last_eval.fen, line.pv)}</span></div>`);
+            `<span class="alt-moves">${head}</span>` +
+            (cont ? ` <span class="alt-cont">${cont}</span>` : '') + `</div>`);
     }
     panel.innerHTML = rows.join('');
 }
@@ -2863,6 +3016,19 @@ function clear_setup_fen() {
 
 function on_new_pos(fen, startFen, moves) {
     console.log("on_new_pos", fen, startFen, moves);
+    // PAINT FIRST. Showing the position we were just handed needs none of the ~200 lines below it --
+    // not the search dispatch, the premove bookkeeping, the explorer/tablebase lookups or the native
+    // configure round-trip -- yet the repaint used to sit at the very END of all of it, so the small
+    // board visibly lagged the page. It is a synchronous DOM render (panel-board.js renders on the
+    // spot, no animation), so doing it here costs nothing and the board tracks the page immediately.
+    // Annotations come with it: they belong to the position that just left, and drawing the new
+    // position under the old arrows is worse than a blank board for the moment before draw_moves().
+    try {
+        hide_4pc_board();   // a normal position means the 14x14 renderer must give the host back
+        board.position(fen);
+        clear_annotations();
+        clear_book_annotations(); // stale book arrows go now; the new position's lookup redraws them
+    } catch (e) { /* board not built yet (first push before init finished) -- the next push paints it */ }
     opp_alert_on_new_pos(fen); // arm the opponent-mistake check from the just-finished position's eval
     last_pos = {startFen: startFen || null, moves: moves || ''}; // Copy PGN reads this
     clear_next_move_eta(); // the countdown belonged to the position that just changed
@@ -2954,14 +3120,48 @@ function on_new_pos(fen, startFen, moves) {
         // PONDERING rides the same rail on the opponent's turn: the native hosts and remote engine
         // turn this `time` into their search limit, so the engine thinks through their whole move
         // instead of stopping after our move time. Superseded by the next position like Help Mode.
-        const rt = (config.help_mode || !config.autoplay || config.manual_mode
-                    || (config.ponder && !our_turn)) ? 3600000 : movetime;
+        const open_ended = config.help_mode || !config.autoplay || config.manual_mode
+                           || (config.ponder && !our_turn);
+        // MULTIPV NEEDS A SEARCH THAT ENDS. a native host may compute lines 2..k only once the main search is
+        // over -- re-searching with the better lines' first moves excluded at the root, then emits
+        // the whole `multipv 1..k` batch in one go, just before bestmove. On the open-ended rail that
+        // moment never arrives: the panel asks for an hour, the engine streams untagged per-depth
+        // frames forever, every one of them lands on line 1, and the Multi Lines panel shows exactly
+        // one row no matter what the slider says. (Verified against the host: at time=3600000, 15s of
+        // streaming yields 20 info frames and not one multipv tag; at time=250 it yields all five.)
+        //
+        // So when more than one line is asked for, bound the search even in analysis mode. The cost
+        // is real and worth naming: analysis stops deepening at the move budget instead of running
+        // indefinitely. That is the trade for MultiPV working at all -- and at Multi Lines 1, which
+        // is the default, nothing changes.
+        const rt = (open_ended && !(uses_native() && want_multipv > 1)) ? 3600000 : movetime;
+        const posKey = moves ? `${startFen}|${moves}` : fen;
         const send_analysis = () => {
+            if (uses_native() && native_inflight === posKey) {
+                console.log('Mephisto: already analysing this position -- not issuing a second search');
+                return;
+            }
             const fresh = remote_result_gate(); // drop this result if the position moves on first
+            // Cleared however the promise settles -- including for a result we discard as
+            // superseded -- so a later push for this same position can still be searched.
+            const settle = () => { if (native_inflight === posKey) native_inflight = null; };
+            if (uses_native()) {
+                native_inflight = posKey;
+                if (rt < 60000) {
+                    setTimeout(() => {
+                        if (native_inflight !== posKey) return;   // it settled; nothing to do
+                        console.warn('Mephisto: the engine never answered this search -- releasing ' +
+                                     'it so the next position push can retry');
+                        native_inflight = null;
+                    }, rt + 6000);
+                }
+            }
             if (moves) {
-                request_remote_analysis(startFen, rt, moves).then(fresh(on_engine_response)).catch(fresh(on_remote_error));
+                request_remote_analysis(startFen, rt, moves)
+                    .then(fresh(on_engine_response)).catch(fresh(on_remote_error)).finally(settle);
             } else {
-                request_remote_analysis(fen, rt).then(fresh(on_engine_response)).catch(fresh(on_remote_error));
+                request_remote_analysis(fen, rt)
+                    .then(fresh(on_engine_response)).catch(fresh(on_remote_error)).finally(settle);
             }
         };
         // The host reads MultiPV out of its stored options, not out of the analyse request, so the
@@ -3043,9 +3243,7 @@ function on_new_pos(fen, startFen, moves) {
         search_active = true;
     }
 
-    board.position(fen);
-    clear_annotations();
-    clear_book_annotations(); // stale book arrows go now; the new position's lookup redraws them
+    // (the repaint + annotation clear that used to live here now run at the TOP of this function)
     if (config.simon_says_mode) {
         const toplay = (turn === 'w') ? 'White' : 'Black';
         if (toplay.toLowerCase() !== our_side()) {
@@ -3564,6 +3762,33 @@ function panel_reload() {
     location.reload();
 }
 
+// "Receiving end does not exist" means the tab has no live content-script. The overwhelmingly common
+// cause is a RELOADED EXTENSION with the game tab still open: reloading orphans every content script
+// already injected, and the orphan cannot be messaged again. The popup then polls into the void and
+// sits on "No Chess Game Detected" forever -- which reads as a broken scraper rather than a page that
+// needs reloading. This is toolbar-popup-only by nature: the floating panel IS the content script, so
+// it cannot be orphaned away from itself.
+//
+// The error was deliberately swallowed (it is expected on non-chess tabs), so this counts instead:
+// a couple of consecutive failures is a dead relay, one is just a tab that isn't ready.
+// Chrome names the cause, and the two causes need different fixes -- so report WHICH, rather than
+// one message that is right half the time:
+//   "Receiving end does not exist"  -> no live content-script (extension reloaded, tab not reloaded)
+//   "Cannot access contents of..."  -> no host permission for this site (a manifest matter, and the
+//                                      reason the toolbar popup can fail where the floating panel
+//                                      cannot: the panel talks to content-script.js in its own
+//                                      isolated world and never touches chrome.tabs at all)
+let relay_failures = 0;
+function note_relay_result(lastError) {
+    if (!lastError) { relay_failures = 0; return; }
+    if (++relay_failures !== 3) return; // exactly 3 -> report once, don't repaint every poll
+    const why = String(lastError.message || lastError);
+    console.warn('Mephisto: the panel cannot reach this tab\'s content script:', why);
+    set_detection_status(/access|permission/i.test(why)
+        ? i18n('panel.no_site_access', 'No access to this site — check the extension\'s permissions')
+        : i18n('panel.reload_the_page', 'Reload this page — the extension was updated'));
+}
+
 function send_to_active_tab(message) {
   // In-page panel: content-script.js is in THIS isolated world -- call it directly. chrome.tabs is
   // undefined here, and runtime.sendMessage would go to the extension, never to a sibling content script.
@@ -3575,12 +3800,16 @@ function send_to_active_tab(message) {
         // popup page is still live -- harmless (a reload re-injects a fresh one)
     // read lastError so "Receiving end does not exist" (no content-script on tab) stays unlogged
     if (MY_TAB_ID) { // normal path: talk to OUR tab only, even when it's in the background
-        chrome.tabs.sendMessage(MY_TAB_ID, message, () => void chrome.runtime.lastError);
+        chrome.tabs.sendMessage(MY_TAB_ID, message, () => note_relay_result(chrome.runtime.lastError));
         return;
     }
+    // The TOOLBAR POPUP always lands here: chrome.action.setPopup registers popup.html with no
+    // ?tab= param, so MY_TAB_ID is null for the whole session. This is the path that has to report,
+    // not the one above -- which is why the first version of note_relay_result never fired in the
+    // one mode it was written for.
     chrome.tabs.query({active: true, currentWindow: true}, function (tabs) { // fallback: no tab id yet
-        if (!tabs[0]?.id) return;
-        chrome.tabs.sendMessage(tabs[0].id, message, () => void chrome.runtime.lastError);
+        if (!tabs[0]?.id) return note_relay_result({message: 'no active tab'});
+        chrome.tabs.sendMessage(tabs[0].id, message, () => note_relay_result(chrome.runtime.lastError));
     });
   } catch (e) { /* extension context invalidated -- ignore */ }
 }
@@ -4165,6 +4394,217 @@ function sync_puzzle_mode_to_page(onPuzzlePage) {
     console.log(`Puzzle Mode ${onPuzzlePage ? 'on' : 'off'} — following the page`);
 }
 
+// ==================================================================================================
+// FOUR-PLAYER BYPASS LANE
+//
+// 4PC is 14x14 with four seats and a FEN4 position. chess.js cannot represent ANY of that, so this
+// lane deliberately skips the whole normal pipeline: no chess.js parse, no legality check, no
+// premove, no arrows, no eval bar, no panel board. Scrape in, engine move out, two clicks.
+//
+// It is entered only when BOTH hold -- the scrape came back as a 4PC payload AND the selected engine
+// is a four-player one -- so nothing about the ordinary path changes shape when this file is loaded.
+// ==================================================================================================
+let board4pc = null;           // the 14x14 renderer, non-null only while it OWNS the #board host
+let fourpc_last = '';          // last FEN4 we analysed, to skip re-analysing an unchanged board
+let fourpc_busy = false;       // one search at a time: Tetrarch is single-threaded and ignores `stop`
+let fourpc_pending = null;     // newest position that arrived while a search was in flight
+
+function is_fourpc_engine() {
+    return FOURPC_ENGINES.includes(config.engine);
+}
+
+// `4PC:<ourSeat>:<fen4>` -- the content script tags the payload with the seat we are sitting in,
+// because "our turn" cannot be derived from a FEN4 alone (it names the side to move, not us).
+// The four-player engine follows the page, the way Puzzle Mode does: 4PC needs Tetrarch and Tetrarch
+// is useless anywhere else, so selecting it by hand on every game (and remembering to put it back)
+// is a chore the page can do for us.
+//
+// `fourpc_prev_engine` holds what to go back to AND doubles as "we are the ones who switched" -- so a
+// deliberate choice is never overridden, matching auto_puzzle_mode. Changing engine reloads the
+// panel, which is why every path here returns unless something actually has to change: a switch that
+// re-fires on each poll would reload the panel once a second.
+let fourpc_prev_engine = null;
+
+function sync_fourpc_engine_to_page(onFourPCPage) {
+    if (onFourPCPage == null) return;                 // a site the content-script does not classify
+    const sel = PANEL_ROOT.getElementById('qs_engine');
+    if (!sel) return;
+    const isFourPC = is_fourpc_engine();
+    if (onFourPCPage) {
+        if (isFourPC) return;                         // already on a four-player engine
+        if (fourpc_prev_engine) {
+            // We switched, and you have since picked something else WHILE STILL on a 4PC page. That
+            // is a deliberate choice, so stop managing the engine rather than switching back on the
+            // next poll and fighting you once a second. (Puzzle Mode's version of this does fight
+            // you; it should not, but that is its bug to fix, not one to copy.)
+            fourpc_prev_engine = null;
+            return;
+        }
+        fourpc_prev_engine = config.engine;            // remember what to restore
+        sel.value = FOURPC_ENGINES[0];
+        sel.dispatchEvent(new Event('change'));        // the one path that saves, pushes and reloads
+        console.log(`Engine -> ${FOURPC_ENGINES[0]} — following the page (was ${fourpc_prev_engine})`);
+        return;
+    }
+    // LEFT THE 4PC PAGES. Unlike Puzzle Mode this is not a preference to respect: Tetrarch plays
+    // 14x14 four-player chess and nothing else, so leaving it selected on a normal game is simply a
+    // broken panel. Switch away whether we chose it or you did.
+    if (!isFourPC) { fourpc_prev_engine = null; return; }  // already on something else
+    // back to what you had, unless that was also a 4PC engine (or there was nothing to remember)
+    const back = (fourpc_prev_engine && !FOURPC_ENGINES.includes(fourpc_prev_engine))
+        ? fourpc_prev_engine : FOURPC_FALLBACK_ENGINE;
+    fourpc_prev_engine = null;
+    sel.value = back;
+    sel.dispatchEvent(new Event('change'));
+    console.log(`Engine -> ${back} — restored on leaving 4-player chess`);
+}
+
+// 4PC does NOT go through request_automove. That function is two-player to its bones: it asks
+// our_side() for white/black, computes `verify` from last_eval.fen (which this lane never sets), runs
+// safe_deselect_square through chess.js -- and, the one that actually bit, it ships the move as
+// `pv: [move]` whenever Puzzle Mode is on, because the content-script's puzzle branch takes that
+// shape. The content script tests `response.pv` BEFORE the 4PC branch, so a 4PC move arrived at the
+// 8x8 simulator and was refused by its [a-h][1-8] regex. Nothing clicked, and Puzzle Mode being on is
+// not a state anyone would think to mention.
+//
+// An explicit `fourpc: true` flag, checked first, makes the routing independent of any other setting.
+function request_automove_4pc(move) {
+    send_to_active_tab({automove: true, fourpc: true, move, timing: fresh_timing(),
+                        deselect: null, verify: false, manual: false});
+}
+
+// The eval bar in 4PC. Two teams, not two colours: R+Y against B+G (RULES.md 2), so the bar is Team
+// Red against Team Blue and YOUR team always grows from the bottom -- the same "bottom belongs to
+// you" convention the two-player bar uses for board orientation.
+//
+// The normal update_eval_bar cannot be reused: it reads `turn` and board.orientation(), both of which
+// are two-player state this lane never sets, and its share is white-relative. This takes the score
+// already normalised to your team, so positive is always your side.
+const FOURPC_TEAM_COLOR = ['#c33c3c', '#3f72c4'];   // team Red (R+Y), team Blue (B+G)
+function update_eval_bar_4pc(line, flip, ourSeat) {
+    const wrap = PANEL_ROOT.getElementById('eval-bar');
+    const fill = PANEL_ROOT.getElementById('eval-bar-white');
+    if (!wrap || !fill || !line) return;
+    const ourTeam = (ourSeat === 'R' || ourSeat === 'Y') ? 0 : 1;
+    let frac;                                       // OUR team's share of the bar
+    if ('mate' in line) {
+        frac = (flip * line.mate >= 0) ? 1 : 0;
+    } else {
+        const wc = 2 / (1 + Math.exp(-0.00368 * flip * line.score)) - 1;  // same lichess curve
+        frac = Math.max(0.03, Math.min(0.97, 0.5 + wc / 2));
+    }
+    wrap.style.background = FOURPC_TEAM_COLOR[1 - ourTeam];   // the other team fills the rest
+    fill.style.background = FOURPC_TEAM_COLOR[ourTeam];
+    fill.style.top = 'auto';                        // your team is ALWAYS the bottom of the bar
+    fill.style.bottom = '0';
+    fill.style.height = `${frac * 100}%`;
+}
+
+// The 8x8 and 14x14 renderers share the single #board host, so swapping is just "whoever renders
+// last owns it". Both are synchronous and cheap, so there is nothing to tear down.
+function show_4pc_board(fen4, ourSeat) {
+    try {
+        if (!board4pc) board4pc = MephistoBoard4PC('board', {root: PANEL_ROOT});
+        board4pc.orientation((ourSeat || 'r').toLowerCase());   // you are always at the bottom
+        board4pc.position(fen4);
+    } catch (e) { /* host not built yet; the next position paints it */ }
+}
+
+function hide_4pc_board() {
+    if (!board4pc) return;
+    board4pc = null;
+    try { board.position(board.position()); } catch (e) { /* 8x8 board not built yet */ }
+}
+
+function fourpc_drain() {
+    const next = fourpc_pending;
+    fourpc_pending = null;
+    if (next) on_new_pos_4pc(next);
+}
+
+function on_new_pos_4pc(payload) {
+    const i = payload.indexOf(':');
+    const ourSeat = payload.slice(0, i);
+    const fen4 = payload.slice(i + 1);
+    if (!fen4) return;
+    // A position arriving mid-search used to be DROPPED, and `fourpc_last` had already been set to
+    // the in-flight one -- so once the board settled on a position we skipped, nothing re-triggered
+    // it and the panel sat there until the page was reloaded. Hold the newest instead and pick it up
+    // when the current search returns. (Tetrarch is single-threaded and ignores `stop`, so the search
+    // in flight genuinely cannot be cancelled -- queueing is the only correct answer.)
+    // PAINT FIRST, ahead of both early returns. The dedupe below exists to avoid re-SEARCHING an
+    // unchanged position, not to avoid redrawing it -- and anything that repaints the shared host
+    // behind our back (a panel rebuild on the engine auto-switch, most obviously) leaves the 8x8
+    // board showing with no way back, because the position it would need to react to is already the
+    // one in `fourpc_last`. Rendering is synchronous and cheap; there is no reason to gate it.
+    show_4pc_board(fen4, ourSeat);
+    if (fourpc_busy) { fourpc_pending = payload; return; }
+    if (fen4 === fourpc_last) return;
+    fourpc_last = fen4;
+    const turn = fen4[0];
+    const ours = (turn === ourSeat);
+    set_detection_status(i18n('panel.fourpc_detected', '4-player chess — {seat} to move',
+        {seat: {R: 'Red', B: 'Blue', Y: 'Yellow', G: 'Green'}[turn] || turn}));
+    if (!is_fourpc_engine()) {
+        update_best_move(i18n('panel.fourpc_needs_engine',
+            'Select the Tetrarch engine to analyse 4-player chess (Teams mode only)'));
+        return;
+    }
+    fourpc_busy = true;
+    // Mode is the one option that changes the RULES (promotion is the 8th rank in FFA, the 11th in
+    // Teams), so it is pushed before the first search. Setup is deliberately NOT sent: every position
+    // arrives as a full FEN4, which makes all five starting setups the same code path.
+    request_remote_configure({Mode: 'teams'}).catch(() => {});
+    native_send('analyse', {fen4, time: Math.max(200, config.compute_time || 1000)})
+        .then((res) => {
+            fourpc_busy = false;
+            fourpc_drain();
+            if (fen4 !== fourpc_last) return;          // the board moved on while we searched
+            const best = res && res.bestmove;
+            // `0000` is UCI's null move -- Tetrarch returns it when the position has no move to make
+            // (game over). It is not a move to play, and passing it on got it as far as the clicker.
+            if (!best || best === '(none)' || best === '0000') {
+                update_best_move(i18n('panel.no_move', 'No move'));
+                return;
+            }
+            const line = res.lines && res.lines[0];
+            // SCORE PERSPECTIVE. Tetrarch reports from the side-to-move's TEAM (PROTOCOL.md), and the
+            // seat to move rotates every ply -- so the raw number flips sign each move and the same
+            // evaluation reads as +3.06 then -3.06. Normalise to YOUR team so it means one thing all
+            // game: positive is good for you. Standard pairing is R+Y against B+G (RULES.md 2).
+            const team = (seat) => (seat === 'R' || seat === 'Y') ? 0 : 1;
+            const flip = (ourSeat !== '?' && team(turn) !== team(ourSeat)) ? -1 : 1;
+            const score = line && (('mate' in line)
+                ? `#${flip * line.mate}`
+                : (flip * line.score / 100).toFixed(2));
+            update_best_move(`${best}${score != null ? '  (' + score + ')' : ''}`);
+            try { board4pc?.highlight(best); } catch (e) { /* board swapped away mid-search */ }
+            if (line && config.eval_bar) update_eval_bar_4pc(line, flip, ourSeat);
+            if (ours && config.autoplay && !config.help_mode) request_automove_4pc(best);
+        })
+        .catch((e) => {
+            fourpc_busy = false;
+            fourpc_drain();
+            // Tetrarch is the ONE engine with nothing bundled behind it -- every other entry in the
+            // dropdown either ships as WASM or degrades to one. So "host not found" here almost
+            // always means it was never installed, and "Engine error" sent people looking for a bug
+            // instead of the installer. Say what to do.
+            update_best_move(native_host_missing(e)
+                ? i18n('panel.tetrarch_setup', 'Tetrarch is not installed yet — see the README section '
+                       + '"Four-player chess" for macOS, Linux and Windows setup')
+                : i18n('panel.engine_error', 'Engine error'));
+            console.warn('Mephisto: 4PC analyse failed', e);
+        });
+}
+
+// Did this failure mean "the native host is not installed"? The worker phrases a missing host as
+// "<label> native host unavailable (Specified native messaging host ... not found.)", and a port that
+// dies before the first reply comes through as a closed port. Neither is distinguishable from a
+// crashed host, which is fine: both answers are "run the installer".
+function native_host_missing(e) {
+    return /not found|unavailable|port closed|no such file/i.test(String((e && e.message) || e || ''));
+}
+
 function request_automove(move, think = null, manual = false) {
     bgTrace('request_automove', {move, think, puzzle: config.puzzle_mode});
     // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
@@ -4372,6 +4812,12 @@ function set_turn_switch(turn) {
     el.classList.toggle('black', black);
     const thumb = el.querySelector('.turn-thumb');
     if (thumb) thumb.innerHTML = black ? '&#9818;' : '&#9812;'; // ♚ / ♔
+    const side = PANEL_ROOT.getElementById('qs_turn_side');
+    if (side) {
+        side.textContent = black
+            ? i18n('panel.black_to_move', 'Black to move')
+            : i18n('panel.white_to_move', 'White to move');
+    }
 }
 
 
@@ -4516,6 +4962,21 @@ function sync_quick_settings() {
         const el = PANEL_ROOT.getElementById(id);
         if (el && String(el.value) !== String(config[key])) el.value = config[key];
     }
+    mark_autoplay_overridden();
+}
+
+// Autoplay can be ON and still never play: on_engine_best_move refuses when Help Mode or Manual
+// Mode is set, which is correct -- both mean "I will make the move myself". That used to be obvious
+// with all the switches in one flat column. They live on separate tabs now, so an armed-looking
+// Autoplay can sit beside a Help Mode you cannot see. Say so on the Autoplay row itself.
+function mark_autoplay_overridden() {
+    const row = PANEL_ROOT.getElementById('qs_autoplay')?.closest('.qs-toggle');
+    if (!row) return;
+    const by = config.help_mode ? 'Help Mode' : config.manual_mode ? 'Manual Mode' : null;
+    row.classList.toggle('qs-overridden', !!(config.autoplay && by));
+    row.title = by && config.autoplay
+        ? `Autoplay is on but ${by} is playing the move instead — turn ${by} off to autoplay`
+        : '';
 }
 
 function push_config() {

@@ -11,6 +11,12 @@
     <script src="/lib/chess.js"></script>
     <script src="/src/scripts/panel-board.js"></script>
     <script src="/src/scripts/config-store.js"></script>
+    <!-- MUST match the manifest's content-script list. The floating panel gets i18n.js from
+         there; the toolbar popup is a normal page and only gets what is listed HERE, so
+         leaving it out made MephistoI18n undefined -- i18n() threw on its first call, took
+         initPanel down with it, and every scrape response after that threw too. The popup
+         looked like a broken scraper; it was a missing script tag. -->
+    <script src="/src/i18n/i18n.js"></script>
     <!-- classic (not a module) so the same file also loads as a content script; `defer` keeps the
          post-parse timing the module had, so document.body exists when it boots the panel -->
     <script defer src="popup.js"></script>
@@ -146,6 +152,7 @@
             <option value="fairy-stockfish-14-nnue">Fairy WASM</option>
             <option value="maia">Maia (human-like)</option>
             <option value="maia3">Maia-3 (600-2600)</option>
+            <option value="tetrarch-native">Tetrarch (4-player, Teams)</option>
             <option value="remote">Remote Engine</option>
         </select>
     </div>
@@ -196,31 +203,71 @@
             <button id="qs_variant_detect" title="Detect the variant from the current game">&#8635;</button>
         </div>
     </div>
-    <div class="qs-row">
-        <span data-i18n="panel.search_fallback_poll_ms" class="qs-label">Search / Fallback Poll (ms)</span>
-        <div class="qs-pair">
-            <input id="qs_search" class="browser-default" type="number" min="50" max="30000" step="25">
-            <input id="qs_fen" class="browser-default" type="number" min="1000" max="10000" step="500">
+<div class="qs-row" id="qs_maia_row">
+        <span data-i18n="panel.maia_level" data-i18n-tip="panel.tip.which_maia_network_to_use" class="qs-label tooltipped" data-position="left"
+              data-tooltip="Which Maia network to use. Each is trained on human games at that rating, so it plays like a human of that strength — human-like mistakes, not a strong engine told to play badly. Changing this loads a different net.">Maia Level</span>
+        <select id="qs_maia_level" class="browser-default">
+            <option value="1100">1100</option>
+            <option value="1200">1200</option>
+            <option value="1300">1300</option>
+            <option value="1400">1400</option>
+            <option value="1500">1500</option>
+            <option value="1600">1600</option>
+            <option value="1700">1700</option>
+            <option value="1800">1800</option>
+            <option value="1900">1900</option>
+            <option value="2200">2200</option>
+        </select>
+    </div>
+    <!-- Threads, then lines, then hash: threads is what changes where the search can go, hash is
+         what you set once. Threads and lines STEP by one rather than slide -- both are small
+         integer counts where every value matters, and a 24-stop slider cannot hit them reliably.
+         Threads' max comes from the machine's own core count (init_quick_settings), so the stepper
+         can only reach values this machine can actually use. -->
+    <div class="qs-row qs-nums">
+        <span data-i18n="panel.threads" class="qs-label">Threads</span>
+        <div class="qs-stepper">
+            <button class="qs-step" type="button" tabindex="-1" data-for="qs_threads" data-d="-1" aria-label="less">&minus;</button>
+            <input id="qs_threads" class="browser-default" type="number" min="1" max="24" step="1">
+            <button class="qs-step" type="button" tabindex="-1" data-for="qs_threads" data-d="1" aria-label="more">+</button>
         </div>
     </div>
-    <div class="qs-row">
-        <span class="qs-label"><span data-i18n="panel.threads">Threads</span> (<span id="qs_threads_val">8</span>)</span>
-        <input id="qs_threads" class="browser-default" type="range" min="1" max="24" step="1">
+    <div class="qs-row qs-nums">
+        <span data-i18n="panel.multi_lines" class="qs-label">Multi Lines</span>
+        <div class="qs-stepper">
+            <button class="qs-step" type="button" tabindex="-1" data-for="qs_lines" data-d="-1" aria-label="less">&minus;</button>
+            <input id="qs_lines" class="browser-default" type="number" min="1" max="5" step="1">
+            <button class="qs-step" type="button" tabindex="-1" data-for="qs_lines" data-d="1" aria-label="more">+</button>
+        </div>
     </div>
     <div class="qs-row">
         <span class="qs-label"><span data-i18n="panel.memory">Memory</span> (<span id="qs_memory_val">512</span> MB)</span>
         <input id="qs_memory" class="browser-default" type="range" min="32" max="4096" step="32">
     </div>
-    <div class="qs-row">
-        <span class="qs-label"><span data-i18n="panel.multi_lines">Multi Lines</span> (<span id="qs_lines_val">1</span>)</span>
-        <input id="qs_lines" class="browser-default" type="range" min="1" max="5" step="1">
-    </div>
-    <div class="qs-row">
-        <span data-i18n="panel.move_time_var_ms" class="qs-label">Move Time ± Var (ms)</span>
-        <div class="qs-pair">
-            <input id="qs_move" class="browser-default" type="number" min="0" step="25">
-            <input id="qs_move_var" class="browser-default" type="number" min="0" step="25">
+<div class="qs-row qs-nums">
+        <span data-i18n="set.search_time_ms" class="qs-label">Search Time (ms)</span>
+        <div class="qs-stepper">
+            <button class="qs-step" type="button" tabindex="-1" data-for="qs_search" data-d="-1" aria-label="less">&minus;</button>
+            <input id="qs_search" class="browser-default" type="number" min="50" max="30000" step="25">
+            <button class="qs-step" type="button" tabindex="-1" data-for="qs_search" data-d="1" aria-label="more">+</button>
         </div>
+    </div>
+    <div class="qs-row qs-toggle">
+        <input id="qs_explorer" type="checkbox" class="qs-cb">
+        <label for="qs_explorer" data-i18n="panel.explorer" data-i18n-tip="panel.tip.show_how_humans_actually_played" class="qs-label tooltipped" data-position="left"
+              data-tooltip="Show how humans actually played this opening (lichess database): the opening name plus the most-played replies with their win/draw/loss split. Read-out only -- it never changes which move you play. Standard chess only; stops once the game leaves book.">Explorer</label>
+    </div>
+    <div class="qs-row qs-toggle">
+        <input id="qs_book" type="checkbox" class="qs-cb">
+        <label for="qs_book" data-i18n="panel.book_moves" data-i18n-tip="panel.tip.play_the_opening_from_the" class="qs-label tooltipped" data-position="left"
+              data-tooltip="Play the opening from the database instead of the engine's pick: a WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the same line every game. A move must be played in at least 20 games AND rate within 40cp of the engine's best, so it varies without playing worse. Falls back to the engine move if the lookup hasn't arrived. Priority — Move: Book > Humanize > engine best. Needs Autoplay.">Book Moves</label>
+    </div>
+    <div class="qs-row qs-toggle">
+        <input id="qs_tablebase" type="checkbox" class="qs-cb">
+        <label for="qs_tablebase" data-i18n="panel.tablebase" data-i18n-tip="panel.tip.with_7_or_fewer_pieces" class="qs-label tooltipped" data-position="left"
+              data-tooltip="With 7 or fewer pieces left the position is solved: ask lichess's Syzygy tablebase for the perfect move instead of trusting the search. Outranks the engine and the opening book. Off by default -- it sends the position to a third party. Never delays a move.">Tablebase</label>
+    </div>
+      </div>
     </div>
 </div>
 

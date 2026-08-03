@@ -252,4 +252,147 @@
     }
 
     self.MephistoBoard = MephistoBoard;
+
+    // ---------------------------------------------------------------------------------------------
+    // 14x14 four-player board. DISPLAY ONLY -- a separate renderer rather than a widened MephistoBoard
+    // on purpose: every one of the 4PC bugs so far came from four-player positions being pushed down a
+    // two-player path, and the 8x8 board above is the one piece of this panel that must not regress.
+    //
+    // Pieces are drawn as text glyphs, not artwork: the bundled piece sets have two colours and this
+    // needs four, and a tinted white bishop reads worse than a coloured outline.
+    const F4 = 'abcdefghijklmn'.split('');
+    const SEAT_FILL = {r: '#d24b4b', b: '#4b7fd2', y: '#d9b036', g: '#43a35f'};
+    const GLYPH = {K: '\u265A', Q: '\u265B', R: '\u265C', B: '\u265D', N: '\u265E', P: '\u265F'};
+    // The cut corners: a 3x3 block at each. Same squares chess.com marks data-invisible, and the same
+    // ones FEN4 writes as ordinary empty squares.
+    const isCorner = (row, col) => (row < 3 || row > 10) && (col < 3 || col > 10);
+
+    // Which board square each screen cell shows, for each seat sitting at the bottom. Canonical is
+    // Red at the bottom: row 0 is rank 14, col 0 is file a. The other three are that rotated, worked
+    // out once here so nothing downstream has to think about rotation.
+    const VIEW = {
+        r: (r, c) => [c, 13 - r],            // [fileIndex, rankIndex] (rankIndex 0 == rank 1)
+        y: (r, c) => [13 - c, r],
+        b: (r, c) => [13 - r, 13 - c],
+        g: (r, c) => [r, c],
+    };
+
+    function fen4ToObj(fen4) {
+        const obj = {};
+        if (!fen4) return obj;
+        // Board is the LAST dash-separated field (RULES.md 11.1) -- turn/dead/castling/points/halfmove
+        // and the optional {extra} block all come before it.
+        const rows = String(fen4).slice(String(fen4).lastIndexOf('-') + 1).split('/');
+        for (let i = 0; i < rows.length && i < 14; i++) {
+            const rank = 14 - i;                       // rank 14 is written first
+            let file = 0;
+            for (const cell of rows[i].split(',')) {
+                if (/^\d+$/.test(cell)) { file += parseInt(cell, 10); continue; }   // a run of empties
+                if (cell.length >= 2 && file < 14) obj[F4[file] + rank] = {seat: cell[0], type: cell[1]};
+                file++;
+            }
+        }
+        return obj;
+    }
+
+    function MephistoBoard4PC(elOrId, cfg) {
+        cfg = cfg || {};
+        const host = (typeof elOrId === 'string') ? (cfg.root || document).getElementById(elOrId) : elOrId;
+        let pos = {}, seat = 'r';                      // `seat` is whoever sits at the BOTTOM
+        let hl = null;                                 // {from, to}: the move to draw an arrow for
+        let last = null;                               // the FEN4 on screen, so a re-scrape is a no-op
+        const SQ4 = /^([a-n](?:1[0-4]|[1-9]))([a-n](?:1[0-4]|[1-9]))/;
+
+        function render() {
+            if (!host) return;
+            const sq = Math.max(8, Math.floor((host.clientWidth || 350) / 14));
+            const board = document.createElement('div');
+            board.className = 'board-b72b1';
+            board.style.cssText = `width:${sq * 14}px;height:${sq * 14}px;position:relative`;
+            const view = VIEW[seat] || VIEW.r;
+            const centre = {};                         // algebraic -> pixel centre, for the arrow
+            for (let r = 0; r < 14; r++) {
+                const row = document.createElement('div');
+                row.style.cssText = 'clear:both';
+                for (let c = 0; c < 14; c++) {
+                    const s = document.createElement('div');
+                    s.style.cssText = `width:${sq}px;height:${sq}px;float:left;position:relative`;
+                    const [fi, ri] = view(r, c);
+                    if (isCorner(13 - ri, fi)) {       // outside the cross: no square at all
+                        s.style.background = 'transparent';
+                        row.appendChild(s);
+                        continue;
+                    }
+                    const alg = F4[fi] + (ri + 1);
+                    centre[alg] = {x: c * sq + sq / 2, y: r * sq + sq / 2};
+                    const p = pos[alg];
+                    s.style.background = (fi + ri) % 2 === 0 ? '#8f8f8f' : '#d9d9d9';
+                    if (p && GLYPH[p.type]) {
+                        const g = document.createElement('div');
+                        g.textContent = GLYPH[p.type];
+                        g.style.cssText = `position:absolute;inset:0;line-height:${sq}px;text-align:center;` +
+                            `font-size:${Math.round(sq * 1.04)}px;color:${SEAT_FILL[p.seat] || '#888'};` +
+                            `-webkit-text-stroke:${Math.max(1, Math.round(sq * 0.05))}px #1a1a1a;`;
+                        s.appendChild(g);
+                    }
+                    row.appendChild(s);
+                }
+                board.appendChild(row);
+            }
+            // The suggested move, as an arrow. The page-side arrows the two-player panel relies on are
+            // drawn over an 8x8 board and know nothing about a 14x14 one, so without this the move is
+            // text only -- and `a8f13` is not something you can find on a 196-square board at a glance.
+            const a = hl && centre[hl.from], b2 = hl && centre[hl.to];
+            if (a && b2) {
+                const NS = 'http://www.w3.org/2000/svg';
+                const svg = document.createElementNS(NS, 'svg');
+                svg.setAttribute('width', sq * 14);
+                svg.setAttribute('height', sq * 14);
+                svg.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none';
+                const ang = Math.atan2(b2.y - a.y, b2.x - a.x);
+                const head = Math.max(6, sq * 0.42);
+                // stop the shaft short of the head so the two do not overlap into a blob
+                const tx = b2.x - Math.cos(ang) * head, ty = b2.y - Math.sin(ang) * head;
+                const line = document.createElementNS(NS, 'line');
+                line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+                line.setAttribute('x2', tx); line.setAttribute('y2', ty);
+                line.setAttribute('stroke', '#14b8a6');
+                line.setAttribute('stroke-width', Math.max(3, sq * 0.2));
+                line.setAttribute('stroke-linecap', 'round');
+                line.setAttribute('opacity', '0.9');
+                const tip = document.createElementNS(NS, 'polygon');
+                const wing = (k) => `${b2.x - Math.cos(ang - k) * head},${b2.y - Math.sin(ang - k) * head}`;
+                tip.setAttribute('points', `${b2.x},${b2.y} ${wing(0.5)} ${wing(-0.5)}`);
+                tip.setAttribute('fill', '#14b8a6');
+                tip.setAttribute('opacity', '0.9');
+                svg.appendChild(line); svg.appendChild(tip);
+                board.appendChild(svg);
+            }
+            host.innerHTML = '';
+            host.appendChild(board);
+        }
+
+        render();
+        requestAnimationFrame(() => render());   // same settle as the 8x8 board: CSS may not be applied yet
+        return {
+            // A CHANGED position invalidates the old suggestion, so the arrow goes with it rather
+            // than pointing at a move nobody is going to play. An UNCHANGED one must not: the board
+            // is re-scraped on the fallback poll every second or so, and clearing on every call wiped
+            // the arrow a second after it was drawn.
+            position(fen4) {
+                if (fen4 === last) return;
+                last = fen4; pos = fen4ToObj(fen4); hl = null; render();
+            },
+            orientation(s) {
+                const next = (s || 'r').toLowerCase();
+                if (next === seat) return;
+                seat = next; render();
+            },
+            highlight(move) { const m = SQ4.exec(move || ''); hl = m ? {from: m[1], to: m[2]} : null; render(); },
+            resize() { render(); },
+        };
+    }
+
+    self.MephistoBoard4PC = MephistoBoard4PC;
+
 })();

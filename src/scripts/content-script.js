@@ -20,7 +20,10 @@ let deferredWhileHidden = false; // an autoplay/premove was held because the tab
 // genuinely backgrounded while you read it. Fire-and-forget: tracing must never be able to break the
 // thing it is tracing.
 function bgLog(...args) {
-    if (tabActive()) return;
+    // Premove keeps the trace live in the foreground: the move-guard decisions it logs (a dropped
+    // move, a superseded premove) are foreground symptoms, and they were invisible exactly when
+    // they mattered. Worker console only -- ordinary play still sees nothing.
+    if (tabActive() && !(config && config.premove)) return;
     console.log('[Mephisto/bg]', ...args);
     try {
         chrome.runtime.sendMessage({bgTrace: {from: 'content', args: args.map(bgSafe)}}, () => void chrome.runtime.lastError);
@@ -77,7 +80,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.160'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.199'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -131,7 +134,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
         }
         try {
             sendToPanel({ dom: res, orient: orient, clocks: scrapeClocks(), fenresponse: true,
-                          puzzlePage: isPuzzlePage() });
+                          puzzlePage: isPuzzlePage(), fourPCPage: is4PC() });
         } catch (e) {
             // extension was reloaded — this orphaned content-script can't reach it anymore
         }
@@ -146,6 +149,16 @@ function handleExtensionMessage(response, sender, sendResponse) {
             console.warn(`Mephisto: clearing a stuck move guard after ` +
                 `${Math.round((Date.now() - movingSince) / 1000)}s (budget ${Math.round(movingBudget / 1000)}s)`);
             endMoving();
+        } else if (response.automove && response.verify && movingSpeculative) {
+            // A BLIND PREMOVE is in flight and a REAL move for the current position has arrived.
+            // The premove was a guess about a position the opponent has now decided; this move is
+            // the actual answer to what they played. Dropping the real one to protect the guess is
+            // backwards, and it is why enabling Premove could stop autoplay entirely: with a chain
+            // armed on nearly every move (a certified premove chain), a premove click session was in flight
+            // most of the time, so the next real move kept landing on this guard.
+            // Superseding is safe: the premove's clicks are already queued at the SITE, and this
+            // move carries its own `deselect`, so it starts by clearing any half-made selection.
+            bgLog('superseding an in-flight blind premove with the real move', {move: response.move});
         } else {
             if (response.automove) bgLog('DROPPED: a previous move is still in progress (moving=true)');
             return;
@@ -173,7 +186,11 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // The board must still be the position the panel analysed (see boardStillMatchesAnalysis).
         // If it moved on, throw this move away and re-scrape: the panel re-analyses what is actually
         // there. Never click into a position the move was not computed for.
-        if (!boardStillMatchesAnalysis()) {
+        // boardStillMatchesAnalysis re-scrapes through the 8x8 path and compares against the
+        // analysed FEN. On a 14x14 board that comparison can never succeed, so it dropped every 4PC
+        // move after the first. The lane has its own protection: it re-analyses whatever is actually
+        // on the board, and a move computed for a stale position simply loses to the next scrape.
+        if (!response.fourpc && !boardStillMatchesAnalysis()) {
             bgLog('DROPPED: board no longer matches the analysed position');
             mismatchAborts++;
             console.warn(`Mephisto: board changed since the analysed position -- move dropped, re-scraping (${mismatchAborts} so far)`);
@@ -190,7 +207,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // apply the think/move timing the popup read FRESH from storage for this move, so changing the
         // Think/Move Time sliders mid-game takes effect on the very next move (not the game-start snapshot)
         if (response.timing) Object.assign(config, response.timing);
-        beginMoving(response.think);
+        const gen = beginMoving(response.think, response.verify === false);
         try {
             // Dispatch on the SHAPE OF THE MESSAGE, never on our own copy of the config.
             //
@@ -202,12 +219,20 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // `pv`. Either way the argument was undefined, no click was ever issued, and
             // `.finally(endMoving)` tidied up behind it, so autoplay simply skipped a move with
             // nothing stuck and nothing logged. The sender already decided; read what it sent.
-            if (response.pv) {
-                simulatePvMoves(response.pv).finally(endMoving);
+            if (response.fourpc && !is4PCGame()) {
+                bgLog('DROPPED: 4PC move outside a game url', {path: location.pathname});
+                endMoving();
+            } else if (response.fourpc) {
+                // FIRST, and on an explicit flag: 4PC must not be reachable by shape inference,
+                // which is how Puzzle Mode silently stole these moves into the 8x8 simulator.
+                simulateMove4PC(response.move, response.think ?? null).finally(() => endMoving(gen));
+            } else if (response.pv) {
+                simulatePvMoves(response.pv).finally(() => endMoving(gen));
             } else if (response.premoves) {
-                simulatePremoveSequence(response.premoves).finally(endMoving);
+                simulatePremoveSequence(response.premoves).finally(() => endMoving(gen));
             } else if (response.move) {
-                simulateMoveVerified(response.move, response.deselect, response.verify, response.think ?? null).finally(endMoving);
+                simulateMoveVerified(response.move, response.deselect, response.verify, response.think ?? null)
+                    .finally(() => endMoving(gen));
             } else {
                 // No move in a message that claimed to carry one. Nothing to click, so release the
                 // guard rather than sitting on it until the watchdog.
@@ -329,7 +354,7 @@ const BOOK_H = 132;        // extra height for the opening-explorer overlay (hea
 let panelBook = false;     // likewise mirrored: the overlay only grows the panel while it's shown
 const panelH = () => panelCompact ? COMPACT_H : (POPUP_H + (panelBook ? BOOK_H : 0));
 const POPUP_W = 568;       // the popup page's fixed layout size (popup.css html,body)
-const POPUP_H = 672; // matches popup.css body height (whichever column is taller)
+const POPUP_H = 646; // matches popup.css body height (whichever column is taller)
 const OVERLAY_SCALE = 0.8; // default render scale for fresh installs; resizing the panel persists a width
 const OVERLAY_BOX_KEY = 'ui.pnl.box'; // per-site localStorage: {left, top, width} -- see LOCAL_CACHE
 
@@ -573,7 +598,14 @@ async function toggleOverlay() {
     bar.style.cssText = 'height: 24px; background: #2d2d2d; color: #ddd; display: flex; ' +
         'align-items: center; justify-content: space-between; padding: 0 10px; ' +
         'font: 12px Roboto, sans-serif; cursor: move; user-select: none;';
-    bar.innerHTML = '<span>Mephisto</span>' +
+    // The brand, then a slot the panel's own status line and engine-health dot get moved into (see
+    // below). They used to sit inside the panel body: the status ate a full 26px row at the top of
+    // the left column, and the dot floated in the corner with nothing to belong to.
+    bar.innerHTML = '<span style="display: flex; align-items: center; gap: 7px; min-width: 0;">' +
+        '<span style="flex: none;">Mephisto</span>' +
+        '<span class="mephisto-bar-slot" style="display: flex; align-items: center; gap: 6px; ' +
+        'min-width: 0; overflow: hidden;"></span>' +
+        '</span>' +
         '<span style="display: flex; align-items: center; gap: 2px;">' +
         '<span class="mephisto-overlay-compact" title="Compact / expanded: collapse to just the move and score" ' +
         'style="cursor: pointer; padding: 0 6px; font-size: 13px; line-height: 1;">▣</span>' +
@@ -597,6 +629,33 @@ async function toggleOverlay() {
     panelBody.id = 'mephisto-panel-body'; // stands in for popup.html's <body> (CSS is rehomed onto it)
     panelBody.innerHTML = assets.html;
     frame.appendChild(panelBody);
+
+    // Status line + engine-health dot move into the title bar. They are MOVED, not copied: popup.js
+    // finds them by id through PANEL_ROOT (the shadow root), which still contains them, so every
+    // existing writer keeps working with no change. The class tells popup.css the left column no
+    // longer starts with a status row -- the toolbar popup has no bar, never gets the class, and
+    // keeps the status where it is. Sizes are inline because these nodes now sit OUTSIDE the scaled
+    // panel body, where popup.css's rules for them no longer apply.
+    const barSlot = bar.querySelector('.mephisto-bar-slot');
+    const barStatus = panelBody.querySelector('#game-detection');
+    const barHealth = panelBody.querySelector('#engine-health');
+    if (barSlot && barStatus) {
+        barStatus.style.cssText = 'width: auto; font: 11px Roboto, sans-serif; color: #9aa0a6; ' +
+            'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;';
+        barSlot.appendChild(barStatus);
+        panelBody.classList.add('mephisto-bar-host');
+    }
+    if (barSlot && barHealth) {
+        // Only the positioning is dropped. Set property by property, NOT cssText: `background` must
+        // stay unset inline or it would beat the #engine-health.ok / .down rules that are the whole
+        // point of the dot, and `display` must survive -- refresh_engine_health toggles it, and it
+        // starts hidden until the first probe answers.
+        for (const [k, v] of [['position', 'static'], ['top', 'auto'], ['right', 'auto'],
+                              ['flex', 'none'], ['width', '7px'], ['height', '7px']]) {
+            barHealth.style.setProperty(k, v);
+        }
+        barSlot.appendChild(barHealth);
+    }
     if (!overlayRoot.querySelector('style[data-mp]')) {
         const style = document.createElement('style'); // scoped to the shadow root; never touches the page
         style.setAttribute('data-mp', '');
@@ -1052,6 +1111,12 @@ function tryScrapePosition() {
 }
 
 function scrapePosition() {
+    if (is4PC()) return scrapePosition4PC();   // 14x14 FEN4, not a chess.js position
+    if (/\/variants\/4-player/.test(location.pathname)) {
+        // 4PC url but is4PC() said no -- that can only be `site`, which is assigned in window.onload
+        // and so is undefined in a content script injected into an already-loaded page.
+        return fourPCFail(`4-player url but site=${JSON.stringify(site)} -- reload the page`);
+    }
     if (site === 'taketaketake') return scrapePositionTT(); // state-based, no DOM to scrape
     if (site === 'chessbase') return scrapePositionCB(); // FEN straight from the page's CB.* model
     if (!getBoard()) return;
@@ -1408,6 +1473,320 @@ function ttQuery() {
 
 // scrape = the SAN move list from the probe, shipped through the same 'fen***' path lichess and
 // chess.com use (standard start + SANs; the popup rebuilds the position with chess.js)
+// ==================================================================================================
+// FOUR-PLAYER CHESS (chess.com /variants/4-player-*)
+//
+// A 14x14 board with the four 3x3 corners removed, four seats, and positions in FEN4 -- none of
+// which chess.js can represent, so this adapter does NOT feed the normal pipeline. It produces a
+// FEN4 string straight from the DOM and the panel hands that to Tetrarch untouched.
+//
+// Everything here was measured against a live rotated game rather than assumed. Two facts carried
+// the design:
+//   * `data-color` is a COLOUR IDENTITY (0=R 1=B 2=Y 3=G), not a seat position. Verified by
+//     comparing an unrotated lobby board against a game where the user sat Green: the pieces moved
+//     around the screen, the ids stayed with their colours.
+//   * the board ROTATES so your seat is at the bottom, and chess.com re-renders its coordinate
+//     labels when it does. So orientation is READ from those labels, never inferred -- which is why
+//     this works for any seat without a special case.
+// ==================================================================================================
+
+const FOURPC_SEATS = ['R', 'B', 'Y', 'G'];              // FEN4's array order, and data-color's
+const FOURPC_FILES = 'abcdefghijklmn'.split('');
+// each seat's back row: the 8 squares between (and including) its two rook corners. Setup-independent
+// -- classic/modern/by/byg/rg only move the king between index 7 and 8 (RULES.md 3.3, 6.1).
+const FOURPC_BACK = {R: ['rank', 1], B: ['file', 'a'], Y: ['rank', 14], G: ['file', 'n']};
+let fourPCPrev = null;   // previous board, for the en-passant diff
+let fourPCTurn = null;   // last KNOWN side to move; sticky across scrapes that saw no move
+
+// Commissioning diagnostic for the four-player lane. bgLog is silent while the tab is focused unless
+// Premove is on, and a 4PC bring-up failure is exactly the thing you are staring at when it happens --
+// so this reports to the PAGE console instead, once per distinct reason.
+const fourPCSeen = new Set();
+function fourPCFail(reason) {
+    lastScrapeFail = '4PC: ' + reason;
+    if (fourPCSeen.has(reason)) return undefined;
+    fourPCSeen.add(reason);
+    console.warn(`Mephisto 4PC: ${reason}`);
+    return undefined;
+}
+
+function is4PC() {
+    return site === 'chesscom' && /\/variants\/4-player/.test(location.pathname);
+}
+
+// ...but CLICKING is gated harder: only inside a real game, never on the lobby's preview board or a
+// setup page. Those render a full, perfectly scrapeable position, and autoplay would happily start
+// clicking pieces around a board that is not a game. The setup slug varies (4-player-chess,
+// 4-player-classic, ...) while the game path does not: /variants/<slug>/game/<id>.
+function is4PCGame() {
+    return site === 'chesscom' && /^\/variants\/4-player[\w-]*\/game\/\d+/.test(location.pathname);
+}
+
+// The board's own coordinate labels -> which screen axis carries ranks, and what sits at each index.
+// viewBox is "0 0 14 14", so one SVG unit is one square and Math.floor(x) is the column.
+function fourPCGeometry() {
+    const svg = [...document.querySelectorAll('svg')]
+        .find(e => /Coordinates/.test(String(e.getAttribute('class') || '')));
+    if (!svg) return fourPCFail('no Coordinates svg on the page') || null;
+    const labels = [...svg.querySelectorAll('text')].map(t => ({
+        v: (t.textContent || '').trim(), x: parseFloat(t.getAttribute('x')), y: parseFloat(t.getAttribute('y')),
+    })).filter(t => isFinite(t.x) && isFinite(t.y));
+    const digits = labels.filter(t => /^\d+$/.test(t.v));
+    const letters = labels.filter(t => /^[a-n]$/.test(t.v));
+    if (digits.length !== 14 || letters.length !== 14) {
+        return fourPCFail(`coordinate labels: ${digits.length} digits, ${letters.length} letters (want 14/14)`) || null;
+    }
+    // ranks vary along whichever axis has 14 distinct values; files take the other
+    const spread = (a, k) => new Set(a.map(t => Math.floor(t[k]))).size;
+    const rankAxis = spread(digits, 'x') > spread(digits, 'y') ? 'x' : 'y';
+    const fileAxis = rankAxis === 'x' ? 'y' : 'x';
+    const rankAt = {}, fileAt = {};
+    for (const t of digits) rankAt[Math.floor(t[rankAxis])] = parseInt(t.v, 10);
+    for (const t of letters) fileAt[Math.floor(t[fileAxis])] = t.v;
+    const host = document.querySelector('.TheBoard-squares') || svg.parentElement;
+    const rect = host.getBoundingClientRect();
+    return {rankAxis, fileAxis, rankAt, fileAt, size: rect.width / 14, rect};
+}
+
+// piece elements -> {square: {seat, type}}. Corners carry data-invisible and are skipped; FEN4
+// writes them as ordinary empty squares anyway (RULES.md 11.2).
+function fourPCBoard(geo) {
+    const board = {};
+    for (const p of document.querySelectorAll('.piece')) {
+        if (p.hasAttribute('data-invisible')) continue;
+        const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(p.getAttribute('style') || '');
+        if (!m) continue;
+        const col = Math.round(parseFloat(m[1]) / geo.size), row = Math.round(parseFloat(m[2]) / geo.size);
+        const file = geo.fileAt[geo.fileAxis === 'x' ? col : row];
+        const rank = geo.rankAt[geo.rankAxis === 'x' ? col : row];
+        const type = p.getAttribute('data-piece'), seat = FOURPC_SEATS[+p.getAttribute('data-color')];
+        if (!file || !rank || !type || !seat) continue;
+        board[file + rank] = {seat, type};
+    }
+    return board;
+}
+
+const fourPCSquare = (seat, i) =>
+    FOURPC_BACK[seat][0] === 'rank' ? FOURPC_FILES[i - 1] + FOURPC_BACK[seat][1] : FOURPC_BACK[seat][1] + i;
+
+// Castling rights, DERIVED (RULES.md 6.1 -- "squares are derived, never tabulated"). The king starts
+// at index 7 or 8 of its back row with rooks at 4 and 11; the SHORT side is the end it starts nearer.
+// A king that has left its home square loses both, which is the conservative direction: the cost of
+// a missed castle is one ordinary move, the cost of an invented one is an illegal move.
+function fourPCCastling(board) {
+    const short = [], long = [];
+    for (const seat of FOURPC_SEATS) {
+        let kingIdx = null;
+        for (const i of [7, 8]) {
+            const p = board[fourPCSquare(seat, i)];
+            if (p && p.seat === seat && p.type === 'K') kingIdx = i;
+        }
+        if (kingIdx === null) { short.push(0); long.push(0); continue; }
+        const rookAt = (i) => {
+            const p = board[fourPCSquare(seat, i)];
+            return (p && p.seat === seat && p.type === 'R') ? 1 : 0;
+        };
+        short.push(rookAt(kingIdx === 8 ? 11 : 4));
+        long.push(rookAt(kingIdx === 8 ? 4 : 11));
+    }
+    return {short, long};
+}
+
+// En passant, from the diff against the previous scrape. FEN4 stores BOTH squares as `M:T` -- the
+// square the pusher skipped and the square the pawn now stands on -- because fairy pawns can move
+// diagonally and one square would be ambiguous (RULES.md 5.2). SAN alone cannot give us this: the
+// move list writes a bare destination for pawns, so a single push onto the double-push rank looks
+// identical to a double push. The diff knows the origin, so it is exact.
+// The single move between two scrapes: the square that emptied and the one that gained a piece.
+// Returns null for anything that is not one quiet move (a capture leaves `lost` empty, castling
+// moves two pieces), which is exactly when the callers should fall back.
+function fourPCDiff(board, prev) {
+    if (!prev) return null;
+    const same = (a, b) => (!a && !b) || (a && b && a.seat === b.seat && a.type === b.type);
+    // ARRIVED means "the occupant CHANGED", not "the square was empty and now is not". A capture
+    // leaves its destination occupied before AND after, so the old test never saw one -- and since
+    // captures are most of a middlegame, the turn fell back to the broken move-count almost every
+    // ply. Vacated is squares that emptied.
+    const arrived = [], vacated = [];
+    for (const sq of new Set([...Object.keys(board), ...Object.keys(prev)])) {
+        if (same(board[sq], prev[sq])) continue;
+        if (board[sq]) arrived.push(sq); else vacated.push(sq);
+    }
+    if (!arrived.length || !vacated.length) return null;
+    // Castling moves two pieces; the king is the one that identifies the mover, and its seat is the
+    // same either way, so prefer it and fall back to whatever arrived.
+    const to = arrived.find(sq => board[sq].type === 'K') || arrived[0];
+    const moved = board[to];
+    // the origin must have held the SAME piece -- otherwise a promotion or a shuffle picks the wrong one
+    const from = vacated.find(sq => prev[sq] && prev[sq].seat === moved.seat && prev[sq].type === moved.type)
+              || vacated.find(sq => prev[sq] && prev[sq].seat === moved.seat)
+              || vacated[0];
+    return {from, to, moved, arrived: arrived.length, vacated: vacated.length};
+}
+
+function fourPCEnPassant(board, prev) {
+    const ep = ['', '', '', ''];
+    const d = fourPCDiff(board, prev);
+    if (!d) return ep;
+    // a double push is one piece moving to an empty square: anything else (capture, castle) is not
+    // an en-passant opportunity even when the geometry happens to look like one
+    if (d.arrived !== 1 || d.vacated !== 1) return ep;
+    const to = d.to, from = d.from, moved = d.moved;
+    if (!moved || moved.type !== 'P') return ep;
+    const f = (sq) => sq.replace(/\d+$/, ''), r = (sq) => parseInt(sq.match(/\d+$/)[0], 10);
+    const df = FOURPC_FILES.indexOf(f(to)) - FOURPC_FILES.indexOf(f(from)), dr = r(to) - r(from);
+    if (Math.abs(df) + Math.abs(dr) !== 2) return ep;          // not a two-square push
+    const mid = (df !== 0)
+        ? FOURPC_FILES[FOURPC_FILES.indexOf(f(from)) + df / 2] + r(from)
+        : f(from) + (r(from) + dr / 2);
+    ep[FOURPC_SEATS.indexOf(moved.seat)] = `${mid}:${to}`;
+    return ep;
+}
+
+// The whole position as a canonical FEN4 -- the spelling Tetrarch itself writes, so a round trip is
+// byte-identical. Field order is turn-dead-castleK-castleQ-points-halfmove[-{extra}]-board, board
+// LAST (RULES.md 11.1), rank 14 first, empty runs as counts.
+function scrapePosition4PC() {
+    const geo = fourPCGeometry();
+    if (!geo) return;                             // fourPCGeometry already said why
+    const board = fourPCBoard(geo);
+    if (Object.keys(board).length < 4) {
+        return fourPCFail(`only ${Object.keys(board).length} pieces mapped to squares`);
+    }
+    // WHOSE TURN. `moveCount % 4` was wrong: it assumes every round has exactly four cells, which
+    // stops being true the moment a seat is eliminated or skipped -- and the counts already do not
+    // reconcile (24 cells against rows of 4,4,4,4,4,1). So ask the BOARD instead: the piece that
+    // appeared since the last scrape names the seat that just moved, and the turn is the next seat
+    // still holding a king. Falls back to the modulo only on the first scrape, where there is no
+    // previous position to diff and nothing better is available.
+    const alive = (seat) => Object.values(board).some(p => p.seat === seat && p.type === 'K');
+    const d = fourPCDiff(board, fourPCPrev);
+    // THE MOVE LIST IS THE AUTHORITY, ON EVERY SCRAPE. It used to seed the turn on the first scrape
+    // only, after which the value was advanced by the board diff and otherwise kept as-is -- so a
+    // single diff the board could not explain (a capture, a castle, two moves landing between polls,
+    // the panel opening mid-move) left the turn one seat behind FOREVER, with nothing able to correct
+    // it. That is the "it does not realise it is my turn" case, and why it looked intermittent: a
+    // stale turn is only visible when it happens to be yours.
+    //
+    // chess.com renders all four seat cells for the current round and leaves the unplayed ones empty,
+    // so only non-empty cells count as moves.
+    const played = [...document.querySelectorAll('.moves-table-cell.moves-move')]
+        .filter(c => c.textContent.trim()).length;
+    let turn = FOURPC_SEATS[played % 4];
+    // The board and the move table do not repaint in the same frame. When the board has already moved
+    // and the table has not caught up, the diff is the fresher of the two -- but it only ever nudges
+    // the count-derived answer forward by one seat, it can no longer replace it.
+    if (d && d.moved && FOURPC_SEATS[played % 4] === d.moved.seat) {
+        let i = FOURPC_SEATS.indexOf(d.moved.seat);
+        for (let n = 0; n < 4; n++) { i = (i + 1) % 4; if (alive(FOURPC_SEATS[i])) break; }
+        turn = FOURPC_SEATS[i];
+    }
+    // ponytail: an eliminated seat stops taking turns, which `played % 4` cannot know about, so skip
+    // forward off a dead seat. Untested -- no game has been observed past an elimination yet.
+    for (let n = 0; n < 4 && !alive(turn); n++) turn = FOURPC_SEATS[(FOURPC_SEATS.indexOf(turn) + 1) % 4];
+    if (turn !== fourPCTurn) bgLog('4PC turn', {turn, played, diff: d && d.moved && d.moved.seat});
+    fourPCTurn = turn;
+    // `dead` is no longer hardcoded either -- a seat with no king is out, and in Teams that changes
+    // the evaluation substantially.
+    const dead = FOURPC_SEATS.map(seat => alive(seat) ? 0 : 1);
+    const {short, long} = fourPCCastling(board);
+    const ep = fourPCEnPassant(board, fourPCPrev);
+    fourPCPrev = board;
+    const ranks = [];
+    for (let r = 14; r >= 1; r--) {
+        const out = []; let run = 0;
+        for (const f of FOURPC_FILES) {
+            const p = board[f + r];
+            if (p) { if (run) { out.push(String(run)); run = 0; } out.push(p.seat.toLowerCase() + p.type); }
+            else run++;
+        }
+        if (run) out.push(String(run));
+        ranks.push(out.join(','));
+    }
+    // the extra block is omitted entirely when empty -- never written as {} (RULES.md 11.1)
+    const extra = ep.some(Boolean) ? `-{'enPassant':(${ep.map(e => `'${e}'`).join(',')})}` : '';
+    return `4PC:${fourPCOurSeat() || '?'}:${turn}-${dead.join(',')}-${short.join(',')}-${long.join(',')}-0,0,0,0-0${extra}-${ranks.join('/')}`;
+}
+
+// square -> viewport point, for clicking a move the engine returned. Same coordinate map in reverse,
+// so a rotated board needs no special case.
+function fourPCSquareXY(sq) {
+    const geo = fourPCGeometry();
+    if (!geo) return null;
+    const file = sq.replace(/\d+$/, ''), rank = parseInt(sq.match(/\d+$/)[0], 10);
+    const colOf = (map, want) => Object.keys(map).find(k => String(map[k]) === String(want));
+    const rIdx = colOf(geo.rankAt, rank), fIdx = colOf(geo.fileAt, file);
+    if (rIdx == null || fIdx == null) return null;
+    const col = geo.rankAxis === 'x' ? +rIdx : +fIdx;
+    const row = geo.rankAxis === 'x' ? +fIdx : +rIdx;
+    return {x: geo.rect.left + (col + 0.5) * geo.size, y: geo.rect.top + (row + 0.5) * geo.size};
+}
+
+
+// Which seat is OURS. chess.com always seats you at the bottom, but you can be any colour, so this
+// asks the coordinate map which back row lies along the bottom edge rather than trusting a position.
+function fourPCOurSeat() {
+    const geo = fourPCGeometry();
+    if (!geo) return null;
+    const bottom = 13;   // screen row 13 is the last rank of the board as drawn
+    if (geo.fileAxis === 'y') {
+        const f = geo.fileAt[bottom];
+        if (f === 'n') return 'G';
+        if (f === 'a') return 'B';
+    } else {
+        const r = geo.rankAt[bottom];
+        if (r === 1) return 'R';
+        if (r === 14) return 'Y';
+    }
+    return null;
+}
+
+// Play a 4PC move. simulateMove is 8x8 to its bones -- an [a-h][1-8] regex and boardBounds/8 -- so
+// this is a separate path rather than a parameterisation of it. Only the square->rect step differs;
+// the clicking itself is the same primitive, so cursor travel and the move-time budget behave
+// exactly as they do everywhere else.
+function simulateMove4PC(move, think = null) {
+    const SQ = '[a-n](?:1[0-4]|[1-9])';
+    const m = new RegExp(`^(${SQ})(${SQ})([qrbnQRBN]?)$`).exec(move ?? '');
+    if (!m) {
+        console.warn(`Mephisto: refusing to play invalid 4PC move '${move}'`);
+        return Promise.resolve();
+    }
+    // Measured fresh for EACH click, never once up front. The first click of a game is what raises
+    // Chrome's debugger infobar, and that shrinks the viewport out from under a board chess.com sizes
+    // to it -- so a destination measured before that click points at where the square USED to be, and
+    // the move dies half-played. The two-player path already measures per click (getBoundsFromCoords
+    // below); this one did not, which is the whole bug.
+    const rectOf = (sq) => {
+        const geo = fourPCGeometry();
+        const pt = geo && fourPCSquareXY(sq);
+        return pt ? new DOMRect(pt.x - geo.size / 2, pt.y - geo.size / 2, geo.size, geo.size) : null;
+    };
+    if (!rectOf(m[1]) || !rectOf(m[2])) {
+        console.warn(`Mephisto: 4PC move '${move}' has no on-screen square`);
+        return Promise.resolve();
+    }
+    return (async () => {
+        await warmClicker();
+        await promiseTimeout(think != null ? think : config.think_time + Math.random() * config.think_variance);
+        const total = config.move_time + Math.random() * config.move_variance;
+        const click = async (sq, travel) => {
+            const r = rectOf(sq);
+            if (!r) { console.warn(`Mephisto: 4PC square '${sq}' vanished mid-move`); return; }
+            bgLog('4PC click', {sq, x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2),
+                                size: Math.round(r.width), vh: window.innerHeight});
+            await simulateClickSquare(r, 0.8, travel);
+        };
+        await click(m[1], total * 0.25);
+        await click(m[2], total * 0.75);
+        if (m[3]) {
+            // Promotion. 4PC's picker has not been read yet, so the move is played and the picker is
+            // left to the user rather than clicking blind at a guessed offset.
+            console.warn(`Mephisto: 4PC promotion to '${m[3]}' -- pick the piece manually (picker not wired yet)`);
+        }
+    })();
+}
+
 function scrapePositionTT() {
     const st = ttQuery();
     if (!st || !st.fen) return; // no active game on this page
@@ -1511,9 +1890,16 @@ let movingWatchdog = null;
 // without depending on a timer that may not be running.
 let movingSince = 0;
 let movingBudget = 0;
+let movingSpeculative = false; // the in-flight session is a blind premove, not a real move
+let moveGen = 0;               // identifies a session, so a superseded one can't clear its successor
 
-function beginMoving(thinkMs = 0) {
+function beginMoving(thinkMs = 0, speculative = false) {
     moving = true;
+    // A BLIND PREMOVE is speculative: it is queued at the site during the OPPONENT'S turn, for a
+    // move they may never make. A real on-turn move is not. The panel already tells them apart --
+    // it sends verify=false for exactly the blind case (popup.js request_automove) -- and the
+    // difference matters here because a speculative session must never outrank a real move.
+    movingSpeculative = !!speculative;
     movingSince = Date.now();
     movingBudget = (Number(thinkMs) || 0) + 15000;
     // Safety net: while `moving` is true the content-script ignores ALL scrape requests, so a move
@@ -1523,12 +1909,19 @@ function beginMoving(thinkMs = 0) {
     // move and drop the `moving` guard -- and that guard is what stops a second automove starting
     // on top of the one still waiting to click.
     clearTimeout(movingWatchdog);
-    movingWatchdog = setTimeout(endMoving, movingBudget);
+    const gen = ++moveGen;
+    movingWatchdog = setTimeout(() => endMoving(gen), movingBudget);
+    return gen;
 }
 
-function endMoving() {
+function endMoving(gen) {
+    // A superseded session finishing late must not clear the guard belonging to the move that
+    // replaced it -- otherwise the winner's own clicks run unprotected and the next scrape lands
+    // mid-move. Sessions started before the current one simply do nothing here.
+    if (gen !== undefined && gen !== moveGen) return;
     clearTimeout(movingWatchdog);
     moving = false;
+    movingSpeculative = false;
     movingSince = 0;
     schedulePush(); // catch up: board mutations during the automove were suppressed
 }
@@ -2189,6 +2582,16 @@ function getRandomSampledXY(bounds, range = 0.8) {
 
 // -------------------------------------------------------------------------------------------
 
+// Ask the panel to attach the debugger now. The FIRST click of a session is what raises Chrome's
+// infobar, which shrinks the viewport and re-lays-out the board -- so the click that triggers it, and
+// anything measured just before it, aims at stale geometry. Doing it up front, ahead of the think
+// delay, means the bar is already up and settled by the time a single square is measured. No-op on
+// every later move.
+function warmClicker() {
+    try { return Promise.resolve(sendToPanel({warm: true})).catch(() => {}); }
+    catch (e) { return Promise.resolve(); }   // orphaned content-script
+}
+
 function dispatchSimulateClick(x, y, travelMs = 0) {
     try {
         // NO CURSOR TRAVEL IN A HIDDEN TAB, for two independent reasons.
@@ -2253,6 +2656,7 @@ function simulateMove(move, deselect, think = null) {
     }
 
     async function performSimulatedMoveClicks(approachMs, travelMs) {
+        await warmClicker();
         // Clear a stale selection (a piece left selected by a prior failed click would be DESELECTED
         // by our from-click, making the move a no-op). `deselect` is an empty square the moving piece
         // can't reach, so clicking it only ever deselects -- never moves anything. ONLY on a RETRY:

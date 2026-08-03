@@ -33,6 +33,7 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('mirror_mode', 'Mirror Time:', 'checkbox', false);
         this.registerFormElement('manual_mode', 'Manual Mode:', 'checkbox', false);
         this.registerFormElement('opp_alert', 'Opponent Mistake Alert:', 'checkbox', false);
+        this.initSteppers();
         this.initHumanizeMix();
         this.initHumanizeThresholds();
         this.initUiMode();
@@ -52,7 +53,12 @@ class GeneralSettings extends SettingsPage {
                 while (!section.classList.contains('section')) {
                     section = section.parentElement
                 }
-                section.querySelector('.value').innerText = range.getValue();
+                // `.set-val` explicitly, NOT the first `.value` in the row: M.Range injects its own
+                // <span class="value"> inside the drag thumb, and since the readout now sits AFTER
+                // the input, a bare `.value` lookup finds that hidden bubble instead. Falls back for
+                // a stale cached page whose markup predates .set-val.
+                const out = section.querySelector('.set-val') || section.querySelector('.value');
+                if (out) out.innerText = range.getValue();
             });
         }
         engine_select.registerChangeListener(() => {
@@ -70,10 +76,6 @@ class GeneralSettings extends SettingsPage {
                     variant_select.setValue('chess');
                 }
             }
-            // Elo cap range follows the engine (Stockfish ignores out-of-range UCI_Elo). Keep the
-            // input min at 0 so "0 = full strength" stays enterable; only cap the top per engine.
-            const ELO_RANGE = { 'stockfish-11-hce': [1350, 2850], 'fairy-stockfish-14-nnue': [500, 2850], 'fairy-native': [500, 2850], 'sf-native': [1320, 3190] };
-            elo_input.elem.max = (ELO_RANGE[engine_select.getValue()] || [1320, 3190])[1];
             if (engine_select.getValue() === 'remote') {
                 engineLabelTooltiped.classList.remove('hidden');
                 engineLabelUntooltiped.classList.add('hidden');
@@ -88,16 +90,33 @@ class GeneralSettings extends SettingsPage {
     // balances them by hand, and the Total row shows the sum plus what's off: "90 (-10)" means
     // add 10 somewhere, "110 (+10)" means remove 10. (The popup normalizes by the sum when
     // picking, so an off-100 mix still behaves proportionally in the meantime.) NOT FormElements:
-    // one logical setting spans two inputs per row. Values persist per-key via MephistoConfig
-    // (chrome.storage.local); the panel reads them fresh on every pick, so edits apply to the very
-    // next move.
+    // one logical setting spans two inputs per row. Values persist per-key in localStorage; the
+    // popup reads them fresh on every pick, so edits apply to the very next move.
     // Panel Style: 'floating' (in-page overlay) or 'popup' (toolbar bubble = no page footprint).
-    // Read straight off chrome.storage.local rather than through MephistoConfig: the background
-    // service worker flips the toolbar popup on/off (chrome.action.setPopup) off the same key, and
-    // writing it here fires chrome.storage.onChanged in the worker.
+    // Unlike every other setting this one lives in chrome.storage.local, NOT localStorage: the
+    // background service worker flips the toolbar popup on/off (chrome.action.setPopup) and can't
+    // read the popup page's localStorage. Writing it fires chrome.storage.onChanged in the worker.
     // Hotkeys: one rebindable key per action, stored together in config.hotkeys (a single JSON key,
     // so settings export/import carries them). DEFAULTS + labels must match content-script.js's
     // HOTKEY_DEFAULTS. Clicking a key captures the next keydown (Esc cancels, Backspace/Delete clears).
+    // [-] value [+] beside a number field. Steps by the input's OWN `step` and clamps to its own
+    // min/max, so one handler serves ms fields (25), the poll interval (50) and Elo (10) alike.
+    // Dispatches 'change' because that -- not 'input' -- is what FormElement persists on.
+    initSteppers() {
+        for (const btn of document.querySelectorAll('.set-step-btn')) {
+            btn.addEventListener('click', () => {
+                const input = btn.parentElement.querySelector('input[type=number]');
+                if (!input) return;
+                const step = +input.step || 1;
+                let val = (+input.value || 0) + (+btn.dataset.step) * step;
+                if (input.min !== '') val = Math.max(+input.min, val);
+                if (input.max !== '') val = Math.min(+input.max, val);
+                input.value = val;
+                input.dispatchEvent(new Event('change', {bubbles: true}));
+            });
+        }
+    }
+
     initHotkeys() {
         const container = document.getElementById('hotkey_rows');
         const resetBtn = document.getElementById('hotkey_reset_btn');
@@ -134,15 +153,13 @@ class GeneralSettings extends SettingsPage {
             container.innerHTML = '';
             for (const action of ORDER) {
                 const row = document.createElement('div');
-                row.className = 'section';
-                row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin:4px 0;';
+                row.className = 'set-key';
                 const label = document.createElement('span');
                 label.textContent = LABELS[action];
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'waves-effect waves-light btn-small';
+                btn.className = (capturing === action) ? 'capturing' : '';
                 btn.textContent = (capturing === action) ? 'press a key…' : pretty(bindings[action]);
-                btn.style.minWidth = '120px';
                 btn.addEventListener('click', () => { capturing = (capturing === action) ? null : action; render(); });
                 row.append(label, btn);
                 container.appendChild(row);
@@ -177,15 +194,17 @@ class GeneralSettings extends SettingsPage {
             ['humanize_fourth', 0], ['humanize_inaccuracy', 0],
             ['humanize_mistake', 5], ['humanize_blunder', 1],
         ];
+        // `range` is optional: the mix is a table of number fields now, and the sliders it used to
+        // carry are gone. Kept nullable rather than deleted so a stale cached page still works.
         const rows = MIX.map(([key, dflt]) => ({
             key, dflt,
             range: document.getElementById(`${key}_mixrange`),
             num: document.getElementById(`${key}_mixnum`),
         }));
         const total = document.getElementById('humanize_mix_total');
-        if (!rows.every(r => r.range && r.num) || !total) return; // stale cached page html
+        if (!rows.every(r => r.num) || !total) return; // stale cached page html
         const paint = (el) => // dark-mode slider fill (options.js paints only on user input)
-            el.style.setProperty('--fill', ((el.value - el.min) / (el.max - el.min) * 100) + '%');
+            el?.style.setProperty('--fill', ((el.value - el.min) / (el.max - el.min) * 100) + '%');
         const load = (key, dflt) => {
             try {
                 const v = JSON.parse(MephistoConfig.get(key));
@@ -196,7 +215,7 @@ class GeneralSettings extends SettingsPage {
         };
 
         const updateTotal = () => {
-            const sum = rows.reduce((a, r) => a + (+r.range.value), 0);
+            const sum = rows.reduce((a, r) => a + (+r.num.value || 0), 0);
             const diff = sum - 100;
             total.textContent = (diff === 0) ? '100 ✓' : `${sum} (${diff > 0 ? '+' : ''}${diff})`;
             total.classList.toggle('ok', diff === 0);
@@ -205,7 +224,7 @@ class GeneralSettings extends SettingsPage {
 
         const set = (row, val, persist = true) => {
             val = Math.min(100, Math.max(0, Math.round(+val) || 0));
-            row.range.value = val;
+            if (row.range) row.range.value = val;
             row.num.value = val;
             paint(row.range);
             if (persist) MephistoConfig.set(row.key, val);
@@ -214,7 +233,7 @@ class GeneralSettings extends SettingsPage {
 
         rows.forEach(r => {
             set(r, load(r.key, r.dflt), false); // initial sync, don't churn storage on page open
-            r.range.addEventListener('input', () => set(r, r.range.value));
+            r.range?.addEventListener('input', () => set(r, r.range.value));
             r.num.addEventListener('change', () => set(r, r.num.value));
         });
     }
@@ -237,24 +256,25 @@ class GeneralSettings extends SettingsPage {
             num: document.getElementById(`${key}_num`),
             readout: document.getElementById(`${key}_readout`),
         }));
-        if (!rows.every(r => r.range && r.num && r.readout)) return; // stale cached page html
+        if (!rows.every(r => r.num && r.readout)) return; // stale cached page html (range is optional)
 
         const winPct = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
         const readoutText = (loss) => {
             const after = winPct(-loss);           // our win% after a move that loses `loss` cp from equal
             const drop = 50 - after;
             const acc = Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * drop) - 3.1669 + 1));
-            return `≈ ${Math.round(acc)}% accuracy · ${Math.round(drop)}% win drop`;
+            // short form: this now sits in the mix table's Accuracy column, not on its own line
+            return `${Math.round(acc)}% acc · ${Math.round(drop)}% drop`;
         };
         const paint = (el) =>
-            el.style.setProperty('--fill', ((el.value - el.min) / (el.max - el.min) * 100) + '%');
+            el?.style.setProperty('--fill', ((el.value - el.min) / (el.max - el.min) * 100) + '%');
         const load = (key, dflt) => {
             try { const v = JSON.parse(MephistoConfig.get(key)); return (v != null && isFinite(+v)) ? +v : dflt; }
             catch (e) { return dflt; }
         };
         const set = (row, val, persist = true) => {
             val = Math.min(800, Math.max(0, Math.round(+val / 5) * 5 || 0)); // snap to the 5cp step
-            row.range.value = val;
+            if (row.range) row.range.value = val;
             row.num.value = val;
             row.readout.textContent = readoutText(val);
             paint(row.range);
@@ -262,7 +282,7 @@ class GeneralSettings extends SettingsPage {
         };
         rows.forEach(r => {
             set(r, load(r.key, r.dflt), false);
-            r.range.addEventListener('input', () => set(r, r.range.value));
+            r.range?.addEventListener('input', () => set(r, r.range.value));
             r.num.addEventListener('change', () => set(r, r.num.value));
         });
     }

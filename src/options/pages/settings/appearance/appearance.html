@@ -1,11 +1,15 @@
+<!-- Appearance settings. Same row/section language as General; the shared styling lives in
+     general.css, which is loaded for both settings pages. -->
 <div class="row">
-    <div class="col s12 m7 offset-m1 xl6 offset-xl1 offset-right-m1">
+    <div class="col s12 m8 offset-m1 xl7 offset-xl1">
         <div id="form-container" class="big-section">
-            <div id="board_and_pieces" class="scrollspy">
-                <h3 data-i18n="set.board_and_pieces" class="header">Board and Pieces</h3>
-                <div class="section">
-                    <label>
-                        <span data-i18n="set.pieces">Pieces:</span>
+
+            <section id="board_and_pieces" class="set-sec scrollspy">
+                <h3 data-i18n="set.board_and_pieces" class="set-h">Board and Pieces</h3>
+
+                <div class="set-row">
+                    <div class="set-lbl"><span data-i18n="set.pieces">Pieces:</span></div>
+                    <div class="set-ctl">
                         <select name="pieces" id="pieces_select">
                             <option value="wikipedia.svg" data-icon="/res/chesspieces/wikipedia/wN.svg">Wikipedia</option>
                             <option value="neo.png" data-icon="/res/chesspieces/neo/wN.png">Neo</option>
@@ -22,11 +26,12 @@
                             <option value="8-bit.png" data-icon="/res/chesspieces/8-bit/wN.png">8-Bit</option>
                             <option value="three-dee.png" data-icon="/res/chesspieces/three-dee/wN.png">Three-Dee</option>
                         </select>
-                    </label>
+                    </div>
                 </div>
-                <div class="section">
-                    <label>
-                        <span data-i18n="set.board">Board:</span>
+
+                <div class="set-row">
+                    <div class="set-lbl"><span data-i18n="set.board">Board:</span></div>
+                    <div class="set-ctl">
                         <select name="board" id="board_select">
                             <option value="brown" data-icon="/res/chessboards/previews/brown.png">Brown</option>
                             <option value="red" data-icon="/res/chessboards/previews/red.png">Red</option>
@@ -42,55 +47,55 @@
                             <option value="newspaper" data-icon="/res/chessboards/previews/newspaper.png">Newspaper</option>
                             <option value="_8-bit" data-icon="/res/chessboards/previews/8-bit.png">8-Bit</option>
                         </select>
-                    </label>
+                    </div>
                 </div>
-                <div class="section switch">
-                    <label data-i18n="set.coordinates" class="switch-label">Coordinates:</label>
-                    <label>
-                        <span data-i18n="ui.off">Off</span>
-                        <input id="coordinates_checkbox" type="checkbox">
-                        <span class="lever"></span>
-                        <span data-i18n="ui.on">On</span>
-                    </label>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl"><span data-i18n="set.coordinates">Coordinates:</span></div>
+                    <div class="set-ctl">
+                        <input id="coordinates_checkbox" type="checkbox" class="set-cb">
+                        <label for="coordinates_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
                 </div>
-                <div class="section switch">
-                    <label data-i18n="set.dark_mode" class="switch-label">Dark Mode:</label>
-                    <label>
-                        <span data-i18n="ui.off">Off</span>
-                        <input id="dark_mode_checkbox" type="checkbox">
-                        <span class="lever"></span>
-                        <span data-i18n="ui.on">On</span>
-                    </label>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl"><span data-i18n="set.dark_mode">Dark Mode:</span></div>
+                    <div class="set-ctl">
+                        <input id="dark_mode_checkbox" type="checkbox" class="set-cb">
+                        <label for="dark_mode_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
                 </div>
-            </div>
-            <div id="language" class="scrollspy">
-                <h3 data-i18n="set.language" class="header">Language</h3>
-                <div class="section">
-                    <label>
+            </section>
+
+            <section id="language" class="set-sec scrollspy">
+                <h3 data-i18n="set.language" class="set-h">Language</h3>
+                <div class="set-row">
+                    <div class="set-lbl">
                         <span data-i18n-tip="set.tip.language" class="tooltipped" data-position="right"
                               data-tooltip="The language of the panel and these settings. Engine names, board themes and chess notation stay as they are.">
                             <span data-i18n="set.language">Language</span> <i class="material-icons info-tooltip">info</i>
                         </span>
+                    </div>
+                    <div class="set-ctl">
                         <select name="language" id="language_select"></select>
-                    </label>
+                    </div>
                 </div>
-            </div>
-        </div>
-        <div class="big-section">
-            <div class="flex-group flex-small-gap">
-                <button data-i18n="set.restore_defaults" id="reset_btn" class="waves-effect waves-light btn">Restore Defaults</button>
+            </section>
+
+            <div class="set-btnrow set-btnrow-end">
+                <button data-i18n="set.restore_defaults" id="reset_btn" type="button" class="set-btn">Restore Defaults</button>
             </div>
         </div>
     </div>
-    <div class="col hide-on-small-only m3 xl3 offset-xl1 sticky-top">
+    <div class="col hide-on-small-only m2 xl3 sticky-top">
         <div class="toc-wrapper pin-top">
             <ul id="toc" class="section table-of-contents">
-                <li>
-                    <a data-i18n="set.board_and_pieces" href="#board_and_pieces">Board and Pieces</a>
-                </li>
-                <li>
-                    <a data-i18n="set.language" href="#language">Language</a>
-                </li>
+                <li><a data-i18n="set.board_and_pieces" href="#board_and_pieces">Board and Pieces</a></li>
+                <li><a data-i18n="set.language" href="#language">Language</a></li>
             </ul>
         </div>
     </div>

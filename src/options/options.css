@@ -1,331 +1,533 @@
+/* Options page: the shell (sidebar, header, footer) AND the shared settings UI.
+
+   The settings rows, toggles, steppers and tables live here rather than in a per-page stylesheet
+   because options.js DISABLES the previous page's stylesheet on every route change -- anything
+   shared by General and Appearance has to sit in a sheet that is always on.
+
+   Visual language, same as the panel: monochrome plus ONE colour, green = "on / acting for you".
+   4px radii, 1px hairlines, native controls, system font. No blur, no gradients, no shadows.
+
+   This sheet loads AFTER materialize.min.css (see options.html), so on equal specificity it wins on
+   source order. The remaining !importants are where materialize is more specific, not decoration. */
+
+:root {
+    --mp-bg:      #ffffff;
+    --mp-raised:  #f7f8f9;
+    --mp-hair:    #eceef0;
+    --mp-line:    #dcdfe3;
+    --mp-text:    #14171a;
+    --mp-dim:     #4a5058;
+    --mp-mute:    #8b9198;
+    --mp-on:      #2f7d41;
+    --mp-on-soft: #e4f2e7;
+    --mp-track:   #d6d9dd;
+}
+html.dark {
+    --mp-bg:      #16171b;
+    --mp-raised:  #1c1e22;
+    --mp-hair:    #26282d;
+    --mp-line:    #34353d;
+    --mp-text:    #e8eaec;
+    --mp-dim:     #b7bbc0;
+    --mp-mute:    #6b7079;
+    --mp-on:      #3f9d54;
+    --mp-on-soft: #16311e;
+    --mp-track:   #3a3a42;
+}
+
 body {
-    color: rgba(0, 0, 0, 0.87);
+    background-color: var(--mp-bg);
+    color: var(--mp-text);
     line-height: 1.6;
-    font-size: 16px;
+    font-size: 14px;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
 }
 
-header, main, footer {
-    padding-left: 300px;
-}
+header, main, footer { padding-left: 300px; }
+main > .container, nav > .container, footer > .container { width: 100% !important; }
 
-main > .container, nav > .container, footer > .container {
-    width: 100% !important;
-}
+#content { min-height: calc(100vh - 171px); }
 
-#title {
-    padding-bottom: 22px;
-}
+.sticky-top { position: sticky; top: 0; }
+.big-section { padding-bottom: 2rem !important; background: transparent !important; box-shadow: none !important; }
+.hidden { display: none !important; }
 
-#content {
-    min-height: calc(100vh - 171px);
-}
+/* ------------------------------------------------------------------- side nav */
 
-#logo-container {
-    padding: 35px;
-}
-
-#logo-link {
-    height: 200px;
-    padding: 0;
-}
-
-#logo {
-    height: 100%;
-    pointer-events: none;
-}
-
-.sticky-top {
-    position: sticky;
-    top: 0;
-}
-
-.big-section {
-    padding-bottom: 2rem !important;
-}
-
-/* side nav */
-
-.sidenav.sidenav-fixed {
-    transform: none !important;
-}
-
-ul.sidenav.sidenav-fixed li#logo-container:hover, ul.sidenav.sidenav-fixed li#logo-container #logo-link:hover {
-    background-color: transparent;
-}
-
-ul.sidenav.sidenav-fixed li#logo-container {
-    text-align: center;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.14);
-}
+.sidenav.sidenav-fixed { transform: none !important; }
 
 ul.sidenav.sidenav-fixed {
     overflow: hidden;
-    -webkit-box-shadow: none;
     box-shadow: none;
-    border-right: 1px solid rgba(0, 0, 0, 0.14);
+    background-color: var(--mp-raised);
+    border-right: 1px solid var(--mp-line);
 }
+ul.sidenav.sidenav-fixed:hover { overflow-y: auto; }
+ul.sidenav.sidenav-fixed > li:last-child { margin-bottom: 160px; }
+ul.sidenav.sidenav-fixed li { line-height: 40px; }
 
-ul.sidenav.sidenav-fixed > li:last-child {
-    margin-bottom: 160px;
+/* brand: a small mark, not a 200px banner -- the sidebar is navigation, not a splash screen */
+#logo-container { padding: 18px 24px 14px; }
+ul.sidenav.sidenav-fixed li#logo-container {
+    text-align: left;
+    border-bottom: 1px solid var(--mp-line);
 }
-
-ul.sidenav.sidenav-fixed li {
-    line-height: 44px;
-}
-
-.sidenav li {
-    transition: background-color 0.5s ease-in-out;
-}
-
-.sidenav li.active {
-    background-color: rgba(238, 110, 115, 0.87) !important;
-}
-
-.sidenav li.active>.menu-item {
-    color: white !important;
-}
-
-.sidenav li.active.open {
-    background-color: rgba(50, 50, 50, 0.06) !important;
-}
+ul.sidenav.sidenav-fixed li#logo-container:hover,
+ul.sidenav.sidenav-fixed li#logo-container #logo-link:hover { background-color: transparent; }
+#logo-link { height: auto; padding: 0; display: block; }
+#logo { height: 64px; width: auto; pointer-events: none; }
 
 ul.sidenav.sidenav-fixed li a {
     outline: none;
     font-size: 13px;
-    line-height: 44px;
-    height: 44px;
-    padding: 0 30px;
+    line-height: 40px;
+    height: 40px;
+    padding: 0 24px;
+    color: var(--mp-dim) !important;
+    font-weight: 400;
 }
-
-ul.sidenav.sidenav-fixed li a .new.badge {
-    margin-top: 11px;
+/* materialize paints .collapsible-body solid white; in dark mode that showed as a white slab behind
+   whichever settings sub-item wasn't the active one. All three surfaces inherit the sidebar instead. */
+ul.sidenav.sidenav-fixed ul.collapsible-accordion,
+ul.sidenav.sidenav-fixed ul.collapsible-accordion a.collapsible-header,
+ul.sidenav.sidenav-fixed .collapsible-body {
+    background-color: transparent;
+    border: none;
 }
-
-ul.sidenav.sidenav-fixed ul.collapsible-accordion {
-    background-color: white;
-}
-
-ul.sidenav.sidenav-fixed ul.collapsible-accordion a.collapsible-header {
-    padding: 0 30px;
-}
-
+ul.sidenav.sidenav-fixed .collapsible li { border: none; }
+ul.sidenav.sidenav-fixed ul.collapsible-accordion a.collapsible-header { padding: 0 24px; }
 ul.sidenav.sidenav-fixed ul.collapsible-accordion .collapsible-body li a {
     font-weight: 400;
-    padding: 0 37.5px 0 45px;
+    padding: 0 24px 0 38px;
 }
+.sidenav li { transition: background-color .12s ease-in-out; }
+.sidenav li > a:hover { background-color: var(--mp-hair); }
 
-ul.sidenav.sidenav-fixed:hover {
-    overflow-y: auto;
-}
+/* active page: the same green wash an "on" toggle gets */
+.sidenav li.active { background-color: var(--mp-on-soft) !important; }
+.sidenav li.active > .menu-item { color: var(--mp-text) !important; font-weight: 500; }
+.sidenav li.active.open { background-color: transparent !important; }
 
-.waves-effect.waves-pink .waves-ripple {
-    background-color: rgba(238, 110, 115, 0.65);
-}
+/* materialize's pink ripple is the last of the old palette */
+.waves-effect.waves-pink .waves-ripple { background-color: rgba(47, 125, 65, .35); }
 
-/* header */
-
-.header {
-    color: #ee6e73;
-    font-weight: 300;
-}
+/* --------------------------------------------------------------------- header */
 
 nav.top-nav {
-    height: 100%;
-    -webkit-box-shadow: none;
+    height: auto;
     box-shadow: none;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.14);
+    border-bottom: 1px solid var(--mp-line);
     background-color: transparent;
 }
-
 nav.top-nav h1.header {
     margin: 0;
-    padding-top: 22px;
+    padding: 18px 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--mp-text);
 }
+#title { padding-bottom: 0; }
 
-/* table of content */
+/* prose pages (Getting Started / About / Disclaimers) still use materialize's h3, which is 48px --
+   far louder than anything on the settings pages. Same restraint, one rule. */
+#content h3.header { font-size: 19px; font-weight: 600; line-height: 1.3; margin: 30px 0 8px; color: var(--mp-text); }
+#content h4.header, #content h4 { font-size: 15.5px; font-weight: 600; line-height: 1.4; margin: 20px 0 6px; color: var(--mp-text); }
+#content h5 { font-size: 14px; font-weight: 600; margin: 16px 0 4px; }
 
-ul.table-of-contents {
-    margin-top: 0;
-    padding-top: 48px;
-}
+/* ------------------------------------------------------------ table of contents */
 
+ul.table-of-contents { margin-top: 0; padding-top: 44px; }
 ul.table-of-contents a {
-    color: rgba(0, 0, 0, 0.55);
+    font-size: 12.5px;
+    line-height: 1.9;
+    color: var(--mp-mute) !important;
     font-weight: 400;
+    border-left: 2px solid transparent;
+    padding-left: 10px;
+    display: block;
 }
-
 ul.table-of-contents a.active {
-    color: rgba(0, 0, 0, 0.8);
+    color: var(--mp-text) !important;
+    border-left-color: var(--mp-on);
+    font-weight: 500;
 }
+.toc-wrapper { position: relative; margin-top: 42px; }
+.toc-wrapper.pin-bottom { margin-top: 84px; }
 
-.toc-wrapper {
-    position: relative;
-    margin-top: 42px;
-}
+/* --------------------------------------------------------------------- footer */
 
-.toc-wrapper.pin-bottom {
-    margin-top: 84px;
-}
-
-/* footer */
-
-footer {
-    font-size: 1rem;
-}
-
-body.parallax-demo footer {
-    margin-top: 0;
-}
-
-.docs-footer {
-    border-top: 1px solid rgba(0, 0, 0, 0.14);
-}
-
+footer { font-size: 12.5px; }
+.docs-footer { border-top: 1px solid var(--mp-line); background-color: transparent; }
 .docs-footer .footer-copyright {
     background-color: transparent;
-    color: inherit;
-    line-height: 60px;
-    height: 60px;
+    color: var(--mp-mute);
+    line-height: 52px;
+    height: 52px;
     width: 100%;
 }
 
-.flex-group {
+/* ==============================================================================
+   SETTINGS UI -- shared by General and Appearance
+   ============================================================================ */
+
+/* A section is a heading over a rule, then rows. No cards, no boxes inside boxes. */
+.set-sec { margin: 0 0 34px; }
+
+h3.set-h {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--mp-mute) !important;
+    letter-spacing: .2px;
+    margin: 0 0 4px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--mp-line);
+}
+
+.set-note {
+    color: var(--mp-mute);
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin: 8px 0 4px;
+}
+.set-note b { color: var(--mp-dim); }
+.set-note code {
+    font: 12px ui-monospace, Menlo, monospace;
+    background: var(--mp-hair);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+.set-note a { color: var(--mp-on); }
+
+/* ------------------------------------------------------------------------ rows */
+/* label on the left, control on the right, on one shared axis */
+.set-row {
     display: flex;
-    flex-wrap: wrap; /* wrap onto more rows instead of overflowing into a horizontal scroll */
-    gap: 50px;
+    align-items: center;
+    gap: 16px;
+    padding: 9px 2px;
+    border-bottom: 1px solid var(--mp-hair);
+    min-height: 46px;
 }
+.set-row:last-of-type { border-bottom: 0; }
 
-/* Toggle groups (the mode switches) stack vertically -- there are a dozen-plus, and a horizontal
-   row ran off the page. `:has` targets only the switch groups, leaving the input pairs side by side. */
-.flex-group:has(.section.switch) {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
+.set-lbl {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--mp-text) !important;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
 }
+.set-lbl > span { display: inline-flex; align-items: center; gap: 5px; color: var(--mp-text); }
 
-.flex-group.flex-space-between {
-    justify-content: space-between;
-}
+/* position: relative contains M.Range's absolutely-positioned thumb, which has no .range-field
+   wrapper to anchor to here. The thumb itself is hidden: the value is already on the row, and its
+   teal teardrop is the last of the old palette. */
+.set-ctl { flex: 0 0 auto; display: flex; align-items: center; gap: 9px; position: relative; }
+.set-ctl .thumb { display: none !important; }
 
-.flex-group.flex-small-gap {
-    gap: 10px;
-}
+/* a row whose content continues underneath it (the puzzle-db block) */
+.set-block { border-bottom: 0; padding-bottom: 0; min-height: 0; }
 
+/* the info "i": present, but quiet until you look for it */
 .info-tooltip {
-    font-size: x-small !important;
-    /*vertical-align: super;*/
+    font-size: 14px !important;
+    line-height: 1;
+    color: var(--mp-mute);
+    cursor: help;
+    vertical-align: middle;
+}
+.set-tip { display: inline-flex; align-items: center; cursor: help; }
+.set-tip:hover .info-tooltip, .tooltipped:hover .info-tooltip { color: var(--mp-on); }
+.tooltip-content { max-width: 250px; }
+
+/* --------------------------------------------------------------------- toggles */
+/* The panel's toggle, exactly: a button that fills green when on. The checkbox stays the real
+   control (FormElement and the hotkeys both drive it) -- moved off-screen rather than hidden, so
+   it keeps keyboard focus. */
+.set-cb {
+    position: absolute !important;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    pointer-events: none;
+}
+
+label.set-tgl {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 84px;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--mp-line);
+    border-radius: 4px;
+    background: var(--mp-bg);
+    color: var(--mp-dim) !important;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
+    user-select: none;
+    transition: background .09s, border-color .09s, color .09s;
 }
+label.set-tgl::before { /* status dot */
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--mp-mute);
+    flex: none;
+    transition: background .09s;
+}
+label.set-tgl:hover { background: var(--mp-hair); }
 
-.tooltip-content {
-    max-width: 250px;
+.set-cb:checked + label.set-tgl {
+    background: var(--mp-on-soft);
+    border-color: var(--mp-on);
+    color: var(--mp-text) !important;
 }
+.set-cb:checked + label.set-tgl::before { background: var(--mp-on); }
+.set-cb:focus-visible + label.set-tgl { outline: 2px solid var(--mp-on); outline-offset: 1px; }
 
-/* --------------------------------------------------------------------------- */
-/* Dark mode (toggled in Appearance settings -> class `dark` on <html>)        */
-html.dark, html.dark body {
-    background-color: #1b1b1d;
-    color: #e2e2e4;
-}
-html.dark .sidenav.sidenav-fixed,
-html.dark ul.sidenav.sidenav-fixed ul.collapsible-accordion,
-html.dark ul.sidenav.sidenav-fixed ul.collapsible-accordion a.collapsible-header {
-    background-color: #232326;
-}
-html.dark .sidenav li > a,
-html.dark ul.sidenav.sidenav-fixed li a,
-html.dark ul.sidenav.sidenav-fixed li a.collapsible-header {
-    color: #cfcfd2 !important;
-}
-html.dark .sidenav li.active { background-color: rgba(238, 110, 115, 0.55) !important; }
-html.dark .sidenav li.active.open { background-color: rgba(255, 255, 255, 0.06) !important; }
-html.dark .big-section,
-html.dark .card,
-html.dark .card-panel,
-html.dark .collapsible-body { background-color: #2a2a2e; }
-html.dark .header,
-html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6,
-html.dark .switch-label { color: #f0f0f2; }
-html.dark input:not([type]), html.dark input[type=text], html.dark input[type=number],
-html.dark input[type=email], html.dark textarea.materialize-textarea,
-html.dark .select-wrapper input.select-dropdown {
-    color: #e2e2e4;
-    border-bottom-color: #555;
-}
-html.dark .dropdown-content { background-color: #2a2a2e; }
-html.dark .dropdown-content li > a, html.dark .dropdown-content li > span { color: #e2e2e4; }
-html.dark .toc-wrapper .table-of-contents a { color: #b8b8bb; }
-html.dark .docs-footer { background-color: #232326; }
-html.dark .docs-footer .footer-copyright { color: #9a9a9d; }
-html.dark a { color: #ec8b8f; }
-html.dark .btn { background-color: #3a3a3f; }
-html.dark .btn:hover { background-color: #45454b; }
-/* plain field labels ("Search Time", "Threads", "Pieces:", ...) inherit materialize's dim grey and
-   are unreadable on the dark panel -- lift them, and make the live slider numbers WHITE so "(6)",
-   "(128 MB)", "(1)" actually read. */
-html.dark label,
-html.dark .range-field label,
-html.dark .input-field label { color: #c7c7cb; }
-html.dark .value { color: #ffffff; font-weight: 600; }
-/* settings sections sit FLAT on the page -- no boxed-off card (the #2a2a2e background set above, the
-   border, shadow and rounding are all removed). This is "the stupid box" gone, consistently on every
-   settings page. */
-html.dark .big-section {
-    background-color: transparent !important;
-    border: none !important;
+/* one word per state; both strings stay in the DOM so both i18n keys keep applying */
+label.set-tgl .set-on  { display: none; }
+label.set-tgl .set-off { display: inline; }
+.set-cb:checked + label.set-tgl .set-on  { display: inline; }
+.set-cb:checked + label.set-tgl .set-off { display: none; }
+
+/* ---------------------------------------------------------------------- inputs */
+.set-ctl input[type=number],
+.set-mix input[type=number] {
+    height: 30px !important;
+    width: 78px;
+    margin: 0 !important;
+    padding: 0 8px !important;
+    border: 1px solid var(--mp-line) !important;
+    border-radius: 4px;
+    background: var(--mp-bg);
+    color: var(--mp-text);
+    font: 13px ui-monospace, Menlo, monospace;
+    text-align: right;
     box-shadow: none !important;
-    border-radius: 0 !important;
+    box-sizing: border-box;
 }
-html.dark .card,
-html.dark .card-panel {
-    border: none;
+.set-ctl input[type=number]:focus,
+.set-mix input[type=number]:focus { border-color: var(--mp-on) !important; outline: none; }
+
+/* stepper: [-] value [+], the buttons exactly as tall as the field */
+.set-step { display: inline-flex; align-items: stretch; gap: 4px; }
+.set-step input[type=number] {
+    text-align: center;
+    width: 82px;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.set-step input[type=number]::-webkit-outer-spin-button,
+.set-step input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.set-step-btn {
+    width: 30px;
+    height: 30px;
+    flex: none;
+    border: 1px solid var(--mp-line);
+    border-radius: 4px;
+    background: var(--mp-bg);
+    color: var(--mp-dim);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    padding: 0;
+}
+.set-step-btn:hover { background: var(--mp-hair); color: var(--mp-text); }
+.set-step-btn:active { background: var(--mp-on-soft); border-color: var(--mp-on); }
+
+.set-ctl input[type=range] { width: 190px; margin: 0; accent-color: var(--mp-on); }
+.set-val {
+    font: 13px ui-monospace, Menlo, monospace;
+    color: var(--mp-dim) !important;
+    min-width: 46px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 400 !important;
+}
+.set-unit { font-size: 12px; color: var(--mp-mute); }
+
+/* materialize replaces <select> with .select-wrapper + a text input -- style that, not the select */
+.set-ctl .select-wrapper { margin: 0; }
+.set-ctl .select-wrapper input.select-dropdown {
+    height: 30px !important;
+    line-height: 28px !important;
+    margin: 0 !important;
+    padding: 0 26px 0 9px !important;
+    width: 250px;
+    border: 1px solid var(--mp-line) !important;
+    border-radius: 4px;
+    background: var(--mp-bg);
+    color: var(--mp-text) !important;
+    font-size: 13px;
+    box-shadow: none !important;
+}
+.set-ctl .select-wrapper input.select-dropdown:focus { border-color: var(--mp-on) !important; }
+.set-ctl .select-wrapper .caret { fill: var(--mp-mute); right: 8px; }
+
+/* --------------------------------------------------------------------- buttons */
+.set-btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.set-btnrow-end { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--mp-line); }
+
+button.set-btn {
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--mp-line);
+    border-radius: 4px;
+    background: var(--mp-bg);
+    color: var(--mp-dim);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+    line-height: 28px;
     box-shadow: none;
-    border-radius: 6px;
 }
-/* Slider: a clean teal-fill track (up to the thumb) + a subtle dark remainder. Materialize's default
-   is a harsh 1px solid WHITE border on the ELEMENT (the ::track pseudo is transparent, so overriding
-   it does nothing) -- so we reset the whole control and paint the ELEMENT background. `--fill` (0-100%)
-   is set by options.js from each range's value, on render and live while dragging. */
-html.dark input[type=range] {
+button.set-btn:hover { background: var(--mp-hair); color: var(--mp-text); }
+button.set-btn:disabled { opacity: .5; cursor: default; }
+
+.set-status { color: var(--mp-mute); font-size: 12.5px; margin: 8px 0 0; }
+
+/* -------------------------------------------------------------- move mix table */
+table.set-mix { width: 100%; border-collapse: collapse; margin: 6px 0 0; font-size: 13px; }
+table.set-mix th {
+    text-align: right;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--mp-mute);
+    padding: 0 0 7px;
+    border-bottom: 1px solid var(--mp-line);
+    white-space: nowrap;
+}
+table.set-mix th:first-child { text-align: left; }
+table.set-mix td {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--mp-hair);
+    text-align: right;
+    color: var(--mp-text);
+}
+table.set-mix td:first-child { text-align: left; font-weight: 500; }
+table.set-mix input[type=number] { width: 70px; }
+
+.set-dash { color: var(--mp-mute); }
+.set-readout {
+    font: 11.5px ui-monospace, Menlo, monospace;
+    color: var(--mp-mute);
+    white-space: nowrap;
+    padding-left: 10px !important;
+}
+
+tr.set-mix-total td { border-bottom: 0; font-weight: 600; padding-top: 8px; }
+#humanize_mix_total { font-size: 14px; font-weight: 600; }
+#humanize_mix_total.ok  { color: var(--mp-on); }
+#humanize_mix_total.off { color: #c25b5b; }
+
+/* --------------------------------------------------------------------- hotkeys */
+/* 17 bindings: two columns, one line each, instead of 17 full-width rows */
+.set-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; }
+.set-keys .set-key {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 2px;
+    border-bottom: 1px solid var(--mp-hair);
+    font-size: 13.5px;
+}
+.set-keys .set-key > span { flex: 1 1 auto; min-width: 0; color: var(--mp-text); }
+.set-keys .set-key > button {
+    flex: none;
+    min-width: 78px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--mp-line);
+    border-radius: 3px;
+    background: var(--mp-bg);
+    color: var(--mp-dim);
+    font: 11.5px ui-monospace, Menlo, monospace;
+    line-height: 24px;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+    box-shadow: none;
+}
+.set-keys .set-key > button:hover { border-color: var(--mp-on); color: var(--mp-on); }
+.set-keys .set-key > button.capturing {
+    border-color: var(--mp-on);
+    background: var(--mp-on-soft);
+    color: var(--mp-text);
+}
+
+@media (max-width: 992px) {
+    .set-keys { grid-template-columns: 1fr; }
+    .set-ctl .select-wrapper input.select-dropdown { width: 180px; }
+}
+
+/* ============================================================================ */
+/* Dark mode: everything above is already var-driven; these are the leftovers    */
+/* materialize paints directly.                                                 */
+html.dark, html.dark body { background-color: var(--mp-bg); color: var(--mp-text); }
+html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6 { color: var(--mp-text); }
+html.dark a { color: var(--mp-on); }
+html.dark .dropdown-content { background-color: var(--mp-raised); }
+html.dark .dropdown-content li > a, html.dark .dropdown-content li > span { color: var(--mp-text); }
+html.dark .dropdown-content li.selected { background-color: var(--mp-on-soft); }
+html.dark input:not([type]), html.dark input[type=text], html.dark input[type=number],
+html.dark textarea.materialize-textarea, html.dark .select-wrapper input.select-dropdown {
+    color: var(--mp-text);
+}
+html.dark .card, html.dark .card-panel { background-color: var(--mp-raised); border: none; box-shadow: none; }
+
+/* Slider, both themes: a green fill up to the thumb, a flat remainder after it. Materialize paints
+   the ELEMENT with a 1px solid border and its own teal thumb (its ::track pseudo is transparent, so
+   overriding that alone does nothing), so the whole control is reset and the ELEMENT background
+   painted. `--fill` (0-100%) is set by options.js from each range's value, on render and live while
+   dragging. accent-color can't do this: it loses to materialize's explicit thumb rule. */
+input[type=range] {
     -webkit-appearance: none;
     appearance: none;
     border: none !important;
     height: 5px;
     border-radius: 3px;
-    /* !important: options.css loads BEFORE materialize.min.css, so its equal-specificity range rule
-       would otherwise win the background on source order. */
     background: linear-gradient(to right,
-        #2bbbad 0%, #2bbbad var(--fill, 0%), #3a3a42 var(--fill, 0%), #3a3a42 100%) !important;
+        var(--mp-on) 0%, var(--mp-on) var(--fill, 0%),
+        var(--mp-track) var(--fill, 0%), var(--mp-track) 100%) !important;
 }
-/* materialize's ::-webkit-slider-runnable-track is a bright 3px line that renders OVER our gradient
-   (that was the leftover white bit past the thumb) -- make it transparent so only our element-background
-   fill shows. */
-html.dark input[type=range]::-webkit-slider-runnable-track {
+input[type=range]::-webkit-slider-runnable-track {
     background: transparent !important;
     border: none !important;
     height: 5px !important;
 }
-html.dark input[type=range]::-moz-range-track {
-    background: transparent !important;
-    border: none !important;
-}
-html.dark input[type=range]::-webkit-slider-thumb {
+input[type=range]::-moz-range-track { background: transparent !important; border: none !important; }
+input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
-    background: #2bbbad;
-    border: 2px solid #17181c;
+    background: var(--mp-on);
+    border: 2px solid var(--mp-bg);
     margin-top: -5px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
     cursor: pointer;
 }
-html.dark input[type=range]::-moz-range-thumb {
-    width: 15px;
-    height: 15px;
-    border: 2px solid #17181c;
-    background: #2bbbad;
+input[type=range]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--mp-bg);
+    background: var(--mp-on);
     cursor: pointer;
 }
