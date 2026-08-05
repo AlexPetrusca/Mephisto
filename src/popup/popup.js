@@ -2410,7 +2410,7 @@ const PUZZLE_MOVE_WINDOW_MS = 9000;
 let puzzle_retry_timer = null;
 let puzzle_retry = {key: null, until: 0};
 
-function maybe_play_puzzle_move(fen) {
+function maybe_play_puzzle_move(fen, opts = {}) {
     const uci = puzzle_move_ready(fen);
     if (!uci) return false;
     console.log(`Puzzle DB: playing ${uci} (known solution, no search)`);
@@ -2430,7 +2430,7 @@ function maybe_play_puzzle_move(fen) {
             console.log('Puzzle DB: position moved on during the pre-move pause -- not sending');
             return;
         }
-        request_automove(uci, null, false, {delayed: true});
+        request_automove(uci, null, false, {paused: true, retry: opts.retry});
         watch_puzzle_move(fen, uci);
     }, PUZZLE_MOVE_DELAY_MS);
     return true;
@@ -2452,7 +2452,7 @@ function watch_puzzle_move(fen, uci) {
             return;
         }
         bgTrace('puzzle move re-issued', {uci, msLeft: puzzle_retry.until - Date.now()});
-        maybe_play_puzzle_move(last_eval.fen);
+        maybe_play_puzzle_move(last_eval.fen, {retry: true});
     }, PUZZLE_MOVE_RETRY_MS);
 }
 
@@ -4696,42 +4696,39 @@ function native_host_missing(e) {
     return /not found|unavailable|port closed|no such file/i.test(String((e && e.message) || e || ''));
 }
 
-// PUZZLE MODE PACING. Two failures this guards, both of which cost a solved puzzle:
+// PUZZLE MODE PACING, and the rule that matters most: DO NOT MOVE TWICE INTO THE SAME POSITION.
 //
-//   1. Playing twice from the SAME position. After our move the puzzle scripts the opponent's reply,
-//      and until that reply lands the board still shows the position we just moved from. A second
-//      move issued into it is answering a question that has already been answered -- and on a
-//      graded puzzle that is a wrong answer, not a no-op.
-//   2. Playing with no pause at all. The database path already waits; the ENGINE path did not, so a
-//      searched puzzle move went out the instant the search returned.
+// After our move the puzzle scripts the opponent's reply, and until that reply lands the board still
+// shows the position we just moved from. A second move issued into it answers a question already
+// answered -- on a graded puzzle that is a wrong answer, not a no-op. So the board CHANGING is the
+// proof that the opponent moved, and it is the only proof accepted here. No time window: a timeout
+// would just make the mistake take longer to arrive.
 //
-// The window is deliberately shorter than watch_puzzle_move's 1200ms retry, so a click that genuinely
-// failed can still be re-issued -- that retry exists because the puzzle click path is unverified.
-const PUZZLE_REPLAY_GUARD_MS = 1000;
+// Two independent flags, because they mean different things and conflating them broke this once:
+//   paused  -- this call has already waited out the pre-move pause (the database path had its own)
+//   checked -- this call has already passed the guard; the delayed continuation must not re-run it
+//              and find the record it wrote itself.
+// `retry` is the one legitimate repeat: watch_puzzle_move re-issues into an unchanged board because
+// the puzzle click path is unverified and the first click may simply have missed.
 let puzzle_last_sent = {key: null, at: 0};
 
 function request_automove(move, think = null, manual = false, opts = {}) {
-    // ONLY ON THE WAY IN. `opts.delayed` means this call IS the continuation of a move that already
-    // passed the guard -- re-checking it there would find its own record, 200ms old, and drop the
-    // move on the floor. That would have silently killed every engine-played puzzle move: the
-    // database path sets `delayed` itself, so only the engine path re-enters, and only the engine
-    // path would have broken.
-    if (config.puzzle_mode && !manual && !opts.delayed) {
-        const key = puzzle_key(last_eval.fen || '');
-        if (key && key === puzzle_last_sent.key && Date.now() - puzzle_last_sent.at < PUZZLE_REPLAY_GUARD_MS) {
-            console.log('Puzzle: already moved from this position -- waiting for the reply');
+    if (config.puzzle_mode && !manual) {
+        if (!opts.checked) {
+            const key = puzzle_key(last_eval.fen || '');
+            if (key && key === puzzle_last_sent.key && !opts.retry) {
+                console.log('Puzzle: already moved from this position -- waiting for the reply');
+                return;
+            }
+            puzzle_last_sent = {key, at: Date.now()};
+        }
+        if (!opts.paused) {
+            clearTimeout(puzzle_move_timer);
+            puzzle_move_timer = setTimeout(
+                () => request_automove(move, think, manual, {...opts, paused: true, checked: true}),
+                PUZZLE_MOVE_DELAY_MS);
             return;
         }
-        puzzle_last_sent = {key, at: Date.now()};
-        clearTimeout(puzzle_move_timer);
-        puzzle_move_timer = setTimeout(() => request_automove(move, think, manual, {delayed: true}),
-                                       PUZZLE_MOVE_DELAY_MS);
-        return;
-    }
-    // The database path arrives with delayed:true, having waited already -- but it has NOT recorded
-    // that it moved, so record it here or the replay guard never sees a database move at all.
-    if (config.puzzle_mode && !manual) {
-        puzzle_last_sent = {key: puzzle_key(last_eval.fen || ''), at: Date.now()};
     }
     bgTrace('request_automove', {move, think, puzzle: config.puzzle_mode});
     // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
