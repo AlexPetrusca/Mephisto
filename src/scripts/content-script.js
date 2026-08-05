@@ -80,7 +80,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.204'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.205'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -1671,6 +1671,39 @@ function fourPCEnPassant(board, prev) {
 // The whole position as a canonical FEN4 -- the spelling Tetrarch itself writes, so a round trip is
 // byte-identical. Field order is turn-dead-castleK-castleQ-points-halfmove[-{extra}]-board, board
 // LAST (RULES.md 11.1), rank 14 first, empty runs as counts.
+// Teams or free-for-all? It decides the RULES (promotion rank) and, more bluntly, whether Tetrarch
+// can analyse at all -- its FFA search is not implemented (PROTOCOL.md), so guessing "teams" on an
+// FFA board produces confident nonsense. Signals in order of trustworthiness; everything considered
+// is logged, so a mode we read wrongly can be pinned from one real game rather than guessed at twice.
+function fourPCMode() {
+    const seen = {};
+    // 1. the URL, when chess.com puts it there
+    seen.path = location.pathname + location.search;
+    if (/\bffa\b|free-for-all|freeforall/i.test(seen.path)) return fourPCModeLog('ffa', seen);
+    if (/\bteams?\b|team-battle/i.test(seen.path)) return fourPCModeLog('teams', seen);
+    // 2. a mode label rendered near the board. Kept to a SHORT visible-text scan rather than a
+    //    guessed class name: chess.com renames classes, it does not rename the words on screen.
+    const text = (document.querySelector('.board-layout-sidebar, .game-info, main')?.innerText || '')
+        .slice(0, 4000);
+    seen.ffaWord = /free[\s-]?for[\s-]?all|\bFFA\b/i.test(text);
+    seen.teamWord = /\bteams?\b/i.test(text);
+    if (seen.ffaWord && !seen.teamWord) return fourPCModeLog('ffa', seen);
+    if (seen.teamWord && !seen.ffaWord) return fourPCModeLog('teams', seen);
+    // 3. FFA scores points per player; Teams does not. A points readout beside every seat is the
+    //    structural tell, but the markup for it is UNVERIFIED -- see the log.
+    seen.points = [...document.querySelectorAll('[class*="points"], [class*="score"]')].length;
+    return fourPCModeLog('teams', seen);   // default keeps the shipped behaviour
+}
+
+let fourPCModeLast = null;
+function fourPCModeLog(mode, seen) {
+    if (mode !== fourPCModeLast) {
+        fourPCModeLast = mode;
+        bgLog('4PC mode', {mode, ...seen});
+    }
+    return mode;
+}
+
 function scrapePosition4PC() {
     const geo = fourPCGeometry();
     if (!geo) return;                             // fourPCGeometry already said why
@@ -1730,7 +1763,7 @@ function scrapePosition4PC() {
     }
     // the extra block is omitted entirely when empty -- never written as {} (RULES.md 11.1)
     const extra = ep.some(Boolean) ? `-{'enPassant':(${ep.map(e => `'${e}'`).join(',')})}` : '';
-    return `4PC:${fourPCOurSeat() || '?'}:${turn}-${dead.join(',')}-${short.join(',')}-${long.join(',')}-0,0,0,0-0${extra}-${ranks.join('/')}`;
+    return `4PC:${fourPCOurSeat() || '?'}:${fourPCMode()}:${turn}-${dead.join(',')}-${short.join(',')}-${long.join(',')}-0,0,0,0-0${extra}-${ranks.join('/')}`;
 }
 
 // square -> viewport point, for clicking a move the engine returned. Same coordinate map in reverse,

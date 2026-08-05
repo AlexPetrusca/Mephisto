@@ -4514,6 +4514,10 @@ function update_eval_bar_4pc(line, flip, ourSeat) {
     const wrap = PANEL_ROOT.getElementById('eval-bar');
     const fill = PANEL_ROOT.getElementById('eval-bar-white');
     if (!wrap || !fill || !line) return;
+    // The host falls back to a bare {move, pv} when a search returns no `info` line at all. Without
+    // this, `score` is undefined, the exp() below is NaN, and `height: NaN%` silently freezes the bar
+    // wherever it happened to be -- which reads as "the eval bar does not move".
+    if (!('mate' in line) && !Number.isFinite(line.score)) return;
     const ourTeam = (ourSeat === 'R' || ourSeat === 'Y') ? 0 : 1;
     let frac;                                       // OUR team's share of the bar
     if ('mate' in line) {
@@ -4560,10 +4564,15 @@ function fourpc_drain() {
 }
 
 function on_new_pos_4pc(payload) {
+    // `<seat>:<mode>:<fen4>` -- the mode decides the promotion rank AND whether Tetrarch can search
+    // this game at all, so it travels with the position rather than being assumed.
     const i = payload.indexOf(':');
+    const j = payload.indexOf(':', i + 1);
     const ourSeat = payload.slice(0, i);
-    const fen4 = payload.slice(i + 1);
+    const mode = payload.slice(i + 1, j);
+    const fen4 = payload.slice(j + 1);
     if (!fen4) return;
+
     // A position arriving mid-search used to be DROPPED, and `fourpc_last` had already been set to
     // the in-flight one -- so once the board settled on a position we skipped, nothing re-triggered
     // it and the panel sat there until the page was reloaded. Hold the newest instead and pick it up
@@ -4591,7 +4600,15 @@ function on_new_pos_4pc(payload) {
     // Mode is the one option that changes the RULES (promotion is the 8th rank in FFA, the 11th in
     // Teams), so it is pushed before the first search. Setup is deliberately NOT sent: every position
     // arrives as a full FEN4, which makes all five starting setups the same code path.
-    request_remote_configure({Mode: 'teams'}).catch(() => {});
+    // FFA IS NOT SEARCHABLE. Tetrarch implements Teams only (PROTOCOL.md), so on a free-for-all board
+    // the honest answer is to say so rather than hand back a move scored against the wrong rules.
+    if (mode === 'ffa') {
+        fourpc_busy = false;
+        update_best_move(i18n('panel.fourpc_ffa',
+            'Free-for-all — Tetrarch searches Teams mode only'));
+        return;
+    }
+    request_remote_configure({Mode: mode || 'teams'}).catch(() => {});
     native_send('analyse', {fen4, time: Math.max(200, config.compute_time || 1000)})
         .then((res) => {
             fourpc_busy = false;
