@@ -366,6 +366,11 @@ Chess.com's **4-player chess** (`/variants/4-player-chess`), analysed by
 no two-player engine can be bent into one. Pick **Tetrarch (4-player)** in the engine dropdown; the panel switches to
 it on a four-player board and back to Stockfish when you leave.
 
+![Four-player chess on Chess.com, with the 14x14 panel board and the suggested move drawn on it](docs/four-player.png)
+
+*Teams mode on Chess.com — the panel's own 14×14 board, rotated so you sit at the bottom, with the engine's move
+drawn on it and the evaluation bar in team colours.*
+
 The panel swaps its own board for a 14×14 one with the corners cut, rotated so **you** sit at the bottom whichever
 seat you drew, and draws the suggested move as an arrow. The evaluation is normalised to **your team** (Red+Yellow
 against Blue+Green), so it means one thing all game instead of flipping sign every seat. Autoplay works.
