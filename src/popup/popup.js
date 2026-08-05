@@ -146,6 +146,12 @@ let opp_clock_mark = null; // opponent's clock when their turn started...
 let opp_spend = null;      // ...so their spend on their LAST move = mark - now (Clock Mode mirroring)
 let prev_ply_count = 0;    // plies in the last-seen position; a drop back to the start = a NEW GAME
 
+// Maia's strength IS the net (a rating-conditioned one for maia3), so UCI_Elo means nothing to it
+// and the Elo row is hidden rather than shown doing nothing. Its nets are standard-chess only, so
+// Chess960 is off the table too.
+const NO_CHESS960_ENGINES = ['maia', 'maia3'];
+const NO_ELO_ENGINES = ['maia', 'maia3'];
+
 // engines that speak native messaging (Chrome auto-launches the host, no server -- see
 // native-host/install-native.sh). The port name == the engine value (see NATIVE_HOSTS).
 const NATIVE_ENGINES = ['sf-native', 'fairy-native', 'tetrarch-native'];
@@ -5378,11 +5384,14 @@ function check_for_update() {
             el.textContent = i18n('panel.update_available', 'Update available — v{latest} (you have v{current})',
       {latest: res.latest, current: res.current});
             el.hidden = false;
+            // Set the REAL destination on the anchor. Belt and braces: in the toolbar popup a plain
+            // target="_blank" works on its own, and if the handler below ever fails to run, the link
+            // still goes to the release rather than to whatever page the panel is sitting on.
+            const url = res.url || 'https://github.com/IchNukeDichWeg/Mephisto/releases/latest';
+            el.href = url;
             el.onclick = (e) => {
-                e.preventDefault();
-                chrome.runtime.sendMessage({
-                    openUrl: res.url || 'https://github.com/IchNukeDichWeg/Mephisto/releases/latest',
-                });
+                e.preventDefault();   // in-page, target="_blank" is unreliable -- let the worker open it
+                chrome.runtime.sendMessage({openUrl: url});
             };
         });
     } catch (e) { /* extension context gone -- nothing to notify about */ }

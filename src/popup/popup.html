@@ -272,7 +272,10 @@
 </div>
 
 <div data-i18n="panel.no_chess_game_detected" id="game-detection">No Chess Game Detected</div>
-<a id="update-notice" href="#" target="_blank" rel="noreferrer" hidden></a>
+<!-- NO href here. This panel is injected into the game page, so href="#" resolves against
+     THAT document -- any click that misses the JS handler opened a new tab on the game the
+     user was playing. The real release URL is set by check_for_update() once it knows it. -->
+<a id="update-notice" target="_blank" rel="noreferrer noopener" hidden></a>
 <a id="calibrate-notice" href="#" hidden></a>
 
 <div id="board"></div>
