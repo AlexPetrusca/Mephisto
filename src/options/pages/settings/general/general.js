@@ -301,9 +301,15 @@ class GeneralSettings extends SettingsPage {
         const n = (x) => x.toLocaleString();
         const idle = async () => {
             try {
-                const count = await PuzzleDB.count();
-                status.textContent = count
-                    ? `${n(count)} puzzle positions loaded.`
+                // Reported per database, because they are separate stores and only the one for the
+                // site you are on is ever consulted. "6.6M positions" hid the fact that none of them
+                // were chess.com's.
+                const c = await PuzzleDB.count();
+                const parts = [];
+                if (c.li) parts.push(`${n(c.li)} Lichess`);
+                if (c.cc) parts.push(`${n(c.cc)} Chess.com`);
+                status.textContent = parts.length
+                    ? `${parts.join(' · ')} puzzle positions loaded. Puzzle Mode plays the known solution.`
                     : 'No puzzle database loaded — Puzzle Mode uses the engine.';
             } catch (e) {
                 status.textContent = `Could not read the database: ${e}`;
@@ -357,8 +363,12 @@ class GeneralSettings extends SettingsPage {
                 // COUNT, not `kept`. The key is the position, and two puzzles can be generated from
                 // the same one, so the store holds slightly fewer records than rows read -- reporting
                 // `kept` would claim a number the database does not contain.
-                const stored = await PuzzleDB.count();
-                status.textContent = `Done — ${n(stored)} puzzle positions loaded from ` +
+                // Count the database this file actually went into, not the pair -- otherwise a
+                // chess.com import reports the Lichess total sitting beside it and reads as though
+                // it loaded ten times what it did.
+                const stored = await PuzzleDB.count(res.site);
+                const which = res.site === 'cc' ? 'Chess.com' : 'Lichess';
+                status.textContent = `Done — ${n(stored)} ${which} puzzle positions loaded from ` +
                     `${n(res.rows)} puzzles. Puzzle Mode will play the known solution.`;
             } catch (e) {
                 status.textContent = `Import failed: ${e}`;

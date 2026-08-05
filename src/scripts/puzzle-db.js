@@ -20,8 +20,15 @@
 'use strict';
 
 const DB_NAME = 'mephisto-puzzles';
-const STORE = 'p';
-const DB_VERSION = 1;
+// ONE STORE PER PUBLISHER, not one pooled store. A Lichess-derived position is a guaranteed miss on
+// chess.com and vice versa, so pooling them would mean every lookup reads records that cannot ever
+// match -- and on a 6.6M-record store that is disk work per position, per move. Separate stores let
+// the lookup ask only where an answer can exist. It also keeps `Remove` meaningful: dropping one
+// database no longer takes the other with it.
+const STORE = 'p';           // lichess (the original store name -- kept, so existing imports survive)
+const STORE_CC = 'c';        // chess.com
+const STORES = {li: STORE, cc: STORE_CC};
+const DB_VERSION = 2;
 const BATCH = 20000; // records per transaction -- see importCsv
 
 function open() {
@@ -29,7 +36,10 @@ function open() {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = () => {
             const db = req.result;
+            // v1 had only STORE. Adding STORE_CC is purely additive: an existing Lichess import is
+            // left exactly where it is and does not need re-running.
             if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+            if (!db.objectStoreNames.contains(STORE_CC)) db.createObjectStore(STORE_CC);
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
@@ -271,8 +281,10 @@ async function importCsv(file, onProgress, opts = {}) {
             const pending = batch;
             batch = [];
             await new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE, 'readwrite');
-                const store = tx.objectStore(STORE);
+                // Which database this file belongs to is known by the time anything is flushed:
+                // the header decided it on the first chunk.
+                const tx = db.transaction(csv ? STORE_CC : STORE, 'readwrite');
+                const store = tx.objectStore(csv ? STORE_CC : STORE);
                 for (const [k, v] of pending) store.put(v, k);
                 tx.oncomplete = resolve;
                 tx.onerror = () => reject(tx.error);
@@ -325,18 +337,20 @@ async function importCsv(file, onProgress, opts = {}) {
         else take(tail.endsWith('\r') ? tail.slice(0, -1) : tail); // final line, if no trailing newline
         await flush();
         onProgress?.({rows, kept});
-        return {rows, kept};
+        return {rows, kept, site: csv ? 'cc' : 'li'};
     } finally {
         db.close();
     }
 }
 
 // The solution line for one position, or null. One IndexedDB read; no network, ever.
-async function lookup(fen) {
+async function lookup(fen, site = 'li') {
+    const store = STORES[site];
+    if (!store) return null;          // a site with no database of its own -- ask nothing
     const db = await open();
     try {
         return await new Promise((resolve, reject) => {
-            const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(keyOf(fen));
+            const req = db.transaction(store, 'readonly').objectStore(store).get(keyOf(fen));
             req.onsuccess = () => resolve(req.result || null);
             req.onerror = () => reject(req.error);
         });
@@ -345,26 +359,34 @@ async function lookup(fen) {
     }
 }
 
-async function count() {
+async function count(site) {
     const db = await open();
+    const one = (store) => new Promise((resolve, reject) => {
+        const req = db.transaction(store, 'readonly').objectStore(store).count();
+        req.onsuccess = () => resolve(req.result || 0);
+        req.onerror = () => reject(req.error);
+    });
     try {
-        return await new Promise((resolve, reject) => {
-            const req = db.transaction(STORE, 'readonly').objectStore(STORE).count();
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
+        if (site) return await one(STORES[site] || STORE);
+        // no site asked -> both, so the settings page can show which databases are loaded
+        const [li, cc] = await Promise.all([one(STORE), one(STORE_CC)]);
+        return {li, cc, total: li + cc};
     } finally {
         db.close();
     }
 }
 
-async function clear() {
+async function clear(site) {
     const db = await open();
+    // `site` omitted removes BOTH -- that is what the Remove button has always meant. Naming one
+    // removes only that database, so re-importing a 30-minute Lichess file is not the price of
+    // dropping a chess.com one.
+    const stores = site ? [STORES[site] || STORE] : [STORE, STORE_CC];
     try {
         await new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE, 'readwrite');
-            tx.objectStore(STORE).clear();
-            tx.oncomplete = resolve;
+            const tx = db.transaction(stores, 'readwrite');
+            for (const st of stores) tx.objectStore(st).clear();
+            tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
     } finally {

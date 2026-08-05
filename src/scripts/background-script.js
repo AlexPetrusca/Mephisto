@@ -63,13 +63,13 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     return;
   }
   if (msg.puzzleLookup) {
-    PuzzleDB.lookup(msg.puzzleLookup.fen)
+    PuzzleDB.lookup(msg.puzzleLookup.fen, msg.puzzleLookup.site)
       .then(solution => sendResponse({solution}))
       .catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }
   if (msg.puzzleDbCount) {
-    PuzzleDB.count().then(count => sendResponse({count})).catch(e => sendResponse({error: String(e)}));
+    PuzzleDB.count(msg.puzzleDbCount?.site).then(count => sendResponse({count})).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }
   // The panel asks for its UI strings. It runs in the page's isolated world, where fetching an

@@ -2245,6 +2245,7 @@ function tablebase_label() {
 let puzzle_solutions = null;   // Map(placement+stm -> our uci) for the line we last matched
 let puzzle_asked = null;       // the position the last request was for (don't re-ask on every poll)
 
+const PUZZLE_DB_SITES = ['li', 'cc'];   // sites a puzzle database can be imported for
 function puzzle_db_enabled() {
     // LICHESS ONLY, and that is a resource decision as much as a correctness one. The database is
     // built from lichess games, so a chess.com or BlitzTactics position is not in it and never will
@@ -2253,7 +2254,10 @@ function puzzle_db_enabled() {
     //
     // Standard chess only for the same reason plus one: the key is a bare placement, so a variant
     // position could in principle collide with a standard one.
-    if (detected_prefix !== 'li') return false;
+    // Each site has its OWN database now, so the question is no longer "is this lichess" but
+    // "does a database exist for where we are". BlitzTactics and TakeTakeTake still have none, and
+    // asking there would be a message and a disk read per position for a guaranteed miss.
+    if (!PUZZLE_DB_SITES.includes(detected_prefix)) return false;
     return config.puzzle_mode && (!config.variant || config.variant === 'chess');
 }
 
@@ -2310,7 +2314,7 @@ function request_puzzle_solution(fen) {
     if (puzzle_solutions?.has(puzzle_key(fen))) return; // already covered by the line in hand
     if (puzzle_asked === puzzle_key(fen)) return;       // asked once; the answer is coming or was null
     puzzle_asked = puzzle_key(fen);
-    chrome.runtime.sendMessage({puzzleLookup: {fen}}, (res) => {
+    chrome.runtime.sendMessage({puzzleLookup: {fen, site: detected_prefix}}, (res) => {
         if (chrome.runtime.lastError || !res || res.error || !res.solution) return;
         puzzle_solutions = puzzle_expand(fen, res.solution);
         console.log(`Puzzle DB: solution known -- ${res.solution}`);

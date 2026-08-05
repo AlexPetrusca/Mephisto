@@ -80,7 +80,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.207'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.208'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -781,6 +781,11 @@ function drawHintArrows(arrows) {
     let bounds, square, squareCenter;
     if (fourpc) {
         const geo = fourPCGeometry();
+        // Help Mode on a 4PC board has been reported as drawing nothing twice. Everything upstream
+        // of here checks out by reading, so log what actually arrives rather than guess a third time.
+        bgLog('4PC hint', {arrows: arrows.length, move: arrows[0]?.move, geo: !!geo,
+                           rect: geo && [Math.round(geo.rect.left), Math.round(geo.rect.top),
+                                         Math.round(geo.rect.width)]});
         if (!geo) return;
         bounds = geo.rect;
         square = geo.size;
