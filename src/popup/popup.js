@@ -2224,11 +2224,11 @@ function tablebase_label() {
     if (!tablebase_data || tablebase_data.fen !== last_eval.fen) return '';
     const c = tablebase_data.category;
     const n = Math.abs(tablebase_data.dtm ?? tablebase_data.dtz ?? 0);
-    if (c === 'win') return i18n('panel.tb.win', 'tablebase: win in {n}', {n});
-    if (c === 'loss') return i18n('panel.tb.loss', 'tablebase: lost in {n}', {n});
-    if (c === 'draw') return i18n('panel.tb.draw', 'tablebase: draw');
-    if (c === 'cursed-win') return i18n('panel.tb.cursed', 'tablebase: win in {n} (50-move drawn)', {n});
-    if (c === 'blessed-loss') return i18n('panel.tb.blessed', 'tablebase: loss (50-move drawn)');
+    if (c === 'win') return i18n('panel.tb.win', 'Tablebase: win in {n}', {n});
+    if (c === 'loss') return i18n('panel.tb.loss', 'Tablebase: lost in {n}', {n});
+    if (c === 'draw') return i18n('panel.tb.draw', 'Tablebase: draw');
+    if (c === 'cursed-win') return i18n('panel.tb.cursed', 'Tablebase: win in {n} (50-move drawn)', {n});
+    if (c === 'blessed-loss') return i18n('panel.tb.blessed', 'Tablebase: loss (50-move drawn)');
     return '';
 }
 
@@ -2447,8 +2447,7 @@ function maybe_play_puzzle_move(fen, opts = {}) {
     console.log(`Puzzle DB: playing ${uci} (known solution, no search)`);
     abandon_search(); // no search is wanted here, and none of its output should arrive behind ours
     toggle_calculating(false);
-    update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci})
-        + (puzzle_rating ? ` (${i18n('panel.msg.puzzle_rating', 'Rating {r}', {r: puzzle_rating})})` : ''));
+    update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci}));
     clearTimeout(puzzle_move_timer);
     puzzle_move_timer = setTimeout(() => {
         // Only skip if the BOARD really moved on. Compared on placement + side to move, not on the
@@ -2489,7 +2488,11 @@ function watch_puzzle_move(fen, uci) {
 
 // Appended to the move readout, so a database move is never silently substituted for the engine's.
 function puzzle_label() {
-    return puzzle_pick(last_eval.fen) ? i18n('panel.puzzle_db_label', 'puzzle database') : '';
+    if (!puzzle_pick(last_eval.fen)) return '';
+    // The rating belongs on THIS line rather than beside the move: this is the line that says where
+    // the move came from, and "how hard was it" is the same kind of fact.
+    return i18n('panel.puzzle_db_label', 'Puzzle database')
+        + (puzzle_rating ? ` (${i18n('panel.msg.puzzle_rating', 'Rating {r}', {r: puzzle_rating})})` : '');
 }
 
 function explorer_enabled() {
@@ -3691,17 +3694,17 @@ function move_confidence_label() {
         if (!last_eval.fen || config.simon_says_mode) return '';
         // a single legal move is "only move" regardless of what the engine reports
         const legal = new Chess(config.variant, last_eval.fen).moves().length;
-        if (legal === 1) return i18n('panel.conf.only_move', 'only move');
+        if (legal === 1) return i18n('panel.conf.only_move', 'Only move');
         const a = last_eval.lines?.[0], b = last_eval.lines?.[1];
         if (!a || !b) return '';                       // Multi Lines = 1, or line 2 not in yet
         // mate scores don't subtract meaningfully against centipawns
         if (a.mate != null || b.mate != null) {
-            return (a.mate != null && b.mate == null) ? i18n('panel.conf.only_line_mates', 'only line that mates') : '';
+            return (a.mate != null && b.mate == null) ? i18n('panel.conf.only_line_mates', 'Only line that mates') : '';
         }
         if (typeof a.score !== 'number' || typeof b.score !== 'number') return '';
         const gap = Math.abs(a.score - b.score);
-        if (gap >= CONFIDENCE_ONLY_MOVE_CP) return i18n('panel.conf.clearly_best', 'clearly best (+{gap})', {gap: (gap / 100).toFixed(1)});
-        if (gap <= CONFIDENCE_EQUAL_CP) return i18n('panel.conf.several_equal', 'several equal');
+        if (gap >= CONFIDENCE_ONLY_MOVE_CP) return i18n('panel.conf.clearly_best', 'Clearly best (+{gap})', {gap: (gap / 100).toFixed(1)});
+        if (gap <= CONFIDENCE_EQUAL_CP) return i18n('panel.conf.several_equal', 'Several equal');
         return i18n('panel.conf.over_second', '+{gap} over #2', {gap: (gap / 100).toFixed(2)});
     } catch (e) {
         return ''; // unparseable variant fen etc. -- the readout is better bare than wrong
