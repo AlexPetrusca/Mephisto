@@ -218,11 +218,61 @@ hit the whole solution is known, so it plays it with **no search at all**. Works
 Lichess only for now, and it doesn't even ask elsewhere — that file is built from Lichess games, so a Chess.com
 position would be a guaranteed miss.
 
-**Chess.com puzzles are coming.** Once [the upstream pull request](https://github.com/AlexPetrusca/Mephisto/pull/37)
-is merged, a database of **620,000+ Chess.com puzzles with their solutions** will be published for import the same
-way — same settings page, same import button, same behaviour: on a hit the panel plays the known line with no search
-at all. It covers rated tactics and the daily archive, and carries each puzzle's rating, pass rate and average solve
-time alongside the solution.
+**Chess.com puzzles.** The reader shipped in v3.1.207 — the same settings page, the same import button, and the
+format is detected from the file, so there is nothing extra to choose. Importing both databases gives you both: they
+key on the position, so neither overwrites the other. A database of **620,000+ Chess.com puzzles with their
+solutions** will be published once [the upstream pull request](https://github.com/AlexPetrusca/Mephisto/pull/37) is
+merged; it covers rated tactics and the daily archive.
+
+<details>
+<summary><b>Building your own Chess.com puzzle CSV</b> — the exact format the importer accepts</summary>
+
+**The header row is required and must begin with `fen3`.** That is the only thing that tells the importer this is a
+Chess.com file rather than a Lichess one — without it the rows are read as Lichess and every one is discarded.
+
+```
+fen3,id,rating,initialFen,tcnMoveList,colorOfUser,pgn,passRate,averageSeconds,gameLiveId,gameId
+```
+
+| # | column | required | meaning |
+|---|---|---|---|
+| 0 | `fen3` | **yes** | board + side to move + castling. Only the first two fields are used as the key. |
+| 1 | `id` | **yes** | puzzle id, or `daily-N` for archive puzzles — the prefix switches the move format |
+| 2 | `rating` | no | ignored on import |
+| 3 | `initialFen` | daily only | full 6-field FEN; used to replay the SAN of a `daily-` row |
+| 4 | `tcnMoveList` | **yes** | solution in Chess.com TCN — **or SAN for `daily-` rows** |
+| 5 | `colorOfUser` | tactics | `white`/`black`, the side solving. Empty for daily. |
+| 6+ | `pgn`, `passRate`, `averageSeconds`, `gameLiveId`, `gameId` | no | never read, but the columns must be in this order |
+
+**Whose move comes first differs by row type**, and getting it wrong shifts every solution by a ply:
+
+- **Rated tactic** — `fen3` is the *opponent* to move and `colorOfUser` is the solver, so the first move is the
+  opponent's setup move. The importer applies it and keys on the position after it, exactly as it does for Lichess.
+- **`daily-` row** — no setup move and no `colorOfUser`. The side to move in `fen3` **is** the solver and the line
+  starts immediately.
+
+**TCN** is two characters per move over this alphabet, index `0` = `a1` and `63` = `h8`:
+
+```
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?{~}(^)[_]@#$,./&-*++=
+```
+
+A promotion pushes the destination past index 63: the piece is `"qnrbkp"[(to - 64) / 3]` and the real destination is
+`from ± 8 + ((to - 64) % 3) - 1`, the remainder carrying the file shift (capture left, straight, capture right).
+
+**Three rules your generator must respect:**
+
+1. **Write real CSV.** The `pgn` column contains literal newlines and doubled `""` quotes. The importer reads these
+   rows with a proper streaming parser, so quoting must be correct — but that also means a naive line-per-row
+   generator will produce a file it cannot read.
+2. **Key on the first three FEN fields only.** Halfmove and fullmove counters vary between sources for the same
+   position; they are not part of what a puzzle *is*.
+3. **Branch on `id` before choosing an encoding.** A `daily-` row holding TCN, or a rated row holding SAN, is
+   silently dropped rather than mis-decoded.
+
+Rows the importer cannot make sense of are skipped, not fatal — the status line reports how many of the rows read
+were kept.
+</details>
 
 <details>
 <summary><b>Importing the puzzle database</b> — about a gigabyte, roughly half an hour, once</summary>
