@@ -80,7 +80,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.205'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.206'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -1675,7 +1675,19 @@ function fourPCEnPassant(board, prev) {
 // can analyse at all -- its FFA search is not implemented (PROTOCOL.md), so guessing "teams" on an
 // FFA board produces confident nonsense. Signals in order of trustworthiness; everything considered
 // is logged, so a mode we read wrongly can be pinned from one real game rather than guessed at twice.
+let fourPCModeCache = null;   // {path, mode}
 function fourPCMode() {
+    // COMPUTED ONCE PER GAME. This is called from scrapePosition4PC, which runs on every mutation
+    // and on the fallback poll -- and the work below reads innerText, which forces a layout. A
+    // forced reflow per scrape is what made the ChessBase board lookup unusable; the mode cannot
+    // change inside a game, so it is cached against the path and re-derived when that changes.
+    if (fourPCModeCache && fourPCModeCache.path === location.pathname) return fourPCModeCache.mode;
+    const mode = fourPCModeDetect();
+    fourPCModeCache = {path: location.pathname, mode};
+    return mode;
+}
+
+function fourPCModeDetect() {
     const seen = {};
     // 1. the URL, when chess.com puts it there
     seen.path = location.pathname + location.search;
