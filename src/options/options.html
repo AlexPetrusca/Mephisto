@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="/lib/materialize/materialize.min.css">
     <script src="/lib/materialize/materialize.min.js"></script>
     <script src="/src/scripts/config-store.js"></script>
+    <!-- chess.js is here only so the puzzle importer can turn the daily rows' SAN into UCI;
+         puzzle-db.js itself keeps no rules engine, because it also runs in the worker. -->
+    <script src="/lib/chess.js"></script>
     <script src="/src/scripts/puzzle-db.js"></script>
     <script src="/src/i18n/i18n.js"></script>
     <script type="module" src="framework/require.js"></script>

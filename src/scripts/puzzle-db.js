@@ -129,6 +129,117 @@ function rowToRecord(line) {
     return [`${after} ${stm === 'w' ? 'b' : 'w'}`, moves.slice(1).join(' ')];
 }
 
+// --- chess.com puzzles ---------------------------------------------------------------------------
+// A different publisher, a different encoding, and one structural difference that decides the whole
+// parsing strategy: the `pgn` column holds a full PGN with LITERAL NEWLINES inside its quotes. The
+// Lichess path below splits the stream on '\n' and is right to -- six million rows, no quoting to
+// honour. That would shred every chess.com row. So this format gets a real CSV reader and Lichess
+// keeps its fast path.
+//
+// Columns: fen3,id,rating,initialFen,tcnMoveList,colorOfUser,pgn,passRate,averageSeconds,
+//          gameLiveId,gameId
+const CC_COLS = {fen3: 0, id: 1, rating: 2, initialFen: 3, tcn: 4, color: 5};
+
+// chess.com's TCN: two characters per move over a fixed 64+ character alphabet. Index 0 is a1 and
+// index 63 is h8 -- the opposite vertical order to `expand()` above, which is FEN reading order, so
+// the two never share a square index.
+const TCN_ALPHABET =
+    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?{~}(^)[_]@#$,./&-*++=';
+
+function tcnSquare(i) {
+    return String.fromCharCode(97 + (i % 8)) + (Math.floor(i / 8) + 1);
+}
+
+// Returns a UCI list, or null if anything about the string is not a clean pair sequence. A promotion
+// is encoded by pushing the DESTINATION index past 63: the excess names the piece and the file shift.
+function tcnToUci(tcn) {
+    if (typeof tcn !== 'string' || !tcn.length || tcn.length % 2) return null;
+    const out = [];
+    for (let i = 0; i < tcn.length; i += 2) {
+        let from = TCN_ALPHABET.indexOf(tcn[i]);
+        let to = TCN_ALPHABET.indexOf(tcn[i + 1]);
+        if (from < 0 || to < 0) return null;
+        if (from > 63) return null;          // a piece DROP (crazyhouse); not a puzzle move here
+        let promo = '';
+        if (to > 63) {
+            promo = 'qnrbkp'[Math.floor((to - 64) / 3)] || '';
+            // the promotion also carries the file change: -1 capture left, 0 straight, +1 right
+            to = from + (from < 16 ? -8 : 8) + ((to - 64) % 3) - 1;
+            if (to < 0 || to > 63) return null;
+        }
+        out.push(tcnSquare(from) + tcnSquare(to) + promo);
+    }
+    return out;
+}
+
+// One parsed chess.com row -> [key, solution] or null.
+//
+// WHOSE MOVE COMES FIRST DIFFERS BY ROW TYPE, and getting it wrong shifts every solution by a ply.
+// A rated tactic stores the position BEFORE the opponent's setup move, exactly like Lichess: `fen3`
+// is the opponent to move and `colorOfUser` is the solver. A `daily-` row has no setup move and no
+// colorOfUser -- the side to move in `fen3` IS the solver, and the line starts immediately. So the
+// setup move is skipped only when the solver is NOT the side to move.
+function ccRowToRecord(cols, sanToUci) {
+    const fen3 = cols[CC_COLS.fen3];
+    const id = cols[CC_COLS.id] || '';
+    if (!fen3) return null;
+    const [placement, stm] = String(fen3).trim().split(/\s+/);
+    if (!placement || (stm !== 'w' && stm !== 'b')) return null;
+
+    // Daily rows carry SAN, not TCN (`Rg3 hxg3 Rxg3 ...`). Turning SAN into UCI needs a rules
+    // engine, and this module deliberately has none -- it also runs in the service worker, where
+    // chess.js is not loaded. The IMPORTER injects one (the options page has chess.js); without it
+    // daily rows are skipped rather than guessed at.
+    const raw = String(cols[CC_COLS.tcn] || '').trim();
+    const moves = id.startsWith('daily-')
+        ? (sanToUci ? sanToUci(String(cols[CC_COLS.initialFen] || fen3), raw.split(/\s+/).filter(Boolean)) : null)
+        : tcnToUci(raw);
+    if (!moves || !moves.length) return null;
+
+    const color = String(cols[CC_COLS.color] || '').trim().toLowerCase();
+    const solverIsSideToMove = !color || color[0] === stm;
+    if (solverIsSideToMove) return [`${placement} ${stm}`, moves.join(' ')];
+
+    if (moves.length < 2) return null;               // a setup move and nothing left to solve
+    const after = applyUci(placement, moves[0]);
+    if (!after) return null;
+    return [`${after} ${stm === 'w' ? 'b' : 'w'}`, moves.slice(1).join(' ')];
+}
+
+// Streaming CSV reader. Feed it chunks, get back complete records. Handles quoted fields, doubled
+// quotes inside them, and the newlines the pgn column contains -- which is the entire reason it
+// exists rather than another split('\n').
+function makeCsvReader() {
+    let field = '', row = [], inQuotes = false, pendingQuote = false;
+    return {
+        push(chunk) {
+            const done = [];
+            for (const ch of chunk) {
+                if (pendingQuote) {                  // saw a quote while inside quotes
+                    pendingQuote = false;
+                    if (ch === '"') { field += '"'; continue; }   // "" -> a literal quote
+                    inQuotes = false;                            // the field ended
+                }
+                if (inQuotes) {
+                    if (ch === '"') pendingQuote = true; else field += ch;
+                    continue;
+                }
+                if (ch === '"' && field === '') { inQuotes = true; continue; }
+                if (ch === ',') { row.push(field); field = ''; continue; }
+                if (ch === '\n') { row.push(field.endsWith('\r') ? field.slice(0, -1) : field);
+                                   done.push(row); row = []; field = ''; continue; }
+                field += ch;
+            }
+            return done;
+        },
+        end() {
+            if (pendingQuote) inQuotes = false;
+            if (field !== '' || row.length) { row.push(field); const r = row; row = []; field = ''; return [r]; }
+            return [];
+        },
+    };
+}
+
 // --- import -------------------------------------------------------------------------------------
 // Streamed, never read whole: the file is about a gigabyte and File.stream() costs nothing to use.
 // Writes go in batches inside one transaction each, and the batch is AWAITED before the next chunk
@@ -137,7 +248,7 @@ function rowToRecord(line) {
 //
 // onProgress({rows, kept}) is called per batch, so the settings page can show it moving; an import of
 // this size takes minutes and a UI that says nothing for minutes reads as a hang.
-async function importCsv(file, onProgress) {
+async function importCsv(file, onProgress, opts = {}) {
     const db = await open();
     try {
         // NOT cleared first. The key IS the position, so a re-import of the same file overwrites the
@@ -149,6 +260,11 @@ async function importCsv(file, onProgress) {
         const reader = file.stream().pipeThrough(new TextDecoderStream()).getReader();
         let tail = '';
         let rows = 0, kept = 0, first = true;
+        // WHICH PUBLISHER? Decided once, from the header, and it picks the whole parsing strategy:
+        // Lichess rows are split on newlines (fast, and nothing in the columns we read can be
+        // quoted), chess.com rows must go through a real CSV reader because the pgn column contains
+        // literal newlines. Guessing per row would be both slower and wrong.
+        let csv = null;                    // non-null once we know it is the chess.com format
         let batch = [];
         const flush = async () => {
             if (!batch.length) return;
@@ -173,15 +289,40 @@ async function importCsv(file, onProgress) {
             const rec = rowToRecord(line);
             if (rec) { kept++; batch.push(rec); }
         };
+        const takeCc = (cols) => {
+            if (!cols.length || (cols.length === 1 && cols[0] === '')) return;
+            rows++;
+            const rec = ccRowToRecord(cols, opts.sanToUci);
+            if (rec) { kept++; batch.push(rec); }
+        };
         for (;;) {
             const {value, done} = await reader.read();
             if (done) break;
-            const lines = (tail + value).split('\n');
-            tail = lines.pop(); // the last piece is a partial line until the next chunk arrives
-            for (const line of lines) take(line.endsWith('\r') ? line.slice(0, -1) : line);
+            if (csv) { for (const cols of csv.push(value)) takeCc(cols); }
+            else {
+                const lines = (tail + value).split('\n');
+                tail = lines.pop(); // the last piece is a partial line until the next chunk arrives
+                for (let i = 0; i < lines.length; i++) {
+                    const l = lines[i].endsWith('\r') ? lines[i].slice(0, -1) : lines[i];
+                    // The header is the only place the format is stated. Once it says chess.com,
+                    // everything still unread in this chunk has to be REJOINED and handed to the CSV
+                    // reader -- splitting it here already destroyed nothing yet, but dropping the
+                    // rows after the header would silently lose the first chunk's worth of puzzles.
+                    if (first && l.startsWith('fen3')) {
+                        first = false;
+                        csv = makeCsvReader();
+                        const rest = lines.slice(i + 1).concat([tail]).join('\n');
+                        tail = '';
+                        for (const cols of csv.push(rest)) takeCc(cols);
+                        break;
+                    }
+                    take(l);
+                }
+            }
             if (batch.length >= BATCH) await flush();
         }
-        take(tail.endsWith('\r') ? tail.slice(0, -1) : tail); // final line, if the file lacks a newline
+        if (csv) { for (const cols of csv.end()) takeCc(cols); }
+        else take(tail.endsWith('\r') ? tail.slice(0, -1) : tail); // final line, if no trailing newline
         await flush();
         onProgress?.({rows, kept});
         return {rows, kept};
@@ -231,6 +372,7 @@ async function clear() {
     }
 }
 
-root.PuzzleDB = {keyOf, applyUci, rowToRecord, importCsv, lookup, count, clear};
+root.PuzzleDB = {keyOf, applyUci, rowToRecord, tcnToUci, ccRowToRecord, makeCsvReader,
+                 importCsv, lookup, count, clear};
 
 })(typeof self !== 'undefined' ? self : this);

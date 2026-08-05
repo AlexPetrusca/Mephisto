@@ -332,11 +332,28 @@ class GeneralSettings extends SettingsPage {
             status.textContent = 'Reading… (this takes a few minutes; leave this page open)';
             try {
                 const t0 = Date.now();
+                // SAN -> UCI for the chess.com daily rows. Built here rather than inside
+                // puzzle-db.js because that module also loads in the service worker, which has no
+                // chess.js -- an import there simply skips those rows instead of failing.
+                const sanToUci = (fen, sans) => {
+                    try {
+                        const g = new Chess('chess', fen);
+                        const out = [];
+                        for (const san of sans) {
+                            const mv = g.move(san);
+                            if (!mv) return null;
+                            out.push(mv.from + mv.to + (mv.promotion || ''));
+                        }
+                        return out;
+                    } catch (e) {
+                        return null; // a SAN this position cannot explain -- skip the row
+                    }
+                };
                 const res = await PuzzleDB.importCsv(f, ({rows, kept}) => {
                     const mins = (Date.now() - t0) / 60000;
                     status.textContent = `Importing… ${n(kept)} positions from ${n(rows)} puzzles ` +
                         `(${mins.toFixed(1)} min)`;
-                });
+                }, {sanToUci});
                 // COUNT, not `kept`. The key is the position, and two puzzles can be generated from
                 // the same one, so the store holds slightly fewer records than rows read -- reporting
                 // `kept` would claim a number the database does not contain.
