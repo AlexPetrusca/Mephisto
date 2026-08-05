@@ -617,6 +617,7 @@ async function initPanel(root, tabId) {
         // coordinates: the pieces looked right, a1 was labelled bottom-left, and it was the labels
         // and the FEN that were wrong.
         setup_view = (setup_view === 'black') ? 'white' : 'black';
+        snap_flipped = !snap_flipped;   // and every FOLLOWED read from here on is rotated to match
         const flipped = rotate_fen_180(current);
         if (box) box.value = flipped;
         apply_setup_fen();
@@ -2121,7 +2122,7 @@ const SETUP_STASH_KEY = 'setup_fen_stash';
 function stash_setup_state() {
     try {
         if (setup_fen) {
-            MephistoConfig.set(SETUP_STASH_KEY, JSON.stringify({fen: setup_fen, crop: snap_crop, view: setup_view}));
+            MephistoConfig.set(SETUP_STASH_KEY, JSON.stringify({fen: setup_fen, crop: snap_crop, view: setup_view, flipped: snap_flipped}));
         } else {
             MephistoConfig.set(SETUP_STASH_KEY, JSON.stringify(null));
         }
@@ -2135,6 +2136,7 @@ function restore_setup_state() {
         setup_fen = raw.fen;
         snap_crop = raw.crop || null;
         setup_view = (raw.view === 'white' || raw.view === 'black') ? raw.view : null;
+        snap_flipped = !!raw.flipped;
         const row = PANEL_ROOT.getElementById('setup-fen-row');
         if (row) row.style.display = '';
         const input = PANEL_ROOT.getElementById('setup_fen_input');
@@ -2673,6 +2675,10 @@ function play_on_panel_board(from, to, promotion) {
     explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
     abandon_search();
     turn = next.split(' ')[1];
+    // The header switch is only refreshed on the SCRAPE path, and a move played on the panel board
+    // never goes near it -- so walking a line left the header stuck on whoever moved first while the
+    // position underneath it had moved on. It is the panel's own move; it has to keep its own state.
+    update_turn_badge(next);
     on_new_pos(next, next, '');
     return true;
 }
@@ -2694,6 +2700,13 @@ function play_on_panel_board(from, to, promotion) {
 // because a board being watched on a screen does not turn round between plies -- and re-deriving it
 // from the turn meant the view flipped every single move.
 let setup_view = null;
+// FOLLOW SCREEN reads a fresh board every tick and always maps the image's top-left to a8. On a
+// board drawn from Black's side every read is therefore 180 degrees out -- and, because a rotated
+// position is usually still LEGAL, nothing notices. Flipping used to rotate `setup_fen` only, so the
+// very next read came back unrotated, could not be explained as one legal move, and re-seeded from
+// the raw placement -- silently undoing the flip. That is the board "randomly flipping back".
+// This flag makes the flip STICK: every incoming read is rotated before it is used.
+let snap_flipped = false;
 
 // The colour the panel is ANSWERING FOR, which is not the same question as which way the board is
 // drawn. On a live game they coincide: the side the page shows us is the side we play. On a held
@@ -2838,8 +2851,17 @@ async function snap_follow_tick() {
         }
         snap_last_error = null;
         if (!res || !res.placement) return;
+        // Rotate the READ, not just the stored position. Everything below -- the unchanged-check,
+        // the ply inference and the re-seed -- then works in the same frame the panel is holding.
+        // `res` is a const, so this is a local rather than a reassignment.
+        let placement = res.placement;
+        if (snap_flipped) {
+            const rot = rotate_fen_180(`${placement} w - - 0 1`).split(' ')[0];
+            if (rot) placement = rot;
+        }
         const prev = (setup_fen || '').split(' ');
-        if (setup_fen && res.placement === prev[0]) return; // unchanged -- do not restart the search
+
+        if (setup_fen && placement === prev[0]) return; // unchanged -- do not restart the search
         // Work out WHICH ply was played, rather than assuming one was. follow_infer_ply replays every
         // legal move from the position we hold and keeps the one that lands on what we just read, so
         // the side to move, the en-passant square, the castling rights and the move counters all come
@@ -2849,7 +2871,7 @@ async function snap_follow_tick() {
         // It also self-corrects the STARTING colour: the recogniser cannot see whose move it is, so a
         // capture is seeded White-to-move, and if the first ply only makes sense as a Black move the
         // inference says so and adopts it. That is the colour switching itself, instead of being your job.
-        let fen = follow_infer_ply(setup_fen, res.placement);
+        let fen = follow_infer_ply(setup_fen, placement);
         if (fen) {
             snap_unexplained = 0;
         } else {
@@ -2862,7 +2884,7 @@ async function snap_follow_tick() {
             if (++snap_unexplained < SNAP_RESEED_AFTER) return;
             snap_unexplained = 0;
             const prev = (setup_fen || '').split(' ');
-            fen = `${res.placement} ${prev[1] || 'w'} - - 0 1`;
+            fen = `${placement} ${prev[1] || 'w'} - - 0 1`;
             if (!is_legal_position(fen)) fen = flip_fen_turn(fen);
             console.warn('Mephisto: could not explain the board as one move -- re-seeding from what is on screen');
             setup_fen_msg(i18n('panel.fen.reseeded', 'Re-seeded · check the side to move'));
@@ -2940,6 +2962,7 @@ async function snap_position(crop) {
     abandon_search();
     turn = 'w';
     setup_view = null;          // a new capture has not been told which way up it is yet
+    snap_flipped = false;       // ...and neither has its follow loop
     board.orientation('white');
     on_new_pos(fen, fen, '');
 }

@@ -1119,17 +1119,28 @@ body.mephisto-dark #game-detection.unsupported { color: #ff7a70; }
    monochrome-plus-green. Same palette now; the thumb carries the side to move.
    -------------------------------------------------------------------------------------------- */
 #quick-settings .turn-switch {
-    background: var(--mp-bg) !important;
-    border: 1px solid var(--mp-line);
-    border-radius: 11px;
+    background: transparent !important;
+    border: 0;
+    border-radius: 999px;
+    height: 24px;
+    padding-left: 54px;
 }
 #quick-settings .turn-switch .turn-thumb {
-    background: #f2f0ec;
-    color: #1b1c1f;
-    box-shadow: none;
-    border: 1px solid var(--mp-line);
+    top: 3px;
+    width: 18px;
+    height: 18px;
+    font-size: 13px;
+    background: #f6f4f0;
+    color: #16171a;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+    border: 0;
 }
-#quick-settings .turn-switch.black .turn-thumb { background: #33353a; color: #f2f0ec; }
+#quick-settings .turn-switch.black .turn-thumb {
+    left: 25px;
+    background: #16171a;
+    color: #f6f4f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .55);
+}
 #quick-settings .turn-switch:focus-visible { box-shadow: 0 0 0 2px var(--mp-on) !important; }
 
 /* --------------------------------------------------------------------------------------------
@@ -1227,18 +1238,21 @@ body.mephisto-bar-host #response-annotations { top: 0; }
    Turn switch, labelled. The 44x22 pill is drawn as a ::before so the element itself can be a flex
    row carrying the text; the thumb keeps its absolute position over that pill.
    -------------------------------------------------------------------------------------------- */
+/* The track carries the answer as well as the thumb: pale for White, dark for Black. Reading the
+   side should not depend on noticing which end an 18px circle sits at. */
 #quick-settings .turn-switch::before {
     content: "";
     position: absolute;
     left: 0;
     top: 0;
-    width: 44px;
-    height: 22px;
+    width: 46px;
+    height: 24px;
     border-radius: 999px;
-    background: var(--mp-line);
-    transition: background .15s;
+    background: #6d7078;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35);
+    transition: background .18s;
 }
-#quick-settings .turn-switch.black::before { background: var(--mp-dim); }
+#quick-settings .turn-switch.black::before { background: #26282d; }
 #quick-settings .turn-switch .turn-side {
     font-size: 12.5px;
     font-weight: 500;
