@@ -65,6 +65,27 @@ Distributed as an unpacked extension, not through the stores.
 3. **Load unpacked** → select the repository folder.
 4. Pin it: puzzle icon right of the address bar → pin "Mephisto Chess Extension".
 
+### Which download?
+
+Every [release](https://github.com/IchNukeDichWeg/Mephisto/releases) carries two archives:
+
+| | | |
+|---|---|---|
+| `mephisto-<version>.zip` | **~585 MB** | **First install, always.** Everything, engines included. |
+| `mephisto-<version>-update.zip` | **~6 MB** | **Already have it.** Code only — extract *over* your existing folder. |
+
+Nearly all of the full archive is bundled engines: 874 MB of neural nets and WASM under `lib/engine`, plus 13 MB of
+onnxruntime under `lib/ort`. Those change on almost no release, so the update archive leaves them alone and carries
+only the ~1 MB of extension code — about a hundredth the download.
+
+> ⚠️ **Extract the update over your existing install, never into an empty folder.** Without the engines it cannot
+> run. If you do it anyway the panel says so rather than failing obscurely — it checks for the bundled engines at
+> startup and tells you to fetch the full archive.
+
+**Extract in place.** Chrome derives an unpacked extension's id from its folder path, so replacing files in the
+folder you already loaded keeps the same id — and native engines, which are registered against that id, keep
+working. Unpacking into a *new* folder changes the id and means re-running the native-host installer.
+
 To pick up a change: reload on `chrome://extensions`, then reload the game tab. The panel checks this repository for
 a newer release at most once every 12 hours, from the service worker, so the chess page never makes the request.
 
@@ -194,8 +215,14 @@ without them an ep capture is illegal and nobody can castle in *any* puzzle.
 objectively stronger move still fails it. Import Lichess's database and the panel looks the position up instead: on a
 hit the whole solution is known, so it plays it with **no search at all**. Works on Training, Storm and Racer.
 
-Lichess only, and it doesn't even ask elsewhere — the file is built from Lichess games, so a Chess.com position would
-be a guaranteed miss.
+Lichess only for now, and it doesn't even ask elsewhere — that file is built from Lichess games, so a Chess.com
+position would be a guaranteed miss.
+
+**Chess.com puzzles are coming.** Once [the upstream pull request](https://github.com/AlexPetrusca/Mephisto/pull/37)
+is merged, a database of **620,000+ Chess.com puzzles with their solutions** will be published for import the same
+way — same settings page, same import button, same behaviour: on a hit the panel plays the known line with no search
+at all. It covers rated tactics and the daily archive, and carries each puzzle's rating, pass rate and average solve
+time alongside the solution.
 
 <details>
 <summary><b>Importing the puzzle database</b> — about a gigabyte, roughly half an hour, once</summary>

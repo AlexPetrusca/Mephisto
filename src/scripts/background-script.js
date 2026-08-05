@@ -35,6 +35,15 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     explorerLookup(msg.explorerLookup).then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }
+  // Is this a COMPLETE install? The update-only archive deliberately omits lib/engine and lib/ort,
+  // so extracting it into a folder that never held a full install leaves an extension with no
+  // engines -- and every failure after that is a confusing symptom (an engine that never loads, a
+  // panel that analyses nothing) rather than a cause. Probe two small files inside the omitted
+  // directories and let the panel say so plainly. Cached: the answer cannot change while we run.
+  if (msg.assetsCheck) {
+    checkBundledAssets().then(sendResponse);
+    return true; // async sendResponse
+  }
   if (msg.updateCheck) {
     updateCheck().then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
@@ -226,6 +235,29 @@ function isNewer(candidate, current) {
     if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
   }
   return false;
+}
+
+let bundledAssets = null;
+async function checkBundledAssets() {
+  if (bundledAssets) return bundledAssets;
+  // Small files, one per omitted directory. A GET of an absent extension resource rejects or 404s;
+  // both mean the same thing here.
+  const probes = ['lib/engine/maia/lc0_policy_index.json', 'lib/ort/ort.wasm.bundle.min.mjs'];
+  const missing = [];
+  for (const p of probes) {
+    try {
+      const r = await fetch(chrome.runtime.getURL(p));
+      if (!r.ok) missing.push(p);
+    } catch (e) {
+      missing.push(p);
+    }
+  }
+  bundledAssets = {ok: missing.length === 0, missing};
+  if (!bundledAssets.ok) {
+    console.warn('Mephisto: bundled engines are missing --', missing.join(', '),
+                 '-- this looks like the update-only archive extracted over an incomplete install');
+  }
+  return bundledAssets;
 }
 
 async function updateCheck() {

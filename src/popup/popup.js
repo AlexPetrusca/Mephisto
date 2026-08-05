@@ -5415,6 +5415,25 @@ function maybe_suggest_calibration() {
 function check_for_update() {
     const el = PANEL_ROOT.getElementById('update-notice');
     if (!el) return;
+    // AN INCOMPLETE INSTALL OUTRANKS AN AVAILABLE UPDATE. If the engines are missing there is no
+    // point telling someone a newer version exists -- the build they have cannot run at all, and the
+    // fix is the FULL archive rather than whatever is newest. Checked first, and it short-circuits.
+    try {
+        chrome.runtime.sendMessage({assetsCheck: true}, (res) => {
+            if (chrome.runtime.lastError || !res || res.ok) return check_for_update_version(el);
+            el.textContent = i18n('panel.incomplete_install',
+                'Engines missing — you have the update-only download. Get the full zip.');
+            el.href = 'https://github.com/IchNukeDichWeg/Mephisto/releases/latest';
+            el.hidden = false;
+            el.onclick = (e) => {
+                e.preventDefault();
+                chrome.runtime.sendMessage({openUrl: el.href});
+            };
+        });
+    } catch (e) { /* extension context gone */ }
+}
+
+function check_for_update_version(el) {
     try {
         chrome.runtime.sendMessage({updateCheck: true}, (res) => {
             // the version compare lives in the SW (isNewer) -- one implementation, not two
