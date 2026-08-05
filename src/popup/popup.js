@@ -4689,20 +4689,27 @@ const PUZZLE_REPLAY_GUARD_MS = 1000;
 let puzzle_last_sent = {key: null, at: 0};
 
 function request_automove(move, think = null, manual = false, opts = {}) {
-    if (config.puzzle_mode && !manual) {
+    // ONLY ON THE WAY IN. `opts.delayed` means this call IS the continuation of a move that already
+    // passed the guard -- re-checking it there would find its own record, 200ms old, and drop the
+    // move on the floor. That would have silently killed every engine-played puzzle move: the
+    // database path sets `delayed` itself, so only the engine path re-enters, and only the engine
+    // path would have broken.
+    if (config.puzzle_mode && !manual && !opts.delayed) {
         const key = puzzle_key(last_eval.fen || '');
         if (key && key === puzzle_last_sent.key && Date.now() - puzzle_last_sent.at < PUZZLE_REPLAY_GUARD_MS) {
             console.log('Puzzle: already moved from this position -- waiting for the reply');
             return;
         }
         puzzle_last_sent = {key, at: Date.now()};
-        // The database path has already paused; anything else (the engine) has not.
-        if (!opts.delayed) {
-            clearTimeout(puzzle_move_timer);
-            puzzle_move_timer = setTimeout(() => request_automove(move, think, manual, {delayed: true}),
-                                           PUZZLE_MOVE_DELAY_MS);
-            return;
-        }
+        clearTimeout(puzzle_move_timer);
+        puzzle_move_timer = setTimeout(() => request_automove(move, think, manual, {delayed: true}),
+                                       PUZZLE_MOVE_DELAY_MS);
+        return;
+    }
+    // The database path arrives with delayed:true, having waited already -- but it has NOT recorded
+    // that it moved, so record it here or the replay guard never sees a database move at all.
+    if (config.puzzle_mode && !manual) {
+        puzzle_last_sent = {key: puzzle_key(last_eval.fen || ''), at: Date.now()};
     }
     bgTrace('request_automove', {move, think, puzzle: config.puzzle_mode});
     // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
