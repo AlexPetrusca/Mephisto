@@ -80,7 +80,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.201'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.202'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -764,23 +764,44 @@ function clearHintArrow() {
 // arrows: [{move: 'e2e4', width: 0..0.25 (in squares), color: '#rrggbb'}, ...] best line first --
 // the same set the popup draws on its mini board (multipv lines weighted by score, threat in red)
 function drawHintArrows(arrows) {
-    arrows = (arrows || []).filter(a => a && /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(a.move ?? ''));
+    // FOUR-PLAYER. The 8x8 filter below rejects a move like `m8l8` outright, which is why Help Mode
+    // drew nothing at all on a 4PC board -- the arrows were requested, then discarded here. The
+    // geometry differs on every axis (14 files, 14 ranks, four rotations), so it gets its own
+    // measurements; everything after this point is shared.
+    const fourpc = is4PC();
+    const SQ4 = '[a-n](?:1[0-4]|[1-9])';
+    const moveRe = fourpc ? new RegExp(`^${SQ4}${SQ4}[qrbnQRBN]?$`) : /^[a-h][1-8][a-h][1-8][qrbn]?$/;
+    arrows = (arrows || []).filter(a => a && moveRe.test(a.move ?? ''));
     // help mode redraws on every engine update; skip the DOM churn while the arrows are unchanged
     const key = JSON.stringify(arrows);
     if (key === lastHintKey && overlayEl(HINT_OVERLAY_ID)) return;
     clearHintArrow();
     if (!arrows.length) return;
-    const board = getBoard();
-    if (!board) return;
-    const bounds = board.getBoundingClientRect();
-    const orientation = getOrientation();
-    const square = bounds.width / 8;
 
-    function squareCenter(coords) {
-        const [xIdx, yIdx] = (orientation === 'white')
-            ? [coords.charCodeAt(0) - 'a'.charCodeAt(0), 8 - parseInt(coords[1])]
-            : ['h'.charCodeAt(0) - coords.charCodeAt(0), parseInt(coords[1]) - 1];
-        return [(xIdx + 0.5) * square, (yIdx + 0.5) * square];
+    let bounds, square, squareCenter;
+    if (fourpc) {
+        const geo = fourPCGeometry();
+        if (!geo) return;
+        bounds = geo.rect;
+        square = geo.size;
+        // fourPCSquareXY already handles all four seat rotations and returns VIEWPORT coords; the
+        // overlay is positioned at the board's origin, so subtract it back off.
+        squareCenter = (sq) => {
+            const pt = fourPCSquareXY(sq);
+            return pt ? [pt.x - bounds.left, pt.y - bounds.top] : [0, 0];
+        };
+    } else {
+        const board = getBoard();
+        if (!board) return;
+        bounds = board.getBoundingClientRect();
+        const orientation = getOrientation();
+        square = bounds.width / 8;
+        squareCenter = (coords) => {
+            const [xIdx, yIdx] = (orientation === 'white')
+                ? [coords.charCodeAt(0) - 'a'.charCodeAt(0), 8 - parseInt(coords[1])]
+                : ['h'.charCodeAt(0) - coords.charCodeAt(0), parseInt(coords[1]) - 1];
+            return [(xIdx + 0.5) * square, (yIdx + 0.5) * square];
+        };
     }
 
     const markerId = color => `mephisto-hint-head-${color.replace(/[^\w]/g, '')}`;
@@ -794,8 +815,12 @@ function drawHintArrows(arrows) {
     for (const arrow of [...arrows].reverse()) { // best line comes first; draw it last so it sits on top
         const color = arrow.color || '#15781b';
         const stroke = Math.max(2, (arrow.width || 0.2) * square);
-        const [x0, y0] = squareCenter(arrow.move.substring(0, 2));
-        const [x1, y1] = squareCenter(arrow.move.substring(2, 4));
+        // a 4PC square is 2 OR 3 characters (`a1` .. `n14`), so the split cannot be a fixed offset
+        const [from, to] = fourpc
+            ? arrow.move.match(new RegExp(`^(${SQ4})(${SQ4})`)).slice(1, 3)
+            : [arrow.move.substring(0, 2), arrow.move.substring(2, 4)];
+        const [x0, y0] = squareCenter(from);
+        const [x1, y1] = squareCenter(to);
         // pull the line back so the arrowhead tip lands on the target square's center
         const dist = Math.hypot(x1 - x0, y1 - y0) || 1;
         const xh = x1 - (x1 - x0) / dist * square * 0.4;

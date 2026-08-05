@@ -4510,6 +4510,11 @@ function update_eval_bar_4pc(line, flip, ourSeat) {
 // last owns it". Both are synchronous and cheap, so there is nothing to tear down.
 function show_4pc_board(fen4, ourSeat) {
     try {
+        // The header switch is White-vs-Black. With four seats it is not merely useless but
+        // actively wrong -- the panel says "Red to move" directly under a control reading
+        // "White to move". Hidden the same way the Elo and Variant rows hide themselves.
+        const ts = PANEL_ROOT.getElementById('qs_turn_switch');
+        if (ts) ts.style.display = 'none';
         if (!board4pc) board4pc = MephistoBoard4PC('board', {root: PANEL_ROOT});
         board4pc.orientation((ourSeat || 'r').toLowerCase());   // you are always at the bottom
         board4pc.position(fen4);
@@ -4519,6 +4524,9 @@ function show_4pc_board(fen4, ourSeat) {
 function hide_4pc_board() {
     if (!board4pc) return;
     board4pc = null;
+    const ts = PANEL_ROOT.getElementById('qs_turn_switch');
+    if (ts) ts.style.display = '';
+    request_clear_hint();          // 4PC arrows must not survive onto an 8x8 board
     try { board.position(board.position()); } catch (e) { /* 8x8 board not built yet */ }
 }
 
@@ -4585,7 +4593,14 @@ function on_new_pos_4pc(payload) {
                 : (flip * line.score / 100).toFixed(2));
             update_best_move(`${best}${score != null ? '  (' + score + ')' : ''}`);
             try { board4pc?.highlight(best); } catch (e) { /* board swapped away mid-search */ }
-            if (line && config.eval_bar) update_eval_bar_4pc(line, flip, ourSeat);
+            // NOT gated on config.eval_bar: that toggle governs the PAGE overlay, and the
+            // normal path calls update_eval_bar unconditionally. Gating this one meant the
+            // panel strip kept its default white/black instead of the two team colours.
+            if (line) update_eval_bar_4pc(line, flip, ourSeat);
+            // Help Mode draws the move instead of playing it, exactly as on an 8x8 board. The
+            // renderer understands 14x14 now, so this is just a matter of asking for it.
+            if (config.help_mode) request_draw_hint([{move: best, color: '#14b8a6', width: 0.22}]);
+            else request_clear_hint();
             if (ours && config.autoplay && !config.help_mode) request_automove_4pc(best);
         })
         .catch((e) => {
