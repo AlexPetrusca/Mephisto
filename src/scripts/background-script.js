@@ -64,7 +64,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
   if (msg.puzzleLookup) {
     PuzzleDB.lookup(msg.puzzleLookup.fen, msg.puzzleLookup.site)
-      .then(solution => sendResponse({solution}))
+      .then(rec => sendResponse({solution: rec?.s || null, rating: rec?.r ?? null}))
       .catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }

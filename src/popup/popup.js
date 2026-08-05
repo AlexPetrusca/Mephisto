@@ -2317,7 +2317,9 @@ function request_puzzle_solution(fen) {
     chrome.runtime.sendMessage({puzzleLookup: {fen, site: detected_prefix}}, (res) => {
         if (chrome.runtime.lastError || !res || res.error || !res.solution) return;
         puzzle_solutions = puzzle_expand(fen, res.solution);
-        console.log(`Puzzle DB: solution known -- ${res.solution}`);
+        puzzle_rating = res.rating ?? null;
+        console.log(`Puzzle DB: solution known -- ${res.solution}` +
+                    (puzzle_rating ? ` (rated ${puzzle_rating})` : ''));
         update_best_move_suffix();
         // The answer landed after on_new_pos ran: draw it and play it now.
         if (last_eval.fen === fen) draw_moves();
@@ -2376,6 +2378,7 @@ const PUZZLE_MOVE_DELAY_MS = 200;
 // for the SAME board -- a re-push flagged as a resume does exactly that -- and two live timers would
 // send the move twice, which the content-script then has to drop on its `moving` guard.
 let puzzle_move_timer = null;
+let puzzle_rating = null;   // what the publisher rated the puzzle we are on, when they said
 
 // ...and a watchdog behind it, because the puzzle click path does NOT verify itself.
 //
@@ -2404,7 +2407,8 @@ function maybe_play_puzzle_move(fen) {
     console.log(`Puzzle DB: playing ${uci} (known solution, no search)`);
     abandon_search(); // no search is wanted here, and none of its output should arrive behind ours
     toggle_calculating(false);
-    update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci}));
+    update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci})
+        + (puzzle_rating ? ` (${i18n('panel.msg.puzzle_rating', 'Rating {r}', {r: puzzle_rating})})` : ''));
     clearTimeout(puzzle_move_timer);
     puzzle_move_timer = setTimeout(() => {
         // Only skip if the BOARD really moved on. Compared on placement + side to move, not on the
@@ -2417,7 +2421,7 @@ function maybe_play_puzzle_move(fen) {
             console.log('Puzzle DB: position moved on during the pre-move pause -- not sending');
             return;
         }
-        request_automove(uci);
+        request_automove(uci, null, false, {delayed: true});
         watch_puzzle_move(fen, uci);
     }, PUZZLE_MOVE_DELAY_MS);
     return true;
@@ -4670,8 +4674,43 @@ function native_host_missing(e) {
     return /not found|unavailable|port closed|no such file/i.test(String((e && e.message) || e || ''));
 }
 
-function request_automove(move, think = null, manual = false) {
+// PUZZLE MODE PACING. Two failures this guards, both of which cost a solved puzzle:
+//
+//   1. Playing twice from the SAME position. After our move the puzzle scripts the opponent's reply,
+//      and until that reply lands the board still shows the position we just moved from. A second
+//      move issued into it is answering a question that has already been answered -- and on a
+//      graded puzzle that is a wrong answer, not a no-op.
+//   2. Playing with no pause at all. The database path already waits; the ENGINE path did not, so a
+//      searched puzzle move went out the instant the search returned.
+//
+// The window is deliberately shorter than watch_puzzle_move's 1200ms retry, so a click that genuinely
+// failed can still be re-issued -- that retry exists because the puzzle click path is unverified.
+const PUZZLE_REPLAY_GUARD_MS = 1000;
+let puzzle_last_sent = {key: null, at: 0};
+
+function request_automove(move, think = null, manual = false, opts = {}) {
+    if (config.puzzle_mode && !manual) {
+        const key = puzzle_key(last_eval.fen || '');
+        if (key && key === puzzle_last_sent.key && Date.now() - puzzle_last_sent.at < PUZZLE_REPLAY_GUARD_MS) {
+            console.log('Puzzle: already moved from this position -- waiting for the reply');
+            return;
+        }
+        puzzle_last_sent = {key, at: Date.now()};
+        // The database path has already paused; anything else (the engine) has not.
+        if (!opts.delayed) {
+            clearTimeout(puzzle_move_timer);
+            puzzle_move_timer = setTimeout(() => request_automove(move, think, manual, {delayed: true}),
+                                           PUZZLE_MOVE_DELAY_MS);
+            return;
+        }
+    }
     bgTrace('request_automove', {move, think, puzzle: config.puzzle_mode});
+    // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
+    // queues a blind premove (it won't appear in the move list until they move), so it must NOT be
+    // verified/retried; an on-turn move must be. The popup is authoritative here -- decide from the
+    // position's side-to-move (== our colour) rather than letting the content-script re-derive the
+    // turn from fragile DOM highlights (which throws on e.g. the lichess analysis board, silently
+    // skipping verification). last_eval.fen is the current position (on_new_pos ran before this).
     // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
     // queues a blind premove (it won't appear in the move list until they move), so it must NOT be
     // verified/retried; an on-turn move must be. The popup is authoritative here -- decide from the

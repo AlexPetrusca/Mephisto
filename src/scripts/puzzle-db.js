@@ -125,6 +125,12 @@ function applyUci(placement, uci) {
 //
 // Returns [key, solution] or null. `solution` is the whole remaining line from that position, ours
 // and theirs alternating, starting with ours.
+// One stored value. A rating is kept only when the publisher gave one (daily puzzles have none).
+function record(solution, rating) {
+    const r = parseInt(rating, 10);
+    return Number.isFinite(r) && r > 0 ? {s: solution, r} : {s: solution};
+}
+
 function rowToRecord(line) {
     // Only the first three fields are touched and none of them can contain a comma or a quote (a FEN
     // and a UCI move list are spaces and alphanumerics). The columns that could -- Themes, GameUrl,
@@ -136,7 +142,10 @@ function rowToRecord(line) {
     if (!placement || !stm || moves.length < 2) return null; // a 1-move `Moves` has no solution left
     const after = applyUci(placement, moves[0]);
     if (!after) return null;
-    return [`${after} ${stm === 'w' ? 'b' : 'w'}`, moves.slice(1).join(' ')];
+    // {s, r} rather than a bare string, so the panel can show what the puzzle is rated. Records
+    // written before this change ARE bare strings and still read -- see lookup().
+    return [`${after} ${stm === 'w' ? 'b' : 'w'}`,
+            record(moves.slice(1).join(' '), cols[3])];
 }
 
 // --- chess.com puzzles ---------------------------------------------------------------------------
@@ -208,12 +217,13 @@ function ccRowToRecord(cols, sanToUci) {
 
     const color = String(cols[CC_COLS.color] || '').trim().toLowerCase();
     const solverIsSideToMove = !color || color[0] === stm;
-    if (solverIsSideToMove) return [`${placement} ${stm}`, moves.join(' ')];
+    const rating = cols[CC_COLS.rating];
+    if (solverIsSideToMove) return [`${placement} ${stm}`, record(moves.join(' '), rating)];
 
     if (moves.length < 2) return null;               // a setup move and nothing left to solve
     const after = applyUci(placement, moves[0]);
     if (!after) return null;
-    return [`${after} ${stm === 'w' ? 'b' : 'w'}`, moves.slice(1).join(' ')];
+    return [`${after} ${stm === 'w' ? 'b' : 'w'}`, record(moves.slice(1).join(' '), rating)];
 }
 
 // Streaming CSV reader. Feed it chunks, get back complete records. Handles quoted fields, doubled
@@ -351,7 +361,12 @@ async function lookup(fen, site = 'li') {
     try {
         return await new Promise((resolve, reject) => {
             const req = db.transaction(store, 'readonly').objectStore(store).get(keyOf(fen));
-            req.onsuccess = () => resolve(req.result || null);
+            req.onsuccess = () => {
+                const v = req.result;
+                if (!v) return resolve(null);
+                // An import made before ratings were stored wrote a bare string.
+                resolve(typeof v === 'string' ? {s: v} : v);
+            };
             req.onerror = () => reject(req.error);
         });
     } finally {

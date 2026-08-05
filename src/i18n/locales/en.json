@@ -236,5 +236,6 @@
   "panel.engine_error": "Engine error",
   "panel.tetrarch_setup": "Tetrarch is not installed yet — see the README section \"Four-player chess\" for macOS, Linux and Windows setup",
   "panel.incomplete_install": "Engines missing — you have the update-only download. Get the full zip.",
-  "panel.fourpc_ffa": "Free-for-all — Tetrarch searches Teams mode only"
+  "panel.fourpc_ffa": "Free-for-all — Tetrarch searches Teams mode only",
+  "panel.msg.puzzle_rating": "Rating {r}"
 }
