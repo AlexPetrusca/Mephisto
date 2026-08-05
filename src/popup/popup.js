@@ -2373,7 +2373,7 @@ function puzzle_move_ready(fen) {
 // opponent's reply is still moving across the board. That is what made the mismatch guard fire on
 // essentially every puzzle move. Delaying the SEND (rather than sleeping inside the click sequence)
 // also means the content-script's guard judges a board that has settled.
-const PUZZLE_MOVE_DELAY_MS = 200;
+const PUZZLE_MOVE_DELAY_MS = 300;
 // The pending pre-move pause. Superseded rather than stacked: on_new_pos can legitimately run twice
 // for the SAME board -- a re-push flagged as a resume does exactly that -- and two live timers would
 // send the move twice, which the content-script then has to drop on its `moving` guard.
