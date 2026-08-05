@@ -2320,8 +2320,16 @@ function request_puzzle_solution(fen) {
     if (puzzle_asked === puzzle_key(fen)) return;       // asked once; the answer is coming or was null
     puzzle_asked = puzzle_key(fen);
     chrome.runtime.sendMessage({puzzleLookup: {fen, site: detected_prefix}}, (res) => {
-        if (chrome.runtime.lastError || !res || res.error || !res.solution) return;
+        // ANSWERED EITHER WAY. A miss used to return silently, which is why the search had to be
+        // started speculatively -- and a search started speculatively is a search that can finish
+        // first and play the engine's move into a puzzle the database could have answered.
+        puzzle_answered = puzzle_key(fen);
+        if (chrome.runtime.lastError || !res || res.error || !res.solution) {
+            release_deferred_search(fen);
+            return;
+        }
         puzzle_solutions = puzzle_expand(fen, res.solution);
+        puzzle_rating = res.rating
         puzzle_rating = res.rating ?? null;
         console.log(`Puzzle DB: solution known -- ${res.solution}` +
                     (puzzle_rating ? ` (rated ${puzzle_rating})` : ''));
@@ -2330,6 +2338,26 @@ function request_puzzle_solution(fen) {
         if (last_eval.fen === fen) draw_moves();
         maybe_play_puzzle_move(fen);
     });
+}
+
+// The position we have a definitive database answer for -- hit OR miss -- and the search that is
+// waiting on one. Puzzle Mode holds the engine until the database has spoken, because an engine move
+// played into a position the database knew is precisely how a solved puzzle gets failed.
+let puzzle_answered = null;
+let puzzle_deferred = null;   // {fen, startFen, moves} -- re-entered once the answer lands
+let puzzle_defer_timer = null;
+// How long the engine will wait on the database before giving up and searching anyway. A lookup is
+// one message and one indexed read, so this is generous by an order of magnitude -- it exists so a
+// worker that never answers costs a slower move rather than NO move, which is the worse failure.
+const PUZZLE_LOOKUP_WAIT_MS = 1500;
+
+function release_deferred_search(fen) {
+    const w = puzzle_deferred;
+    if (!w || puzzle_key(w.fen) !== puzzle_key(fen)) return;
+    puzzle_deferred = null;
+    clearTimeout(puzzle_defer_timer);
+    console.log('Puzzle DB: no entry for this position -- searching normally');
+    on_new_pos(w.fen, w.startFen, w.moves);
 }
 
 // Our move in THIS position per the database, or null.
@@ -3158,6 +3186,22 @@ function on_new_pos(fen, startFen, moves) {
     // feed, and the bestmove it produces moves one of THEIR pieces, which premove_reply_playable
     // rejects anyway. It only burns cores and leaves a search in flight that the real position then
     // has to supersede. Stop whatever is running and wait for their move instead.
+    // WAIT FOR THE DATABASE BEFORE SEARCHING. The lookup is a message to the worker plus a disk
+    // read; a search is slower, but not always, and the engine finishing first is what produced
+    // moves that failed puzzles the database could have solved. Deferred, not skipped: the answer
+    // re-enters this function, so a miss searches exactly as it always did.
+    if (puzzle_db_enabled() && !puzzle_known && puzzle_answered !== puzzle_key(fen)) {
+        puzzle_deferred = {fen, startFen, moves};
+        abandon_search();
+        toggle_calculating(true);
+        clearTimeout(puzzle_defer_timer);
+        puzzle_defer_timer = setTimeout(() => {
+            console.warn('Mephisto: the puzzle database did not answer in time -- searching anyway');
+            puzzle_answered = puzzle_key(fen);   // do not wait again for this position
+            release_deferred_search(fen);
+        }, PUZZLE_LOOKUP_WAIT_MS);
+        return;
+    }
     if (puzzle_known) {
         // THE MOVE IS ALREADY DECIDED, so this search chooses nothing -- it runs only so the panel
         // still shows an evaluation for the position instead of a blank readout. Bounded at depth 10:
