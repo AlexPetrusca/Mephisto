@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <title>Mephisto Options</title>
-    <link rel="stylesheet" href="options.css"/>
     <link rel="stylesheet" href="/lib/materialize/material-icons.min.css">
     <link rel="stylesheet" href="/lib/materialize/materialize.min.css">
+    <!-- AFTER materialize: this sheet overrides it, and on equal specificity source order decides. -->
+    <link rel="stylesheet" href="options.css"/>
     <script src="/lib/materialize/materialize.min.js"></script>
     <script src="/src/scripts/config-store.js"></script>
     <!-- chess.js is here only so the puzzle importer can turn the daily rows' SAN into UCI;

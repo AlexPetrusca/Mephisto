@@ -2328,8 +2328,11 @@ function request_puzzle_solution(fen) {
             release_deferred_search(fen);
             return;
         }
+        // A HIT ends the wait too. Without this the deferral stays armed and its watchdog re-enters
+        // on_new_pos 1.5s later for a position that has already been answered and played.
+        puzzle_deferred = null;
+        clearTimeout(puzzle_defer_timer);
         puzzle_solutions = puzzle_expand(fen, res.solution);
-        puzzle_rating = res.rating
         puzzle_rating = res.rating ?? null;
         console.log(`Puzzle DB: solution known -- ${res.solution}` +
                     (puzzle_rating ? ` (rated ${puzzle_rating})` : ''));
