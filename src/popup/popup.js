@@ -1446,7 +1446,12 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                     : (book && premove_reply_playable(last_eval.fen, book)) ? book : best;
                 if (tb_ok && tb !== best) console.log(`Tablebase: playing ${tb} over ${best} (solved position)`);
                 if (!tb_ok && played !== best) console.log(`Book: playing ${played} over ${best} (weighted random)`);
-                if ((config.humanize || clock_aware()) && !config.puzzle_mode) {
+                if (puzzle_display_search) {
+                    // A depth-10 look at a position whose answer is already known. Showing it is the
+                    // whole point; playing it is how you fail a puzzle with a stronger move.
+                    puzzle_display_search = false;
+                    console.log('Puzzle: display-only search finished -- the known solution stands');
+                } else if ((config.humanize || clock_aware()) && !config.puzzle_mode) {
                     const pick = humanize_pick(best);
                     if (played !== best) pick.move = played; // book wins the move, humanize keeps the clock
                     if (pick.move !== best) console.log(`Humanize: playing ${pick.move} over ${best}`);
@@ -2374,6 +2379,10 @@ function puzzle_move_ready(fen) {
 // essentially every puzzle move. Delaying the SEND (rather than sleeping inside the click sequence)
 // also means the content-script's guard judges a board that has settled.
 const PUZZLE_MOVE_DELAY_MS = 300;
+// Depth for the look-only search run when the database already knows the answer. Not a budget in
+// milliseconds: the point is a comparable number on every machine, not a fixed wait.
+const PUZZLE_DISPLAY_DEPTH = 10;
+let puzzle_display_search = false;   // the search in flight decides nothing and must not be played
 // The pending pre-move pause. Superseded rather than stacked: on_new_pos can legitimately run twice
 // for the SAME board -- a re-push flagged as a resume does exactly that -- and two live timers would
 // send the move twice, which the content-script then has to drop on its `moving` guard.
@@ -3149,7 +3158,20 @@ function on_new_pos(fen, startFen, moves) {
     // feed, and the bestmove it produces moves one of THEIR pieces, which premove_reply_playable
     // rejects anyway. It only burns cores and leaves a search in flight that the real position then
     // has to supersede. Stop whatever is running and wait for their move instead.
-    if (puzzle_known || (config.puzzle_mode && !our_turn)) {
+    if (puzzle_known) {
+        // THE MOVE IS ALREADY DECIDED, so this search chooses nothing -- it runs only so the panel
+        // still shows an evaluation for the position instead of a blank readout. Bounded at depth 10:
+        // deep enough to mean something, cheap enough to be free next to a solution we already hold.
+        // Its bestmove must never be played (see puzzle_display_search in on_engine_best_move) --
+        // the puzzle's line wins, and an objectively stronger move still fails the puzzle.
+        abandon_search();
+        if (!is_remote()) {
+            puzzle_display_search = true;
+            send_engine_uci(moves ? `position fen ${startFen} moves ${moves}` : `position fen ${fen}`);
+            send_engine_uci(`go depth ${PUZZLE_DISPLAY_DEPTH}`);
+            search_active = true;
+        }
+    } else if (config.puzzle_mode && !our_turn) {
         abandon_search();
     } else if (is_remote()) {
         // pure analysis (Help Mode / Autoplay off) keeps deepening like the WASM `go infinite`: give
