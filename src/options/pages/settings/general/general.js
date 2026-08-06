@@ -1,6 +1,33 @@
 import {define} from "../../../framework/require.js";
 import {SettingsPage} from "../../../util/SettingsPage.js";
 
+// What a move that gives up `lossCp` centipawns is worth. Both formulas are Lichess's own, so a cp
+// figure here reads the same as a Lichess game review:
+//   winPercent -- lila WinPercent.scala, the PR #11148 regression (NOT Stockfish's own formula)
+//   accuracy   -- lila AccuracyPercent.scala, derived from the before/after win%
+// Taken from an EQUAL position (win% 50 before the move), which is the standard way these are
+// illustrated: 110cp = a 10% win-drop = Inaccuracy, 230cp = 20% = Mistake, 377cp = 30% = Blunder,
+// which is where the defaults sit. Module scope because the per-row readouts and the weighted
+// summary both need it, and two copies of a formula drift.
+function moveQuality(lossCp) {
+    const winPct = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
+    const drop = 50 - winPct(-lossCp); // our win% after a move that loses this much, from equal
+    const acc = Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * drop) - 3.1669 + 1));
+    return {acc, drop};
+}
+
+// The seven mix categories paired with the threshold that defines each. Top move has no threshold:
+// it IS the best move, so it gives up nothing.
+const HUMANIZE_BANDS = [
+    ['humanize_top', null],
+    ['humanize_second', 'humanize_cp_second'],
+    ['humanize_third', 'humanize_cp_third'],
+    ['humanize_fourth', 'humanize_cp_fourth'],
+    ['humanize_inaccuracy', 'humanize_cp_inaccuracy'],
+    ['humanize_mistake', 'humanize_cp_mistake'],
+    ['humanize_blunder', 'humanize_cp_blunder'],
+];
+
 class GeneralSettings extends SettingsPage {
     init() {
         M.FormSelect.init(document.querySelectorAll('select'), {});
@@ -230,6 +257,7 @@ class GeneralSettings extends SettingsPage {
             paint(row.range);
             if (persist) MephistoConfig.set(row.key, val);
             updateTotal();
+            this.updateHumanizeSummary(); // a share moved, so the weighting moved
         };
 
         rows.forEach(r => {
@@ -237,6 +265,32 @@ class GeneralSettings extends SettingsPage {
             r.range?.addEventListener('input', () => set(r, r.range.value));
             r.num.addEventListener('change', () => set(r, r.num.value));
         });
+    }
+
+    // The whole mix in one number, in the Total row's Accuracy cell: each category's accuracy
+    // weighted by the share it is actually played. Reads live off the inputs rather than off stored
+    // config, so it answers for what is on screen right now -- including a value typed but not yet
+    // committed by a change event.
+    //
+    // Normalized by the ACTUAL sum, not by 100. The popup picks proportionally, so a mix totalling
+    // 90 or 110 still plays those ratios, and this has to describe what will happen rather than what
+    // a corrected mix would do. That also keeps it meaningful while the total is mid-edit and red.
+    updateHumanizeSummary() {
+        const cell = document.getElementById('humanize_mix_summary');
+        if (!cell) return; // stale cached page html
+        const num = (id) => +document.getElementById(id)?.value || 0;
+        let share = 0, acc = 0, drop = 0;
+        for (const [mixKey, cpKey] of HUMANIZE_BANDS) {
+            const s = num(`${mixKey}_mixnum`);
+            if (s <= 0) continue; // a category never played contributes nothing, not a zero
+            const q = moveQuality(cpKey ? num(`${cpKey}_num`) : 0);
+            share += s;
+            acc += s * q.acc;
+            drop += s * q.drop;
+        }
+        cell.textContent = share > 0
+            ? `${Math.round(acc / share)}% acc · ${Math.round(drop / share)}% drop`
+            : '—';
     }
 
     // Per-category centipawn thresholds, each with a live accuracy/win-drop readout. The two formulas
@@ -259,12 +313,9 @@ class GeneralSettings extends SettingsPage {
         }));
         if (!rows.every(r => r.num && r.readout)) return; // stale cached page html (range is optional)
 
-        const winPct = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
+        // short form: this sits in the mix table's Accuracy column, not on its own line
         const readoutText = (loss) => {
-            const after = winPct(-loss);           // our win% after a move that loses `loss` cp from equal
-            const drop = 50 - after;
-            const acc = Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * drop) - 3.1669 + 1));
-            // short form: this now sits in the mix table's Accuracy column, not on its own line
+            const {acc, drop} = moveQuality(loss);
             return `${Math.round(acc)}% acc · ${Math.round(drop)}% drop`;
         };
         const paint = (el) =>
@@ -280,12 +331,16 @@ class GeneralSettings extends SettingsPage {
             row.readout.textContent = readoutText(val);
             paint(row.range);
             if (persist) MephistoConfig.set(row.key, val);
+            this.updateHumanizeSummary(); // a band moved, so the weighted accuracy moved
         };
         rows.forEach(r => {
             set(r, load(r.key, r.dflt), false);
             r.range?.addEventListener('input', () => set(r, r.range.value));
             r.num.addEventListener('change', () => set(r, r.num.value));
         });
+        // The mix populates BEFORE this does, so its first summary was computed against empty cp
+        // fields. This is the pass that gets it right on page open.
+        this.updateHumanizeSummary();
     }
 
     // Self-update. NOT a FormElement, and no config key at all: the CHROME PERMISSION is the

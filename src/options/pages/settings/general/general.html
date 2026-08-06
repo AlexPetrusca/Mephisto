@@ -731,11 +731,13 @@
                             <td><input id="humanize_cp_blunder_num" type="number" min="0" max="800" step="5"></td>
                             <td class="set-readout" id="humanize_cp_blunder_readout"></td>
                         </tr>
+                        <!-- The Accuracy cell of this row is the whole mix in one number: every
+                             category's accuracy weighted by the share it is actually played. -->
                         <tr class="set-mix-total">
                             <td data-i18n="set.total">Total</td>
                             <td id="humanize_mix_total"></td>
                             <td></td>
-                            <td></td>
+                            <td class="set-readout" id="humanize_mix_summary"></td>
                         </tr>
                     </tbody>
                 </table>
