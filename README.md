@@ -638,9 +638,10 @@ post-game review, where the hit rate is higher and the eval is context rather th
 
 ### Shipped
 
-- [x] **[Automatic updates](#automatic-updates-opt-in)** (v3.1.214) — opt-in, one button: fetches the ~6 MB update
-  archive from this repository and writes it into the extension's own folder in place, so the id and the native
-  hosts survive. Off by default; nothing is installed without pressing the button.
+- [x] **[Automatic updates](#automatic-updates-opt-in)** (v3.1.214, one-click from the panel v3.1.215) — opt-in:
+  fetches the ~6 MB update archive from this repository and writes it into the extension's own folder in place, so
+  the id and the native hosts survive. Once it is set up the panel's own update notice installs it. Off by default;
+  nothing is installed without pressing the button.
 - [x] **[Four-player chess](#four-player-chess)** (v3.1.199) — chess.com's 4-player variant, driven by
   [Tetrarch](https://github.com/IchNukeDichWeg/Tetrarch); 14×14 panel board, team-relative eval, autoplay.
   Teams mode only.
