@@ -80,7 +80,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.212'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.213'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -159,10 +159,15 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // Superseding is safe: the premove's clicks are already queued at the SITE, and this
             // move carries its own `deselect`, so it starts by clearing any half-made selection.
             bgLog('superseding an in-flight blind premove with the real move', {move: response.move});
-        } else {
-            if (response.automove) bgLog('DROPPED: a previous move is still in progress (moving=true)');
+        } else if (response.automove || response.premoves) {
+            bgLog('DROPPED: a previous move is still in progress (moving=true)');
             return;
         }
+        // ANYTHING ELSE FALLS THROUGH. This guard exists to stop two CLICK SESSIONS overlapping --
+        // it used to `return` for every message shape, so while a move was in flight the panel could
+        // not draw a hint arrow, clear one, or repaint the eval bar. None of those touch the board;
+        // they are drawing. Autoplay in four-player chess moves almost continuously, which is why
+        // Help Mode looked like it drew nothing there while the same code worked on an 8x8 board.
     }
     if (response.automove) {
         // Manual Mode moves (response.manual) are triggered by YOUR keypress, so they're allowed even
