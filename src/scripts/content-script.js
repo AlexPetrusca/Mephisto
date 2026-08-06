@@ -80,7 +80,7 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.211'; // bump on every content-script change; verify in the page console after reload
+const MEPHISTO_BUILD = '3.1.212'; // bump on every content-script change; verify in the page console after reload
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
@@ -1694,22 +1694,29 @@ function fourPCMode() {
 
 function fourPCModeDetect() {
     const seen = {};
-    // 1. the URL, when chess.com puts it there
+    // 1. chess.com's own mode chip. VERIFIED on a live board: a free-for-all game renders
+    //    `.game-details-type` as "1 | 7 | FFA" and a Teams game as "2 | 10 Teams", on the game page
+    //    and in every list. This is the signal; everything below is a fallback.
+    const chip = document.querySelector('.game-details-type');
+    seen.chip = chip ? (chip.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 40) : null;
+    if (seen.chip) {
+        if (/\bFFA\b|free[\s-]?for[\s-]?all/i.test(seen.chip)) return fourPCModeLog('ffa', seen);
+        if (/\bteams?\b/i.test(seen.chip)) return fourPCModeLog('teams', seen);
+    }
+    // 2. the URL, if chess.com ever puts it there. Measured: today it does NOT -- a live FFA game is
+    //    just /variants/4-player-chess/game/<id> -- so this can only ever confirm, never decide.
     seen.path = location.pathname + location.search;
     if (/\bffa\b|free-for-all|freeforall/i.test(seen.path)) return fourPCModeLog('ffa', seen);
     if (/\bteams?\b|team-battle/i.test(seen.path)) return fourPCModeLog('teams', seen);
-    // 2. a mode label rendered near the board. Kept to a SHORT visible-text scan rather than a
-    //    guessed class name: chess.com renames classes, it does not rename the words on screen.
-    const text = (document.querySelector('.board-layout-sidebar, .game-info, main')?.innerText || '')
-        .slice(0, 4000);
+    // 3. the whole page's text. NOT `main` or `.board-layout-sidebar`, which is what this used to
+    //    read: on a real game page those are empty or absent, so the scan saw nothing, found neither
+    //    word, and fell through to the default -- an FFA board analysed under Teams rules.
+    const text = (document.body.innerText || '').slice(0, 6000);
     seen.ffaWord = /free[\s-]?for[\s-]?all|\bFFA\b/i.test(text);
     seen.teamWord = /\bteams?\b/i.test(text);
     if (seen.ffaWord && !seen.teamWord) return fourPCModeLog('ffa', seen);
     if (seen.teamWord && !seen.ffaWord) return fourPCModeLog('teams', seen);
-    // 3. FFA scores points per player; Teams does not. A points readout beside every seat is the
-    //    structural tell, but the markup for it is UNVERIFIED -- see the log.
-    seen.points = [...document.querySelectorAll('[class*="points"], [class*="score"]')].length;
-    return fourPCModeLog('teams', seen);   // default keeps the shipped behaviour
+    return fourPCModeLog('teams', seen);   // default: the mode Tetrarch can actually search
 }
 
 let fourPCModeLast = null;
