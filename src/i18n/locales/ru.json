@@ -252,5 +252,10 @@
   "set.sec.diagnostics": "Диагностика",
   "set.verbose_logging": "Подробный журнал",
   "set.tip.the_trace_is_normally_quiet": "The trace is normally quiet while the game tab is focused, so ordinary play does not fill the console. That is the right default and the wrong thing to have to guess at: turn this on to see every decision as it happens, in the service worker's console. Costs nothing but noise.",
-  "set.note.the_panel_s_clipboard_button": "The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report: version, engine, what was detected, why the last move was or was not played, and the last 200 trace lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no query string, no extension id."
+  "set.note.the_panel_s_clipboard_button": "The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report: version, engine, what was detected, why the last move was or was not played, and the last 200 trace lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no query string, no extension id.",
+  "set.roll_back": "Откатить",
+  "set.finish_update": "Завершить прерванное обновление",
+  "set.note.every_update_is_undoable": "Every update is <b>undoable</b>. Before anything is overwritten the new version is written to a staging folder, and the files it replaces are copied to a backup — so <b>Roll Back</b> puts the previous version straight back, and an update interrupted halfway can be finished without downloading it again. One generation is kept, and the bundled engines are never part of it.",
+  "panel.updated_to": "Обновлено до v{v}",
+  "panel.updated_to_with_note": "Обновлено до v{v} — {note}"
 }

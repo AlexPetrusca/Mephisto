@@ -349,8 +349,19 @@ async function updateCheck(force = false) {
       // The update archive is taken BY NAME. "the smaller of the two assets" would quietly start a
       // 585 MB download the day a release ships only the full one.
       const asset = (json.assets || []).find(a => a.name === `mephisto-${latest}-update.zip`);
+      // The one-line story of the release, for the "what changed" note shown once after an update.
+      // The notes always open with a bold headline sentence, so the first non-empty line is it --
+      // stripped of the markdown that would otherwise read as literal asterisks in the panel, and
+      // capped so a malformed release cannot push a paragraph into a one-line element.
+      const headline = String(json.body || '').split('\n').map(l => l.trim())
+        .find(l => l && !l.startsWith('#') && !l.startsWith('|') && !l.startsWith('>')) || '';
+      // First SENTENCE, not first 240 characters: the notes open with a headline sentence followed
+      // by context, and a character cap cut it mid-clause.
+      const plain = headline.replace(/\*\*|__|`/g, '');
+      const stop = plain.search(/[.!?](\s|$)/);
       result = {latest, url: json.html_url, asset: asset?.browser_download_url || null,
-                size: asset?.size || 0};
+                size: asset?.size || 0, name: json.name || '',
+                headline: (stop > 0 ? plain.slice(0, stop + 1) : plain).slice(0, 200)};
     }
   } catch (e) {
     // offline, rate-limited or aborted -- fall through with latest:null and cache it, so a broken

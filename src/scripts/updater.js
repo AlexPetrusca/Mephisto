@@ -230,6 +230,180 @@ const MephistoUpdater = (function () {
         return out;
     }
 
+    // --- staged, recoverable install --------------------------------------------------------------
+    // TRUE ATOMICITY IS NOT AVAILABLE, and it is worth being plain about why: the extension id comes
+    // from its folder path, so the folder cannot be swapped out from under itself the way a normal
+    // installer would. What IS available is making every step recoverable:
+    //
+    //   1. every file is written to .mephisto-staging first, so a complete copy of the new version
+    //      exists on disk before anything is overwritten
+    //   2. every file about to be replaced is copied to .mephisto-backup/<version>, with a manifest
+    //   3. only then are the files put in place
+    //
+    // Die during 3 and the backup is complete, so Roll back restores the old version; the staged
+    // copy is also intact, so finishing needs no second download. Dot-directories, which Chrome
+    // ignores when it loads an unpacked extension.
+    const STAGING = '.mephisto-staging';
+    const BACKUP = '.mephisto-backup';
+
+    async function dirAt(root, path, create) {
+        let d = root;
+        for (const part of path.split('/').filter(Boolean)) d = await d.getDirectoryHandle(part, {create});
+        return d;
+    }
+    async function readFileAt(root, relPath) {
+        try {
+            const parts = relPath.split('/');
+            const name = parts.pop();
+            const d = await dirAt(root, parts.join('/'), false);
+            const f = await (await d.getFileHandle(name)).getFile();
+            return new Uint8Array(await f.arrayBuffer());
+        } catch (e) {
+            return null; // absent is a normal answer here, not a failure
+        }
+    }
+    async function removeFileAt(root, relPath) {
+        try {
+            const parts = relPath.split('/');
+            const name = parts.pop();
+            const d = await dirAt(root, parts.join('/'), false);
+            await d.removeEntry(name);
+        } catch (e) { /* already gone */ }
+    }
+    async function removeEntry(root, name) {
+        try { await root.removeEntry(name, {recursive: true}); } catch (e) { /* not there */ }
+    }
+
+    // One generation, deliberately. Two would double the disk for a case nobody has ever wanted:
+    // what you want back is the version that was working ten minutes ago, not four versions ago.
+    async function backupCurrent(dir, version, paths, onStatus) {
+        await removeEntry(dir, BACKUP);
+        const backup = await dir.getDirectoryHandle(BACKUP, {create: true});
+        const gen = await backup.getDirectoryHandle(version, {create: true});
+        const saved = [], added = [];
+        let n = 0;
+        for (const p of paths) {
+            const bytes = await readFileAt(dir, p);
+            if (bytes) { await writeFile(gen, p, bytes); saved.push(p); }
+            else added.push(p); // a file this update introduces: rolling back has to DELETE it
+            if (++n % 40 === 0) onStatus(`Backing up… ${n}/${paths.length}`);
+        }
+        await writeFile(backup, 'manifest.json', new TextEncoder().encode(
+            JSON.stringify({version, saved, added, at: new Date().toISOString()}, null, 2)));
+        return {saved: saved.length, added: added.length};
+    }
+
+    // What Settings needs to decide whether to offer the button at all.
+    async function rollbackInfo() {
+        const dir = await handleGet();
+        if (!dir) return null;
+        try {
+            const backup = await dir.getDirectoryHandle(BACKUP);
+            const raw = await readFileAt(backup, 'manifest.json');
+            if (!raw) return null;
+            const m = JSON.parse(new TextDecoder().decode(raw));
+            return {version: m.version, files: (m.saved || []).length, at: m.at};
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Every file is read back and checked BEFORE the first one is written, for the same reason the
+    // archive is: a half-restore is worse than a failed one, and it is the state nobody can recover
+    // from by hand.
+    async function rollback(onStatus = () => {}) {
+        const dir = await folder({prompt: true});
+        if (!dir) throw new Error('Choose the extension folder first.');
+        const backup = await dir.getDirectoryHandle(BACKUP).catch(() => null);
+        if (!backup) throw new Error('There is nothing to roll back to.');
+        const raw = await readFileAt(backup, 'manifest.json');
+        if (!raw) throw new Error('The backup is missing its manifest.');
+        const m = JSON.parse(new TextDecoder().decode(raw));
+        const gen = await backup.getDirectoryHandle(m.version).catch(() => null);
+        if (!gen) throw new Error(`The backup of v${m.version} is missing.`);
+
+        onStatus(`Reading the backup of v${m.version}…`);
+        const restore = [];
+        for (const p of (m.saved || [])) {
+            const bytes = await readFileAt(gen, p);
+            if (!bytes) throw new Error(`The backup is missing ${p} — refusing to half-restore.`);
+            restore.push({path: p, bytes});
+        }
+        let n = 0;
+        for (const f of restore) {
+            await writeFile(dir, f.path, f.bytes);
+            if (++n % 40 === 0 || n === restore.length) onStatus(`Restoring… ${n}/${restore.length}`);
+        }
+        // Files the update ADDED have no earlier version. Leaving them behind would mix two builds,
+        // which is the failure mode that made a deleted declaration invisible once before.
+        for (const p of (m.added || [])) await removeFileAt(dir, p);
+        await removeEntry(dir, BACKUP);
+        return {version: m.version, files: restore.length, removed: (m.added || []).length};
+    }
+
+    // A staging directory left behind means the move step did not finish. Say so, and offer to
+    // finish it from disk rather than making someone download the archive again.
+    async function pendingInstall() {
+        const dir = await handleGet();
+        if (!dir) return null;
+        try {
+            const staging = await dir.getDirectoryHandle(STAGING);
+            const raw = await readFileAt(staging, 'manifest.json');
+            if (!raw) return null;
+            return {version: JSON.parse(new TextDecoder().decode(raw)).version};
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Every file under a directory handle, depth first, as paths relative to it.
+    async function walkFiles(root, prefix = '') {
+        const out = [];
+        for await (const [name, h] of root.entries()) {
+            const p = prefix ? `${prefix}/${name}` : name;
+            if (h.kind === 'directory') out.push(...await walkFiles(h, p));
+            else out.push(p);
+        }
+        return out;
+    }
+
+    // Finish an install whose move step was interrupted. The bytes are already on disk and already
+    // verified -- they went through readUpdateArchive before they were staged -- so this is a copy,
+    // not a second download. Read entirely into memory first, same as everywhere else: a partial
+    // finish would be a third state nobody can reason about.
+    async function finishStaged(onStatus = () => {}) {
+        const dir = await folder({prompt: true});
+        if (!dir) throw new Error('Choose the extension folder first.');
+        const staging = await dir.getDirectoryHandle(STAGING).catch(() => null);
+        if (!staging) throw new Error('There is no interrupted update to finish.');
+        const raw = await readFileAt(staging, 'manifest.json');
+        if (!raw) throw new Error('The staged update has no manifest — download it again.');
+        const version = JSON.parse(new TextDecoder().decode(raw)).version;
+
+        onStatus(`Reading the staged v${version}…`);
+        const paths = await walkFiles(staging);
+        const files = [];
+        for (const p of paths) {
+            const bytes = await readFileAt(staging, p);
+            if (!bytes) throw new Error(`The staged update is missing ${p} — download it again.`);
+            files.push({path: p, bytes});
+        }
+        // An interrupted install already took a backup. Only take one if it did not get that far,
+        // and never overwrite a good backup with a half-updated folder -- that would destroy the
+        // only copy of the version being restored to.
+        if (!(await rollbackInfo())) {
+            const installed = await verifyFolder(dir);
+            await backupCurrent(dir, installed.version, paths, onStatus);
+        }
+        let n = 0;
+        for (const f of files) {
+            await writeFile(dir, f.path, f.bytes);
+            if (++n % 40 === 0 || n === files.length) onStatus(`Installing… ${n}/${files.length}`);
+        }
+        await removeEntry(dir, STAGING);
+        return {version, files: files.length};
+    }
+
     // --- writing --------------------------------------------------------------------------------
     async function writeFile(root, relPath, bytes) {
         const parts = relPath.split('/');
@@ -277,12 +451,31 @@ const MephistoUpdater = (function () {
         const keyed = carryKey(files.find(f => f.path === 'manifest.json').bytes, installed);
         if (keyed) files.find(f => f.path === 'manifest.json').bytes = keyed;
 
+        // 1. STAGE. A complete copy of the new version lands on disk before anything is overwritten.
+        onStatus(`Staging ${files.length} files…`);
+        await removeEntry(dir, STAGING);
+        const staging = await dir.getDirectoryHandle(STAGING, {create: true});
         let n = 0;
         for (const f of files) {
-            await writeFile(dir, f.path, f.bytes);
-            if (++n % 20 === 0 || n === files.length) onStatus(`Writing… ${n}/${files.length}`);
+            await writeFile(staging, f.path, f.bytes);
+            if (++n % 40 === 0 || n === files.length) onStatus(`Staging… ${n}/${files.length}`);
         }
-        return {installed: rel.latest, from: installed.version, files: files.length};
+
+        // 2. BACK UP what is about to be replaced, so this is undoable.
+        onStatus(`Backing up v${installed.version}…`);
+        const bk = await backupCurrent(dir, installed.version, files.map(f => f.path), onStatus);
+
+        // 3. PUT IN PLACE. Written from memory rather than re-read from staging -- same bytes, half
+        // the I/O. Staging still earns its keep: it is the on-disk proof that the whole version
+        // arrived, and it is what finishes the job if this loop is interrupted.
+        n = 0;
+        for (const f of files) {
+            await writeFile(dir, f.path, f.bytes);
+            if (++n % 40 === 0 || n === files.length) onStatus(`Installing… ${n}/${files.length}`);
+        }
+        await removeEntry(dir, STAGING);
+        return {installed: rel.latest, from: installed.version, files: files.length,
+                backedUp: bk.saved, added: bk.added, headline: rel.headline || ''};
     }
 
     return {
@@ -294,9 +487,13 @@ const MephistoUpdater = (function () {
         // one the settings page needs to decide what to tell you.
         pickFolder, folder, savedFolder: handleGet, forgetFolder: handleDel, verifyFolder,
         check, install,
+        rollback, rollbackInfo, pendingInstall, finishStaged,
         // exported for the test suite, which drives them against a real archive and a stub directory
         _readZip: readZip, _extract: extract, _readUpdateArchive: readUpdateArchive,
         _writeFile: writeFile, _carryKey: carryKey,
+        _readFileAt: readFileAt, _removeFileAt: removeFileAt, _backupCurrent: backupCurrent,
+        _walkFiles: walkFiles,
+        _STAGING: STAGING, _BACKUP: BACKUP,
     };
 })();
 

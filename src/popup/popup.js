@@ -152,6 +152,9 @@ let prev_ply_count = 0;    // plies in the last-seen position; a drop back to th
 const NO_CHESS960_ENGINES = ['maia', 'maia3'];
 // maia strength = net choice; tetrarch speaks its own four-player protocol and has no UCI_Elo, so
 // the slider was purely decorative there -- it advertised a strength cap that nothing applied.
+// Must match UPDATE_REPO in background-script.js; the ladder asserts they agree. Was written out
+// three times, which is two chances for a fork to be pointed at the wrong releases page.
+const UPDATE_REPO_SLUG = 'IchNukeDichWeg/Mephisto';
 const NO_ELO_ENGINES = ['maia', 'maia3', 'tetrarch-native'];
 
 // engines that speak native messaging (Chrome auto-launches the host, no server -- see
@@ -5672,6 +5675,31 @@ function maybe_suggest_calibration() {
 function check_for_update() {
     const el = PANEL_ROOT.getElementById('update-notice');
     if (!el) return;
+    // WHAT CHANGED OUTRANKS EVERYTHING. Straight after a self-update, the one thing worth saying is
+    // what you just got -- telling someone about the NEXT update, or about missing engines, on the
+    // first panel open after an install would bury it. Shown once and cleared, and only when the
+    // note is for the version actually running (a note left by a rollback is not news).
+    try {
+        chrome.storage.local.get('mephisto_whats_new', ({mephisto_whats_new: note}) => {
+            if (chrome.runtime.lastError || !note ||
+                note.version !== chrome.runtime.getManifest().version) return check_for_update_assets(el);
+            chrome.storage.local.remove('mephisto_whats_new');
+            el.textContent = note.headline
+                ? i18n('panel.updated_to_with_note', 'Updated to v{v} — {note}',
+                    {v: note.version, note: note.headline})
+                : i18n('panel.updated_to', 'Updated to v{v}', {v: note.version});
+            el.hidden = false;
+            const url = `https://github.com/${UPDATE_REPO_SLUG}/releases/tag/v${note.version}`;
+            el.href = url;
+            el.onclick = (e) => { e.preventDefault(); chrome.runtime.sendMessage({openUrl: url}); };
+        });
+    } catch (e) { /* extension context gone */ }
+}
+
+// The original body of check_for_update: what it did before the what's-new note took precedence.
+function check_for_update_assets(el) {
+    if (!el) return;
+
     // AN INCOMPLETE INSTALL OUTRANKS AN AVAILABLE UPDATE. If the engines are missing there is no
     // point telling someone a newer version exists -- the build they have cannot run at all, and the
     // fix is the FULL archive rather than whatever is newest. Checked first, and it short-circuits.
@@ -5680,7 +5708,7 @@ function check_for_update() {
             if (chrome.runtime.lastError || !res || res.ok) return check_for_update_version(el);
             el.textContent = i18n('panel.incomplete_install',
                 'Engines missing — you have the update-only download. Get the full zip.');
-            el.href = 'https://github.com/IchNukeDichWeg/Mephisto/releases/latest';
+            el.href = `https://github.com/${UPDATE_REPO_SLUG}/releases/latest`;
             el.hidden = false;
             el.onclick = (e) => {
                 e.preventDefault();
@@ -5701,7 +5729,7 @@ function check_for_update_version(el) {
             // Set the REAL destination on the anchor. Belt and braces: in the toolbar popup a plain
             // target="_blank" works on its own, and if the handler below ever fails to run, the link
             // still goes to the release rather than to whatever page the panel is sitting on.
-            const url = res.url || 'https://github.com/IchNukeDichWeg/Mephisto/releases/latest';
+            const url = res.url || `https://github.com/${UPDATE_REPO_SLUG}/releases/latest`;
             el.href = url;
             el.onclick = (e) => {
                 e.preventDefault();   // in-page, target="_blank" is unreliable -- let the worker open it

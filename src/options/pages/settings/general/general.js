@@ -365,11 +365,13 @@ class GeneralSettings extends SettingsPage {
         const checkBtn = document.getElementById('update_check_btn');
         const folderBtn = document.getElementById('update_folder_btn');
         const installBtn = document.getElementById('update_install_btn');
+        const rollbackBtn = document.getElementById('update_rollback_btn');
+        const resumeBtn = document.getElementById('update_resume_btn');
         const status = document.getElementById('update_status');
         if (!cb || !checkBtn || !folderBtn || !installBtn || !status) return; // stale cached page html
 
         const say = (t) => { status.textContent = t; };
-        const buttons = [checkBtn, folderBtn, installBtn];
+        const buttons = [checkBtn, folderBtn, installBtn, rollbackBtn, resumeBtn].filter(Boolean);
         const current = chrome.runtime.getManifest().version;
         let latest = null; // last release seen, so Install can name it
 
@@ -388,6 +390,18 @@ class GeneralSettings extends SettingsPage {
             const dir = await MephistoUpdater.savedFolder();
             if (!dir) return say(`On — you have v${current}. Choose the extension folder to finish setting this up.`);
             say(`On — you have v${current}, and updates go into "${dir.name}".`);
+            // Both of these exist only as a consequence of a previous install, so they are hidden
+            // until there is actually something to undo or finish -- a permanently greyed-out
+            // button teaches you nothing.
+            const [back, pending] = await Promise.all([
+                MephistoUpdater.rollbackInfo().catch(() => null),
+                MephistoUpdater.pendingInstall().catch(() => null),
+            ]);
+            rollbackBtn?.classList.toggle('hidden', !back);
+            if (back && rollbackBtn) rollbackBtn.textContent = `Roll Back to v${back.version}`;
+            resumeBtn?.classList.toggle('hidden', !pending);
+            if (pending) return say(`An update to v${pending.version} was interrupted before it finished. ` +
+                `Press Finish Interrupted Update — the files are already downloaded.`);
             report(await MephistoUpdater.check().catch(() => null), dir);
         };
 
@@ -448,7 +462,14 @@ class GeneralSettings extends SettingsPage {
                 } else {
                     // The reload tears this page down, so the line has to be on screen first. It
                     // also orphans the content script in every open game tab, hence the reminder.
-                    say(`Installed v${res.installed} over v${res.from} — ${res.files} files. Reloading the extension; reload your game tabs.`);
+                    // Leave a note for the panel to show once, so you find out WHAT changed without
+                    // going to look for the release. Cleared by the panel after it is shown.
+                    await chrome.storage.local.set({mephisto_whats_new: {
+                        version: res.installed, headline: res.headline || '', at: Date.now(),
+                    }});
+                    const kept = res.backedUp ? ` Roll back to v${res.from} from this page if it misbehaves.` : '';
+                    say(`Installed v${res.installed} over v${res.from} — ${res.files} files.${kept} ` +
+                        `Reloading the extension; reload your game tabs.`);
                     setTimeout(() => chrome.runtime.reload(), 1500);
                     return; // leave the buttons disabled: this page is about to go away
                 }
@@ -458,6 +479,34 @@ class GeneralSettings extends SettingsPage {
             buttons.forEach(b => b.disabled = false);
         };
         installBtn.addEventListener('click', runInstall);
+
+        rollbackBtn?.addEventListener('click', async () => {
+            buttons.forEach(b => b.disabled = true);
+            try {
+                const res = await MephistoUpdater.rollback(say);
+                say(`Rolled back to v${res.version} — ${res.files} files restored` +
+                    `${res.removed ? `, ${res.removed} removed` : ''}. Reloading the extension; reload your game tabs.`);
+                setTimeout(() => chrome.runtime.reload(), 1500);
+                return; // this page is about to go away
+            } catch (e) {
+                say(`Roll back failed, and nothing was changed: ${e.message || e}`);
+            }
+            buttons.forEach(b => b.disabled = false);
+        });
+
+        resumeBtn?.addEventListener('click', async () => {
+            buttons.forEach(b => b.disabled = true);
+            try {
+                const res = await MephistoUpdater.finishStaged(say);
+                say(`Finished the update to v${res.version} — ${res.files} files. ` +
+                    `Reloading the extension; reload your game tabs.`);
+                setTimeout(() => chrome.runtime.reload(), 1500);
+                return;
+            } catch (e) {
+                say(`Could not finish the update, and nothing was changed: ${e.message || e}`);
+            }
+            buttons.forEach(b => b.disabled = false);
+        });
 
         // The panel's "click to install" hands off to here -- the worker raises a flag and opens
         // this page, and the install starts on its own. The flag is cleared BEFORE anything runs, so
