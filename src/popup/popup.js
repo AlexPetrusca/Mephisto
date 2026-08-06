@@ -778,7 +778,13 @@ function init_quick_settings() {
             keep_alive(keep_alive_wanted(), true); // this change is a user gesture -> can (re)start the tone now
             if (key === 'help_mode' && !elem.checked) request_clear_hint();
             if (key === 'help_mode' || key === 'manual_mode' || key === 'autoplay') mark_autoplay_overridden();
-            if (key === 'autoplay' && elem.checked) fourpc_last = '';   // replay the board on screen
+            // FOUR-PLAYER: a search is skipped entirely when the position has not changed
+            // (fourpc_last), so any toggle that changes what the SAME position should PRODUCE has to
+            // invalidate that. Help Mode was missing here, which is exactly why its arrow never
+            // appeared until someone played a move -- turning it on asked for something the dedupe
+            // had already decided not to redo. Both directions, and both toggles: switching Help
+            // Mode off has to re-run too, or autoplay cannot take the move back over.
+            if (key === 'autoplay' || key === 'help_mode') fourpc_last = '';
             if (key === 'eval_bar' && !elem.checked) request_clear_eval_bar();
             // the strip is drawn by drawEvalBar, so clearing and letting the next eval redraw is
             // enough -- clear_eval_bar removes both overlays and the live bar comes straight back
