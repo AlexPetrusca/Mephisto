@@ -247,5 +247,10 @@
   "panel.fourpc_mode_auto": "自動判定",
   "panel.fourpc_mode_teams": "チーム",
   "panel.fourpc_mode_ffa": "フリーフォーオール",
-  "set.tip.four_player_mode": "4人盤をどのルールで進めるか。自動判定は chess.com 自身のモード表示を読みますが、それは他者のマークアップに対する推測です — 外れているときは自分で設定してください。探索のルールが変わります。昇格はフリーフォーオールで8段目、チームで11段目です。Tetrarch はチームのみ探索します。"
+  "set.tip.four_player_mode": "4人盤をどのルールで進めるか。自動判定は chess.com 自身のモード表示を読みますが、それは他者のマークアップに対する推測です — 外れているときは自分で設定してください。探索のルールが変わります。昇格はフリーフォーオールで8段目、チームで11段目です。Tetrarch はチームのみ探索します。",
+  "panel.tip.copy_diagnostics": "診断をコピー：バージョン、エンジン、検出内容、直前の手が指された／指されなかった理由、および最近のトレース。バグ報告にそのまま貼れます — アドレスも、あなたを特定する情報も含みません。",
+  "set.sec.diagnostics": "診断",
+  "set.verbose_logging": "詳細ログ",
+  "set.tip.the_trace_is_normally_quiet": "The trace is normally quiet while the game tab is focused, so ordinary play does not fill the console. That is the right default and the wrong thing to have to guess at: turn this on to see every decision as it happens, in the service worker's console. Costs nothing but noise.",
+  "set.note.the_panel_s_clipboard_button": "The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report: version, engine, what was detected, why the last move was or was not played, and the last 200 trace lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no query string, no extension id."
 }

@@ -788,6 +788,35 @@
                     <button data-i18n="set.reset_hotkeys_to_defaults" id="hotkey_reset_btn" type="button" class="set-btn">Reset hotkeys to defaults</button>
                 </div>
             </section>
+            <!-- ========================== DIAGNOSTICS ========================== -->
+            <section id="diagnostics" class="set-sec scrollspy">
+                <h3 data-i18n="set.sec.diagnostics" class="set-h">Diagnostics</h3>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl">
+                        <span data-i18n="set.verbose_logging">Verbose Logging</span>
+                        <span class="set-tip tooltipped" data-position="left" data-i18n-tip="set.tip.the_trace_is_normally_quiet"
+                              data-tooltip="The trace is normally quiet while the game tab is focused, so ordinary play
+                                            does not fill the console. That is the right default and the wrong thing to
+                                            have to guess at: turn this on to see every decision as it happens, in the
+                                            service worker's console. Costs nothing but noise."><i class="material-icons info-tooltip">info</i></span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="verbose_log_checkbox" type="checkbox" class="set-cb">
+                        <label for="verbose_log_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <p data-i18n-html="set.note.the_panel_s_clipboard_button" class="set-note">
+                    The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report:
+                    version, engine, what was detected, why the last move was or was not played, and the last 200 trace
+                    lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no
+                    query string, no extension id.
+                </p>
+            </section>
+
             <!-- ============================ UPDATES ============================ -->
             <!-- Off by default and deliberately three steps the first time: the switch asks Chrome
                  for the two hosts, the folder is picked once, and installing is its own button. None
@@ -851,6 +880,7 @@
                 <li><a data-i18n="set.sec.timing" href="#timing">Timing</a></li>
                 <li><a data-i18n="set.sec.humanize_move_mix" href="#humanize">Humanize — move mix</a></li>
                 <li><a data-i18n="set.hotkeys" href="#hotkeys">Hotkeys</a></li>
+                <li><a data-i18n="set.sec.diagnostics" href="#diagnostics">Diagnostics</a></li>
                 <li><a data-i18n="set.sec.updates" href="#updates">Updates</a></li>
             </ul>
         </div>

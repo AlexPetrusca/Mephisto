@@ -247,5 +247,10 @@
   "panel.fourpc_mode_auto": "Автоопределение",
   "panel.fourpc_mode_teams": "Команды",
   "panel.fourpc_mode_ffa": "Каждый за себя",
-  "set.tip.four_player_mode": "По каким правилам идёт игра на доске для четверых. Автоопределение читает собственную метку режима на chess.com, а это догадка о чужой разметке — задайте вручную, если догадка неверна. Это меняет правила поиска: превращение на 8-й горизонтали в режиме «каждый за себя» и на 11-й в командном. Tetrarch ищет только командный режим."
+  "set.tip.four_player_mode": "По каким правилам идёт игра на доске для четверых. Автоопределение читает собственную метку режима на chess.com, а это догадка о чужой разметке — задайте вручную, если догадка неверна. Это меняет правила поиска: превращение на 8-й горизонтали в режиме «каждый за себя» и на 11-й в командном. Tetrarch ищет только командный режим.",
+  "panel.tip.copy_diagnostics": "Скопировать диагностику: версия, движок, что было распознано, почему последний ход был сыгран или нет, и последние строки трассировки. Вставьте в отчёт об ошибке — там нет адресов и ничего, что вас идентифицирует.",
+  "set.sec.diagnostics": "Диагностика",
+  "set.verbose_logging": "Подробный журнал",
+  "set.tip.the_trace_is_normally_quiet": "The trace is normally quiet while the game tab is focused, so ordinary play does not fill the console. That is the right default and the wrong thing to have to guess at: turn this on to see every decision as it happens, in the service worker's console. Costs nothing but noise.",
+  "set.note.the_panel_s_clipboard_button": "The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report: version, engine, what was detected, why the last move was or was not played, and the last 200 trace lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no query string, no extension id."
 }

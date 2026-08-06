@@ -84,7 +84,17 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.bgTrace) {
     const t = new Date().toISOString().slice(11, 23);
     console.log(`[bg ${t}] ${msg.bgTrace.from} |`, ...msg.bgTrace.args);
+    traceRing.push(`${t} ${msg.bgTrace.from} | ` + msg.bgTrace.args
+      .map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
+    if (traceRing.length > TRACE_RING) traceRing.shift();
     return;
+  }
+  // One clipboard-sized report of everything worth knowing when something is not working. Built
+  // HERE because the worker is the only place that sees the whole picture -- it is the far end of
+  // every trace, and it survives the page reloads that lose the panel's own state.
+  if (msg.diagnostics) {
+    buildDiagnostics(msg.diagnostics).then(sendResponse).catch(e => sendResponse({error: String(e)}));
+    return true; // async sendResponse
   }
   if (msg.puzzleLookup) {
     PuzzleDB.lookup(msg.puzzleLookup.fen, msg.puzzleLookup.site)
@@ -259,6 +269,39 @@ function isNewer(candidate, current) {
     if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
   }
   return false;
+}
+
+// --- Diagnostics ---------------------------------------------------------------------------------
+// A ring of the most recent traces, so "it did nothing" can be answered from evidence instead of by
+// asking someone to reproduce it with a console open. 200 lines is a few minutes of real play and a
+// couple of hundred KB at worst -- small enough to paste, long enough to contain the cause.
+const TRACE_RING = 200;
+const traceRing = [];
+
+// What goes in: enough to explain a failure, and nothing that identifies you. The extension id, the
+// full URL and the query string are all deliberately left out -- this is meant to be pasteable into
+// a public issue without a second thought.
+async function buildDiagnostics(ctx = {}) {
+  const m = chrome.runtime.getManifest();
+  const assets = await checkBundledAssets();
+  const perm = await chrome.permissions.getAll().catch(() => ({origins: []}));
+  const lines = [
+    `Mephisto ${m.version}  (${m.name})`,
+    `chrome    ${(navigator.userAgent.match(/Chrome\/[\d.]+/) || ['?'])[0]}  ${navigator.platform}`,
+    `engines   ${assets.ok ? 'bundled assets present' : 'MISSING: ' + assets.missing.join(', ')}`,
+    `hosts     ${Object.keys(nativePorts).join(', ') || 'none connected'}`,
+    `optional  ${(perm.origins || []).length} host permission(s) granted`,
+    ctx.site ? `site      ${ctx.site}${ctx.path ? '  ' + ctx.path : ''}` : null,
+    ctx.engine ? `engine    ${ctx.engine}` : null,
+    ctx.detection ? `detection ${ctx.detection}` : null,
+    ctx.reason ? `reason    ${ctx.reason}` : null,
+    ctx.toggles ? `toggles   ${ctx.toggles}` : null,
+    ctx.fen ? `position  ${ctx.fen}` : null,
+    '',
+    `--- last ${traceRing.length} trace lines ---`,
+    ...traceRing,
+  ].filter(l => l !== null);
+  return {report: lines.join('\n')};
 }
 
 let bundledAssets = null;

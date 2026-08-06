@@ -247,5 +247,10 @@
   "panel.fourpc_mode_auto": "Automatisch",
   "panel.fourpc_mode_teams": "Teams",
   "panel.fourpc_mode_ffa": "Jeder gegen jeden",
-  "set.tip.four_player_mode": "Nach welchen Regeln das Vier-Spieler-Brett läuft. Automatisch liest chess.coms eigene Modus-Angabe aus, was eine Vermutung über fremdes Markup ist — stell es selbst ein, wenn die Vermutung falsch ist. Es ändert die Regeln der Suche: Umwandlung ist bei Jeder-gegen-jeden auf der 8., bei Teams auf der 11. Reihe. Tetrarch sucht nur Teams."
+  "set.tip.four_player_mode": "Nach welchen Regeln das Vier-Spieler-Brett läuft. Automatisch liest chess.coms eigene Modus-Angabe aus, was eine Vermutung über fremdes Markup ist — stell es selbst ein, wenn die Vermutung falsch ist. Es ändert die Regeln der Suche: Umwandlung ist bei Jeder-gegen-jeden auf der 8., bei Teams auf der 11. Reihe. Tetrarch sucht nur Teams.",
+  "panel.tip.copy_diagnostics": "Diagnose kopieren: Version, Engine, was erkannt wurde, warum der letzte Zug gespielt wurde oder nicht, und die letzten Trace-Zeilen. Füge sie in einen Fehlerbericht ein — sie enthält keine Adressen und nichts, was dich identifiziert.",
+  "set.sec.diagnostics": "Diagnose",
+  "set.verbose_logging": "Ausführliches Protokoll",
+  "set.tip.the_trace_is_normally_quiet": "The trace is normally quiet while the game tab is focused, so ordinary play does not fill the console. That is the right default and the wrong thing to have to guess at: turn this on to see every decision as it happens, in the service worker's console. Costs nothing but noise.",
+  "set.note.the_panel_s_clipboard_button": "The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report: version, engine, what was detected, why the last move was or was not played, and the last 200 trace lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no query string, no extension id."
 }

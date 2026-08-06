@@ -20,9 +20,13 @@ let deferredWhileHidden = false; // an autoplay/premove was held because the tab
 // genuinely backgrounded while you read it. Fire-and-forget: tracing must never be able to break the
 // thing it is tracing.
 function bgLog(...args) {
-    // Premove keeps the trace live in the foreground: the move-guard decisions it logs (a dropped
-    // move, a superseded premove) are foreground symptoms, and they were invisible exactly when
-    // they mattered. Worker console only -- ordinary play still sees nothing.
+    // Verbose logging is the explicit way to see everything, and it wins over every gate below.
+    // The gate exists so ordinary play does not fill the worker console; it also spent three
+    // sessions hiding the cause of a bug from the only person who could report it, so there is now
+    // a switch that does not require guessing which incantation turns the trace back on.
+    // Premove additionally keeps it live in the foreground, because the move-guard decisions it
+    // logs (a dropped move, a superseded premove) are foreground symptoms.
+    if (config && config.verbose_log) return bgLogAlways(...args);
     if (tabActive() && !(config && config.premove)) return;
     bgLogAlways(...args);
 }
@@ -169,7 +173,8 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // move carries its own `deselect`, so it starts by clearing any half-made selection.
             bgLog('superseding an in-flight blind premove with the real move', {move: response.move});
         } else if (response.automove || response.premoves) {
-            (response.fourpc ? bgLogAlways : bgLog)('DROPPED: a previous move is still in progress (moving=true)');
+            dropMove('A move is already being played — this one was skipped.',
+                'DROPPED: a previous move is still in progress (moving=true)');
             return;
         }
         // ANYTHING ELSE FALLS THROUGH. This guard exists to stop two CLICK SESSIONS overlapping --
@@ -194,7 +199,10 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // `config` here is the CONTENT SCRIPT's copy, pushed separately from the panel's. The panel
         // already decided to send this move against its own copy, so a disagreement between the two
         // drops a move the user did ask for -- which is what the log above exists to make visible.
-        if (!config.autoplay && !response.manual) { alog('DROPPED: autoplay is off'); return; }
+        if (!config.autoplay && !response.manual) {
+            dropMove('Autoplay is off.', 'DROPPED: autoplay is off');
+            return;
+        }
         // undetectability: don't click while the tab is backgrounded/unfocused -- a human wouldn't
         // move while tabbed away, and "moved while hidden" is an easy anomaly to flag. It's still our
         // turn (or a queued premove), so the position is stable: hold the move and re-scrape the
@@ -203,7 +211,8 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // tabActive() is visibility AND document.hasFocus(), so an open DevTools window on the
             // game tab counts as inactive -- autoplay stops the moment you go to read the console
             // about autoplay not working, which is its own small trap.
-            alog('DEFERRED: tab inactive and Background Play is off');
+            dropMove('Waiting — this tab is not focused, and Background Play is off.',
+                'DEFERRED: tab inactive and Background Play is off');
             deferredWhileHidden = true;
             return;
         }
@@ -215,7 +224,8 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // move after the first. The lane has its own protection: it re-analyses whatever is actually
         // on the board, and a move computed for a stale position simply loses to the next scrape.
         if (!response.fourpc && !boardStillMatchesAnalysis()) {
-            bgLog('DROPPED: board no longer matches the analysed position');
+            dropMove('The board moved on while it was thinking — re-analysing.',
+                'DROPPED: board no longer matches the analysed position');
             mismatchAborts++;
             console.warn(`Mephisto: board changed since the analysed position -- move dropped, re-scraping (${mismatchAborts} so far)`);
             // BOTH dedupes, not just ours. Clearing lastPushKey lets the re-push leave here, but the
@@ -244,7 +254,8 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // `.finally(endMoving)` tidied up behind it, so autoplay simply skipped a move with
             // nothing stuck and nothing logged. The sender already decided; read what it sent.
             if (response.fourpc && !is4PCGame()) {
-                bgLogAlways('DROPPED: 4PC move outside a game url', {path: location.pathname});
+                dropMove('This four-player board is not playable — open a game or the analysis board.',
+                    'DROPPED: 4PC move outside a game url', {path: location.pathname});
                 endMoving();
             } else if (response.fourpc) {
                 // FIRST, and on an explicit flag: 4PC must not be reachable by shape inference,
@@ -1877,7 +1888,8 @@ function simulateMove4PC(move, think = null) {
     const SQ = '[a-n](?:1[0-4]|[1-9])';
     const m = new RegExp(`^(${SQ})(${SQ})([qrbnQRBN]?)$`).exec(move ?? '');
     if (!m) {
-        console.warn(`Mephisto: refusing to play invalid 4PC move '${move}'`);
+        dropMove('The engine returned a move this board does not understand.',
+            'DROPPED: invalid 4PC move', {move});
         return Promise.resolve();
     }
     // Measured fresh for EACH click, never once up front. The first click of a game is what raises
@@ -1891,7 +1903,8 @@ function simulateMove4PC(move, think = null) {
         return pt ? new DOMRect(pt.x - geo.size / 2, pt.y - geo.size / 2, geo.size, geo.size) : null;
     };
     if (!rectOf(m[1]) || !rectOf(m[2])) {
-        console.warn(`Mephisto: 4PC move '${move}' has no on-screen square`);
+        dropMove('Could not find that square on the board — is it fully visible?',
+            'DROPPED: 4PC move has no on-screen square', {move});
         return Promise.resolve();
     }
     return (async () => {
@@ -2140,8 +2153,48 @@ const NO_SCRAPE_RETRY_MS = 40;
 const NO_SCRAPE_MAX_RETRIES = 10; // 10 x 40ms = 400ms, then let the fallback poll take over
 let noScrapeRetries = 0;
 
+// SCRAPE WATCHDOG. Every scrape reads the DOM, and the mutation observer that triggers them watches
+// a subtree the page is free to churn. A page that mutates continuously (or an observer that ends up
+// seeing something we caused) turns that into a loop that pins the main thread -- which is how a
+// browser gets wedged with nothing in the log but thousands of identical lines.
+//
+// So: count them over a rolling second and stop scraping when the rate is impossible for real play.
+// A chess move produces a handful; sixty per second is never a game. The fallback poll still runs,
+// so the panel keeps working at 1 Hz instead of dying, and the cooldown lets a genuinely busy page
+// recover on its own. Reported ONCE per episode -- a storm must not also be a log storm.
+const SCRAPE_BURST_MAX = 60;      // per second; real play peaks in the low single digits
+const SCRAPE_COOLDOWN_MS = 2000;
+let scrapeTimes = [];
+let scrapeThrottledUntil = 0;
+let scrapeThrottleReported = false;
+
+function scrapeStorming() {
+    const now = Date.now();
+    if (now < scrapeThrottledUntil) return true;
+    scrapeTimes = scrapeTimes.filter(t => now - t < 1000);
+    scrapeTimes.push(now);
+    if (scrapeTimes.length <= SCRAPE_BURST_MAX) { scrapeThrottleReported = false; return false; }
+    scrapeThrottledUntil = now + SCRAPE_COOLDOWN_MS;
+    scrapeTimes = [];
+    if (!scrapeThrottleReported) {
+        scrapeThrottleReported = true;
+        bgLogAlways('THROTTLED: scrape storm', {rate: `>${SCRAPE_BURST_MAX}/s`,
+            cooldownMs: SCRAPE_COOLDOWN_MS, site, path: location.pathname});
+    }
+    return true;
+}
+
+// A move was not played, and here is why -- to the trace for me and to the PANEL for whoever is
+// sitting in front of it. Every one of these used to be trace-only, which is why "it just does
+// nothing" was the most common bug report and the least actionable one.
+function dropMove(userText, ...trace) {
+    bgLogAlways(...trace);
+    try { sendToPanel({moveDropped: userText}); } catch (e) { /* panel not booted */ }
+}
+
 function pushPosition() {
     if (!config) return;           // no config yet -> can't scrape
+    if (scrapeStorming()) return;  // see the watchdog above
     const res = tryScrapePosition();
     if (res === 'no') {            // transient (animating, no board): never push, never dedupe
         bgLog('scrape returned nothing', {why: lastScrapeFail, retry: noScrapeRetries,

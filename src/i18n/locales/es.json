@@ -247,5 +247,10 @@
   "panel.fourpc_mode_auto": "Detección automática",
   "panel.fourpc_mode_teams": "Equipos",
   "panel.fourpc_mode_ffa": "Todos contra todos",
-  "set.tip.four_player_mode": "Con qué reglas se juega el tablero de cuatro jugadores. La detección automática lee la etiqueta de modo de chess.com, que es una suposición sobre el marcado ajeno — ponlo tú si esa suposición falla. Cambia las reglas de la búsqueda: la promoción es la 8.ª fila en todos contra todos y la 11.ª en equipos. Tetrarch solo busca equipos."
+  "set.tip.four_player_mode": "Con qué reglas se juega el tablero de cuatro jugadores. La detección automática lee la etiqueta de modo de chess.com, que es una suposición sobre el marcado ajeno — ponlo tú si esa suposición falla. Cambia las reglas de la búsqueda: la promoción es la 8.ª fila en todos contra todos y la 11.ª en equipos. Tetrarch solo busca equipos.",
+  "panel.tip.copy_diagnostics": "Copiar diagnóstico: versión, motor, qué se detectó, por qué se jugó o no la última jugada, y el registro reciente. Pégalo en un informe de error — no contiene direcciones ni nada que te identifique.",
+  "set.sec.diagnostics": "Diagnóstico",
+  "set.verbose_logging": "Registro detallado",
+  "set.tip.the_trace_is_normally_quiet": "The trace is normally quiet while the game tab is focused, so ordinary play does not fill the console. That is the right default and the wrong thing to have to guess at: turn this on to see every decision as it happens, in the service worker's console. Costs nothing but noise.",
+  "set.note.the_panel_s_clipboard_button": "The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report: version, engine, what was detected, why the last move was or was not played, and the last 200 trace lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no query string, no extension id."
 }

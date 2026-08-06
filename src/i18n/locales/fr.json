@@ -247,5 +247,10 @@
   "panel.fourpc_mode_auto": "Détection auto",
   "panel.fourpc_mode_teams": "Équipes",
   "panel.fourpc_mode_ffa": "Chacun pour soi",
-  "set.tip.four_player_mode": "Selon quelles règles se joue l'échiquier à quatre. La détection automatique lit l'étiquette de mode de chess.com, ce qui reste une supposition sur le balisage d'autrui — réglez-le vous-même si elle se trompe. Cela change les règles de la recherche : la promotion est à la 8e rangée en chacun pour soi et à la 11e en équipes. Tetrarch ne cherche qu'en équipes."
+  "set.tip.four_player_mode": "Selon quelles règles se joue l'échiquier à quatre. La détection automatique lit l'étiquette de mode de chess.com, ce qui reste une supposition sur le balisage d'autrui — réglez-le vous-même si elle se trompe. Cela change les règles de la recherche : la promotion est à la 8e rangée en chacun pour soi et à la 11e en équipes. Tetrarch ne cherche qu'en équipes.",
+  "panel.tip.copy_diagnostics": "Copier le diagnostic : version, moteur, ce qui a été détecté, pourquoi le dernier coup a été joué ou non, et la trace récente. Collez-le dans un rapport de bogue — il ne contient aucune adresse ni rien qui vous identifie.",
+  "set.sec.diagnostics": "Diagnostic",
+  "set.verbose_logging": "Journal détaillé",
+  "set.tip.the_trace_is_normally_quiet": "The trace is normally quiet while the game tab is focused, so ordinary play does not fill the console. That is the right default and the wrong thing to have to guess at: turn this on to see every decision as it happens, in the service worker's console. Costs nothing but noise.",
+  "set.note.the_panel_s_clipboard_button": "The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report: version, engine, what was detected, why the last move was or was not played, and the last 200 trace lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no query string, no extension id."
 }

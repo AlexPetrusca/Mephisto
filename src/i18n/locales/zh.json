@@ -247,5 +247,10 @@
   "panel.fourpc_mode_auto": "自动检测",
   "panel.fourpc_mode_teams": "组队",
   "panel.fourpc_mode_ffa": "混战",
-  "set.tip.four_player_mode": "四人棋盘按哪套规则进行。自动检测读取 chess.com 自己的模式标签，而那只是对他人页面结构的猜测——猜错时请自行设定。它会改变搜索所依据的规则：混战的升变在第 8 横线，组队在第 11 横线。Tetrarch 只搜索组队模式。"
+  "set.tip.four_player_mode": "四人棋盘按哪套规则进行。自动检测读取 chess.com 自己的模式标签，而那只是对他人页面结构的猜测——猜错时请自行设定。它会改变搜索所依据的规则：混战的升变在第 8 横线，组队在第 11 横线。Tetrarch 只搜索组队模式。",
+  "panel.tip.copy_diagnostics": "复制诊断信息：版本、引擎、检测到的内容、上一步为何走或没走，以及最近的追踪记录。可直接贴进问题报告——其中不含任何网址，也没有任何能识别你的信息。",
+  "set.sec.diagnostics": "诊断",
+  "set.verbose_logging": "详细日志",
+  "set.tip.the_trace_is_normally_quiet": "The trace is normally quiet while the game tab is focused, so ordinary play does not fill the console. That is the right default and the wrong thing to have to guess at: turn this on to see every decision as it happens, in the service worker's console. Costs nothing but noise.",
+  "set.note.the_panel_s_clipboard_button": "The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report: version, engine, what was detected, why the last move was or was not played, and the last 200 trace lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no query string, no extension id."
 }

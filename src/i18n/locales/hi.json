@@ -247,5 +247,10 @@
   "panel.fourpc_mode_auto": "स्वतः पहचान",
   "panel.fourpc_mode_teams": "टीम",
   "panel.fourpc_mode_ffa": "सबका सबसे मुक़ाबला",
-  "set.tip.four_player_mode": "चार-खिलाड़ी बोर्ड किन नियमों से खेला जा रहा है। स्वतः पहचान chess.com का अपना मोड लेबल पढ़ती है, जो किसी और के मार्कअप के बारे में अनुमान है — अनुमान ग़लत हो तो इसे स्वयं सेट करें। यह खोज के नियम बदल देता है: प्रमोशन सबका-सबसे में 8वीं और टीम में 11वीं रैंक पर होता है। Tetrarch केवल टीम मोड खोजता है।"
+  "set.tip.four_player_mode": "चार-खिलाड़ी बोर्ड किन नियमों से खेला जा रहा है। स्वतः पहचान chess.com का अपना मोड लेबल पढ़ती है, जो किसी और के मार्कअप के बारे में अनुमान है — अनुमान ग़लत हो तो इसे स्वयं सेट करें। यह खोज के नियम बदल देता है: प्रमोशन सबका-सबसे में 8वीं और टीम में 11वीं रैंक पर होता है। Tetrarch केवल टीम मोड खोजता है।",
+  "panel.tip.copy_diagnostics": "डायग्नोस्टिक्स कॉपी करें: वर्शन, इंजन, क्या पहचाना गया, पिछली चाल क्यों चली या नहीं चली, और हालिया ट्रेस। इसे बग रिपोर्ट में चिपका दें — इसमें कोई पता नहीं है और आपकी पहचान बताने वाला कुछ भी नहीं।",
+  "set.sec.diagnostics": "डायग्नोस्टिक्स",
+  "set.verbose_logging": "विस्तृत लॉगिंग",
+  "set.tip.the_trace_is_normally_quiet": "The trace is normally quiet while the game tab is focused, so ordinary play does not fill the console. That is the right default and the wrong thing to have to guess at: turn this on to see every decision as it happens, in the service worker's console. Costs nothing but noise.",
+  "set.note.the_panel_s_clipboard_button": "The panel's <b>clipboard</b> button copies a report you can paste straight into a bug report: version, engine, what was detected, why the last move was or was not played, and the last 200 trace lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no query string, no extension id."
 }

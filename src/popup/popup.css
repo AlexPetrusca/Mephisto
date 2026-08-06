@@ -269,6 +269,21 @@ html, body {
     color: #000;
 }
 
+/* Why nothing is happening. Sits between the readout and the score, wraps (the body sets
+   white-space: nowrap, which would run a sentence off the panel), and is muted so it never
+   competes with an actual answer. Hidden entirely when there is nothing to say. */
+#idle-reason {
+    font: 13px/17px -apple-system, 'Roboto', system-ui, sans-serif;
+    color: #8a6d1f;
+    background: rgba(255, 214, 102, 0.16);
+    border-radius: 5px;
+    padding: 5px 9px;
+    margin: 6px 8px 0;
+    text-align: center;
+    white-space: normal;
+}
+#idle-reason[hidden] { display: none; }
+
 #nps {
     height: 23px;
     font: 17px 'Roboto', sans-serif; /* same size as the best-move + score lines it sits between */
@@ -1047,6 +1062,7 @@ body.mephisto-compact #alt-lines {
 #calibrate-notice[hidden] { display: none; }
 body.mephisto-dark #calibrate-notice { color: #4dd0e1; }
 body.mephisto-dark #update-notice { color: #4dd0e1; }
+body.mephisto-dark #idle-reason { color: #e8c76a; background: rgba(232, 199, 106, 0.12); }
 body.mephisto-dark #game-detection.unsupported { color: #ff7a70; }
 
 

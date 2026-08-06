@@ -306,6 +306,10 @@ async function initPanel(root, tabId) {
         move_variance: (moveVariance != null) ? moveVariance : 400,
         humanize: JSON.parse(MephistoConfig.get('humanize')) || false,
         clock_mode: JSON.parse(MephistoConfig.get('clock_mode')) || false,
+        // Diagnostics, not play: forces the worker trace on even while the tab is focused. The
+        // gate that suppresses it by default is the right default and the wrong thing to have to
+        // guess at, so it gets a switch.
+        verbose_log: JSON.parse(MephistoConfig.get('verbose_log')) || false,
         mirror_mode: JSON.parse(MephistoConfig.get('mirror_mode')) || false,
         // Manual Mode: the engine searches until YOU press the play-move hotkey, then it plays the
         // best move it found. Your own timing -- overrides the clock-pacing modes and never auto-fires.
@@ -412,6 +416,10 @@ async function initPanel(root, tabId) {
         // that came from a different tab's content-script so tabs never cross-talk. (Background
         // messages have no sender.tab and pass through.)
         if (MY_TAB_ID && sender.tab && sender.tab.id !== MY_TAB_ID) return;
+        // The content-script could not play a move and says why. Shown in the panel rather than
+        // only traced: a move that silently does not happen is the least actionable bug report
+        // there is, and it was the shape of three separate ones.
+        if (response.moveDropped) { set_idle_reason(response.moveDropped); return; }
         if (response.fenresponse) { // reply received -> the poll interval may fire the next request
             fen_request_inflight = false;
             sync_puzzle_mode_to_page(response.puzzlePage);
@@ -576,6 +584,29 @@ async function initPanel(root, tabId) {
     });
     PANEL_ROOT.getElementById('copyfen')?.addEventListener('click', () => copy_to_button('copyfen', last_eval.fen));
     PANEL_ROOT.getElementById('copypgn')?.addEventListener('click', () => copy_to_button('copypgn', current_pgn()));
+    // Everything worth knowing about a failure, in one paste. The worker holds the trace ring and
+    // the things only it can see (bundled assets, connected hosts, granted permissions); the panel
+    // adds what only IT knows -- what is on screen, and why it last did nothing.
+    PANEL_ROOT.getElementById('copydiag')?.addEventListener('click', () => {
+        const ctx = {
+            site: (typeof site !== 'undefined' && site) || location.hostname,
+            path: location.pathname,                       // path only: never the query string
+            engine: config.engine,
+            detection: PANEL_ROOT.getElementById('game-detection')?.textContent || '',
+            reason: idle_reason_text,
+            fen: last_eval.fen || '',
+            toggles: ['autoplay', 'premove', 'help_mode', 'manual_mode', 'humanize', 'puzzle_mode',
+                      'clock_mode', 'mirror_mode', 'background_play', 'verbose_log']
+                .filter(k => config[k]).join(' ') || 'none on',
+        };
+        chrome.runtime.sendMessage({diagnostics: ctx}, (res) => {
+            if (chrome.runtime.lastError || !res || res.error) {
+                return copy_to_button('copydiag', `Mephisto diagnostics unavailable: ` +
+                    `${chrome.runtime.lastError?.message || res?.error || 'no answer'}`);
+            }
+            copy_to_button('copydiag', res.report);
+        });
+    });
     PANEL_ROOT.getElementById('config').addEventListener('click', () => {
         chrome.runtime.sendMessage({openOptions: true}); // the background opens it (see above)
     });
@@ -3125,6 +3156,8 @@ function clear_setup_fen() {
 }
 
 function on_new_pos(fen, startFen, moves) {
+    clear_idle_reason();   // a new position: whatever stopped the last move no longer applies
+
     console.log("on_new_pos", fen, startFen, moves);
     // PAINT FIRST. Showing the position we were just handed needs none of the ~200 lines below it --
     // not the search dispatch, the premove bookkeeping, the explorer/tablebase lookups or the native
@@ -3759,6 +3792,21 @@ function update_best_move(line1) {
         PANEL_ROOT.getElementById('chess_line_1').innerHTML = line1 + readout_extras();
     }
 }
+
+// --- Why nothing is happening --------------------------------------------------------------------
+// Every path that ends in "the panel produces no move" used to end in silence, and silence is
+// indistinguishable from a bug: it is what sent three separate "autoplay is broken" reports at
+// something that was refusing by design. One sentence, in the panel, where the person who needs it
+// is already looking. The DETAIL still goes to the trace -- this is the user-facing half.
+let idle_reason_text = '';
+function set_idle_reason(text) {
+    idle_reason_text = text || '';
+    const el = PANEL_ROOT.getElementById('idle-reason');
+    if (!el) return; // stale cached popup.html
+    el.textContent = idle_reason_text;
+    el.hidden = !idle_reason_text;
+}
+const clear_idle_reason = () => set_idle_reason('');
 let last_best_move_line = null; // the readout without the tablebase suffix, so it can be re-rendered
 
 // The tablebase answer arrives AFTER the readout is drawn (it is never awaited), so re-render with
@@ -4675,6 +4723,8 @@ function fourpc_drain() {
 }
 
 function on_new_pos_4pc(payload) {
+    clear_idle_reason();   // as above -- the board moved, so the last reason is stale
+
     // `<seat>:<mode>:<fen4>` -- the mode decides the promotion rank AND whether Tetrarch can search
     // this game at all, so it travels with the position rather than being assumed.
     const i = payload.indexOf(':');
@@ -4785,6 +4835,11 @@ function on_new_pos_4pc(payload) {
                 // `ours` false for every position and autoplay dead for the whole game.
                 request_console_log(`4PC autoplay skipped: yourSeat=${ourSeat} turnSeat=${turn} ` +
                     `yourTurn=${ours} helpMode=${!!config.help_mode}`);
+                set_idle_reason(config.help_mode
+                    ? 'Help Mode is on, so the move is drawn rather than played.'
+                    : (ourSeat === '?'
+                        ? 'Your seat could not be read from the board, so autoplay cannot tell when it is your turn.'
+                        : `Not your turn — ${FOURPC_SEAT_NAME[turn] || turn} to play, you are ${FOURPC_SEAT_NAME[ourSeat] || ourSeat}.`));
             }
         })
         .catch((e) => {
@@ -5159,6 +5214,8 @@ const LIVE_CONFIG_KEYS = [
     'manual_mode', 'eval_bar', 'eval_history', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
     'computer_evaluation', 'multiple_lines', 'compute_time', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
+    // toggling the trace has to take effect on the session you are already debugging
+    'verbose_log', 'fourpc_mode',
 ];
 
 function watch_config_changes() {

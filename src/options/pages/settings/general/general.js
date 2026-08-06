@@ -61,6 +61,7 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('mirror_mode', 'Mirror Time:', 'checkbox', false);
         this.registerFormElement('manual_mode', 'Manual Mode:', 'checkbox', false);
         this.registerFormElement('opp_alert', 'Opponent Mistake Alert:', 'checkbox', false);
+        this.registerFormElement('verbose_log', 'Verbose Logging:', 'checkbox', false);
         this.initSteppers();
         this.initHumanizeMix();
         this.initHumanizeThresholds();
