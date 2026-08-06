@@ -7,8 +7,10 @@
 
         powershell -ExecutionPolicy Bypass -File install-tetrarch.ps1 -ExtId <EXTENSION_ID> [-Tetrarch C:\path\to\Tetrarch]
 
-    -ExtId    : your Mephisto extension id from chrome://extensions (Developer mode on). It CHANGES
-                every time an unpacked extension is reloaded -- re-run this when that happens.
+    -ExtId    : your Mephisto extension id from chrome://extensions (Developer mode on). It is derived
+                from the extension FOLDER PATH, so reloading does not change it (measured: the same
+                folder loaded into two fresh profiles gets the same id). Re-run this only if you move
+                or re-extract the extension somewhere else.
     -Tetrarch : the Tetrarch checkout. Looked for beside this repo's parent folder if omitted.
 
     Build the engine core first (MSYS2 / mingw-w64):  cd Tetrarch; ./setup.sh
@@ -95,4 +97,4 @@ Write-Host "-> host:     $bat"
 Write-Host "-> manifest: $manifestPath"
 Write-Host ''
 Write-Host 'Done. Reload the extension and the page, then pick "Tetrarch (4-player, Teams)".'
-Write-Host 'If it stops working after reloading the unpacked extension, re-run this with the new -ExtId.'
+Write-Host 'If you move the extension to a different folder its id changes -- re-run this with the new -ExtId.'
