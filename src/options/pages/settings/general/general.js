@@ -94,6 +94,13 @@ class GeneralSettings extends SettingsPage {
             while (!section.classList.contains('section')) {
                 section = section.parentElement
             }
+            // Engines with no UCI_Elo. The panel already hid the row for these (NO_ELO_ENGINES in
+            // popup.js, which this must match); this page did not, so it kept offering a strength
+            // cap that nothing ever applied -- maia picks its strength by which net is loaded, and
+            // tetrarch speaks its own four-player protocol and has no such option at all.
+            const NO_ELO = ['maia', 'maia3', 'tetrarch-native'];
+            document.getElementById('elo_section')
+                ?.classList.toggle('hidden', NO_ELO.includes(engine_select.getValue()));
             if (['fairy-stockfish-14-nnue', 'fairy-native'].includes(engine_select.getValue())) {
                 section.classList.remove('hidden');
             } else {

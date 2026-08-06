@@ -150,7 +150,9 @@ let prev_ply_count = 0;    // plies in the last-seen position; a drop back to th
 // and the Elo row is hidden rather than shown doing nothing. Its nets are standard-chess only, so
 // Chess960 is off the table too.
 const NO_CHESS960_ENGINES = ['maia', 'maia3'];
-const NO_ELO_ENGINES = ['maia', 'maia3'];
+// maia strength = net choice; tetrarch speaks its own four-player protocol and has no UCI_Elo, so
+// the slider was purely decorative there -- it advertised a strength cap that nothing applied.
+const NO_ELO_ENGINES = ['maia', 'maia3', 'tetrarch-native'];
 
 // engines that speak native messaging (Chrome auto-launches the host, no server -- see
 // native-host/install-native.sh). The port name == the engine value (see NATIVE_HOSTS).
