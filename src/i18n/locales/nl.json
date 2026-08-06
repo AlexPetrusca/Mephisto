@@ -242,5 +242,10 @@
   "set.check_for_updates": "Controleren op updates",
   "set.choose_extension_folder": "Extensiemap kiezen",
   "set.install_update": "Update installeren",
-  "panel.update_install_now": "Update beschikbaar — v{latest} (je hebt v{current}) — klik om te installeren"
+  "panel.update_install_now": "Update beschikbaar — v{latest} (je hebt v{current}) — klik om te installeren",
+  "panel.fourpc_mode": "Modus",
+  "panel.fourpc_mode_auto": "Automatisch",
+  "panel.fourpc_mode_teams": "Teams",
+  "panel.fourpc_mode_ffa": "Ieder voor zich",
+  "set.tip.four_player_mode": "Volgens welke regels het vierspelersbord wordt gespeeld. Automatisch leest chess.coms eigen modusaanduiding, en dat is een gok over andermans markup — stel het zelf in als die gok fout is. Het verandert de regels van de zoektocht: promotie is de 8e rij bij ieder voor zich en de 11e bij teams. Tetrarch zoekt alleen teams."
 }

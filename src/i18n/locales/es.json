@@ -242,5 +242,10 @@
   "set.check_for_updates": "Buscar actualizaciones",
   "set.choose_extension_folder": "Elegir carpeta de la extensión",
   "set.install_update": "Instalar actualización",
-  "panel.update_install_now": "Actualización disponible — v{latest} (tienes la v{current}) — haz clic para instalar"
+  "panel.update_install_now": "Actualización disponible — v{latest} (tienes la v{current}) — haz clic para instalar",
+  "panel.fourpc_mode": "Modo",
+  "panel.fourpc_mode_auto": "Detección automática",
+  "panel.fourpc_mode_teams": "Equipos",
+  "panel.fourpc_mode_ffa": "Todos contra todos",
+  "set.tip.four_player_mode": "Con qué reglas se juega el tablero de cuatro jugadores. La detección automática lee la etiqueta de modo de chess.com, que es una suposición sobre el marcado ajeno — ponlo tú si esa suposición falla. Cambia las reglas de la búsqueda: la promoción es la 8.ª fila en todos contra todos y la 11.ª en equipos. Tetrarch solo busca equipos."
 }

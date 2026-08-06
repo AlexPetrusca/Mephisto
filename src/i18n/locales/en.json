@@ -249,5 +249,10 @@
   "set.check_for_updates": "Check for Updates",
   "set.choose_extension_folder": "Choose Extension Folder",
   "set.install_update": "Install Update",
-  "panel.update_install_now": "Update available — v{latest} (you have v{current}) — click to install"
+  "panel.update_install_now": "Update available — v{latest} (you have v{current}) — click to install",
+  "panel.fourpc_mode": "Mode",
+  "panel.fourpc_mode_auto": "Auto-detect",
+  "panel.fourpc_mode_teams": "Teams",
+  "panel.fourpc_mode_ffa": "Free-for-all",
+  "set.tip.four_player_mode": "Which rules the four-player board is played under. Auto-detect reads it from chess.com's own mode label, which is a guess about someone else's markup — set it yourself when that guess is wrong. It changes the rules the search runs under: promotion is the 8th rank in free-for-all and the 11th in Teams. Tetrarch searches Teams only."
 }

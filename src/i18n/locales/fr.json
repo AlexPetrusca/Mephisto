@@ -242,5 +242,10 @@
   "set.check_for_updates": "Rechercher des mises à jour",
   "set.choose_extension_folder": "Choisir le dossier de l'extension",
   "set.install_update": "Installer la mise à jour",
-  "panel.update_install_now": "Mise à jour disponible — v{latest} (vous avez la v{current}) — cliquez pour installer"
+  "panel.update_install_now": "Mise à jour disponible — v{latest} (vous avez la v{current}) — cliquez pour installer",
+  "panel.fourpc_mode": "Mode",
+  "panel.fourpc_mode_auto": "Détection auto",
+  "panel.fourpc_mode_teams": "Équipes",
+  "panel.fourpc_mode_ffa": "Chacun pour soi",
+  "set.tip.four_player_mode": "Selon quelles règles se joue l'échiquier à quatre. La détection automatique lit l'étiquette de mode de chess.com, ce qui reste une supposition sur le balisage d'autrui — réglez-le vous-même si elle se trompe. Cela change les règles de la recherche : la promotion est à la 8e rangée en chacun pour soi et à la 11e en équipes. Tetrarch ne cherche qu'en équipes."
 }

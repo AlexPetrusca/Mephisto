@@ -208,6 +208,20 @@
             <button id="qs_variant_detect" title="Detect the variant from the current game">&#8635;</button>
         </div>
     </div>
+<!-- Four-player mode override. Its own row rather than extra <option>s on the Variant select: the
+     two are different questions (which RULES this board plays by, not which chess variant), and the
+     Variant select is bound to `variant`, which the whole 8x8 lane reads. Shown only for Tetrarch,
+     where the Variant row is hidden anyway, so the panel never grows a line. -->
+<div class="qs-row" id="qs_fourpc_mode_row">
+        <span data-i18n="panel.fourpc_mode" class="qs-label">Mode</span>
+        <div class="qs-pair">
+            <select id="qs_fourpc_mode" class="browser-default">
+                <option data-i18n="panel.fourpc_mode_auto" value="auto">Auto-detect</option>
+                <option data-i18n="panel.fourpc_mode_teams" value="teams">Teams</option>
+                <option data-i18n="panel.fourpc_mode_ffa" value="ffa">Free-for-all</option>
+            </select>
+        </div>
+    </div>
 <div class="qs-row" id="qs_maia_row">
         <span data-i18n="panel.maia_level" data-i18n-tip="panel.tip.which_maia_network_to_use" class="qs-label tooltipped" data-position="left"
               data-tooltip="Which Maia network to use. Each is trained on human games at that rating, so it plays like a human of that strength — human-like mistakes, not a strong engine told to play badly. Changing this loads a different net.">Maia Level</span>

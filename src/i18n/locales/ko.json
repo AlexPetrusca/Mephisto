@@ -242,5 +242,10 @@
   "set.check_for_updates": "업데이트 확인",
   "set.choose_extension_folder": "확장 프로그램 폴더 선택",
   "set.install_update": "업데이트 설치",
-  "panel.update_install_now": "업데이트 있음 — v{latest}(현재 v{current}) — 눌러서 설치"
+  "panel.update_install_now": "업데이트 있음 — v{latest}(현재 v{current}) — 눌러서 설치",
+  "panel.fourpc_mode": "모드",
+  "panel.fourpc_mode_auto": "자동 감지",
+  "panel.fourpc_mode_teams": "팀",
+  "panel.fourpc_mode_ffa": "개인전",
+  "set.tip.four_player_mode": "4인 보드를 어떤 규칙으로 두는지. 자동 감지는 chess.com 자체의 모드 표시를 읽는데, 이는 남의 마크업에 대한 추측입니다 — 어긋나면 직접 설정하세요. 탐색이 따르는 규칙이 바뀝니다. 승격은 개인전에서 8번째 랭크, 팀에서 11번째 랭크입니다. Tetrarch는 팀만 탐색합니다."
 }

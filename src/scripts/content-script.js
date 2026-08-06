@@ -1717,15 +1717,24 @@ function fourPCEnPassant(board, prev) {
 // can analyse at all -- its FFA search is not implemented (PROTOCOL.md), so guessing "teams" on an
 // FFA board produces confident nonsense. Signals in order of trustworthiness; everything considered
 // is logged, so a mode we read wrongly can be pinned from one real game rather than guessed at twice.
-let fourPCModeCache = null;   // {path, mode}
+let fourPCModeCache = null;   // {path, override, mode}
 function fourPCMode() {
+    // The user's override wins outright and skips the detection entirely. Reading the mode off
+    // someone else's markup can only ever be a guess, and the mode changes the RULES the search runs
+    // under (promotion is the 8th rank in FFA, the 11th in Teams) -- so a wrong guess is a wrong
+    // search, and there has to be a way to say so. Panel: Mode, in the Variant row's place.
+    const override = config && config.fourpc_mode;
+    if (override === 'teams' || override === 'ffa') return override;
     // COMPUTED ONCE PER GAME. This is called from scrapePosition4PC, which runs on every mutation
     // and on the fallback poll -- and the work below reads innerText, which forces a layout. A
     // forced reflow per scrape is what made the ChessBase board lookup unusable; the mode cannot
     // change inside a game, so it is cached against the path and re-derived when that changes.
-    if (fourPCModeCache && fourPCModeCache.path === location.pathname) return fourPCModeCache.mode;
+    // The override is part of the key too: switching back to Auto has to re-detect rather than serve
+    // whatever was cached before the override was set.
+    if (fourPCModeCache && fourPCModeCache.path === location.pathname
+        && fourPCModeCache.override === override) return fourPCModeCache.mode;
     const mode = fourPCModeDetect();
-    fourPCModeCache = {path: location.pathname, mode};
+    fourPCModeCache = {path: location.pathname, override, mode};
     return mode;
 }
 

@@ -287,6 +287,11 @@ async function initPanel(root, tabId) {
         // general settings
         engine: storedEngine || 'stockfish-dev-nnue',
         variant: JSON.parse(MephistoConfig.get('variant')) || 'chess',
+        // Four-player mode OVERRIDE. 'auto' reads it off chess.com's own mode chip; the other two
+        // force it. Detection can only ever be a guess about someone else's markup, and the mode
+        // changes the RULES (promotion is the 8th rank in FFA, the 11th in Teams), so a wrong read
+        // is a wrong search with no way for you to say otherwise. This is that way.
+        fourpc_mode: JSON.parse(MephistoConfig.get('fourpc_mode')) || 'auto',
         elo: JSON.parse(MephistoConfig.get('elo')) || 0, // strength cap; 0 = full strength (no UCI_LimitStrength)
         maia_level: JSON.parse(MephistoConfig.get('maia_level')) || '1500', // which Maia net (rating band) when engine=maia
         maia3_elo: JSON.parse(MephistoConfig.get('maia3_elo')) || 1500, // Maia-3 target Elo (600-2600, live input, not a reload)
@@ -975,6 +980,23 @@ function init_quick_settings() {
                 o.hidden = !fairy && !['chess', 'fischerandom'].includes(o.value);
             });
         }
+    }
+    // Four-player mode override, in the Variant row's place. Deliberately NOT in the reload-the-panel
+    // table above: the mode is pushed to the content script and to Tetrarch per search, so it needs a
+    // re-analysis, not a re-init. Clearing fourpc_last is what makes it apply to the position already
+    // on screen instead of the next one -- the mode changes the RULES, so waiting would analyse the
+    // board under the rules you just said were wrong.
+    const modeRow = PANEL_ROOT.getElementById('qs_fourpc_mode_row');
+    if (modeRow) modeRow.style.display = FOURPC_ENGINES.includes(config.engine) ? '' : 'none';
+    const modeSel = PANEL_ROOT.getElementById('qs_fourpc_mode');
+    if (modeSel) {
+        modeSel.value = config.fourpc_mode || 'auto';
+        modeSel.addEventListener('change', () => {
+            config.fourpc_mode = modeSel.value;
+            save('fourpc_mode', modeSel.value);
+            fourpc_last = '';
+            push_config();
+        });
     }
     const detectBtn = PANEL_ROOT.getElementById('qs_variant_detect');
     if (detectBtn) {

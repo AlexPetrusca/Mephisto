@@ -69,6 +69,30 @@
                     </div>
                 </div>
 
+                <!-- Four-player mode override. Its own row rather than options on Variant: which
+                     RULES a four-player board plays by is a different question from which chess
+                     variant this is, and `variant` is read by the whole 8x8 lane. Shown only for
+                     Tetrarch, where the Variant row above is hidden anyway. -->
+                <div class="set-row section hidden" id="fourpc_mode_section">
+                    <div class="set-lbl">
+                        <span data-i18n="panel.fourpc_mode" data-i18n-tip="set.tip.four_player_mode" class="tooltipped" data-position="right"
+                              data-tooltip="Which rules the four-player board is played under. Auto-detect reads it
+                                            from chess.com's own mode label, which is a guess about someone else's
+                                            markup — set it yourself when that guess is wrong. It changes the rules
+                                            the search runs under: promotion is the 8th rank in free-for-all and the
+                                            11th in Teams. Tetrarch searches Teams only.">
+                            Four-player Mode <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <select name="fourpc_mode" id="fourpc_mode_select">
+                            <option data-i18n="panel.fourpc_mode_auto" value="auto">Auto-detect</option>
+                            <option data-i18n="panel.fourpc_mode_teams" value="teams">Teams</option>
+                            <option data-i18n="panel.fourpc_mode_ffa" value="ffa">Free-for-all</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="set-row section">
                     <div class="set-lbl"><span data-i18n="panel.threads">Threads</span></div>
                     <div class="set-ctl">

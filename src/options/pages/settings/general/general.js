@@ -35,6 +35,7 @@ class GeneralSettings extends SettingsPage {
         M.Tooltip.init(document.querySelectorAll('.tooltipped'), {enterDelay: 1000});
         const engine_select = this.registerFormElement('engine', 'Engine:', 'select', 'stockfish-dev-nnue');
         const variant_select = this.registerFormElement('variant', 'Variant:', 'select', 'chess');
+        this.registerFormElement('fourpc_mode', 'Four-player Mode:', 'select', 'auto');
         const elo_input = this.registerFormElement('elo', 'Elo:', 'input', 0);
         this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 300);
         this.registerFormElement('fen_refresh', 'Fallback Poll Interval (ms):', 'input', 1000);
@@ -101,6 +102,10 @@ class GeneralSettings extends SettingsPage {
             const NO_ELO = ['maia', 'maia3', 'tetrarch-native'];
             document.getElementById('elo_section')
                 ?.classList.toggle('hidden', NO_ELO.includes(engine_select.getValue()));
+            // The four-player mode override replaces Variant for Tetrarch: a different question
+            // (which RULES this board plays by) for the one engine it applies to.
+            document.getElementById('fourpc_mode_section')
+                ?.classList.toggle('hidden', engine_select.getValue() !== 'tetrarch-native');
             if (['fairy-stockfish-14-nnue', 'fairy-native'].includes(engine_select.getValue())) {
                 section.classList.remove('hidden');
             } else {

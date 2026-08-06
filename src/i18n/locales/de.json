@@ -242,5 +242,10 @@
   "set.check_for_updates": "Nach Updates suchen",
   "set.choose_extension_folder": "Erweiterungsordner wählen",
   "set.install_update": "Update installieren",
-  "panel.update_install_now": "Update verfügbar — v{latest} (installiert: v{current}) — zum Installieren klicken"
+  "panel.update_install_now": "Update verfügbar — v{latest} (installiert: v{current}) — zum Installieren klicken",
+  "panel.fourpc_mode": "Modus",
+  "panel.fourpc_mode_auto": "Automatisch",
+  "panel.fourpc_mode_teams": "Teams",
+  "panel.fourpc_mode_ffa": "Jeder gegen jeden",
+  "set.tip.four_player_mode": "Nach welchen Regeln das Vier-Spieler-Brett läuft. Automatisch liest chess.coms eigene Modus-Angabe aus, was eine Vermutung über fremdes Markup ist — stell es selbst ein, wenn die Vermutung falsch ist. Es ändert die Regeln der Suche: Umwandlung ist bei Jeder-gegen-jeden auf der 8., bei Teams auf der 11. Reihe. Tetrarch sucht nur Teams."
 }

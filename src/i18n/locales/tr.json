@@ -242,5 +242,10 @@
   "set.check_for_updates": "Güncellemeleri denetle",
   "set.choose_extension_folder": "Uzantı klasörünü seç",
   "set.install_update": "Güncellemeyi yükle",
-  "panel.update_install_now": "Güncelleme var — v{latest} (sende v{current}) — yüklemek için tıkla"
+  "panel.update_install_now": "Güncelleme var — v{latest} (sende v{current}) — yüklemek için tıkla",
+  "panel.fourpc_mode": "Mod",
+  "panel.fourpc_mode_auto": "Otomatik algıla",
+  "panel.fourpc_mode_teams": "Takımlar",
+  "panel.fourpc_mode_ffa": "Herkes kendine",
+  "set.tip.four_player_mode": "Dört kişilik tahtanın hangi kurallarla oynandığı. Otomatik algılama chess.com'un kendi mod etiketini okur; bu, başkasının işaretlemesi hakkında bir tahmindir — tahmin yanlışsa kendin ayarla. Aramanın kurallarını değiştirir: terfi herkes kendine modunda 8., takımlarda 11. sıradadır. Tetrarch yalnızca takımları arar."
 }

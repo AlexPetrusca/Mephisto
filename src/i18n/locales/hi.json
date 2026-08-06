@@ -242,5 +242,10 @@
   "set.check_for_updates": "अपडेट जाँचें",
   "set.choose_extension_folder": "एक्सटेंशन फ़ोल्डर चुनें",
   "set.install_update": "अपडेट इंस्टॉल करें",
-  "panel.update_install_now": "अपडेट उपलब्ध — v{latest} (आपके पास v{current}) — इंस्टॉल करने के लिए क्लिक करें"
+  "panel.update_install_now": "अपडेट उपलब्ध — v{latest} (आपके पास v{current}) — इंस्टॉल करने के लिए क्लिक करें",
+  "panel.fourpc_mode": "मोड",
+  "panel.fourpc_mode_auto": "स्वतः पहचान",
+  "panel.fourpc_mode_teams": "टीम",
+  "panel.fourpc_mode_ffa": "सबका सबसे मुक़ाबला",
+  "set.tip.four_player_mode": "चार-खिलाड़ी बोर्ड किन नियमों से खेला जा रहा है। स्वतः पहचान chess.com का अपना मोड लेबल पढ़ती है, जो किसी और के मार्कअप के बारे में अनुमान है — अनुमान ग़लत हो तो इसे स्वयं सेट करें। यह खोज के नियम बदल देता है: प्रमोशन सबका-सबसे में 8वीं और टीम में 11वीं रैंक पर होता है। Tetrarch केवल टीम मोड खोजता है।"
 }

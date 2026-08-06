@@ -242,5 +242,10 @@
   "set.check_for_updates": "Cerca aggiornamenti",
   "set.choose_extension_folder": "Scegli la cartella dell'estensione",
   "set.install_update": "Installa aggiornamento",
-  "panel.update_install_now": "Aggiornamento disponibile — v{latest} (hai la v{current}) — clicca per installare"
+  "panel.update_install_now": "Aggiornamento disponibile — v{latest} (hai la v{current}) — clicca per installare",
+  "panel.fourpc_mode": "Modalità",
+  "panel.fourpc_mode_auto": "Rilevamento automatico",
+  "panel.fourpc_mode_teams": "Squadre",
+  "panel.fourpc_mode_ffa": "Tutti contro tutti",
+  "set.tip.four_player_mode": "Con quali regole si gioca la scacchiera a quattro. Il rilevamento automatico legge l'etichetta di modalità di chess.com, che è un'ipotesi sul markup altrui — impostala tu quando sbaglia. Cambia le regole della ricerca: la promozione è all'8ª traversa in tutti contro tutti e all'11ª a squadre. Tetrarch cerca solo a squadre."
 }

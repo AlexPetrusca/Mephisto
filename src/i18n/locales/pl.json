@@ -242,5 +242,10 @@
   "set.check_for_updates": "Sprawdź aktualizacje",
   "set.choose_extension_folder": "Wybierz folder rozszerzenia",
   "set.install_update": "Zainstaluj aktualizację",
-  "panel.update_install_now": "Dostępna aktualizacja — v{latest} (masz v{current}) — kliknij, aby zainstalować"
+  "panel.update_install_now": "Dostępna aktualizacja — v{latest} (masz v{current}) — kliknij, aby zainstalować",
+  "panel.fourpc_mode": "Tryb",
+  "panel.fourpc_mode_auto": "Wykryj automatycznie",
+  "panel.fourpc_mode_teams": "Drużyny",
+  "panel.fourpc_mode_ffa": "Każdy na każdego",
+  "set.tip.four_player_mode": "Według jakich zasad toczy się partia na planszy czteroosobowej. Wykrywanie automatyczne czyta etykietę trybu chess.com, co jest domysłem na temat cudzego kodu — ustaw ręcznie, gdy ten domysł jest błędny. Zmienia to zasady przeszukiwania: promocja następuje na 8. linii w każdy na każdego i na 11. w drużynach. Tetrarch przeszukuje tylko drużyny."
 }

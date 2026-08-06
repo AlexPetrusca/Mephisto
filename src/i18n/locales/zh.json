@@ -242,5 +242,10 @@
   "set.check_for_updates": "检查更新",
   "set.choose_extension_folder": "选择扩展文件夹",
   "set.install_update": "安装更新",
-  "panel.update_install_now": "有可用更新 — v{latest}（当前 v{current}）——点击安装"
+  "panel.update_install_now": "有可用更新 — v{latest}（当前 v{current}）——点击安装",
+  "panel.fourpc_mode": "模式",
+  "panel.fourpc_mode_auto": "自动检测",
+  "panel.fourpc_mode_teams": "组队",
+  "panel.fourpc_mode_ffa": "混战",
+  "set.tip.four_player_mode": "四人棋盘按哪套规则进行。自动检测读取 chess.com 自己的模式标签，而那只是对他人页面结构的猜测——猜错时请自行设定。它会改变搜索所依据的规则：混战的升变在第 8 横线，组队在第 11 横线。Tetrarch 只搜索组队模式。"
 }
