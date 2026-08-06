@@ -1578,10 +1578,15 @@ function is4PC() {
 
 // ...but CLICKING is gated harder: only inside a real game, never on the lobby's preview board or a
 // setup page. Those render a full, perfectly scrapeable position, and autoplay would happily start
-// clicking pieces around a board that is not a game. The setup slug varies (4-player-chess,
-// 4-player-classic, ...) while the game path does not: /variants/<slug>/game/<id>.
+// Boards it is sensible to CLICK on. A real game, and the analysis board -- which is your own
+// private board, so playing a line out on it is a normal thing to want and cannot affect anyone
+// else's game. What stays excluded is the lobby and the variant setup pages, where a board is drawn
+// but there is nothing to play: clicking pieces around those is the failure this guard was written
+// for. Measured: the analysis board is /variants/4-player-chess/analysis, and autoplay silently
+// refused every move there.
 function is4PCGame() {
-    return site === 'chesscom' && /^\/variants\/4-player[\w-]*\/game\/\d+/.test(location.pathname);
+    return site === 'chesscom'
+        && /^\/variants\/4-player[\w-]*\/(game\/\d+|analysis)/.test(location.pathname);
 }
 
 // The board's own coordinate labels -> which screen axis carries ranks, and what sits at each index.
