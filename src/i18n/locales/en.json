@@ -264,5 +264,7 @@
   "set.finish_update": "Finish Interrupted Update",
   "set.note.every_update_is_undoable": "Every update is <b>undoable</b>. Before anything is overwritten the new version is written to a staging folder, and the files it replaces are copied to a backup — so <b>Roll Back</b> puts the previous version straight back, and an update interrupted halfway can be finished without downloading it again. One generation is kept, and the bundled engines are never part of it.",
   "panel.updated_to": "Updated to v{v}",
-  "panel.updated_to_with_note": "Updated to v{v} — {note}"
+  "panel.updated_to_with_note": "Updated to v{v} — {note}",
+  "set.copy_diagnostics": "Copy Diagnostics",
+  "panel.diagnostics_copied": "Diagnostics copied to the clipboard."
 }

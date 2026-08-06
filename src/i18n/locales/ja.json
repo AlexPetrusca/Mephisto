@@ -257,5 +257,7 @@
   "set.finish_update": "中断した更新を完了",
   "set.note.every_update_is_undoable": "Every update is <b>undoable</b>. Before anything is overwritten the new version is written to a staging folder, and the files it replaces are copied to a backup — so <b>Roll Back</b> puts the previous version straight back, and an update interrupted halfway can be finished without downloading it again. One generation is kept, and the bundled engines are never part of it.",
   "panel.updated_to": "v{v} に更新しました",
-  "panel.updated_to_with_note": "v{v} に更新しました — {note}"
+  "panel.updated_to_with_note": "v{v} に更新しました — {note}",
+  "set.copy_diagnostics": "診断をコピー",
+  "panel.diagnostics_copied": "診断をクリップボードにコピーしました。"
 }

@@ -257,5 +257,7 @@
   "set.finish_update": "Yarım kalan güncellemeyi tamamla",
   "set.note.every_update_is_undoable": "Every update is <b>undoable</b>. Before anything is overwritten the new version is written to a staging folder, and the files it replaces are copied to a backup — so <b>Roll Back</b> puts the previous version straight back, and an update interrupted halfway can be finished without downloading it again. One generation is kept, and the bundled engines are never part of it.",
   "panel.updated_to": "v{v} sürümüne güncellendi",
-  "panel.updated_to_with_note": "v{v} sürümüne güncellendi — {note}"
+  "panel.updated_to_with_note": "v{v} sürümüne güncellendi — {note}",
+  "set.copy_diagnostics": "Tanılamayı kopyala",
+  "panel.diagnostics_copied": "Tanılama panoya kopyalandı."
 }

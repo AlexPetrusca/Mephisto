@@ -69,6 +69,7 @@ class GeneralSettings extends SettingsPage {
         this.initHotkeys();
         this.initPuzzleDb();
         this.initUpdater();
+        this.initCopyDiagnostics();
         this.registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
         this.registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
         this.registerFormElement('think_time', 'Simulated Think Time (ms):', 'input', 0);
@@ -169,11 +170,12 @@ class GeneralSettings extends SettingsPage {
             mirror_mode: 'Toggle Mirror Time', manual_mode: 'Toggle Manual Mode', eval_bar: 'Toggle Eval Bar',
             eval_history: 'Toggle Eval History', tablebase: 'Toggle Endgame Tablebase',
             puzzle_mode: 'Toggle Puzzle Mode', explorer: 'Toggle Opening Explorer',
-            book_play: 'Toggle Book Moves', copy_fen: 'Copy FEN', copy_pgn: 'Copy PGN', redetect: 'Re-detect game',
+            book_play: 'Toggle Book Moves', copy_fen: 'Copy FEN', copy_pgn: 'Copy PGN', copy_diagnostics: 'Copy Diagnostics',
+            redetect: 'Re-detect game',
         };
         const ORDER = ['manual_play', 'manual_mode', 'autoplay', 'premove', 'explorer', 'book_play',
             'help_mode', 'humanize', 'clock_mode', 'mirror_mode', 'eval_bar', 'eval_history', 'tablebase', 'puzzle_mode',
-            'copy_fen', 'copy_pgn', 'redetect'];
+            'copy_fen', 'copy_pgn', 'copy_diagnostics', 'redetect'];
         // same normalization as the content-script listener, so what we store matches what it compares
         const keyString = (e) => {
             const parts = [];
@@ -354,6 +356,31 @@ class GeneralSettings extends SettingsPage {
         // The mix populates BEFORE this does, so its first summary was computed against empty cp
         // fields. This is the pass that gets it right on page open.
         this.updateHumanizeSummary();
+    }
+
+    // Copy Diagnostics from the settings page. The same worker report the hotkey fetches, minus the
+    // panel-only context (what is on screen, why the last move did not happen) -- this page has no
+    // panel to ask. The bulk of a report is the worker's trace ring either way.
+    initCopyDiagnostics() {
+        const btn = document.getElementById('copy_diag_btn');
+        const status = document.getElementById('copy_diag_status');
+        if (!btn || !status) return; // stale cached page html
+        btn.addEventListener('click', () => {
+            status.textContent = 'Collecting…';
+            chrome.runtime.sendMessage({diagnostics: {site: 'settings page'}}, async (res) => {
+                if (chrome.runtime.lastError || !res || res.error) {
+                    status.textContent = `Could not collect diagnostics: ` +
+                        `${chrome.runtime.lastError?.message || res?.error || 'no answer'}`;
+                    return;
+                }
+                try {
+                    await navigator.clipboard.writeText(res.report);
+                    status.textContent = `Copied — ${res.report.split('\n').length} lines. Paste it into your report.`;
+                } catch (e) {
+                    status.textContent = `Collected, but the clipboard refused: ${e.message || e}`;
+                }
+            });
+        });
     }
 
     // Self-update. NOT a FormElement, and no config key at all: the CHROME PERMISSION is the

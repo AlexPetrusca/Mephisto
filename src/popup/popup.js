@@ -587,29 +587,6 @@ async function initPanel(root, tabId) {
     });
     PANEL_ROOT.getElementById('copyfen')?.addEventListener('click', () => copy_to_button('copyfen', last_eval.fen));
     PANEL_ROOT.getElementById('copypgn')?.addEventListener('click', () => copy_to_button('copypgn', current_pgn()));
-    // Everything worth knowing about a failure, in one paste. The worker holds the trace ring and
-    // the things only it can see (bundled assets, connected hosts, granted permissions); the panel
-    // adds what only IT knows -- what is on screen, and why it last did nothing.
-    PANEL_ROOT.getElementById('copydiag')?.addEventListener('click', () => {
-        const ctx = {
-            site: (typeof site !== 'undefined' && site) || location.hostname,
-            path: location.pathname,                       // path only: never the query string
-            engine: config.engine,
-            detection: PANEL_ROOT.getElementById('game-detection')?.textContent || '',
-            reason: idle_reason_text,
-            fen: last_eval.fen || '',
-            toggles: ['autoplay', 'premove', 'help_mode', 'manual_mode', 'humanize', 'puzzle_mode',
-                      'clock_mode', 'mirror_mode', 'background_play', 'verbose_log']
-                .filter(k => config[k]).join(' ') || 'none on',
-        };
-        chrome.runtime.sendMessage({diagnostics: ctx}, (res) => {
-            if (chrome.runtime.lastError || !res || res.error) {
-                return copy_to_button('copydiag', `Mephisto diagnostics unavailable: ` +
-                    `${chrome.runtime.lastError?.message || res?.error || 'no answer'}`);
-            }
-            copy_to_button('copydiag', res.report);
-        });
-    });
     PANEL_ROOT.getElementById('config').addEventListener('click', () => {
         chrome.runtime.sendMessage({openOptions: true}); // the background opens it (see above)
     });
@@ -4548,6 +4525,13 @@ function do_hotkey(action) {
     if (action === 'manual_play') return manual_play();
     if (action === 'copy_fen') { copy_to_button('copyfen', last_eval.fen); return true; }
     if (action === 'copy_pgn') { copy_to_button('copypgn', current_pgn()); return true; }
+    if (action === 'copy_diagnostics') {
+        // The reason line doubles as the confirmation: there is no button left to flash a tick on,
+        // and a hotkey that appears to do nothing is worse than no hotkey.
+        copy_diagnostics((err) => set_idle_reason(err || i18n('panel.diagnostics_copied',
+            'Diagnostics copied to the clipboard.')));
+        return true;
+    }
     if (action === 'redetect') { PANEL_ROOT.getElementById('recheck')?.click(); return true; }
     const box = HOTKEY_TOGGLES[action] && PANEL_ROOT.getElementById(HOTKEY_TOGGLES[action]);
     if (!box) return false;
@@ -5753,6 +5737,33 @@ function check_for_update_version(el) {
             });
         });
     } catch (e) { /* extension context gone -- nothing to notify about */ }
+}
+
+// Everything worth knowing about a failure, in one paste. The worker holds the trace ring and
+// the things only it can see (bundled assets, connected hosts, granted permissions); the panel
+// adds what only IT knows -- what is on screen, and why it last did nothing.
+//
+// NOT a toolbar button: that row is absolutely positioned by id on a 45px pitch and its own
+// comment does the arithmetic showing five is exactly what fits. A sixth fell out of the layout
+// and landed on the board. It is a hotkey and a settings button instead.
+function copy_diagnostics(onDone = () => {}) {
+        const ctx = {
+            site: (typeof site !== 'undefined' && site) || location.hostname,
+            path: location.pathname,                       // path only: never the query string
+            engine: config.engine,
+            detection: PANEL_ROOT.getElementById('game-detection')?.textContent || '',
+            reason: idle_reason_text,
+            fen: last_eval.fen || '',
+            toggles: ['autoplay', 'premove', 'help_mode', 'manual_mode', 'humanize', 'puzzle_mode',
+                      'clock_mode', 'mirror_mode', 'background_play', 'verbose_log']
+                .filter(k => config[k]).join(' ') || 'none on',
+        };
+        chrome.runtime.sendMessage({diagnostics: ctx}, (res) => {
+            if (chrome.runtime.lastError || !res || res.error) {
+                return onDone(`Mephisto diagnostics unavailable: ${chrome.runtime.lastError?.message || res?.error || 'no answer'}`);
+            }
+            copy_text(res.report).then(okd => onDone(okd ? '' : 'Could not write to the clipboard.'));
+        });
 }
 
 function is_remote() {

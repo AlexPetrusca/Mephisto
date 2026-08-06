@@ -257,5 +257,7 @@
   "set.finish_update": "完成中断的更新",
   "set.note.every_update_is_undoable": "Every update is <b>undoable</b>. Before anything is overwritten the new version is written to a staging folder, and the files it replaces are copied to a backup — so <b>Roll Back</b> puts the previous version straight back, and an update interrupted halfway can be finished without downloading it again. One generation is kept, and the bundled engines are never part of it.",
   "panel.updated_to": "已更新到 v{v}",
-  "panel.updated_to_with_note": "已更新到 v{v} — {note}"
+  "panel.updated_to_with_note": "已更新到 v{v} — {note}",
+  "set.copy_diagnostics": "复制诊断信息",
+  "panel.diagnostics_copied": "诊断信息已复制到剪贴板。"
 }

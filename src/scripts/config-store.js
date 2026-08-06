@@ -70,7 +70,7 @@
             manual_mode: 'n', autoplay: 'a', premove: 'p', help_mode: 'h', humanize: 'u',
             clock_mode: 'c', mirror_mode: 'm', eval_bar: 'e', eval_history: 'y', tablebase: 't', puzzle_mode: 'z',
             explorer: 'o', book_play: 'b',
-            copy_fen: 'f', copy_pgn: 'g', redetect: 'r',
+            copy_fen: 'f', copy_pgn: 'g', copy_diagnostics: 'd', redetect: 'r',
         },
         // the effective bindings: defaults overlaid with whatever the user saved in config.hotkeys
         hotkeys() {
