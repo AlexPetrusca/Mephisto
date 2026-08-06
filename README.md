@@ -106,6 +106,10 @@ After that it is one button. It downloads the ~6 MB update archive, writes it ov
 extension — the same *extract in place* described above, so your extension id survives and native engines keep
 working. Reload any game tab you had open afterwards.
 
+Once all three are in place you don't have to come back here at all: the panel's own update notice becomes the
+button. It reads *"Update available — v… — click to install"* and does the whole thing. With anything missing it
+stays what it always was, a link to the releases page, because there would be nothing to click that would work.
+
 What it will not do:
 
 | | |
@@ -114,7 +118,7 @@ What it will not do:
 | Touch the bundled engines | The update archive doesn't contain them, so `lib/engine` and `lib/ort` are left alone. |
 | Write into the wrong folder | A folder is rejected unless its `manifest.json` is this extension's. |
 | Apply a broken download | The whole archive is unpacked and checked in memory first. If anything is off — a bad path, a version that disagrees with the release, a missing file the extension needs to boot — nothing is written at all. |
-| Anything, while switched off | Every button is disabled and the installer refuses outright. |
+| Anything at all, while switched off | Every button is disabled, the panel stops offering one click, and the installer refuses outright. Switching off records that choice and keeps it, whether or not Chrome agrees to hand the permission back. |
 
 > The permission is scoped to this repository's release downloads, not to github.com. You can see it, and take it
 > back, on `chrome://extensions` — or just switch Automatic Updates off, which hands it back for you.
