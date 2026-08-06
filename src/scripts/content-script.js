@@ -24,6 +24,15 @@ function bgLog(...args) {
     // move, a superseded premove) are foreground symptoms, and they were invisible exactly when
     // they mattered. Worker console only -- ordinary play still sees nothing.
     if (tabActive() && !(config && config.premove)) return;
+    bgLogAlways(...args);
+}
+
+// The same trace WITHOUT the foreground gate. For the four-player lane, which is one search per move
+// (nowhere near enough volume to be worth suppressing) and is still being brought up. Gating it cost
+// three sessions of "autoplay does nothing in 4PC" with no evidence: the lines that name the cause
+// were silent in precisely the situation being investigated -- someone sitting in front of the board
+// with the tab focused and Premove off.
+function bgLogAlways(...args) {
     console.log('[Mephisto/bg]', ...args);
     try {
         chrome.runtime.sendMessage({bgTrace: {from: 'content', args: args.map(bgSafe)}}, () => void chrome.runtime.lastError);
@@ -160,7 +169,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // move carries its own `deselect`, so it starts by clearing any half-made selection.
             bgLog('superseding an in-flight blind premove with the real move', {move: response.move});
         } else if (response.automove || response.premoves) {
-            bgLog('DROPPED: a previous move is still in progress (moving=true)');
+            (response.fourpc ? bgLogAlways : bgLog)('DROPPED: a previous move is still in progress (moving=true)');
             return;
         }
         // ANYTHING ELSE FALLS THROUGH. This guard exists to stop two CLICK SESSIONS overlapping --
@@ -175,16 +184,26 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // `pv` is the shape a PUZZLE move arrives in -- without it this line read
         // `{move: undefined, premoves: undefined}` for every database move, which is exactly the
         // case most likely to be under investigation when someone is reading this log.
-        bgLog('automove received', {move: response.move, pv: response.pv, premoves: response.premoves,
+        // Ungated for four-player moves: this line and the two guards under it are the ones that say
+        // WHY a move never reached the board, and the gate hid them from the only person who could
+        // have reported them.
+        const alog = response.fourpc ? bgLogAlways : bgLog;
+        alog('automove received', {move: response.move, pv: response.pv, premoves: response.premoves,
             autoplay: config.autoplay, background_play: config.background_play, moving,
             visible: document.visibilityState, focused: document.hasFocus()});
-        if (!config.autoplay && !response.manual) { bgLog('DROPPED: autoplay is off'); return; }
+        // `config` here is the CONTENT SCRIPT's copy, pushed separately from the panel's. The panel
+        // already decided to send this move against its own copy, so a disagreement between the two
+        // drops a move the user did ask for -- which is what the log above exists to make visible.
+        if (!config.autoplay && !response.manual) { alog('DROPPED: autoplay is off'); return; }
         // undetectability: don't click while the tab is backgrounded/unfocused -- a human wouldn't
         // move while tabbed away, and "moved while hidden" is an easy anomaly to flag. It's still our
         // turn (or a queued premove), so the position is stable: hold the move and re-scrape the
         // instant the tab is active again, which makes the popup re-issue it. Opt out with background_play.
         if (!config.background_play && !tabActive()) {
-            bgLog('DEFERRED: tab inactive and Background Play is off');
+            // tabActive() is visibility AND document.hasFocus(), so an open DevTools window on the
+            // game tab counts as inactive -- autoplay stops the moment you go to read the console
+            // about autoplay not working, which is its own small trap.
+            alog('DEFERRED: tab inactive and Background Play is off');
             deferredWhileHidden = true;
             return;
         }
@@ -225,7 +244,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // `.finally(endMoving)` tidied up behind it, so autoplay simply skipped a move with
             // nothing stuck and nothing logged. The sender already decided; read what it sent.
             if (response.fourpc && !is4PCGame()) {
-                bgLog('DROPPED: 4PC move outside a game url', {path: location.pathname});
+                bgLogAlways('DROPPED: 4PC move outside a game url', {path: location.pathname});
                 endMoving();
             } else if (response.fourpc) {
                 // FIRST, and on an explicit flag: 4PC must not be reachable by shape inference,
@@ -796,7 +815,7 @@ function drawHintArrows(arrows) {
         const geo = fourPCGeometry();
         // Help Mode on a 4PC board has been reported as drawing nothing twice. Everything upstream
         // of here checks out by reading, so log what actually arrives rather than guess a third time.
-        bgLog('4PC hint', {arrows: arrows.length, move: arrows[0]?.move, geo: !!geo,
+        bgLogAlways('4PC hint', {arrows: arrows.length, move: arrows[0]?.move, geo: !!geo,
                            rect: geo && [Math.round(geo.rect.left), Math.round(geo.rect.top),
                                          Math.round(geo.rect.width)]});
         if (!geo) return;
@@ -1736,7 +1755,7 @@ let fourPCModeLast = null;
 function fourPCModeLog(mode, seen) {
     if (mode !== fourPCModeLast) {
         fourPCModeLast = mode;
-        bgLog('4PC mode', {mode, ...seen});
+        bgLogAlways('4PC mode', {mode, ...seen});
     }
     return mode;
 }
@@ -1779,7 +1798,7 @@ function scrapePosition4PC() {
     // ponytail: an eliminated seat stops taking turns, which `played % 4` cannot know about, so skip
     // forward off a dead seat. Untested -- no game has been observed past an elimination yet.
     for (let n = 0; n < 4 && !alive(turn); n++) turn = FOURPC_SEATS[(FOURPC_SEATS.indexOf(turn) + 1) % 4];
-    if (turn !== fourPCTurn) bgLog('4PC turn', {turn, played, diff: d && d.moved && d.moved.seat});
+    if (turn !== fourPCTurn) bgLogAlways('4PC turn', {turn, played, diff: d && d.moved && d.moved.seat});
     fourPCTurn = turn;
     // `dead` is no longer hardcoded either -- a seat with no king is out, and in Teams that changes
     // the evaluation substantially.
@@ -1868,7 +1887,7 @@ function simulateMove4PC(move, think = null) {
         const click = async (sq, travel) => {
             const r = rectOf(sq);
             if (!r) { console.warn(`Mephisto: 4PC square '${sq}' vanished mid-move`); return; }
-            bgLog('4PC click', {sq, x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2),
+            bgLogAlways('4PC click', {sq, x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2),
                                 size: Math.round(r.width), vh: window.innerHeight});
             await simulateClickSquare(r, 0.8, travel);
         };
