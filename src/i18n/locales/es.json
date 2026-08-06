@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "El permiso cubre solo las descargas de versiones de este proyecto. Desactivarlo lo devuelve.",
   "set.check_for_updates": "Buscar actualizaciones",
   "set.choose_extension_folder": "Elegir carpeta de la extensión",
-  "set.install_update": "Instalar actualización"
+  "set.install_update": "Instalar actualización",
+  "panel.update_install_now": "Actualización disponible — v{latest} (tienes la v{current}) — haz clic para instalar"
 }

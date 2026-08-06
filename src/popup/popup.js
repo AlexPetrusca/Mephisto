@@ -5611,6 +5611,22 @@ function check_for_update_version(el) {
                 e.preventDefault();   // in-page, target="_blank" is unreliable -- let the worker open it
                 chrome.runtime.sendMessage({openUrl: url});
             };
+            // If self-updating is already set up -- permission granted AND a folder chosen -- the
+            // notice becomes the button that does it. Only THEN: with nothing set up there is no
+            // one-click update to offer, and the release page is still the right destination.
+            // The panel cannot run the install itself (it lives in the page's isolated world, where
+            // there is no showDirectoryPicker and no access to the extension's IndexedDB), so the
+            // click hands off to the worker, which opens the settings page and lets it run.
+            chrome.runtime.sendMessage({updateReady: true}, (ready) => {
+                if (chrome.runtime.lastError || !ready?.ok) return;
+                el.textContent = i18n('panel.update_install_now',
+                    'Update available — v{latest} (you have v{current}) — click to install',
+                    {latest: res.latest, current: res.current});
+                el.onclick = (e) => {
+                    e.preventDefault();
+                    chrome.runtime.sendMessage({startUpdate: true});
+                };
+            });
         });
     } catch (e) { /* extension context gone -- nothing to notify about */ }
 }

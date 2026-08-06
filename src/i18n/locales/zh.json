@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "该权限仅覆盖本项目的发布下载。关闭即可收回。",
   "set.check_for_updates": "检查更新",
   "set.choose_extension_folder": "选择扩展文件夹",
-  "set.install_update": "安装更新"
+  "set.install_update": "安装更新",
+  "panel.update_install_now": "有可用更新 — v{latest}（当前 v{current}）——点击安装"
 }

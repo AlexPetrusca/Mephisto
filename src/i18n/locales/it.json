@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "Il permesso copre solo i download delle versioni di questo progetto. Disattivarlo lo restituisce.",
   "set.check_for_updates": "Cerca aggiornamenti",
   "set.choose_extension_folder": "Scegli la cartella dell'estensione",
-  "set.install_update": "Installa aggiornamento"
+  "set.install_update": "Installa aggiornamento",
+  "panel.update_install_now": "Aggiornamento disponibile — v{latest} (hai la v{current}) — clicca per installare"
 }

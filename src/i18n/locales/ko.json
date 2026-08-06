@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "이 권한은 이 프로젝트의 릴리스 내려받기에만 적용됩니다. 끄면 반환됩니다.",
   "set.check_for_updates": "업데이트 확인",
   "set.choose_extension_folder": "확장 프로그램 폴더 선택",
-  "set.install_update": "업데이트 설치"
+  "set.install_update": "업데이트 설치",
+  "panel.update_install_now": "업데이트 있음 — v{latest}(현재 v{current}) — 눌러서 설치"
 }

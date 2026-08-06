@@ -74,6 +74,25 @@ const MephistoUpdater = (function () {
     const requestPermission = () => chrome.permissions.request({origins: ORIGINS});
     const dropPermission = () => chrome.permissions.remove({origins: ORIGINS});
 
+    // --- the on/off setting -----------------------------------------------------------------------
+    // The Chrome permission is a CAPABILITY, not the setting. Treating it as the setting meant the
+    // switch could not be turned off: chrome.permissions.remove answers false whenever Chrome
+    // decides not to revoke -- granting a path-scoped pattern can widen it to the whole origin, and
+    // the narrower pattern then does not match anything removable -- so hasPermission() stayed true
+    // and the checkbox sprang straight back on. The user's intent has to be recorded separately and
+    // has to win. Off means off whatever Chrome kept.
+    //
+    // chrome.storage.local, not localStorage: the service worker reads it to answer isReady().
+    const enabled = () => chrome.storage.local.get('auto_update').then(v => v.auto_update === true);
+    const setEnabled = (on) => chrome.storage.local.set({auto_update: on === true});
+
+    // Everything that has to be true before a one-click update can be offered.
+    async function isReady() {
+        if (!(await enabled())) return false;
+        if (!(await hasPermission())) return false;
+        return !!(await handleGet());
+    }
+
     // --- the folder -----------------------------------------------------------------------------
     // Verified to be THIS extension before it is ever written to. A mis-picked directory would
     // otherwise get a few hundred files sprayed into it, and there is no undo for that. The name
@@ -233,7 +252,8 @@ const MephistoUpdater = (function () {
 
     // --- the whole thing ------------------------------------------------------------------------
     async function install(onStatus = () => {}) {
-        if (!(await hasPermission())) throw new Error('Automatic updates are switched off.');
+        if (!(await enabled())) throw new Error('Automatic updates are switched off.');
+        if (!(await hasPermission())) throw new Error('Chrome is not holding the download permission.');
         const dir = await folder({prompt: true});
         if (!dir) throw new Error('Choose the extension folder first.');
         const installed = await verifyFolder(dir); // re-checked every run, not only when it was picked
@@ -268,6 +288,7 @@ const MephistoUpdater = (function () {
     return {
         REPO, ORIGINS,
         hasPermission, requestPermission, dropPermission,
+        enabled, setEnabled, isReady,
         // `folder` answers null when the write grant has lapsed (it does across restarts);
         // `savedFolder` answers whether one was ever chosen, which is a different question and the
         // one the settings page needs to decide what to tell you.

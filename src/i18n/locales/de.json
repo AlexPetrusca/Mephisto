@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "Die Berechtigung gilt nur für die Release-Downloads dieses Projekts. Ausschalten gibt sie zurück.",
   "set.check_for_updates": "Nach Updates suchen",
   "set.choose_extension_folder": "Erweiterungsordner wählen",
-  "set.install_update": "Update installieren"
+  "set.install_update": "Update installieren",
+  "panel.update_install_now": "Update verfügbar — v{latest} (installiert: v{current}) — zum Installieren klicken"
 }

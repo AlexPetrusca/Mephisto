@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "A permissão cobre apenas as transferências de versões deste projeto. Desligar isto devolve-a.",
   "set.check_for_updates": "Procurar atualizações",
   "set.choose_extension_folder": "Escolher pasta da extensão",
-  "set.install_update": "Instalar atualização"
+  "set.install_update": "Instalar atualização",
+  "panel.update_install_now": "Atualização disponível — v{latest} (tens a v{current}) — clica para instalar"
 }

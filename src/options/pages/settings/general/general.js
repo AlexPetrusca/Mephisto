@@ -361,10 +361,17 @@ class GeneralSettings extends SettingsPage {
         let latest = null; // last release seen, so Install can name it
 
         const render = async () => {
-            const on = await MephistoUpdater.hasPermission();
+            // The SETTING is what the user chose; the permission is only a capability. Reading the
+            // permission back as the setting is what made the switch impossible to turn off.
+            const on = await MephistoUpdater.enabled();
+            const granted = on && await MephistoUpdater.hasPermission();
             cb.checked = on;
-            buttons.forEach(b => b.disabled = !on);
+            buttons.forEach(b => b.disabled = !granted);
             if (!on) return say('Off — Mephisto downloads nothing and asks GitHub for nothing extra.');
+            if (!granted) {
+                return say('On, but Chrome is no longer holding the download permission — ' +
+                    'switch this off and on again to ask for it.');
+            }
             const dir = await MephistoUpdater.savedFolder();
             if (!dir) return say(`On — you have v${current}. Choose the extension folder to finish setting this up.`);
             say(`On — you have v${current}, and updates go into "${dir.name}".`);
@@ -387,8 +394,14 @@ class GeneralSettings extends SettingsPage {
         cb.addEventListener('change', async () => {
             if (cb.checked) {
                 const granted = await MephistoUpdater.requestPermission().catch(() => false);
+                await MephistoUpdater.setEnabled(granted); // refusing the prompt leaves it off
                 if (!granted) say('Chrome did not grant the download permission, so this stays off.');
             } else {
+                // ORDER MATTERS. Record the intent FIRST, then try to hand the permission back:
+                // chrome.permissions.remove can answer false and keep it (granting a path-scoped
+                // pattern can widen it to the whole origin, which the narrow pattern then cannot
+                // remove). Off has to mean off whatever Chrome decides to keep.
+                await MephistoUpdater.setEnabled(false);
                 await MephistoUpdater.dropPermission().catch(() => {});
             }
             render();
@@ -413,7 +426,7 @@ class GeneralSettings extends SettingsPage {
             }
         });
 
-        installBtn.addEventListener('click', async () => {
+        const runInstall = async () => {
             buttons.forEach(b => b.disabled = true);
             try {
                 const res = await MephistoUpdater.install(say);
@@ -430,9 +443,22 @@ class GeneralSettings extends SettingsPage {
                 say(`Update failed, and nothing was changed: ${e.message || e}`);
             }
             buttons.forEach(b => b.disabled = false);
-        });
+        };
+        installBtn.addEventListener('click', runInstall);
 
-        render();
+        // The panel's "click to install" hands off to here -- the worker raises a flag and opens
+        // this page, and the install starts on its own. The flag is cleared BEFORE anything runs, so
+        // reloading this page afterwards never re-triggers an update.
+        const autostart = async () => {
+            const {mephisto_autostart_update: wanted} =
+                await chrome.storage.local.get('mephisto_autostart_update');
+            if (!wanted) return;
+            await chrome.storage.local.remove('mephisto_autostart_update');
+            document.getElementById('updates')?.scrollIntoView({block: 'center'});
+            if (await MephistoUpdater.isReady()) runInstall();
+        };
+
+        render().then(autostart);
     }
 
     // Puzzle database import. NOT a FormElement: what is stored is an IndexedDB of six million

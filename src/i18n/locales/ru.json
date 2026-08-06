@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "Разрешение распространяется только на загрузку релизов этого проекта. Выключение возвращает его.",
   "set.check_for_updates": "Проверить обновления",
   "set.choose_extension_folder": "Выбрать папку расширения",
-  "set.install_update": "Установить обновление"
+  "set.install_update": "Установить обновление",
+  "panel.update_install_now": "Доступно обновление — v{latest} (у вас v{current}) — нажмите, чтобы установить"
 }

@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "İzin yalnızca bu projenin sürüm indirmelerini kapsar. Kapatmak izni geri verir.",
   "set.check_for_updates": "Güncellemeleri denetle",
   "set.choose_extension_folder": "Uzantı klasörünü seç",
-  "set.install_update": "Güncellemeyi yükle"
+  "set.install_update": "Güncellemeyi yükle",
+  "panel.update_install_now": "Güncelleme var — v{latest} (sende v{current}) — yüklemek için tıkla"
 }

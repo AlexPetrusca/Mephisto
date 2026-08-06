@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "この権限は本プロジェクトのリリースのダウンロードのみを対象とします。オフにすれば返上されます。",
   "set.check_for_updates": "アップデートを確認",
   "set.choose_extension_folder": "拡張機能のフォルダーを選択",
-  "set.install_update": "アップデートをインストール"
+  "set.install_update": "アップデートをインストール",
+  "panel.update_install_now": "更新があります — v{latest}（お使いのバージョン v{current}） — クリックしてインストール"
 }

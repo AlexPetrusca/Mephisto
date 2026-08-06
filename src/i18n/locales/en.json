@@ -248,5 +248,6 @@
   "set.note.updates_permission_scope": "The permission covers only this project's release downloads. Switching this off gives it back.",
   "set.check_for_updates": "Check for Updates",
   "set.choose_extension_folder": "Choose Extension Folder",
-  "set.install_update": "Install Update"
+  "set.install_update": "Install Update",
+  "panel.update_install_now": "Update available — v{latest} (you have v{current}) — click to install"
 }

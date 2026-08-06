@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "De toestemming geldt alleen voor de release-downloads van dit project. Uitschakelen geeft hem terug.",
   "set.check_for_updates": "Controleren op updates",
   "set.choose_extension_folder": "Extensiemap kiezen",
-  "set.install_update": "Update installeren"
+  "set.install_update": "Update installeren",
+  "panel.update_install_now": "Update beschikbaar — v{latest} (je hebt v{current}) — klik om te installeren"
 }

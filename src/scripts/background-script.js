@@ -6,6 +6,11 @@ importScripts('/src/scripts/puzzle-db.js');
 // definition of which codes exist -- which is also what makes the fetch below safe, since `lang`
 // arrives from a setting.
 importScripts('/src/i18n/i18n.js');
+// The self-updater, for the two questions the PANEL cannot answer for itself: is auto-updating set
+// up, and start it. The install proper never runs here -- it needs showDirectoryPicker, which only a
+// page has. Imported rather than reimplemented so the origin list and the handle store have one
+// definition (see updater.js).
+importScripts('/src/scripts/updater.js');
 
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // the content-script asks for its own tab id so its popup iframe can talk to ONLY this tab
@@ -42,6 +47,23 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // directories and let the panel say so plainly. Cached: the answer cannot change while we run.
   if (msg.assetsCheck) {
     checkBundledAssets().then(sendResponse);
+    return true; // async sendResponse
+  }
+  // Can the panel offer a one-click update? Only when all three hold: the user switched it on, the
+  // download permission is still granted, and a folder has been chosen. Anything less and the notice
+  // stays a link to the release page, because there is nothing to click that would work.
+  if (msg.updateReady) {
+    MephistoUpdater.isReady().then(ok => sendResponse({ok})).catch(() => sendResponse({ok: false}));
+    return true; // async sendResponse
+  }
+  // The panel asking us to run it. The install lives on the settings page (only a page can hold the
+  // directory handle's permission and show progress), so flag it and open that page -- it starts by
+  // itself from there.
+  if (msg.startUpdate) {
+    chrome.storage.local.set({mephisto_autostart_update: true}, () => {
+      chrome.runtime.openOptionsPage();
+      sendResponse({ok: true});
+    });
     return true; // async sendResponse
   }
   if (msg.updateCheck) {

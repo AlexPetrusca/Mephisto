@@ -241,5 +241,6 @@
   "set.note.updates_permission_scope": "Uprawnienie obejmuje wyłącznie pobieranie wydań tego projektu. Wyłączenie go zwraca.",
   "set.check_for_updates": "Sprawdź aktualizacje",
   "set.choose_extension_folder": "Wybierz folder rozszerzenia",
-  "set.install_update": "Zainstaluj aktualizację"
+  "set.install_update": "Zainstaluj aktualizację",
+  "panel.update_install_now": "Dostępna aktualizacja — v{latest} (masz v{current}) — kliknij, aby zainstalować"
 }
