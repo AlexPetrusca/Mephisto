@@ -414,6 +414,13 @@ against Blue+Green), so it means one thing all game instead of flipping sign eve
 > **Teams mode only, for now.** Tetrarch does not search free-for-all, so FFA games are detected and shown but
 > not analysed. Promotion plays the move and leaves the piece picker to you.
 
+The mode is read from Chess.com's own mode label, which is a guess about someone else's markup — and it decides the
+rules the search runs under, since promotion is the 8th rank in free-for-all and the 11th in Teams. When that guess
+is wrong, **Mode** in the panel (it takes the Variant row's place for Tetrarch) sets it by hand: *Auto-detect*,
+*Teams* or *Free-for-all*. Changing it re-analyses the position already on screen rather than waiting for the next
+move. Autoplay also works on the **analysis board**, not just in a game — it's your own board, so playing a line out
+on it affects nobody. The lobby and setup pages stay excluded.
+
 <details>
 <summary><b>Setup</b> — macOS, Linux, Windows</summary>
 
@@ -556,6 +563,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Hotkeys** | One rebindable key per action, live on the game page while the panel is open. Click a key and the next press becomes the binding; **Esc** cancels, **Backspace** clears. Defaults are single letters, play-move is Space. Clashes with a site shortcut can be rebound to any Ctrl/Alt/Shift/Meta combination. |
 | **Pieces / Board / Coordinates** | The panel's own board only — the site's board is never restyled. |
 | **Dark Mode / Language** | Theme and language for the panel and the settings page. |
+| **Four-player Mode** | Tetrarch only, in the Variant row's place. Which rules a four-player board is played under — *Auto-detect* reads Chess.com's mode label, *Teams* and *Free-for-all* override it. See [Four-player chess](#four-player-chess). |
 | **Automatic Updates** | See [Automatic updates](#automatic-updates-opt-in). Off by default. On, it asks Chrome for permission to download this repository's releases, then updates the extension in place at the press of a button — the bundled engines are never touched. |
 | **Restore Defaults · Export · Import** | Reset everything on the page (not the puzzle database or hotkeys); write every setting including hotkeys and tuning to JSON, and read one back. Values that no longer exist are ignored. |
 </details>
