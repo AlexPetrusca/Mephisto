@@ -237,5 +237,8 @@
   "panel.tetrarch_setup": "Tetrarch is not installed yet — see the README section \"Four-player chess\" for macOS, Linux and Windows setup",
   "panel.incomplete_install": "Engines missing — you have the update-only download. Get the full zip.",
   "panel.fourpc_ffa": "Free-for-all — Tetrarch searches Teams mode only",
-  "panel.msg.puzzle_rating": "Rating {r}"
+  "panel.msg.puzzle_rating": "Rating {r}",
+  "panel.msg.fourpc_to_play": "{seat} to play, best move is {move}",
+  "panel.msg.mate_in": "Checkmate in {n}",
+  "panel.msg.score_at_depth": "Score: {score} at depth {depth}"
 }

@@ -4589,6 +4589,7 @@ function request_automove_4pc(move) {
 // The normal update_eval_bar cannot be reused: it reads `turn` and board.orientation(), both of which
 // are two-player state this lane never sets, and its share is white-relative. This takes the score
 // already normalised to your team, so positive is always your side.
+const FOURPC_SEAT_NAME = {R: 'Red', B: 'Blue', Y: 'Yellow', G: 'Green'};
 const FOURPC_TEAM_COLOR = ['#c33c3c', '#3f72c4'];   // team Red (R+Y), team Blue (B+G)
 function update_eval_bar_4pc(line, flip, ourSeat) {
     const wrap = PANEL_ROOT.getElementById('eval-bar');
@@ -4669,8 +4670,15 @@ function on_new_pos_4pc(payload) {
     fourpc_last = fen4;
     const turn = fen4[0];
     const ours = (turn === ourSeat);
+    const seatName = FOURPC_SEAT_NAME[turn] || turn;
+    // SCORE PERSPECTIVE, hoisted: Tetrarch reports from the side-to-move's TEAM (PROTOCOL.md) and the
+    // seat rotates every ply, so the raw number flips sign each move and the same evaluation reads as
+    // +3.06 then -3.06. Normalised to YOUR team it means one thing all game. Standard pairing is
+    // R+Y against B+G (RULES.md 2). Needed BEFORE the search so the streamed info can use it too.
+    const team = (seat) => (seat === 'R' || seat === 'Y') ? 0 : 1;
+    const flip = (ourSeat !== '?' && team(turn) !== team(ourSeat)) ? -1 : 1;
     set_detection_status(i18n('panel.fourpc_detected', '4-player chess — {seat} to move',
-        {seat: {R: 'Red', B: 'Blue', Y: 'Yellow', G: 'Green'}[turn] || turn}));
+        {seat: FOURPC_SEAT_NAME[turn] || turn}));
     if (!is_fourpc_engine()) {
         update_best_move(i18n('panel.fourpc_needs_engine',
             'Select the Tetrarch engine to analyse 4-player chess (Teams mode only)'));
@@ -4689,7 +4697,24 @@ function on_new_pos_4pc(payload) {
         return;
     }
     request_remote_configure({Mode: mode || 'teams'}).catch(() => {});
-    native_send('analyse', {fen4, time: Math.max(200, config.compute_time || 1000)})
+    toggle_calculating(true);
+    native_send('analyse', {fen4, time: Math.max(200, config.compute_time || 1000)}, (info) => {
+        // The host emits one frame per depth exactly like the two-player hosts, and the panel has
+        // always had the rows for them -- 4PC simply never asked. Same NPS box, same score line.
+        if (!info || fen4 !== fourpc_last) return;
+        const npsEl = PANEL_ROOT.getElementById('nps');
+        if (npsEl && Number.isFinite(info.nps) && info.nps > 0) npsEl.textContent = format_nps(info.nps);
+        if ('mate' in info) {
+            update_evaluation(i18n('panel.msg.mate_in', 'Checkmate in {n}', {n: flip * info.mate}));
+        } else if (Number.isFinite(info.score) && Number.isFinite(info.depth)) {
+            update_evaluation(i18n('panel.msg.score_at_depth', 'Score: {score} at depth {depth}',
+                {score: (flip * info.score / 100).toFixed(2), depth: info.depth}));
+        }
+        if (info.move) {
+            update_best_move(i18n('panel.msg.fourpc_to_play', '{seat} to play, best move is {move}',
+                {seat: seatName, move: info.move}));
+        }
+    })
         .then((res) => {
             fourpc_busy = false;
             fourpc_drain();
@@ -4706,16 +4731,16 @@ function on_new_pos_4pc(payload) {
             // seat to move rotates every ply -- so the raw number flips sign each move and the same
             // evaluation reads as +3.06 then -3.06. Normalise to YOUR team so it means one thing all
             // game: positive is good for you. Standard pairing is R+Y against B+G (RULES.md 2).
-            const team = (seat) => (seat === 'R' || seat === 'Y') ? 0 : 1;
-            const flip = (ourSeat !== '?' && team(turn) !== team(ourSeat)) ? -1 : 1;
-            const score = line && (('mate' in line)
-                ? `#${flip * line.mate}`
-                : (flip * line.score / 100).toFixed(2));
-            update_best_move(`${best}${score != null ? '  (' + score + ')' : ''}`);
+            toggle_calculating(false);
+            update_best_move(i18n('panel.msg.fourpc_to_play', '{seat} to play, best move is {move}',
+                {seat: seatName, move: best}));
+            if (line && 'mate' in line) {
+                update_evaluation(i18n('panel.msg.mate_in', 'Checkmate in {n}', {n: flip * line.mate}));
+            } else if (line && Number.isFinite(line.score)) {
+                update_evaluation(i18n('panel.msg.score_at_depth', 'Score: {score} at depth {depth}',
+                    {score: (flip * line.score / 100).toFixed(2), depth: line.depth ?? 0}));
+            }
             try { board4pc?.highlight(best); } catch (e) { /* board swapped away mid-search */ }
-            // NOT gated on config.eval_bar: that toggle governs the PAGE overlay, and the
-            // normal path calls update_eval_bar unconditionally. Gating this one meant the
-            // panel strip kept its default white/black instead of the two team colours.
             if (line) update_eval_bar_4pc(line, flip, ourSeat);
             // Help Mode draws the move instead of playing it, exactly as on an 8x8 board. The
             // renderer understands 14x14 now, so this is just a matter of asking for it.
