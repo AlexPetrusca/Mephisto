@@ -269,6 +269,14 @@ function handleExtensionMessage(response, sender, sendResponse) {
         showOppAlert(response.label, response.drop, response.san, response.uci);
     } else if (response.consoleMessage) {
         console.log(response.consoleMessage);
+        // ALSO to the worker console, unconditionally -- not through bgLog, whose foreground gate
+        // (tab active and premove off -> silent) exists for the premove trace and would hide a
+        // panel-side diagnostic exactly while someone is sitting there watching the board. This is
+        // where every other Mephisto trace lands, so it is where people look.
+        try {
+            chrome.runtime.sendMessage({bgTrace: {from: 'panel', args: [String(response.consoleMessage)]}},
+                () => void chrome.runtime.lastError);
+        } catch (e) { /* orphaned content-script */ }
     }
 }
 chrome.runtime.onMessage.addListener(handleExtensionMessage); // background + toolbar-popup traffic

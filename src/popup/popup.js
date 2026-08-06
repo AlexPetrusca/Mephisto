@@ -4749,6 +4749,15 @@ function on_new_pos_4pc(payload) {
             if (config.help_mode) request_draw_hint([{move: best, color: '#14b8a6', width: 0.22}]);
             else request_clear_hint();
             if (ours && config.autoplay && !config.help_mode) request_automove_4pc(best);
+            else if (config.autoplay) {
+                // "Autoplay does nothing in four-player chess" has been reported more than once, and
+                // all three gates above are silent -- a skipped move looks exactly like a move that
+                // was never searched. Name the gate that stopped it instead of guessing again.
+                // `ourSeat` is '?' whenever the seat could not be read off the page, which makes
+                // `ours` false for every position and autoplay dead for the whole game.
+                request_console_log(`4PC autoplay skipped: yourSeat=${ourSeat} turnSeat=${turn} ` +
+                    `yourTurn=${ours} helpMode=${!!config.help_mode}`);
+            }
         })
         .catch((e) => {
             fourpc_busy = false;
