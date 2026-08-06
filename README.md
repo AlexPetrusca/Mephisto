@@ -89,6 +89,38 @@ working. Unpacking into a *new* folder changes the id and means re-running the n
 To pick up a change: reload on `chrome://extensions`, then reload the game tab. The panel checks this repository for
 a newer release at most once every 12 hours, from the service worker, so the chess page never makes the request.
 
+
+### Automatic updates (opt-in)
+
+Chrome never updates an extension you loaded yourself, so Mephisto can do it for you instead — **Settings → General →
+Updates**. It is **off by default**, and nothing about it runs until you switch it on.
+
+Set-up is three steps, once:
+
+1. **Automatic Updates → On.** Chrome asks for permission to download from this repository's releases. Refusing
+   leaves the switch off.
+2. **Choose Extension Folder** → pick the folder you loaded as an unpacked extension. Chrome remembers it.
+3. **Install Update** when one is offered.
+
+After that it is one button. It downloads the ~6 MB update archive, writes it over that folder and reloads the
+extension — the same *extract in place* described above, so your extension id survives and native engines keep
+working. Reload any game tab you had open afterwards.
+
+What it will not do:
+
+| | |
+|---|---|
+| Install anything by itself | It checks and it tells you. Files are only written when you press **Install Update**. |
+| Touch the bundled engines | The update archive doesn't contain them, so `lib/engine` and `lib/ort` are left alone. |
+| Write into the wrong folder | A folder is rejected unless its `manifest.json` is this extension's. |
+| Apply a broken download | The whole archive is unpacked and checked in memory first. If anything is off — a bad path, a version that disagrees with the release, a missing file the extension needs to boot — nothing is written at all. |
+| Anything, while switched off | Every button is disabled and the installer refuses outright. |
+
+> The permission is scoped to this repository's release downloads, not to github.com. You can see it, and take it
+> back, on `chrome://extensions` — or just switch Automatic Updates off, which hands it back for you.
+
+Updating by hand still works exactly as before, and is still the whole story if you'd rather not grant anything.
+
 ---
 
 ## Engines
@@ -520,6 +552,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Hotkeys** | One rebindable key per action, live on the game page while the panel is open. Click a key and the next press becomes the binding; **Esc** cancels, **Backspace** clears. Defaults are single letters, play-move is Space. Clashes with a site shortcut can be rebound to any Ctrl/Alt/Shift/Meta combination. |
 | **Pieces / Board / Coordinates** | The panel's own board only — the site's board is never restyled. |
 | **Dark Mode / Language** | Theme and language for the panel and the settings page. |
+| **Automatic Updates** | See [Automatic updates](#automatic-updates-opt-in). Off by default. On, it asks Chrome for permission to download this repository's releases, then updates the extension in place at the press of a button — the bundled engines are never touched. |
 | **Restore Defaults · Export · Import** | Reset everything on the page (not the puzzle database or hotkeys); write every setting including hotkeys and tuning to JSON, and read one back. Values that no longer exist are ignored. |
 </details>
 
@@ -593,6 +626,9 @@ post-game review, where the hit rate is higher and the eval is context rather th
 
 ### Shipped
 
+- [x] **[Automatic updates](#automatic-updates-opt-in)** (v3.1.214) — opt-in, one button: fetches the ~6 MB update
+  archive from this repository and writes it into the extension's own folder in place, so the id and the native
+  hosts survive. Off by default; nothing is installed without pressing the button.
 - [x] **[Four-player chess](#four-player-chess)** (v3.1.199) — chess.com's 4-player variant, driven by
   [Tetrarch](https://github.com/IchNukeDichWeg/Tetrarch); 14×14 panel board, team-relative eval, autoplay.
   Teams mode only.

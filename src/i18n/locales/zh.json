@@ -233,5 +233,13 @@
   "panel.fourpc_detected": "四人国际象棋 — 轮到 {seat}",
   "panel.fourpc_needs_engine": "请选择 Tetrarch 引擎来分析四人国际象棋",
   "panel.no_move": "无着法",
-  "panel.engine_error": "引擎错误"
+  "panel.engine_error": "引擎错误",
+  "set.sec.updates": "更新",
+  "set.automatic_updates": "自动更新",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome 从不更新你自行加载的扩展程序，因此可以让 Mephisto 代劳：从发布页下载小体积的更新压缩包，直接写入本扩展自己的文件夹。开启时 Chrome 会请求仅从该仓库下载的权限——不按下“安装”就不会安装任何东西。",
+  "set.note.updates_are_applied_in_place": "更新是<b>原地</b>应用的，这正是关键：扩展 ID 不会改变，你安装的本地引擎主机继续可用，随附的引擎也不会被动到——下载约 <b>6 MB</b>，而不是 585 MB。只需选择一次你以“加载已解压的扩展程序”方式加载的文件夹，Chrome 会记住它。更新后请重新加载已打开的对局标签页。",
+  "set.note.updates_permission_scope": "该权限仅覆盖本项目的发布下载。关闭即可收回。",
+  "set.check_for_updates": "检查更新",
+  "set.choose_extension_folder": "选择扩展文件夹",
+  "set.install_update": "安装更新"
 }

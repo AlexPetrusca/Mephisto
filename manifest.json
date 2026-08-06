@@ -83,6 +83,10 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
+  "optional_host_permissions": [
+    "https://github.com/IchNukeDichWeg/Mephisto/releases/download/*",
+    "https://release-assets.githubusercontent.com/*"
+  ],
   "host_permissions": [
     "http://localhost:8080/*",
     "http://localhost:9090/*",

@@ -233,5 +233,13 @@
   "panel.fourpc_detected": "4-Spieler-Schach — {seat} am Zug",
   "panel.fourpc_needs_engine": "Wähle die Tetrarch-Engine, um 4-Spieler-Schach zu analysieren",
   "panel.no_move": "Kein Zug",
-  "panel.engine_error": "Engine-Fehler"
+  "panel.engine_error": "Engine-Fehler",
+  "set.sec.updates": "Updates",
+  "set.automatic_updates": "Automatische Updates",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome aktualisiert eine selbst geladene Erweiterung nie, also kann Mephisto das übernehmen: das kleine Update-Archiv von der Releases-Seite laden und direkt in den Ordner dieser Erweiterung schreiben. Beim Einschalten fragt Chrome nach der Berechtigung, aus genau diesem einen Repository zu laden — installiert wird nur, wenn du auf Installieren drückst.",
+  "set.note.updates_are_applied_in_place": "Updates werden <b>an Ort und Stelle</b> angewendet, und genau darum geht es: deine Erweiterungs-ID bleibt gleich, die installierten nativen Engine-Hosts funktionieren weiter, und die mitgelieferten Engines bleiben unangetastet — der Download ist rund <b>6 MB</b> statt 585. Wähle einmal den Ordner aus, den du als entpackte Erweiterung geladen hast; Chrome merkt ihn sich. Lade nach einem Update alle offenen Partie-Tabs neu.",
+  "set.note.updates_permission_scope": "Die Berechtigung gilt nur für die Release-Downloads dieses Projekts. Ausschalten gibt sie zurück.",
+  "set.check_for_updates": "Nach Updates suchen",
+  "set.choose_extension_folder": "Erweiterungsordner wählen",
+  "set.install_update": "Update installieren"
 }

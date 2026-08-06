@@ -45,7 +45,9 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     return true; // async sendResponse
   }
   if (msg.updateCheck) {
-    updateCheck().then(sendResponse).catch(e => sendResponse({error: String(e)}));
+    // `true` from the panel, `{force}` from the Updates settings page -- both truthy, and
+    // `true?.force` is undefined, so the panel keeps the cached path it always had.
+    updateCheck(msg.updateCheck?.force).then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }
   if (msg.tablebaseLookup) {
@@ -260,10 +262,12 @@ async function checkBundledAssets() {
   return bundledAssets;
 }
 
-async function updateCheck() {
+// `force` skips the cache. Only the Updates settings page passes it, and only on a button press:
+// the panel's own notice must keep using the cache or a busy session burns the 60/hour allowance.
+async function updateCheck(force = false) {
   const current = chrome.runtime.getManifest().version;
   const cached = (await chrome.storage.local.get('mephisto_update_check')).mephisto_update_check;
-  if (cached && (Date.now() - cached.at) < UPDATE_TTL_MS) {
+  if (!force && cached && (Date.now() - cached.at) < UPDATE_TTL_MS) {
     return {...cached.result, current, newer: isNewer(cached.result.latest, current), cached: true};
   }
   let result = {latest: null};
@@ -276,7 +280,12 @@ async function updateCheck() {
     clearTimeout(timer);
     if (res.ok) {
       const json = await res.json();
-      result = {latest: String(json.tag_name || '').replace(/^v/, ''), url: json.html_url};
+      const latest = String(json.tag_name || '').replace(/^v/, '');
+      // The update archive is taken BY NAME. "the smaller of the two assets" would quietly start a
+      // 585 MB download the day a release ships only the full one.
+      const asset = (json.assets || []).find(a => a.name === `mephisto-${latest}-update.zip`);
+      result = {latest, url: json.html_url, asset: asset?.browser_download_url || null,
+                size: asset?.size || 0};
     }
   } catch (e) {
     // offline, rate-limited or aborted -- fall through with latest:null and cache it, so a broken

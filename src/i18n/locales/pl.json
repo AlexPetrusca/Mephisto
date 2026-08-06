@@ -233,5 +233,13 @@
   "panel.fourpc_detected": "Szachy czteroosobowe — ruch {seat}",
   "panel.fourpc_needs_engine": "Wybierz silnik Tetrarch, aby analizować szachy czteroosobowe",
   "panel.no_move": "Brak ruchu",
-  "panel.engine_error": "Błąd silnika"
+  "panel.engine_error": "Błąd silnika",
+  "set.sec.updates": "Aktualizacje",
+  "set.automatic_updates": "Automatyczne aktualizacje",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome nigdy nie aktualizuje rozszerzenia wczytanego samodzielnie, więc może to zrobić Mephisto: pobiera małe archiwum aktualizacji ze strony wydań i zapisuje je wprost do własnego folderu tego rozszerzenia. Włączenie tej opcji sprawia, że Chrome prosi o zgodę na pobieranie tylko z tego jednego repozytorium — nic nie zostanie zainstalowane, dopóki nie naciśniesz Zainstaluj.",
+  "set.note.updates_are_applied_in_place": "Aktualizacje są stosowane <b>w miejscu</b> i o to właśnie chodzi: identyfikator rozszerzenia się nie zmienia, zainstalowane natywne hosty silników działają dalej, a dołączone silniki pozostają nietknięte — pobranie waży około <b>6 MB</b> zamiast 585. Wybierz raz folder wczytany jako rozpakowane rozszerzenie; Chrome go zapamięta. Po aktualizacji odśwież otwarte karty z partiami.",
+  "set.note.updates_permission_scope": "Uprawnienie obejmuje wyłącznie pobieranie wydań tego projektu. Wyłączenie go zwraca.",
+  "set.check_for_updates": "Sprawdź aktualizacje",
+  "set.choose_extension_folder": "Wybierz folder rozszerzenia",
+  "set.install_update": "Zainstaluj aktualizację"
 }

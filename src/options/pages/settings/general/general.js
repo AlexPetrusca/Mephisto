@@ -39,6 +39,7 @@ class GeneralSettings extends SettingsPage {
         this.initUiMode();
         this.initHotkeys();
         this.initPuzzleDb();
+        this.initUpdater();
         this.registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
         this.registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
         this.registerFormElement('think_time', 'Simulated Think Time (ms):', 'input', 0);
@@ -285,6 +286,98 @@ class GeneralSettings extends SettingsPage {
             r.range?.addEventListener('input', () => set(r, r.range.value));
             r.num.addEventListener('change', () => set(r, r.num.value));
         });
+    }
+
+    // Self-update. NOT a FormElement, and no config key at all: the CHROME PERMISSION is the
+    // setting. A stored flag beside it could only ever disagree with it -- revoke the host in
+    // chrome://extensions and a stored `true` would still render as On while every download failed.
+    // So the checkbox is drawn from chrome.permissions.contains() and writes nothing.
+    initUpdater() {
+        const cb = document.getElementById('auto_update_checkbox');
+        const checkBtn = document.getElementById('update_check_btn');
+        const folderBtn = document.getElementById('update_folder_btn');
+        const installBtn = document.getElementById('update_install_btn');
+        const status = document.getElementById('update_status');
+        if (!cb || !checkBtn || !folderBtn || !installBtn || !status) return; // stale cached page html
+
+        const say = (t) => { status.textContent = t; };
+        const buttons = [checkBtn, folderBtn, installBtn];
+        const current = chrome.runtime.getManifest().version;
+        let latest = null; // last release seen, so Install can name it
+
+        const render = async () => {
+            const on = await MephistoUpdater.hasPermission();
+            cb.checked = on;
+            buttons.forEach(b => b.disabled = !on);
+            if (!on) return say('Off — Mephisto downloads nothing and asks GitHub for nothing extra.');
+            const dir = await MephistoUpdater.savedFolder();
+            if (!dir) return say(`On — you have v${current}. Choose the extension folder to finish setting this up.`);
+            say(`On — you have v${current}, and updates go into "${dir.name}".`);
+            report(await MephistoUpdater.check().catch(() => null), dir);
+        };
+
+        // One place that turns a release into a sentence, so the automatic check on page open and
+        // the Check button cannot word the same state two different ways.
+        const report = (rel, dir) => {
+            if (!rel || !rel.latest) return say(`On — you have v${current}. Could not reach GitHub just now.`);
+            latest = rel;
+            if (!rel.newer) return say(`Up to date — v${current} is the newest release.`);
+            if (!dir) return say(`Update available — v${rel.latest}. Choose the extension folder, then press Install Update.`);
+            if (!rel.asset) return say(`Update available — v${rel.latest}, but that release has no update archive. Download the full zip.`);
+            say(`Update available — v${rel.latest} (${(rel.size / 1048576).toFixed(1)} MB). Press Install Update.`);
+        };
+
+        // Turning it ON is the permission prompt, and a refusal has to snap the switch back --
+        // otherwise the page claims a permission Chrome did not give.
+        cb.addEventListener('change', async () => {
+            if (cb.checked) {
+                const granted = await MephistoUpdater.requestPermission().catch(() => false);
+                if (!granted) say('Chrome did not grant the download permission, so this stays off.');
+            } else {
+                await MephistoUpdater.dropPermission().catch(() => {});
+            }
+            render();
+        });
+
+        checkBtn.addEventListener('click', async () => {
+            say('Checking…');
+            buttons.forEach(b => b.disabled = true);
+            const rel = await MephistoUpdater.check({force: true}).catch(() => null);
+            report(rel, await MephistoUpdater.savedFolder());
+            buttons.forEach(b => b.disabled = false);
+        });
+
+        folderBtn.addEventListener('click', async () => {
+            try {
+                const picked = await MephistoUpdater.pickFolder();
+                say(`Folder set — "${picked.name}", holding v${picked.version}.`);
+                report(latest || await MephistoUpdater.check().catch(() => null), {name: picked.name});
+            } catch (e) {
+                // AbortError is the user closing the picker, which is not a failure and needs no line
+                if (e?.name !== 'AbortError') say(`Could not use that folder: ${e.message || e}`);
+            }
+        });
+
+        installBtn.addEventListener('click', async () => {
+            buttons.forEach(b => b.disabled = true);
+            try {
+                const res = await MephistoUpdater.install(say);
+                if (res.already) {
+                    say(`Up to date — v${res.version} is the newest release.`);
+                } else {
+                    // The reload tears this page down, so the line has to be on screen first. It
+                    // also orphans the content script in every open game tab, hence the reminder.
+                    say(`Installed v${res.installed} over v${res.from} — ${res.files} files. Reloading the extension; reload your game tabs.`);
+                    setTimeout(() => chrome.runtime.reload(), 1500);
+                    return; // leave the buttons disabled: this page is about to go away
+                }
+            } catch (e) {
+                say(`Update failed, and nothing was changed: ${e.message || e}`);
+            }
+            buttons.forEach(b => b.disabled = false);
+        });
+
+        render();
     }
 
     // Puzzle database import. NOT a FormElement: what is stored is an IndexedDB of six million

@@ -233,5 +233,13 @@
   "panel.fourpc_detected": "4人チェス — {seat} の手番",
   "panel.fourpc_needs_engine": "4人チェスを解析するには Tetrarch エンジンを選択してください",
   "panel.no_move": "手がありません",
-  "panel.engine_error": "エンジンエラー"
+  "panel.engine_error": "エンジンエラー",
+  "set.sec.updates": "アップデート",
+  "set.automatic_updates": "自動アップデート",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome は自分で読み込んだ拡張機能を更新しないため、Mephisto が代わりに行えます。リリースページから小さな更新アーカイブをダウンロードし、この拡張機能自身のフォルダーへ直接書き込みます。オンにすると Chrome がそのリポジトリからのダウンロード権限のみを求めます — 「インストール」を押さないかぎり何もインストールされません。",
+  "set.note.updates_are_applied_in_place": "アップデートは<b>その場で</b>適用されます。これが要点で、拡張機能 ID は変わらないため、導入済みのネイティブエンジンホストはそのまま動き、同梱エンジンにも手を触れません — ダウンロードは 585 MB ではなく約 <b>6 MB</b> です。パッケージ化されていない拡張機能として読み込んだフォルダーを一度選べば、Chrome が記憶します。更新後は開いている対局タブを再読み込みしてください。",
+  "set.note.updates_permission_scope": "この権限は本プロジェクトのリリースのダウンロードのみを対象とします。オフにすれば返上されます。",
+  "set.check_for_updates": "アップデートを確認",
+  "set.choose_extension_folder": "拡張機能のフォルダーを選択",
+  "set.install_update": "アップデートをインストール"
 }

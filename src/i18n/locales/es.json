@@ -233,5 +233,13 @@
   "panel.fourpc_detected": "Ajedrez de 4 jugadores — juega {seat}",
   "panel.fourpc_needs_engine": "Selecciona el motor Tetrarch para analizar ajedrez de 4 jugadores",
   "panel.no_move": "Sin jugada",
-  "panel.engine_error": "Error del motor"
+  "panel.engine_error": "Error del motor",
+  "set.sec.updates": "Actualizaciones",
+  "set.automatic_updates": "Actualizaciones automáticas",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome nunca actualiza una extensión que cargaste tú, así que Mephisto puede hacerlo: descarga el pequeño archivo de actualización de su página de versiones y lo escribe directamente en la carpeta de esta extensión. Al activarlo, Chrome pide permiso para descargar solo de ese repositorio — nada se instala sin que pulses Instalar.",
+  "set.note.updates_are_applied_in_place": "Las actualizaciones se aplican <b>en el sitio</b>, y eso es lo importante: tu ID de extensión no cambia, así que los hosts nativos que instalaste siguen funcionando y los motores incluidos no se tocan — la descarga es de unos <b>6 MB</b> en vez de 585. Elige una sola vez la carpeta que cargaste como extensión sin empaquetar; Chrome la recuerda. Tras una actualización, recarga las pestañas de partida que tuvieras abiertas.",
+  "set.note.updates_permission_scope": "El permiso cubre solo las descargas de versiones de este proyecto. Desactivarlo lo devuelve.",
+  "set.check_for_updates": "Buscar actualizaciones",
+  "set.choose_extension_folder": "Elegir carpeta de la extensión",
+  "set.install_update": "Instalar actualización"
 }

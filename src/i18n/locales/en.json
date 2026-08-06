@@ -240,5 +240,13 @@
   "panel.msg.puzzle_rating": "Rating {r}",
   "panel.msg.fourpc_to_play": "{seat} to play, best move is {move}",
   "panel.msg.mate_in": "Checkmate in {n}",
-  "panel.msg.score_at_depth": "Score: {score} at depth {depth}"
+  "panel.msg.score_at_depth": "Score: {score} at depth {depth}",
+  "set.sec.updates": "Updates",
+  "set.automatic_updates": "Automatic Updates",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome never updates an extension you loaded yourself, so Mephisto can do it instead: download the small update archive from its releases page and write it straight into this extension's own folder. Turning this on asks Chrome for permission to download from that one repository — nothing is ever installed without you pressing Install.",
+  "set.note.updates_are_applied_in_place": "Updates are applied <b>in place</b>, which is the point: your extension ID never changes, so the native engine hosts you installed keep working, and the bundled engines are left alone — the download is about <b>6 MB</b> rather than 585. Choose the folder you loaded as an unpacked extension once; Chrome remembers it. After an update, reload any game tab you had open.",
+  "set.note.updates_permission_scope": "The permission covers only this project's release downloads. Switching this off gives it back.",
+  "set.check_for_updates": "Check for Updates",
+  "set.choose_extension_folder": "Choose Extension Folder",
+  "set.install_update": "Install Update"
 }

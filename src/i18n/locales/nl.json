@@ -233,5 +233,13 @@
   "panel.fourpc_detected": "Vierspelersschaak — {seat} aan zet",
   "panel.fourpc_needs_engine": "Kies de Tetrarch-engine om vierspelersschaak te analyseren",
   "panel.no_move": "Geen zet",
-  "panel.engine_error": "Enginefout"
+  "panel.engine_error": "Enginefout",
+  "set.sec.updates": "Updates",
+  "set.automatic_updates": "Automatische updates",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome werkt een zelf geladen extensie nooit bij, dus kan Mephisto dat doen: het kleine update-archief van de releasespagina downloaden en rechtstreeks in de eigen map van deze extensie schrijven. Bij het inschakelen vraagt Chrome toestemming om alleen van die ene repository te downloaden — er wordt niets geïnstalleerd zonder dat je op Installeren drukt.",
+  "set.note.updates_are_applied_in_place": "Updates worden <b>ter plekke</b> toegepast, en daar gaat het om: je extensie-ID verandert niet, de native engine-hosts die je installeerde blijven werken en de meegeleverde engines blijven ongemoeid — de download is ongeveer <b>6 MB</b> in plaats van 585. Kies één keer de map die je als uitgepakte extensie hebt geladen; Chrome onthoudt hem. Herlaad na een update de openstaande partijtabbladen.",
+  "set.note.updates_permission_scope": "De toestemming geldt alleen voor de release-downloads van dit project. Uitschakelen geeft hem terug.",
+  "set.check_for_updates": "Controleren op updates",
+  "set.choose_extension_folder": "Extensiemap kiezen",
+  "set.install_update": "Update installeren"
 }

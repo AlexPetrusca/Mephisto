@@ -233,5 +233,13 @@
   "panel.fourpc_detected": "4 oyunculu satranç — sıra {seat}",
   "panel.fourpc_needs_engine": "4 oyunculu satrancı analiz etmek için Tetrarch motorunu seçin",
   "panel.no_move": "Hamle yok",
-  "panel.engine_error": "Motor hatası"
+  "panel.engine_error": "Motor hatası",
+  "set.sec.updates": "Güncellemeler",
+  "set.automatic_updates": "Otomatik güncellemeler",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome kendi yüklediğin bir uzantıyı asla güncellemez, bu yüzden bunu Mephisto yapabilir: küçük güncelleme arşivini sürümler sayfasından indirip doğrudan bu uzantının kendi klasörüne yazar. Bunu açtığında Chrome yalnızca o tek depodan indirme izni ister — Yükle'ye basmadan hiçbir şey kurulmaz.",
+  "set.note.updates_are_applied_in_place": "Güncellemeler <b>yerinde</b> uygulanır, olayın özü de bu: uzantı kimliğin değişmez, kurduğun yerel motor sunucuları çalışmaya devam eder ve pakete dahil motorlara dokunulmaz — indirme 585 MB yerine yaklaşık <b>6 MB</b>'tır. Paketlenmemiş uzantı olarak yüklediğin klasörü bir kez seç; Chrome onu hatırlar. Güncellemeden sonra açık oyun sekmelerini yeniden yükle.",
+  "set.note.updates_permission_scope": "İzin yalnızca bu projenin sürüm indirmelerini kapsar. Kapatmak izni geri verir.",
+  "set.check_for_updates": "Güncellemeleri denetle",
+  "set.choose_extension_folder": "Uzantı klasörünü seç",
+  "set.install_update": "Güncellemeyi yükle"
 }

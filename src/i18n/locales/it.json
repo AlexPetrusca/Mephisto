@@ -233,5 +233,13 @@
   "panel.fourpc_detected": "Scacchi a 4 giocatori — muove {seat}",
   "panel.fourpc_needs_engine": "Seleziona il motore Tetrarch per analizzare gli scacchi a 4 giocatori",
   "panel.no_move": "Nessuna mossa",
-  "panel.engine_error": "Errore del motore"
+  "panel.engine_error": "Errore del motore",
+  "set.sec.updates": "Aggiornamenti",
+  "set.automatic_updates": "Aggiornamenti automatici",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome non aggiorna mai un'estensione caricata da te, quindi può farlo Mephisto: scarica il piccolo archivio di aggiornamento dalla sua pagina delle versioni e lo scrive direttamente nella cartella di questa estensione. Attivandolo, Chrome chiede il permesso di scaricare solo da quel repository — non viene installato nulla senza che tu prema Installa.",
+  "set.note.updates_are_applied_in_place": "Gli aggiornamenti vengono applicati <b>sul posto</b>, ed è questo il punto: il tuo ID estensione non cambia, gli host nativi che hai installato continuano a funzionare e i motori inclusi restano intatti — il download è di circa <b>6 MB</b> invece di 585. Scegli una volta sola la cartella che hai caricato come estensione non pacchettizzata; Chrome la ricorda. Dopo un aggiornamento, ricarica le schede di partita aperte.",
+  "set.note.updates_permission_scope": "Il permesso copre solo i download delle versioni di questo progetto. Disattivarlo lo restituisce.",
+  "set.check_for_updates": "Cerca aggiornamenti",
+  "set.choose_extension_folder": "Scegli la cartella dell'estensione",
+  "set.install_update": "Installa aggiornamento"
 }

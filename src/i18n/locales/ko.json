@@ -233,5 +233,13 @@
   "panel.fourpc_detected": "4인 체스 — {seat} 차례",
   "panel.fourpc_needs_engine": "4인 체스를 분석하려면 Tetrarch 엔진을 선택하세요",
   "panel.no_move": "수 없음",
-  "panel.engine_error": "엔진 오류"
+  "panel.engine_error": "엔진 오류",
+  "set.sec.updates": "업데이트",
+  "set.automatic_updates": "자동 업데이트",
+  "set.tip.chrome_never_updates_an_unpacked": "Chrome은 직접 불러온 확장 프로그램을 절대 업데이트하지 않으므로 Mephisto가 대신할 수 있습니다. 릴리스 페이지에서 작은 업데이트 압축 파일을 내려받아 이 확장 프로그램 자신의 폴더에 곧바로 씁니다. 켜면 Chrome이 그 저장소 한 곳에서만 내려받을 권한을 요청합니다 — 설치를 누르지 않으면 아무것도 설치되지 않습니다.",
+  "set.note.updates_are_applied_in_place": "업데이트는 <b>제자리에서</b> 적용되며 그것이 핵심입니다. 확장 프로그램 ID가 바뀌지 않으므로 설치해 둔 네이티브 엔진 호스트가 계속 동작하고, 함께 들어 있는 엔진도 건드리지 않습니다 — 내려받는 크기는 585 MB가 아니라 약 <b>6 MB</b>입니다. 압축을 푼 확장 프로그램으로 불러온 폴더를 한 번만 고르면 Chrome이 기억합니다. 업데이트 후에는 열어 둔 대국 탭을 새로 고치세요.",
+  "set.note.updates_permission_scope": "이 권한은 이 프로젝트의 릴리스 내려받기에만 적용됩니다. 끄면 반환됩니다.",
+  "set.check_for_updates": "업데이트 확인",
+  "set.choose_extension_folder": "확장 프로그램 폴더 선택",
+  "set.install_update": "업데이트 설치"
 }
