@@ -286,7 +286,16 @@
         <label for="qs_tablebase" data-i18n="panel.tablebase" data-i18n-tip="panel.tip.with_7_or_fewer_pieces" class="qs-label tooltipped" data-position="left"
               data-tooltip="With 7 or fewer pieces left the position is solved: ask lichess's Syzygy tablebase for the perfect move instead of trusting the search. Outranks the engine and the opening book. Off by default -- it sends the position to a third party. Never delays a move.">Tablebase</label>
     </div>
-      </div>
+      <!-- Copy Diagnostics. HERE and not in the button row: that row is absolutely positioned by id on
+     a 45px pitch and its own comment shows five is exactly what fits -- a sixth fell out of the
+     layout and landed on the board. A labelled row is also more discoverable than a sixth
+     unlabelled icon, which is the point of the thing. -->
+<div class="qs-row">
+        <span data-i18n="set.copy_diagnostics" class="qs-label">Copy Diagnostics</span>
+        <button id="qs_copydiag" type="button"
+                title="Copy version, engine, what was detected, why the last move was or was not played, and the recent trace. Safe to paste into a bug report.">Copy</button>
+    </div>
+    </div>
     </div>
 </div>
 

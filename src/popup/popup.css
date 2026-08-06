@@ -273,12 +273,16 @@ html, body {
    white-space: nowrap, which would run a sentence off the panel), and is muted so it never
    competes with an actual answer. Hidden entirely when there is nothing to say. */
 #idle-reason {
-    font: 13px/17px -apple-system, 'Roboto', system-ui, sans-serif;
+    font: 13px/16px -apple-system, 'Roboto', system-ui, sans-serif;
     color: #8a6d1f;
     background: rgba(255, 214, 102, 0.16);
     border-radius: 5px;
-    padding: 5px 9px;
-    margin: 6px 8px 0;
+    padding: 4px 8px;
+    /* RIGHT MARGIN CLEARS THE QUICK-SETTINGS COLUMN. Everything in this flow spans the full 378px
+       panel, but only the left 188px is visible beside the settings column -- so centring inside the
+       full width put the text visibly off to the right of the board it belongs under. Same 190px
+       clearance the notices use. */
+    margin: 6px 190px 0 8px;
     text-align: center;
     white-space: normal;
 }
@@ -643,6 +647,21 @@ html, body {
     cursor: pointer;
 }
 #quick-settings #qs_variant_detect:hover { background: #f0f0f0; }
+
+/* Same pill as the detect button beside it, just wide enough for a word. */
+#quick-settings #qs_copydiag {
+    flex: 0 0 auto;
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    line-height: 1;
+    background: #fff;
+    color: #000;
+    border: 1px solid #cfcfcf;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#quick-settings #qs_copydiag:hover { background: #f0f0f0; }
 
 #quick-settings select.browser-default,
 #quick-settings input.browser-default {
@@ -1063,6 +1082,8 @@ body.mephisto-compact #alt-lines {
 body.mephisto-dark #calibrate-notice { color: #4dd0e1; }
 body.mephisto-dark #update-notice { color: #4dd0e1; }
 body.mephisto-dark #idle-reason { color: #e8c76a; background: rgba(232, 199, 106, 0.12); }
+body.mephisto-dark #quick-settings #qs_copydiag { background: #2a2b31; color: #e6e6e6; border-color: #43444d; }
+body.mephisto-dark #quick-settings #qs_copydiag:hover { background: #363740; }
 body.mephisto-dark #game-detection.unsupported { color: #ff7a70; }
 
 

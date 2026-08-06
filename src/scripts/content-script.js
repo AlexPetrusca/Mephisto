@@ -173,8 +173,9 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // move carries its own `deselect`, so it starts by clearing any half-made selection.
             bgLog('superseding an in-flight blind premove with the real move', {move: response.move});
         } else if (response.automove || response.premoves) {
-            dropMove('A move is already being played — this one was skipped.',
-                'DROPPED: a previous move is still in progress (moving=true)');
+            // Trace only: this is transient and self-correcting, and saying it in the panel on
+            // every fast sequence is noise.
+            (response.fourpc ? bgLogAlways : bgLog)('DROPPED: a previous move is still in progress (moving=true)');
             return;
         }
         // ANYTHING ELSE FALLS THROUGH. This guard exists to stop two CLICK SESSIONS overlapping --
@@ -199,10 +200,10 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // `config` here is the CONTENT SCRIPT's copy, pushed separately from the panel's. The panel
         // already decided to send this move against its own copy, so a disagreement between the two
         // drops a move the user did ask for -- which is what the log above exists to make visible.
-        if (!config.autoplay && !response.manual) {
-            dropMove('Autoplay is off.', 'DROPPED: autoplay is off');
-            return;
-        }
+        // Trace only. The panel does not SEND a move with autoplay off, so this fires only when the
+        // two config copies disagree -- and the toggle is on screen anyway, so a panel line saying
+        // what the switch already says is noise.
+        if (!config.autoplay && !response.manual) { alog('DROPPED: autoplay is off'); return; }
         // undetectability: don't click while the tab is backgrounded/unfocused -- a human wouldn't
         // move while tabbed away, and "moved while hidden" is an easy anomaly to flag. It's still our
         // turn (or a queued premove), so the position is stable: hold the move and re-scrape the
@@ -211,8 +212,9 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // tabActive() is visibility AND document.hasFocus(), so an open DevTools window on the
             // game tab counts as inactive -- autoplay stops the moment you go to read the console
             // about autoplay not working, which is its own small trap.
-            dropMove('Waiting — this tab is not focused, and Background Play is off.',
-                'DEFERRED: tab inactive and Background Play is off');
+            // Trace only, and necessarily so: by definition you are not looking at this panel when
+            // it happens.
+            alog('DEFERRED: tab inactive and Background Play is off');
             deferredWhileHidden = true;
             return;
         }

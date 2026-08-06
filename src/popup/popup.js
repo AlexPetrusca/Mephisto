@@ -1009,6 +1009,20 @@ function init_quick_settings() {
             push_config();
         });
     }
+    // Diagnostics, as a button people will actually find. The hotkey stays wired too -- it is one
+    // line and costs nothing -- but the button is the way in.
+    const diagBtn = PANEL_ROOT.getElementById('qs_copydiag');
+    if (diagBtn) {
+        diagBtn.addEventListener('click', () => {
+            const was = diagBtn.textContent;
+            diagBtn.disabled = true;
+            copy_diagnostics((err) => {
+                diagBtn.textContent = err ? '✕' : '✓';
+                if (err) set_idle_reason(err);
+                setTimeout(() => { diagBtn.textContent = was; diagBtn.disabled = false; }, 1100);
+            });
+        });
+    }
     const detectBtn = PANEL_ROOT.getElementById('qs_variant_detect');
     if (detectBtn) {
         detectBtn.addEventListener('click', () => {
@@ -4822,11 +4836,6 @@ function on_new_pos_4pc(payload) {
                 // `ours` false for every position and autoplay dead for the whole game.
                 request_console_log(`4PC autoplay skipped: yourSeat=${ourSeat} turnSeat=${turn} ` +
                     `yourTurn=${ours} helpMode=${!!config.help_mode}`);
-                set_idle_reason(config.help_mode
-                    ? 'Help Mode is on, so the move is drawn rather than played.'
-                    : (ourSeat === '?'
-                        ? 'Your seat could not be read from the board, so autoplay cannot tell when it is your turn.'
-                        : `Not your turn — ${FOURPC_SEAT_NAME[turn] || turn} to play, you are ${FOURPC_SEAT_NAME[ourSeat] || ourSeat}.`));
             }
         })
         .catch((e) => {
