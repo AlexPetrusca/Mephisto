@@ -446,7 +446,8 @@ against Blue+Green), so it means one thing all game instead of flipping sign eve
 Promotions are played in full: the picker Chess.com opens over the board is found by its shape — a small
 panel of four pieces in two rows — rather than by a class name, so a generated class changing cannot make
 it click the wrong piece. If nothing matches that shape it plays the move and leaves the piece to you,
-which is what it always did. With **Multiple Lines** above 1 you get an arrow per line on the page board
+which is what it always did. Confirmed from every seat: unlike the board, the picker is *not* rotated per
+player, so one reading order serves all four. With **Multiple Lines** above 1 you get an arrow per line on the page board
 and on the panel's own 14×14 board, with a colour-matched list of scores beneath it.
 
 The mode is read from Chess.com's own mode label, which is a guess about someone else's markup — and it decides the
