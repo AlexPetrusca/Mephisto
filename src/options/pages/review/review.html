@@ -198,6 +198,43 @@
 
                 <div class="set-row set-toggle">
                     <div class="set-lbl">
+                        <span data-i18n="rv.human_report" data-i18n-tip="rv.tip.human_report" class="tooltipped" data-position="right"
+                              data-tooltip="A second reading of the same game by the human model instead of the engine:
+                                            how EXPECTED each move was from a player of that rating, rather than how
+                                            good it was. Needs a human model selected above, and costs the pass it
+                                            runs. Off by default.">
+                            Human-likeness report <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="rv_human_report" type="checkbox" class="set-cb">
+                        <label for="rv_human_report" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl">
+                        <span data-i18n="rv.batch" data-i18n-tip="rv.tip.batch" class="tooltipped" data-position="right"
+                              data-tooltip="Analyse EVERY game in the box rather than the one picked above, and add a
+                                            summary that pools each player's numbers across all of them. One game
+                                            cannot answer a fair-play question; a season of them starts to. The engine
+                                            is loaded once for the whole batch, so it is much cheaper than running
+                                            them one at a time.">
+                            Review every game <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="rv_batch" type="checkbox" class="set-cb">
+                        <label for="rv_batch" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl">
                         <span data-i18n="rv.opening_book" data-i18n-tip="rv.tip.opening_book" class="tooltipped" data-position="right"
                               data-tooltip="Look the opening up in the Lichess masters database, so book moves are
                                             named rather than scored. It stops at the first position the database
@@ -263,6 +300,20 @@
                 </div>
             </section>
 
+            <!-- ============================= BATCH ================================ -->
+            <section id="rv-batch" class="set-sec scrollspy hidden">
+                <h3 data-i18n="rv.across_games" class="set-h">Across games</h3>
+                <div id="rv_batch_players" class="rv-cards"></div>
+                <div id="rv_batch_games" class="rv-batch-games"></div>
+            </section>
+
+            <!-- ========================== HUMAN MODEL ============================= -->
+            <section id="rv-human" class="set-sec scrollspy hidden">
+                <h3 data-i18n="rv.human_likeness" class="set-h">Human likeness</h3>
+                <div id="rv_human_note" class="rv-status"></div>
+                <div id="rv_human_cards" class="rv-cards"></div>
+            </section>
+
             <!-- =========================== INDICATORS ============================= -->
             <section id="rv-indicators" class="set-sec scrollspy hidden">
                 <h3 data-i18n="rv.indicators" class="set-h">Fair-play indicators</h3>
@@ -286,6 +337,8 @@
             <li><a href="#rv-game" data-i18n="rv.game">Game</a></li>
             <li><a href="#rv-analysis" data-i18n="rv.analysis">Analysis</a></li>
             <li><a href="#rv-report" data-i18n="rv.report">Report</a></li>
+            <li><a href="#rv-batch" data-i18n="rv.across_games">Across games</a></li>
+            <li><a href="#rv-human" data-i18n="rv.human_likeness">Human likeness</a></li>
             <li><a href="#rv-indicators" data-i18n="rv.indicators">Fair-play indicators</a></li>
         </ul>
     </div>

@@ -296,5 +296,11 @@
   "rv.tip.budget": "How hard the engine works on EACH position. Depth is reproducible -- the same depth is the same answer on any machine -- and is the better choice when you want to compare two reviews. Time is the only budget a native host accepts. A game is roughly 2 positions per move, so 80 positions at 300ms is about 25 seconds.",
   "rv.tip.lines": "How many alternatives the engine keeps per position. More lines let the review say where your move ranked rather than only whether it was the best one, and they are what the board's coloured arrows show. They also cost search: 5 lines is meaningfully slower than 1 at the same depth.",
   "rv.tip.human_model": "An optional second pass with Maia, a network trained to predict what a HUMAN of a given rating plays -- not what is best. It answers a different question from the engine: how expected was this move for a player at this level. It roughly doubles the run time.",
-  "rv.tip.opening_book": "Look the opening up in the Lichess masters database, so book moves are named rather than scored. It stops at the first position the database does not know, so it is a handful of requests at the start of the game and nothing after that."
+  "rv.tip.opening_book": "Look the opening up in the Lichess masters database, so book moves are named rather than scored. It stops at the first position the database does not know, so it is a handful of requests at the start of the game and nothing after that.",
+  "rv.human_report": "Human-likeness report",
+  "rv.batch": "Review every game",
+  "rv.across_games": "Across games",
+  "rv.human_likeness": "Human likeness",
+  "rv.tip.human_report": "A second reading of the same game by the human model instead of the engine: how EXPECTED each move was from a player of that rating, rather than how good it was. Needs a human model selected above, and costs the pass it runs. Off by default.",
+  "rv.tip.batch": "Analyse EVERY game in the box rather than the one picked above, and add a summary that pools each player's numbers across all of them. One game cannot answer a fair-play question; a season of them starts to. The engine is loaded once for the whole batch, so it is much cheaper than running them one at a time."
 }

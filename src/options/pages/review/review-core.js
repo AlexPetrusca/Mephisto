@@ -557,6 +557,54 @@ function evidence(ind, opts) {
     return out;
 }
 
+// One overall estimate per player, because "here are eleven numbers, you decide" is not actually
+// more honest than a summary -- it just moves the summarising to someone with less information.
+//
+// It is a WEIGHTED VOTE over the evidence lines, not a probability, and it says so wherever it is
+// shown. The weights are the difference between a line that is hard to fake and one that is easy:
+// finding the engine's move in sharp positions and diverging from the human model are worth several
+// times a raw match rate, which a short game inflates on its own.
+const ESTIMATE_WEIGHT = {
+    real: 3, sharp: 3, divergent: 3, 'phase-middlegame': 2, maia: 2, streak: 1.5,
+    uniform: 1, effort: 1, time: 1, fast: 1, top1: 0.5, 'phase-endgame': 0.5, acpl: 0,
+};
+const LEVEL_SCORE = {normal: 0, notable: 1, high: 2, strong: 3};
+
+function estimate(evidenceLines, ind) {
+    // Too little to say anything at all. A ten-move game has no opinion worth having.
+    if (!ind || ind.moves < 12) {
+        return {level: 'normal', confidence: 'none', score: 0,
+                text: `Only ${ind ? ind.moves : 0} moves. That is too few for any of this to mean anything.`};
+    }
+    let got = 0, max = 0;
+    for (const e of evidenceLines) {
+        const w = ESTIMATE_WEIGHT[e.key] ?? 1;
+        if (!w) continue;
+        got += w * LEVEL_SCORE[e.level];
+        max += w * 3;
+    }
+    const score = max > 0 ? got / max : 0;
+    const level = score >= 0.55 ? 'strong' : score >= 0.35 ? 'high' : score >= 0.18 ? 'notable' : 'normal';
+    // How much the estimate is worth, which is a different question from what it says. Both are
+    // shown: a "strong" reading over 14 moves with no clock is not the same finding as one over 60
+    // moves with times and a human model.
+    const depth = (ind.moves >= 30 ? 1 : 0) + (ind.secCv != null ? 1 : 0)
+        + (ind.maiaN >= 8 ? 1 : 0) + (ind.sharpN >= 6 ? 1 : 0);
+    const confidence = depth >= 3 ? 'reasonable' : depth >= 2 ? 'limited' : 'weak';
+    const TEXT = {
+        normal: 'Nothing here stands out from ordinary play.',
+        notable: 'A few numbers sit above the usual range. That describes a lot of good games.',
+        high: 'Several numbers sit well above the usual range at once, which is less easily explained.',
+        strong: 'Most of the numbers that are hard to reach by playing well are at their top band together.',
+    };
+    const WHY = {
+        weak: 'On very little: a short game, no clock times, no human model.',
+        limited: 'On a partial picture. More moves, the clock times, or the human model would sharpen it.',
+        reasonable: 'On the fullest picture this page can build from one game -- which is still one game.',
+    };
+    return {level, score, confidence, text: `${TEXT[level]} ${WHY[confidence]}`};
+}
+
 // ---- UCI line reading ---------------------------------------------------------------------------
 // `info depth 20 seldepth 27 multipv 1 score cp 34 nodes ... pv e2e4 e7e5`
 function parseInfo(line) {
@@ -586,7 +634,7 @@ function parseInfo(line) {
 root.MephistoReviewCore = {
     parsePgn, clockToSeconds, formatDate, gamePhases, phaseOf, LEVELS,
     toWhiteCp, isMateScore, winPercent, moveAccuracy, classify, CLASS_ORDER, MATE_CP,
-    accuracyFor, indicators, evidence, parseInfo, clamp,
+    accuracyFor, indicators, evidence, estimate, parseInfo, clamp,
 };
 
 })(typeof self !== 'undefined' ? self : globalThis);

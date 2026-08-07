@@ -42,7 +42,7 @@ const MAIA_BANDS = ['1100', '1200', '1300', '1400', '1500', '1600', '1700', '180
 const CFG_DEFAULTS = {
     rv_engine: 'stockfish-18-nnue',
     rv_limit_kind: 'depth',
-    rv_limit_value: 16,
+    rv_limit_value: 16,      // plies. The time-mode default is TIME_DEFAULT_MS below.
     rv_multipv: 3,
     // Not a literal: 4 is most of a two-core laptop and a quarter of a workstation. The panel
     // and the settings page already share this, so a review uses the same rule.
@@ -52,11 +52,18 @@ const CFG_DEFAULTS = {
     rv_maia_band: '1500',
     rv_maia3_elo: 1500,
     rv_book: true,
+    rv_human_report: false,
+    rv_batch: false,
 };
 
 // A game whose clocks and blunders make the whole report show something. Deliberately a famous
 // short one: it finishes analysing in seconds even on the small net, so the first thing a new user
 // clicks does not take a minute.
+// Switching between the two budgets has to move the NUMBER as well: 16 means something as a depth
+// and nothing as a millisecond count.
+const DEPTH_DEFAULT = 16;
+const TIME_DEFAULT_MS = 1000;
+
 const SAMPLE_PGN = `[Event "Immortal Game"]
 [Site "London"]
 [Date "1851.06.21"]
@@ -78,6 +85,7 @@ let board = null;
 let cursor = 0;         // which ply the board is showing (0 = start position)
 let flipped = false;
 let nativeAvailable = null; // engine id -> bool, probed once per page load
+let batchReports = null;    // every game's report, when a batch was run
 // The engine currently searching, if any. Held at module scope for one reason: closing or reloading
 // this tab has to shut it down. Nothing else would -- the worker frees a PANEL's engine when its tab
 // closes (keyed by tab id) and this client is deliberately not one, so a run abandoned by closing
@@ -112,10 +120,17 @@ function setCfg(key, value) { MephistoConfig.set(key, JSON.stringify(value)); }
 // parse as a tab id on purpose: the service worker relays engine output to `parseInt(clientId)` and
 // must not try to deliver ours to a tab (see background-script.js).
 class WasmEngine {
-    constructor(name, opts) {
+    constructor(name, opts, clientId) {
         this.name = name;
         this.opts = opts;
-        this.clientId = 'review';
+        // ONE ID PER ENGINE. The offscreen host keys everything on this: a second `init` with the
+        // same id DISPOSES the first engine and replaces it, and both listeners then see the
+        // survivor's output. That is fine when the two run one after the other, and it was -- until
+        // the batch refactor started the analysis engine and the human model together, at which
+        // point Maia's init silently killed Stockfish and answered in its place. Every eval after
+        // that was a depth-1 human-likelihood score, which reads as a sawtooth on the graph and as
+        // a perfect game in the numbers.
+        this.clientId = clientId || 'review';
         this.listeners = [];
         this.onMessage = (msg) => {
             if (!msg || !msg.fromOffscreen || msg.clientId !== this.clientId) return;
@@ -241,7 +256,7 @@ class WasmEngine {
 const NATIVE_DEPTH_CAP_MS = 8000;
 
 class NativeEngine {
-    constructor(name, opts) {
+    constructor(name, opts, clientId) {   // clientId is the WASM host's business; a port is its own
         this.name = name;
         this.opts = opts;
         this.seq = 0;
@@ -322,9 +337,10 @@ class NativeEngine {
     }
 }
 
-function makeEngine(id, opts) {
+function makeEngine(id, opts, clientId) {
     const spec = ENGINES.find(e => e.id === id);
-    return (spec && spec.kind === 'native') ? new NativeEngine(id, opts) : new WasmEngine(id, opts);
+    return (spec && spec.kind === 'native')
+        ? new NativeEngine(id, opts, clientId) : new WasmEngine(id, opts, clientId);
 }
 
 // Is a native host installed? Same probe the panel uses: `ping` is answered without launching the
@@ -406,58 +422,31 @@ function incrementFromTimeControl(tc) {
     return m && m[2] ? +m[2] : 0;
 }
 
-async function runReview(game) {
-    const opts = {
-        variant: 'chess',
-        limitKind: cfg('rv_limit_kind'),
-        limitValue: +cfg('rv_limit_value'),
-        multipv: Math.max(1, +cfg('rv_multipv')),
-        threads: Math.max(1, +cfg('rv_threads')),
-        hash: Math.max(16, +cfg('rv_hash')),
-    };
+// Analyse one game. `rig` holds engines that are ALREADY started; a batch run starts them once and
+// hands the same pair to every game, which is most of what makes a batch cheaper than N single runs.
+async function runReview(game, rig, onProgress) {
+    const opts = rig.opts;
     const {positions, moves} = buildPositions(game);
     fillThinkTime(moves, incrementFromTimeControl(game.tags.TimeControl));
 
-    const humanKind = cfg('rv_human');
-    // How many of Maia's own choices to keep. Its rank of the played move is far more informative
-    // than a yes/no match: "the human model had this fourth" says something a boolean cannot.
-    const HUMAN_LINES = 5;
-    const total = positions.length + (humanKind ? moves.length : 0);
+    const total = positions.length + (rig.human ? moves.length : 0);
     let done = 0;
-    const tick = (what) => {
-        done++;
-        progress(done / total, what);
-    };
+    const tick = (what) => { done++; onProgress(done / total, what); };
 
-    const engine = makeEngine(cfg('rv_engine'), opts);
-    activeEngine = engine;
-    let human = null;
-    try {
-        progress(0, 'starting the engine');
-        await engine.start();
-        for (let i = 0; i < positions.length; i++) {
-            if (cancel) throw new Error('stopped');
-            const p = positions[i];
-            const r = await engine.analyse(p.fen, p.turn);
-            p.lines = r.lines;
-            p.depth = r.depth;
-            tick(`position ${i + 1} of ${positions.length}`);
-        }
-    } finally {
-        engine.dispose();
-        activeEngine = null;
+    for (let i = 0; i < positions.length; i++) {
+        if (cancel) throw new Error('stopped');
+        const p = positions[i];
+        const r = await rig.engine.analyse(p.fen, p.turn);
+        p.lines = r.lines;
+        p.depth = r.depth;
+        tick(`position ${i + 1} of ${positions.length}`);
     }
 
-    if (humanKind && !cancel) {
-        const level = humanKind === 'maia3' ? String(cfg('rv_maia3_elo')) : String(cfg('rv_maia_band'));
-        human = makeEngine(humanKind, {...opts, multipv: HUMAN_LINES, maiaLevel: level});
-        activeEngine = human;
+    if (rig.human && !cancel) {
         try {
-            progress(done / total, 'starting the human model');
-            await human.start();
             for (let i = 0; i < moves.length; i++) {
                 if (cancel) break;
-                const r = await human.analyse(positions[i].fen, positions[i].turn);
+                const r = await rig.human.analyse(positions[i].fen, positions[i].turn);
                 const order = r.lines.map(l => l.pv?.[0]).filter(Boolean);
                 moves[i].maiaMove = order[0] || null;
                 moves[i].maiaOrder = order;
@@ -466,39 +455,87 @@ async function runReview(game) {
                 // as one past the end so it counts against the match rate rather than vanishing.
                 moves[i].maiaRank = order.length ? (at >= 0 ? at + 1 : order.length + 1) : null;
                 moves[i].maiaMatch = moves[i].maiaRank === 1;
-                tick(`human model, move ${i + 1} of ${moves.length}`);
             }
         } catch (e) {
             // A missing Maia net must not throw the whole review away: the engine pass is the report.
             note(`Human model unavailable (${e.message}) -- the rest of the report is unaffected.`, true);
-        } finally {
-            human.dispose();
-            activeEngine = null;
         }
     }
 
-    const book = cfg('rv_book') ? await lookupOpening(positions, moves) : {name: null, plies: 0};
+    const book = cfg('rv_book') ? await lookupOpening(positions) : {name: null, plies: 0};
     return assemble(game, positions, moves, book, opts);
 }
 
-// The opening, from the Lichess masters database, via the service worker (never from this page, so
-// the request carries the extension's origin rather than a game site's). Stops at the first position
-// the database does not know: that ply is where the players left theory.
-async function lookupOpening(positions, moves) {
-    let name = null, plies = 0;
-    for (let i = 0; i < Math.min(positions.length - 1, 30); i++) {
-        let r;
+// Start whatever the settings ask for, once. The caller owns the teardown, which is what lets a
+// batch of forty games pay for one engine load instead of forty.
+async function startRig() {
+    const opts = {
+        variant: 'chess',
+        limitKind: cfg('rv_limit_kind'),
+        limitValue: +cfg('rv_limit_value'),
+        multipv: Math.max(1, +cfg('rv_multipv')),
+        threads: Math.max(1, +cfg('rv_threads')),
+        hash: Math.max(16, +cfg('rv_hash')),
+    };
+    const engine = makeEngine(cfg('rv_engine'), opts, 'review');
+    activeEngine = engine;
+    await engine.start();
+    let human = null;
+    const humanKind = cfg('rv_human');
+    if (humanKind) {
+        const level = humanKind === 'maia3' ? String(cfg('rv_maia3_elo')) : String(cfg('rv_maia_band'));
+        // Five of Maia's own choices: its RANK of the played move says far more than a yes/no.
+        // Its own client id: it runs ALONGSIDE the analysis engine now, not after it.
+        human = makeEngine(humanKind, {...opts, multipv: 5, maiaLevel: level}, 'review-human');
         try {
-            r = await chrome.runtime.sendMessage({explorerLookup: {fen: positions[i].fen, db: 'masters'}});
+            await human.start();
         } catch (e) {
-            break;
+            note(`Human model unavailable (${e.message}) -- the rest of the report is unaffected.`, true);
+            try { human.dispose(); } catch (e2) { /* */ }
+            human = null;
         }
-        if (!r || r.error || !r.moves || !r.moves.length) break;
-        if (r.opening && r.opening.name) name = `${r.opening.eco} ${r.opening.name}`;
-        // the move actually played has to be one the database knows, or the NEXT position is out of
-        // book and this ply was the last one in it
-        if (!r.moves.some(m => m.uci === moves[i].uci)) break;
-        plies = i + 1;
+    }
+    return {opts, engine, human};
+}
+
+function disposeRig(rig) {
+    try { rig?.engine?.dispose(); } catch (e) { /* */ }
+    try { rig?.human?.dispose(); } catch (e) { /* */ }
+    activeEngine = null;
+}
+
+// The opening, from a table that ships WITH the extension. It used to ask the Lichess opening
+// explorer through the service worker; that endpoint now answers 401 at its proxy, before the
+// application sees the request, and whether that is an auth requirement or a network block is not
+// something this code can find out or fix. Naming an opening never needed a server anyway: the
+// answer is a property of the position.
+//
+// The table is lichess-org/chess-openings (CC0, a collection of facts in the public domain), 3,810
+// named lines replayed once at build time and keyed on the position rather than the move order --
+// so a transposition is named correctly, which a move-list lookup cannot do.
+let openingBook = null;
+
+async function loadOpeningBook() {
+    if (openingBook) return openingBook;
+    try {
+        const r = await fetch(chrome.runtime.getURL('src/options/pages/review/openings.json'));
+        openingBook = r.ok ? await r.json() : {};
+    } catch (e) {
+        openingBook = {};
+    }
+    return openingBook;
+}
+
+// The last named position the game passed through, and the ply it stopped being theory at. Both
+// come out of the same walk: a game is "in book" up to the last position the table knows.
+async function lookupOpening(positions) {
+    const book = await loadOpeningBook();
+    let name = null, plies = 0;
+    for (let i = 0; i < positions.length; i++) {
+        // the FEN without its move counters, which is how the table is keyed
+        const key = positions[i].fen.split(' ').slice(0, 4).join(' ');
+        const hit = book[key];
+        if (hit) { name = hit; plies = i; }
     }
     return {name, plies};
 }
@@ -616,6 +653,7 @@ function renderReport() {
     renderGraph();
     renderMoves();
     renderIndicators();
+    renderHumanReport();
     ensureBoard();
     showPly(report.moves.length);
 }
@@ -786,12 +824,129 @@ function renderIndicators() {
         const name = playerName(color);
         const ind = report.indicators[color];
         const evid = Core.evidence(ind, {});
+        const est = Core.estimate(evid, ind);
         const items = evid.map(e => `<div class="rv-ev">
             <span class="rv-ev-flag rv-ev-${e.level}">${e.level}</span>${esc(e.text)}
             <span class="rv-ev-note">${esc(e.note)}</span></div>`).join('');
-        return `<div class="rv-ind-col"><h4>${esc(name)}</h4>${items || '<div class="rv-ev">Not enough data.</div>'}</div>`;
+        // The estimate first, because a column of eleven numbers with no summary is not more honest
+        // than a summary -- it just moves the summarising to someone with less information.
+        const head = `<div class="rv-est rv-ev-${est.level}">
+            <span class="rv-ev-flag rv-ev-${est.level}">${esc(est.level)}</span>
+            <b>Overall estimate</b>
+            <span class="rv-est-text">${esc(est.text)}</span></div>`;
+        return `<div class="rv-ind-col"><h4>${esc(name)}</h4>${head}`
+            + `${items || '<div class="rv-ev">Not enough data.</div>'}</div>`;
     };
     $('rv_indicators').innerHTML = col('w') + col('b');
+}
+
+
+// ---- the human-likeness report (opt-in) ---------------------------------------------------------
+// A second reading of the same game, by a different judge. The engine asks "how good was this move";
+// Maia asks "how expected was it from a player of this rating". They disagree constantly, and that
+// is the point -- a move can be excellent and completely out of character, or awful and exactly what
+// you would expect. Off by default: it costs a whole second pass.
+function renderHumanReport() {
+    const sec = $('rv-human');
+    if (!sec) return;
+    const on = cfg('rv_human_report') && report.moves.some(m => m.maiaRank != null);
+    sec.classList.toggle('hidden', !on);
+    if (!on) return;
+    const band = report.humanKind === 'maia3' ? cfg('rv_maia3_elo') : cfg('rv_maia_band');
+    const col = (color) => {
+        const mine = report.moves.filter(m => m.color === color && m.maiaRank != null);
+        if (!mine.length) return '';
+        const buckets = [0, 0, 0, 0];  // its 1st, 2nd-3rd, 4th-5th, outside its list
+        for (const m of mine) {
+            const r = m.maiaRank;
+            buckets[r === 1 ? 0 : r <= 3 ? 1 : r <= 5 ? 2 : 3]++;
+        }
+        const LABEL = ['Exactly what it expected', 'Among its next two', 'Further down its list',
+                       'Outside its list entirely'];
+        const rows = buckets.map((n, i) => `<div class="rv-kv"><span>${LABEL[i]}</span>`
+            + `<span>${n} (${Math.round(n / mine.length * 100)}%)</span></div>`).join('');
+        // The moves worth looking at: the engine's first choice, and nowhere near the human model's.
+        const odd = report.moves.filter(m => m.color === color && m.rank === 1 && m.maiaRank > 3
+            && !m.isBook && !m.onlyMove).slice(0, 8);
+        const oddList = odd.length
+            ? `<div class="rv-sub" style="margin-top:10px">Engine's move, not the human model's: `
+              + odd.map(m => `<a href="#" data-ply="${m.ply}">${esc(moveLabel(m))}</a>`).join(', ') + '</div>'
+            : '';
+        return `<div class="rv-card"><h4>${esc(playerName(color))}</h4>${rows}${oddList}</div>`;
+    };
+    $('rv_human_cards').innerHTML = col('w') + col('b');
+    $('rv_human_note').textContent =
+        `Judged against Maia at ${band}. This says nothing about whether a move was GOOD -- it is`
+        + ` how expected the move was from a human at that rating.`;
+    $('rv_human_cards').onclick = (e) => {
+        const a = e.target.closest('a[data-ply]');
+        if (!a) return;
+        e.preventDefault();
+        showPly(+a.dataset.ply + 1);
+        $('rv-report').scrollIntoView({behavior: 'smooth', block: 'start'});
+    };
+}
+
+// ---- the batch summary --------------------------------------------------------------------------
+// One game cannot answer a fair-play question, which is the whole reason this exists: the same
+// player's numbers ACROSS games is the only version of the question with an answer worth having.
+function renderBatch() {
+    const sec = $('rv-batch');
+    if (!sec) return;
+    sec.classList.toggle('hidden', !batchReports || batchReports.length < 2);
+    if (!batchReports || batchReports.length < 2) return;
+
+    // Per player name, pooled over every game they appear in. Pooled, not averaged: a 20-move game
+    // and a 90-move game are not one vote each.
+    const players = new Map();
+    for (const r of batchReports) {
+        for (const c of ['w', 'b']) {
+            const key = (c === 'w' ? r.game.tags.White : r.game.tags.Black) || '?';
+            const p = players.get(key) || {name: key, games: 0, moves: [], accs: []};
+            p.games++;
+            p.moves.push(...r.moves.filter(m => m.color === c));
+            if (r.accuracy[c] != null) p.accs.push(r.accuracy[c]);
+            players.set(key, p);
+        }
+    }
+    const pooled = [...players.values()].map(p => {
+        const ind = Core.indicators(p.moves.map((m, i) => ({...m, ply: i, color: 'w'})), 'w',
+                                    report.opts.multipv, null, {});
+        const ev = Core.evidence(ind, {});
+        return {...p, ind, ev, est: Core.estimate(ev, ind),
+                acc: p.accs.length ? p.accs.reduce((a, b) => a + b, 0) / p.accs.length : null};
+    }).sort((a, b) => b.games - a.games);
+
+    $('rv_batch_players').innerHTML = pooled.map(p => `<div class="rv-card">
+        <h4>${esc(p.name)}</h4>
+        <div class="rv-big">${p.acc == null ? '—' : p.acc.toFixed(1) + '%'}</div>
+        <div class="rv-sub">mean accuracy over ${p.games} game${p.games === 1 ? '' : 's'},
+            ${p.ind.moves} moves</div>
+        <div style="margin-top:10px">
+          <div class="rv-kv"><span>Engine's first choice, real choices</span>
+            <span>${p.ind.realTop1 == null ? '—' : Math.round(p.ind.realTop1 * 100) + '%'}</span></div>
+          <div class="rv-kv"><span>...in sharp positions</span>
+            <span>${p.ind.sharpTop1 == null ? '—' : Math.round(p.ind.sharpTop1 * 100) + '%'}</span></div>
+          <div class="rv-kv"><span>Avg. centipawn loss</span><span>${p.ind.acpl ?? '—'}</span></div>
+        </div>
+        <div class="rv-ev" style="margin-top:10px">
+          <span class="rv-ev-flag rv-ev-${p.est.level}">${esc(p.est.level)}</span>${esc(p.est.text)}
+        </div>
+    </div>`).join('');
+
+    $('rv_batch_games').innerHTML = `<table class="rv-table"><thead><tr>
+        <th>#</th><th>White</th><th>Black</th><th>Result</th><th>Date</th>
+        <th class="n">Acc. W</th><th class="n">Acc. B</th><th>Opening</th></tr></thead><tbody>`
+        + batchReports.map((r, i) => `<tr>
+            <td>${i + 1}</td>
+            <td>${esc(r.game.tags.White || '?')}</td>
+            <td>${esc(r.game.tags.Black || '?')}</td>
+            <td>${esc(r.game.result)}</td>
+            <td>${esc(Core.formatDate(r.game.tags.Date))}</td>
+            <td class="n">${r.accuracy.w == null ? '' : r.accuracy.w.toFixed(1)}</td>
+            <td class="n">${r.accuracy.b == null ? '' : r.accuracy.b.toFixed(1)}</td>
+            <td>${esc(r.book.name || '')}</td></tr>`).join('')
+        + '</tbody></table>';
 }
 
 // ---- board ------------------------------------------------------------------------------------
@@ -1096,6 +1251,8 @@ async function exportHtml(btn) {
 </head><body><main><div class="container">
 ${wrap.innerHTML}
 ${exportMoveTable()}
+<section class="set-sec"><h3 class="set-h">PGN</h3>
+  <pre class="rv-pgn-out">${esc(report.pgnText || '')}</pre></section>
 <p class="rv-status">Generated ${esc(Core.formatDate(new Date().toISOString().slice(0, 10).replace(/-/g, '.')))}
  by the Mephisto Chess Extension. The analysis in this file was produced on the machine that wrote it;
  nothing was uploaded.</p>
@@ -1174,19 +1331,36 @@ function selectedGame() {
 
 async function onRun() {
     if (running) return;
-    const game = selectedGame();
-    if (!game) return note('Paste a PGN first.', true);
+    if (!games.length) return note('Paste a PGN first.', true);
+    const batch = cfg('rv_batch') && games.length > 1;
+    const list = batch ? games : [selectedGame()];
     running = true;
     cancel = false;
     $('rv_run').disabled = true;
     $('rv_stop').disabled = false;
     note('');
+    let rig = null;
     try {
-        const built = await runReview(game);
-        built.pgnText = $('rv_pgn')?.value || '';
-        report = built;
+        progress(0, 'starting the engine');
+        rig = await startRig();
+        const done = [];
+        for (let g = 0; g < list.length; g++) {
+            if (cancel) break;
+            const label = batch ? `game ${g + 1} of ${list.length} — ` : '';
+            // Each game gets its own slice of the bar, so a batch of forty does not sit at 2%.
+            const base = g / list.length, span = 1 / list.length;
+            const built = await runReview(list[g], rig,
+                (frac, what) => progress(base + frac * span, label + what));
+            built.pgnText = gameText(list[g]);
+            done.push(built);
+        }
+        if (!done.length) throw new Error('stopped');
+        batchReports = batch ? done : null;
+        report = done[done.length - 1];
+        report.pgnText = report.pgnText || ($('rv_pgn')?.value || '');
         renderReport();
-        progress(1, 'done');
+        renderBatch();
+        progress(1, batch ? `${done.length} games analysed` : 'done');
         $('rv-report').scrollIntoView({behavior: 'smooth', block: 'start'});
     } catch (e) {
         if (cancel) note('Stopped.');
@@ -1194,6 +1368,7 @@ async function onRun() {
         progress(0, '');
         $('rv_progress_wrap')?.classList.add('hidden');
     } finally {
+        disposeRig(rig);
         running = false;
         cancel = false;
         // The page is re-injected on every route change, so these can be gone by the time a long
@@ -1201,6 +1376,24 @@ async function onRun() {
         if ($('rv_run')) $('rv_run').disabled = false;
         if ($('rv_stop')) $('rv_stop').disabled = true;
     }
+}
+
+// The PGN of one game as it was pasted, so the export can carry it. Rebuilt from the parse rather
+// than re-split from the textarea: a batch needs one game's text, not all forty.
+function gameText(game) {
+    const tags = Object.entries(game.tags).map(([k, v]) => `[${k} "${v}"]`).join('\n');
+    const body = [];
+    for (let i = 0; i < game.moves.length; i++) {
+        if (i % 2 === 0) body.push(`${i / 2 + 1}.`);
+        body.push(game.moves[i].san);
+        if (game.moves[i].clk != null) {
+            const t = game.moves[i].clk;
+            const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = (t % 60).toFixed(1);
+            body.push(`{[%clk ${h}:${String(m).padStart(2, '0')}:${sec.padStart(4, '0')}]}`);
+        }
+    }
+    body.push(game.result);
+    return `${tags}\n\n${body.join(' ')}`;
 }
 
 function syncLimitUi() {
@@ -1216,8 +1409,8 @@ function syncLimitUi() {
     // A depth of 16 is sensible and 16ms is not, so switching the KIND has to move the value into
     // that kind's range rather than leaving a number that means something else entirely.
     const n = +v.value;
-    if (kind === 'depth' && n > 40) v.value = 20;
-    if (kind === 'time' && n < 50) v.value = 300;
+    if (kind === 'depth' && n > 40) v.value = DEPTH_DEFAULT;
+    if (kind === 'time' && n < 50) v.value = TIME_DEFAULT_MS;
     setCfg('rv_limit_value', +v.value);
     updateEngineOptions();
 }
@@ -1321,9 +1514,12 @@ class ReviewPage {
         bindSteppers();
         bindHumanUi();
 
-        const book = $('rv_book');
-        book.checked = !!cfg('rv_book');
-        book.addEventListener('change', () => setCfg('rv_book', book.checked));
+        for (const key of ['rv_book', 'rv_human_report', 'rv_batch']) {
+            const el = $(key);
+            if (!el) continue;
+            el.checked = !!cfg(key);
+            el.addEventListener('change', () => setCfg(key, el.checked));
+        }
 
         // Probing three native hosts takes up to a second; do it once and re-render the list when it
         // lands rather than making the page wait for it.

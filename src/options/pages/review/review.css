@@ -312,6 +312,30 @@ html.dark .rv-ev-strong  { color: #d15050; }
 .rv-lvl { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; color: var(--mp-dim); }
 .rv-lvl .rv-ev-flag { flex: 0 0 auto; }
 
+/* the overall estimate, above the lines it is drawn from */
+.rv-est {
+    padding: 10px 12px;
+    margin: 0 0 12px;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    font-size: 13px;
+}
+.rv-est b { color: var(--mp-text); margin-right: 6px; }
+.rv-est-text { display: block; margin-top: 3px; color: var(--mp-dim); }
+
+.rv-batch-games { margin-top: 18px; overflow-x: auto; }
+.rv-pgn-out {
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--mp-line);
+    border-radius: 4px;
+    background: var(--mp-raised);
+    color: var(--mp-dim);
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 /* the full move table, export only -- the page shows this one move at a time */
 .rv-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .rv-table th, .rv-table td {
