@@ -194,6 +194,30 @@ instead of analysing the wrong position.
 *Reading a position straight off a YouTube video — a board reading is a guess and says so, naming its least-confident
 squares (`least sure: e4 pawn 62%`).*
 
+### Game review
+
+Analyse a finished game on the extension's own page — **Settings → Game Review**. Paste a PGN, load a `.pgn`, or
+fetch a player's recent games from chess.com's public archive. Nothing is uploaded: the text stays in the tab and
+the search runs in the extension's own engine.
+
+- **Any bundled engine, at your budget** — a WASM Stockfish at a fixed depth (reproducible on any machine) or a
+  native host at a time per position. 1–10 candidate lines, your own thread and hash counts.
+- **Accuracy and move quality** — Lichess's win% and accuracy formulas, and the same 30/20/10 bands the panel judges
+  live moves by, so a review agrees with what the panel said at the time.
+- **What you actually gave up** — every position is searched once, so the score before a move and the score after it
+  come from the same search at the same budget, and the played move's rank in the engine's own list is exact.
+- **Eval graph** — click anywhere on it to jump the board there. Blunders and mistakes are marked.
+- **Think time** — read from the `[%clk ...]` comments chess.com and Lichess both write.
+- **Human model (optional)** — a second pass with Maia, which predicts what a *human* of a chosen rating plays
+  rather than what is best. Different question, different answer, and the combination is the interesting part.
+- **Fair-play indicators** — engine-match rate overall and in the positions where being right is hard, think-time
+  variability, how often the fastest moves were the engine's. Presented as **measurements, never a verdict**, each
+  with what it is worth and what else explains it.
+- **Export** — one self-contained HTML file with the graph, the move table and the indicators. No scripts, no
+  external anything; it opens anywhere, forever.
+
+![The game review page](docs/game-review.png)
+
 ### Automated play
 
 - **Autoplay** — plays the engine's move for you. **Help Mode** draws the arrows instead and overrides it.
@@ -228,6 +252,11 @@ A countdown shows what kind of move is coming.
 
 **Clock Mode** budgets each move off the page clock (~time/30 + 60% of the increment); **Mirror Time** paces to the
 opponent's last spend −10%. Both size the search to the time they'll spend, so the wait becomes a deeper move.
+
+**Pace to Clock** is separate and off by default. Clock Mode paces the *search*; this paces the *simulated* delay —
+the think pause and the cursor travel — which is what actually costs you time in a scramble. With clock to spare
+your settings are used exactly as they are: it only ever makes a move shorter, never slower, and never below the
+point where the click stops looking like a hand moved it.
 
 > **Priority** — *Time:* Mirror ▸ Clock ▸ Humanize ▸ Search Time. *Move:* Book ▸ Humanize ▸ engine best.
 
@@ -552,6 +581,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Background Play** | Off, moves fire only while the tab is focused. On keeps everything running hidden — Chrome throttles silent background tabs, so the tab is marked as playing audio and shows a speaker icon. |
 | **Help Mode** | Arrows on the site's board, plays nothing. Overrides Autoplay. |
 | **Humanize** / **Clock Mode** / **Mirror Time** | Which move is played, and how long it takes. See [Humanize](#humanize). |
+| **Pace to Clock** | Shrinks the simulated think pause and cursor travel when the clock gets short. Off by default; never lengthens a move. |
 | **Manual Mode** | Thinks indefinitely; plays only when you press the play key. Overrides Clock/Mirror/Humanize. |
 | **Puzzle Mode** / **Puzzle Database** | See [Puzzles](#puzzles). Puzzle Mode turns itself on when you open a puzzle page and off when you leave — unless you set it yourself, which is never overridden. |
 | **Python Backend** | Moves the real pointer via a local Python helper instead of synthetic clicks. Needs `mephisto-clicker.py` and PyAutoGUI permissions. Almost nobody needs this. |
@@ -645,6 +675,10 @@ openings are already covered by the [Opening Explorer](#analysis) and book play.
 post-game review, where the hit rate is higher and the eval is context rather than a move to play.
 
 ### Shipped
+
+- [x] **[Game review](#game-review)** (v3.1.218) — a finished game analysed on the extension's own page: accuracy,
+  move quality, alternate lines, an eval graph, think time from the clock comments, an optional Maia pass, and
+  fair-play measurements that deliberately stop short of a verdict. Exports as one self-contained HTML file.
 
 - [x] **[Automatic updates](#automatic-updates-opt-in)** (v3.1.214, one-click from the panel v3.1.215) — opt-in:
   fetches the ~6 MB update archive from this repository and writes it into the extension's own folder in place, so
