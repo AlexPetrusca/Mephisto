@@ -93,7 +93,13 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
     'w-p-a2*****w-p-b2*****w-p-c2*****w-p-d2*****w-p-e2*****w-p-f2*****w-p-g2*****w-p-h2*****w-r-a1*****' +
     'w-n-b1*****w-b-c1*****w-q-d1*****w-k-e1*****w-b-f1*****w-n-g1*****w-r-h1*****';
 
-const MEPHISTO_BUILD = '3.1.213'; // bump on every content-script change; verify in the page console after reload
+// Read from the manifest, never typed here. It was a hand-maintained constant with a comment saying
+// "bump on every content-script change", and it sat at 3.1.213 through eighty-one commits to this
+// file -- so every diagnostics report and every page-console line named a build that had not been
+// running for four releases. A version marker nobody can trust is worse than none.
+const MEPHISTO_BUILD = (() => {
+    try { return chrome.runtime.getManifest().version; } catch (e) { return '?'; }
+})();
 window.onload = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
