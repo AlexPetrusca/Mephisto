@@ -513,6 +513,27 @@
                     </div>
                 </div>
 
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="set.puzzle_move_delay" data-i18n-tip="set.tip.puzzle_move_delay" class="tooltipped" data-position="right"
+                              data-tooltip="How long a DATABASE move waits before its first click. Every other move has
+                                            a search in front of it, and that search is what lets the board finish
+                                            animating; a known solution has none, so without a pause the click goes
+                                            out while the opponent's reply is still sliding across the board and the
+                                            move is dropped as a mismatch. Raise it if moves are being dropped on a
+                                            slow page; lower it to solve faster. 0 disables the pause.">
+                            Puzzle Move Delay (ms) <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="puzzle_delay_input" type="number" min="0" max="3000" step="50">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
                 <!-- Puzzle database. Not a setting (nothing to toggle): importing the file IS
                      turning it on, and with no file imported nothing below changes at all. -->
                 <div class="set-row set-block">

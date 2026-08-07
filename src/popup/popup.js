@@ -2465,7 +2465,18 @@ function puzzle_move_ready(fen) {
 // opponent's reply is still moving across the board. That is what made the mismatch guard fire on
 // essentially every puzzle move. Delaying the SEND (rather than sleeping inside the click sequence)
 // also means the content-script's guard judges a board that has settled.
+// The DEFAULT, not the value: it is a setting now (Settings -> General -> Puzzle Move Delay).
+// Kept as a constant because it is also the fallback whenever the setting is unset or unreadable,
+// and because the reasoning above is about this number.
 const PUZZLE_MOVE_DELAY_MS = 300;
+
+// Read fresh per move rather than off the config snapshot: the point of a knob like this is that
+// you drag it while watching puzzles being solved, and a value that only takes effect on the next
+// panel rebuild would be useless for that.
+function puzzle_move_delay_ms() {
+    const v = JSON.parse(MephistoConfig.get('puzzle_delay') ?? 'null');
+    return (typeof v === 'number' && v >= 0 && v <= 3000) ? v : PUZZLE_MOVE_DELAY_MS;
+}
 // Depth for the look-only search run when the database already knows the answer. Not a budget in
 // milliseconds: the point is a comparable number on every machine, not a fixed wait.
 const PUZZLE_DISPLAY_DEPTH = 10;
@@ -2518,7 +2529,7 @@ function maybe_play_puzzle_move(fen, opts = {}) {
         }
         request_automove(uci, null, false, {paused: true, retry: opts.retry});
         watch_puzzle_move(fen, uci);
-    }, PUZZLE_MOVE_DELAY_MS);
+    }, puzzle_move_delay_ms());
     return true;
 }
 
@@ -5310,7 +5321,7 @@ const LIVE_CONFIG_KEYS = [
     'computer_evaluation', 'multiple_lines', 'compute_time', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
-    'verbose_log', 'fourpc_mode', 'clock_pace',
+    'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay',
 ];
 
 function watch_config_changes() {
