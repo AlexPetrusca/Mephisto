@@ -33,7 +33,9 @@ const CFG_DEFAULTS = {
     rv_limit_kind: 'depth',
     rv_limit_value: 16,
     rv_multipv: 3,
-    rv_threads: 4,
+    // Not a literal: 4 is most of a two-core laptop and a quarter of a workstation. The panel
+    // and the settings page already share this, so a review uses the same rule.
+    get rv_threads() { return MephistoConfig.defaultThreads(); },
     rv_hash: 256,
     rv_human: '',
     rv_maia_band: '1500',
@@ -65,6 +67,11 @@ let board = null;
 let cursor = 0;         // which ply the board is showing (0 = start position)
 let flipped = false;
 let nativeAvailable = null; // engine id -> bool, probed once per page load
+// The engine currently searching, if any. Held at module scope for one reason: closing or reloading
+// this tab has to shut it down. Nothing else would -- the worker frees a PANEL's engine when its tab
+// closes (keyed by tab id) and this client is deliberately not one, so a run abandoned by closing
+// the tab would leave a multi-threaded search burning cores with nobody watching it.
+let activeEngine = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -389,6 +396,7 @@ async function runReview(game) {
     };
 
     const engine = makeEngine(cfg('rv_engine'), opts);
+    activeEngine = engine;
     let human = null;
     try {
         progress(0, 'starting the engine');
@@ -403,11 +411,13 @@ async function runReview(game) {
         }
     } finally {
         engine.dispose();
+        activeEngine = null;
     }
 
     if (humanKind && !cancel) {
         const level = humanKind === 'maia3' ? String(cfg('rv_maia3_elo')) : String(cfg('rv_maia_band'));
         human = makeEngine(humanKind, {...opts, multipv: 1, maiaLevel: level});
+        activeEngine = human;
         try {
             progress(done / total, 'starting the human model');
             await human.start();
@@ -423,6 +433,7 @@ async function runReview(game) {
             note(`Human model unavailable (${e.message}) -- the rest of the report is unaffected.`, true);
         } finally {
             human.dispose();
+            activeEngine = null;
         }
     }
 
@@ -1016,12 +1027,14 @@ async function onRun() {
         if (cancel) note('Stopped.');
         else note(String(e.message || e), true);
         progress(0, '');
-        $('rv_progress_wrap').classList.add('hidden');
+        $('rv_progress_wrap')?.classList.add('hidden');
     } finally {
         running = false;
         cancel = false;
-        $('rv_run').disabled = false;
-        $('rv_stop').disabled = true;
+        // The page is re-injected on every route change, so these can be gone by the time a long
+        // run ends -- the run itself is module state and outlives the DOM it started from.
+        if ($('rv_run')) $('rv_run').disabled = false;
+        if ($('rv_stop')) $('rv_stop').disabled = true;
     }
 }
 
@@ -1176,6 +1189,11 @@ class ReviewPage {
         document.removeEventListener('keydown', onKey); // re-injected page: never bind twice
         document.addEventListener('keydown', onKey);
 
+        // Closing or reloading the tab has to stop a search, not orphan it. pagehide rather than
+        // beforeunload: it also fires when the tab is discarded or navigated by the browser.
+        window.removeEventListener('pagehide', stopOnUnload);
+        window.addEventListener('pagehide', stopOnUnload);
+
         // Coming back to this page after visiting another one: the module survived, the DOM did not.
         if (report) {
             $('rv_pgn').value = report.pgnText || '';
@@ -1183,6 +1201,12 @@ class ReviewPage {
             renderReport();
         }
     }
+}
+
+function stopOnUnload() {
+    cancel = true;
+    try { activeEngine?.dispose(); } catch (e) { /* already gone */ }
+    activeEngine = null;
 }
 
 function onKey(e) {

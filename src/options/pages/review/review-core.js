@@ -197,7 +197,10 @@ function accuracyFor(moves, color) {
     const weights = mine.map(m => {
         const i = m.ply;
         const w = Math.max(2, Math.round(moves.length / 10));
-        const win = wins.slice(Math.max(0, i - w), i + w + 1);
+        // Only the moves that were actually analysed. A position the engine returned nothing for
+        // leaves winBefore undefined, and one of those in the window made stdev NaN, which then
+        // spread through the weighted sum and rendered the whole game's accuracy as "NaN%".
+        const win = wins.slice(Math.max(0, i - w), i + w + 1).filter(Number.isFinite);
         return clamp(stdev(win), 0.5, 12);
     });
     const total = weights.reduce((a, b) => a + b, 0);
@@ -205,7 +208,8 @@ function accuracyFor(moves, color) {
     // Lichess reports the mean of the weighted mean and the harmonic mean -- the harmonic one is
     // what stops a single 100% streak from hiding a blunder.
     const harmonic = mine.length / mine.reduce((a, m) => a + 1 / Math.max(m.acc, 1), 0);
-    return clamp((weighted + harmonic) / 2, 0, 100);
+    const out = (weighted + harmonic) / 2;
+    return Number.isFinite(out) ? clamp(out, 0, 100) : null;
 }
 
 // The measurements the "is this engine-assisted?" question actually rests on. Every field is a
@@ -333,11 +337,13 @@ function parseInfo(line) {
     return out;
 }
 
+// What the page and the test ladder actually call. parseGame/splitGames/parseTags/stripVariations
+// and the three statistics helpers stay internal: they are steps of the functions below, and an
+// export with no caller is surface that has to keep working for nobody.
 root.MephistoReviewCore = {
-    parsePgn, parseGame, splitGames, parseTags, clockToSeconds, stripVariations,
+    parsePgn, clockToSeconds,
     toWhiteCp, isMateScore, winPercent, moveAccuracy, classify, CLASS_ORDER, MATE_CP,
-    accuracyFor, indicators, evidence, parseInfo,
-    mean, median, stdev, clamp,
+    accuracyFor, indicators, evidence, parseInfo, clamp,
 };
 
 })(typeof self !== 'undefined' ? self : globalThis);
