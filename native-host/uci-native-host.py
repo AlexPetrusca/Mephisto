@@ -188,7 +188,15 @@ def do_analyse(data, mid):
         if data.get('moves'):
             for mv in data['moves'].split():
                 board.push(chess.Move.from_uci(mv))
-        limit = chess.engine.Limit(time=data['time'] / 1000)
+        # A DEPTH budget when the caller asks for one, time otherwise. Depth is what makes two
+        # reviews of the same game comparable across machines, which a wall-clock budget can never
+        # be. `time` is still sent alongside it and is used as the cap, so a caller that predates
+        # this and a host that predates it both keep working unchanged.
+        depth = data.get('depth')
+        if isinstance(depth, int) and depth > 0:
+            limit = chess.engine.Limit(depth=depth, time=data['time'] / 1000)
+        else:
+            limit = chess.engine.Limit(time=data['time'] / 1000)
         try:
             multipv = int(engine_options.get('MultiPV', 1))
         except (TypeError, ValueError):

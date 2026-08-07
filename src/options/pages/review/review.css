@@ -24,6 +24,11 @@ html.dark .rv-c-inaccuracy { --rv-c: #d8a628; }
 html.dark .rv-c-mistake    { --rv-c: #e08a3c; }
 html.dark .rv-c-blunder    { --rv-c: #d15050; }
 
+/* The page title sits in the header above; the first section heading needs room to breathe under it
+   or the two read as one block. Same fix the settings pages got, applied to this page's own first
+   section, which is not `:first-child` of anything options.css can see. */
+#rv-game.set-sec { margin-top: 26px; }
+
 /* ------------------------------------------------------------------- inputs */
 
 .rv-stack { align-items: flex-start; }
@@ -153,7 +158,8 @@ html.dark .rv-status.rv-bad { color: #d15050; }
     gap: 22px;
     align-items: start;
 }
-@media (max-width: 1100px) { .rv-main { grid-template-columns: 1fr; } }
+/* 900, not 1100: the exported file renders around 1180 wide and should keep both columns. */
+@media (max-width: 900px) { .rv-main { grid-template-columns: 1fr; } }
 
 .rv-board-wrap { position: relative; width: 100%; aspect-ratio: 1; }
 .rv-board { width: 100%; height: 100%; }
@@ -289,6 +295,36 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 }
 .rv-ev-normal   { color: var(--mp-mute); }
 .rv-ev-notable  { color: #b8860b; }
-.rv-ev-high     { color: #b03030; }
+.rv-ev-high     { color: #cc7722; }
+.rv-ev-strong   { color: #b03030; }
 html.dark .rv-ev-notable { color: #d8a628; }
-html.dark .rv-ev-high    { color: #d15050; }
+html.dark .rv-ev-high    { color: #e08a3c; }
+html.dark .rv-ev-strong  { color: #d15050; }
+
+/* the key: what the four levels on the lines below actually mean */
+.rv-levels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 6px 18px;
+    margin: 0 0 20px;
+    max-width: 1100px;
+}
+.rv-lvl { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; color: var(--mp-dim); }
+.rv-lvl .rv-ev-flag { flex: 0 0 auto; }
+
+/* the full move table, export only -- the page shows this one move at a time */
+.rv-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.rv-table th, .rv-table td {
+    padding: 4px 9px;
+    border-bottom: 1px solid var(--mp-hair);
+    text-align: left;
+}
+.rv-table th {
+    color: var(--mp-mute);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+.rv-table td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.rv-table td b { color: var(--rv-c, var(--mp-text)); }

@@ -94,6 +94,44 @@
 
                 <div class="set-row">
                     <div class="set-lbl">
+                        <span data-i18n="rv.human_model" data-i18n-tip="rv.tip.human_model" class="tooltipped" data-position="right"
+                              data-tooltip="An optional second pass with Maia, a network trained to predict what a
+                                            HUMAN of a given rating plays -- not what is best. It answers a different
+                                            question from the engine: how expected was this move for a player at this
+                                            level. It roughly doubles the run time.">
+                            Human model <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl rv-btns">
+                        <select id="rv_human" class="rv-select browser-default">
+                            <option value="" data-i18n="rv.off">Off</option>
+                            <option value="maia">Maia 1 (band)</option>
+                            <option value="maia3">Maia 3 (rating)</option>
+                        </select>
+                        <select id="rv_maia_band" class="rv-select rv-narrow browser-default hidden">
+                            <option value="1100">1100</option>
+                            <option value="1200">1200</option>
+                            <option value="1300">1300</option>
+                            <option value="1400">1400</option>
+                            <option value="1500">1500</option>
+                            <option value="1600">1600</option>
+                            <option value="1700">1700</option>
+                            <option value="1800">1800</option>
+                            <option value="1900">1900</option>
+                            <option value="2000">2000</option>
+                            <option value="2100">2100</option>
+                            <option value="2200">2200</option>
+                        </select>
+                        <span id="rv_maia3_wrap" class="set-step hidden">
+                            <button type="button" class="set-step-btn" data-step="-100">&minus;</button>
+                            <input id="rv_maia3_elo" type="number" min="600" max="2600" step="100">
+                            <button type="button" class="set-step-btn" data-step="100">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
                         <span data-i18n="rv.budget" data-i18n-tip="rv.tip.budget" class="tooltipped" data-position="right"
                               data-tooltip="How hard the engine works on EACH position. Depth is reproducible -- the
                                             same depth is the same answer on any machine -- and is the better choice
@@ -154,41 +192,6 @@
                             <button type="button" class="set-step-btn" data-step="-16">&minus;</button>
                             <input id="rv_hash" type="number" min="16" max="4096" step="16">
                             <button type="button" class="set-step-btn" data-step="16">+</button>
-                        </span>
-                    </div>
-                </div>
-
-                <div class="set-row">
-                    <div class="set-lbl">
-                        <span data-i18n="rv.human_model" data-i18n-tip="rv.tip.human_model" class="tooltipped" data-position="right"
-                              data-tooltip="An optional second pass with Maia, a network trained to predict what a
-                                            HUMAN of a given rating plays -- not what is best. It answers a different
-                                            question from the engine: how expected was this move for a player at this
-                                            level. It roughly doubles the run time.">
-                            Human model <i class="material-icons info-tooltip">info</i>
-                        </span>
-                    </div>
-                    <div class="set-ctl rv-btns">
-                        <select id="rv_human" class="rv-select browser-default">
-                            <option value="" data-i18n="rv.off">Off</option>
-                            <option value="maia">Maia 1 (band)</option>
-                            <option value="maia3">Maia 3 (rating)</option>
-                        </select>
-                        <select id="rv_maia_band" class="rv-select rv-narrow browser-default hidden">
-                            <option value="1100">1100</option>
-                            <option value="1200">1200</option>
-                            <option value="1300">1300</option>
-                            <option value="1400">1400</option>
-                            <option value="1500">1500</option>
-                            <option value="1600">1600</option>
-                            <option value="1700">1700</option>
-                            <option value="1800">1800</option>
-                            <option value="1900">1900</option>
-                        </select>
-                        <span id="rv_maia3_wrap" class="set-step hidden">
-                            <button type="button" class="set-step-btn" data-step="-100">&minus;</button>
-                            <input id="rv_maia3_elo" type="number" min="600" max="2600" step="100">
-                            <button type="button" class="set-step-btn" data-step="100">+</button>
                         </span>
                     </div>
                 </div>
@@ -271,6 +274,7 @@
                     conclude anything, and this page cannot see the things a real investigation uses.
                     If you think someone is cheating, report them to the site and let it look.
                 </p>
+                <div id="rv_levels" class="rv-levels"></div>
                 <div id="rv_indicators" class="rv-indicators"></div>
             </section>
 
