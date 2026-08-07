@@ -635,6 +635,10 @@ async function toggleOverlay() {
         'box-shadow: 0 6px 24px rgba(0,0,0,0.45);';
     placeholder.textContent = 'Mephisto — starting…';
     overlayRoot.appendChild(placeholder);
+    // How long the worker takes to answer is the number the "waiting for the background worker"
+    // message is about, so it is stamped out here where BOTH the success and the failure path can
+    // read it -- inside the try it was in scope for neither.
+    const assetsAsked = Date.now();
     // Say more the longer it takes, rather than sitting on one word. Cleared either way below.
     const slow = setTimeout(() => {
         placeholder.textContent = 'Mephisto — waiting for the extension’s background worker. ' +
@@ -647,7 +651,6 @@ async function toggleOverlay() {
         // not the other two. 784 KB of the old payload was base64 for themes that were not selected.
         // MephistoConfig, not raw localStorage: it is a content script loaded ahead of this one and
         // it reads chrome.storage, which is where the setting actually lives.
-        const assetsAsked = Date.now();
         let boardTheme = null;
         try { boardTheme = JSON.parse(MephistoConfig.get('board')) || null; } catch (e) { /* unset */ }
         // Time-boxed. sendMessage to a worker that never answers hangs for as long as Chrome feels
@@ -658,15 +661,13 @@ async function toggleOverlay() {
         ]);
     } catch (e) {
         clearTimeout(slow);
-        // How long the worker actually took to answer, traced ungated so it reaches a bug report.
-        // This is the number the "waiting for the background worker" message is about.
-        bgLogAlways('panel assets', {ms: Date.now() - assetsAsked});
-        bgLogAlways('panel assets failed', {why: String(e && e.message || e)});
+        bgLogAlways('panel assets failed', {ms: Date.now() - assetsAsked, why: String(e && e.message || e)});
         placeholder.textContent = 'Mephisto could not start: ' + (e && e.message || e) +
             '. Reload this page, or reload the extension on chrome://extensions.';
         return;   // the placeholder stays, so the failure is visible; click the icon again to dismiss
     }
     clearTimeout(slow);
+    bgLogAlways('panel assets', {ms: Date.now() - assetsAsked});
     if (!assets || assets.error || !assets.html) {
         bgLogAlways('panel assets unavailable', {error: assets && assets.error});
         placeholder.textContent = 'Mephisto could not load its panel' +
