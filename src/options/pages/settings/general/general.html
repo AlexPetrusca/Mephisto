@@ -433,6 +433,25 @@
                     </div>
                 </div>
 
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="set.lichess_token" data-i18n-tip="set.tip.lichess_token" class="tooltipped" data-position="right"
+                              data-tooltip="Lichess now requires a token on the opening explorer -- without one it
+                                            answers 401 and both Opening Explorer and Play Book Moves stop working.
+                                            Make a personal token at lichess.org/account/oauth/token/create with NO
+                                            scopes ticked: the explorer only needs to know a request has an owner.
+                                            It is stored on this machine like every other setting, never sent
+                                            anywhere but lichess, and is left out of Copy Diagnostics and of an
+                                            exported settings file.">
+                            Lichess API token <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="lichess_token_input" type="password" autocomplete="off" spellcheck="false"
+                               placeholder="lip_..." class="set-secret">
+                    </div>
+                </div>
+
                 <div class="set-row set-toggle">
                     <div class="set-lbl">
                         <span data-i18n="set.play_book_moves">Play Book Moves</span>

@@ -121,6 +121,10 @@ export class SettingsPage {
         try { all = await chrome.storage.local.get(null); } catch (e) { all = {}; }
         delete all.__cfg_migrated; // internal marker: exporting it would suppress the one-time
                                    // localStorage migration on a fresh install that imports this
+        // A CREDENTIAL never goes in the file. This export exists to be moved between machines and
+        // pasted into issues, and a lichess token in one is a token in someone else's hands. The
+        // field is one paste to refill on the other machine.
+        delete all.lichess_token;
         const url = URL.createObjectURL(new Blob([JSON.stringify(all, null, 2)], {type: 'application/json'}));
         const a = document.createElement('a');
         a.href = url;

@@ -315,12 +315,17 @@ async function buildDiagnostics(ctx = {}) {
   const assets = await checkBundledAssets();
   const perm = await chrome.permissions.getAll().catch(() => ({origins: []}));
   const {mephisto_startup: starts = []} = await chrome.storage.local.get('mephisto_startup').catch(() => ({}));
+  // Whether a token is SET is worth knowing when the explorer is failing; the token itself never
+  // leaves this machine. Read as a boolean so there is nothing here to redact.
+  const {lichess_token: tok} = await chrome.storage.local.get('lichess_token').catch(() => ({}));
+  const hasToken = !!(() => { try { return JSON.parse(tok ?? '""'); } catch (e) { return ''; } })();
   const lines = [
     `Mephisto ${m.version}  (${m.name})`,
     `chrome    ${(navigator.userAgent.match(/Chrome\/[\d.]+/) || ['?'])[0]}  ${navigator.platform}`,
     `engines   ${assets.ok ? 'bundled assets present' : 'MISSING: ' + assets.missing.join(', ')}`,
     `hosts     ${Object.keys(nativePorts).join(', ') || 'none connected'}`,
     `optional  ${(perm.origins || []).length} host permission(s) granted`,
+    `lichess   API token ${hasToken ? 'set' : 'not set'}`,
     ctx.site ? `site      ${ctx.site}${ctx.path ? '  ' + ctx.path : ''}` : null,
     ctx.engine ? `engine    ${ctx.engine}` : null,
     ctx.detection ? `detection ${ctx.detection}` : null,
@@ -482,6 +487,24 @@ async function tablebaseLookup({fen, variant}) {
   return out;
 }
 
+// Lichess put the opening explorer behind OAuth: every explorer route answers 401 at its proxy
+// without one, while the tablebase (which declares `security: []`) still answers anonymously. Their
+// own site gets through on a session cookie, but the explorer answers `access-control-allow-origin:
+// *` to every origin except lichess.org's -- and a wildcard forbids credentials -- so no extension
+// can ever use that route. A per-user token is the only mechanism left open to us.
+//
+// Empty is the normal state and is NOT an error here: the caller reports the 401 it gets, which is
+// what tells the user to go and make one.
+async function lichessAuthHeader() {
+  try {
+    const {lichess_token} = await chrome.storage.local.get('lichess_token');
+    const t = JSON.parse(lichess_token ?? '""');
+    return t ? {Authorization: `Bearer ${t}`} : {};
+  } catch (e) {
+    return {};
+  }
+}
+
 async function explorerLookup({fen, db}) {
   const cfg = EXPLORER_DB[db] || EXPLORER_DB.masters;
   const key = `${db}|${fen}`;
@@ -499,9 +522,12 @@ async function explorerLookup({fen, db}) {
     const timer = setTimeout(() => ctl.abort(), 4000);
     try {
       const url = `${host}${cfg.path}?${params}`;
-      const r = await fetch(url, {signal: ctl.signal});
+      const r = await fetch(url, {signal: ctl.signal, headers: await lichessAuthHeader()});
       if (lichess_note_response(r, 'explorer')) { out = {error: `HTTP ${r.status}`}; break; } // don't try the other host
-      out = r.ok ? await r.json() : {error: `HTTP ${r.status}`};
+      out = r.ok ? await r.json()
+        : {error: r.status === 401
+            ? 'Lichess needs an API token for the opening explorer — Settings → General → Lichess API token'
+            : `HTTP ${r.status}`};
       // log the REQUEST, not just the verdict: "no moves" is indistinguishable from "wrong FEN"
       // without seeing exactly what was asked for
       console.log('[Explorer]', r.status, url, out.error ? out.error : `${out.moves?.length ?? 0} moves`);

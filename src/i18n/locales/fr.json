@@ -302,5 +302,7 @@
   "rv.across_games": "Across games",
   "rv.human_likeness": "Human likeness",
   "rv.tip.human_report": "A second reading of the same game by the human model instead of the engine: how EXPECTED each move was from a player of that rating, rather than how good it was. Needs a human model selected above, and costs the pass it runs. Off by default.",
-  "rv.tip.batch": "Analyse EVERY game in the box rather than the one picked above, and add a summary that pools each player's numbers across all of them. One game cannot answer a fair-play question; a season of them starts to. The engine is loaded once for the whole batch, so it is much cheaper than running them one at a time."
+  "rv.tip.batch": "Analyse EVERY game in the box rather than the one picked above, and add a summary that pools each player's numbers across all of them. One game cannot answer a fair-play question; a season of them starts to. The engine is loaded once for the whole batch, so it is much cheaper than running them one at a time.",
+  "set.lichess_token": "Jeton API Lichess",
+  "set.tip.lichess_token": "Lichess now requires a token on the opening explorer -- without one it answers 401 and both Opening Explorer and Play Book Moves stop working. Make a personal token at lichess.org/account/oauth/token/create with NO scopes ticked: the explorer only needs to know a request has an owner. It is stored on this machine like every other setting, never sent anywhere but lichess, and is left out of Copy Diagnostics and of an exported settings file."
 }

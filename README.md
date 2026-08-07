@@ -178,7 +178,9 @@ instead of analysing the wrong position.
   conservative: pins, skewers and discovered attacks can't be established from the position alone, so it stays quiet
   rather than guessing.
 - **Opening Explorer** — how humans played this opening (Lichess database): the name, the most-played replies with
-  their win/draw/loss split, and coloured arrows. Masters, all Lichess, or a club band.
+  their win/draw/loss split, and coloured arrows. Masters, all Lichess, or a club band. Lichess requires a personal
+  API token on this endpoint now — see the setting of that name; Game Review names openings without it, from its own
+  bundled table.
 - **Read a position off the screen** — the camera button captures the tab, finds the board and loads it. Any site: a
   video, a diagram, an image. Nothing is uploaded. **Follow screen** re-reads twice a second so a board playing
   elsewhere keeps the panel in step.
@@ -596,6 +598,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Premove** | Certifies a reply to the opponent's predicted move; an exact hit is instant. A reply that could never be legal after some other move is queued as a real site premove. |
 | **Pondering** | Full threads during the opponent's turn across their top five replies. Costs CPU continuously — it pairs best with Premove. |
 | **Endgame Tablebase** | Perfect play at ≤7 pieces, outranking engine and book. Off by default: it leaves your machine. Never delays a move. |
+| **Lichess API token** | Lichess put the opening explorer behind OAuth — without a token it answers 401 and both Opening Explorer and Play Book Moves stop working. Make a personal token at [lichess.org/account/oauth/token/create](https://lichess.org/account/oauth/token/create) with **no scopes** ticked; the explorer only needs to know a request has an owner. Stored on your machine like any other setting, sent nowhere but lichess, and deliberately left out of Copy Diagnostics and of an exported settings file. |
 | **Opening Explorer** / **Opening Database** | Human opening data and which games it comes from. *Masters* is the cleanest play; the Lichess sets look more like a normal opponent. Read-out only. |
 | **Play Book Moves** | Plays from the book instead of the engine's pick — an engine that always opens the same way is itself a tell. 20-game floor, 40cp check. If the lookup is late the engine's move is played. |
 | **Background Play** | Off, moves fire only while the tab is focused. On keeps everything running hidden — Chrome throttles silent background tabs, so the tab is marked as playing audio and shows a speaker icon. |

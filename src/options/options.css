@@ -325,6 +325,20 @@ label.set-tgl .set-off { display: inline; }
 .set-mix input[type=number]:focus { border-color: var(--mp-on) !important; outline: none; }
 
 /* stepper: [-] value [+], the buttons exactly as tall as the field */
+/* a secret: same shape as the number fields, wide enough to see that something is in it */
+input.set-secret {
+    width: 230px;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--mp-line);
+    border-radius: 4px;
+    background: var(--mp-raised);
+    color: var(--mp-text);
+    font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .08em;
+}
+input.set-secret:focus { outline: none; border-color: var(--mp-on); }
+
 .set-step { display: inline-flex; align-items: stretch; gap: 4px; }
 .set-step input[type=number] {
     text-align: center;
