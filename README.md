@@ -412,7 +412,13 @@ seat you drew, and draws the suggested move as an arrow. The evaluation is norma
 against Blue+Green), so it means one thing all game instead of flipping sign every seat. Autoplay works.
 
 > **Teams mode only, for now.** Tetrarch does not search free-for-all, so FFA games are detected and shown but
-> not analysed. Promotion plays the move and leaves the piece picker to you.
+> not analysed.
+
+Promotions are played in full: the picker Chess.com opens over the board is found by its shape — a small
+panel of four pieces in two rows — rather than by a class name, so a generated class changing cannot make
+it click the wrong piece. If nothing matches that shape it plays the move and leaves the piece to you,
+which is what it always did. With **Multiple Lines** above 1 you get an arrow per line on the page board
+and on the panel's own 14×14 board, with a colour-matched list of scores beneath it.
 
 The mode is read from Chess.com's own mode label, which is a guess about someone else's markup — and it decides the
 rules the search runs under, since promotion is the 8th rank in free-for-all and the 11th in Teams. When that guess
@@ -565,6 +571,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Dark Mode / Language** | Theme and language for the panel and the settings page. |
 | **Four-player Mode** | Tetrarch only, in the Variant row's place. Which rules a four-player board is played under — *Auto-detect* reads Chess.com's mode label, *Teams* and *Free-for-all* override it. See [Four-player chess](#four-player-chess). |
 | **Automatic Updates** | See [Automatic updates](#automatic-updates-opt-in). Off by default. On, it asks Chrome for permission to download this repository's releases, then updates the extension in place at the press of a button — the bundled engines are never touched. |
+| **Verbose Logging · Copy Diagnostics** | Diagnostics, not play. The trace is quiet while the game tab is focused; this turns it on. **Copy Diagnostics** (panel → Engine, or **D**) copies version, engine, what was detected, why the last move was or was not played, and the recent trace — with no addresses and nothing identifying, so it can go straight into a bug report. |
 | **Restore Defaults · Export · Import** | Reset everything on the page (not the puzzle database or hotkeys); write every setting including hotkeys and tuning to JSON, and read one back. Values that no longer exist are ignored. |
 </details>
 
@@ -609,9 +616,10 @@ No schedule — added whenever I feel like it. Checked means shipped.
 - [ ] **More engines** — the lineup covers *strong* and *human-like* and not much between. Variety of character, not
   more strength. **lc0 (Leela)** in WASM would be for comparing styles, not for strength.
 - [ ] **Duck Chess autoplay** — detection and analysis work; the duck-placement step doesn't.
-- [ ] **Four-player chess, the rest of it** — Teams mode works; free-for-all needs engine support, the promotion
-  picker isn't wired, and elimination hasn't been seen in a real game. Chaturaji, 4P Giveaway and Self Partnering
-  are untouched.
+- [ ] **Four-player chess, the rest of it** — Teams mode works, promotions are played and eliminations are
+  handled. What is left: free-for-all needs engine support, and no real game has yet been seen past an
+  elimination, so that path is pinned by synthetic positions rather than by having happened. Chaturaji,
+  4P Giveaway and Self Partnering are untouched.
 - [ ] **Four-player chess on Windows, confirmed** — built and symbol-checked, never run on a real Windows machine.
   See [Contributing](#contributing) for the four stages worth reporting.
 - [ ] **Short videos and more screenshots** — a premove firing, Humanize pacing a move, the screen reader following a
