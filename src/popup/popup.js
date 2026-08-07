@@ -4777,7 +4777,11 @@ function on_new_pos_4pc(payload) {
             'Free-for-all — Tetrarch searches Teams mode only'));
         return;
     }
-    request_remote_configure({Mode: mode || 'teams'}).catch(() => {});
+    // MultiPV alongside it. Tetrarch declares MultiPV (spin 1-64) and emits one `info ... multipv N`
+    // per line; the host already keys them by rank and returns them in order, so the whole feature
+    // was one option away. Mode and Setup reset the board when they change and MultiPV does not, and
+    // the host skips values that have not changed, so sending them together is safe.
+    request_remote_configure({Mode: mode || 'teams', MultiPV: effective_multipv()}).catch(() => {});
     toggle_calculating(true);
     native_send('analyse', {fen4, time: Math.max(200, config.compute_time || 1000)}, (info) => {
         // The host emits one frame per depth exactly like the two-player hosts, and the panel has
@@ -4825,8 +4829,20 @@ function on_new_pos_4pc(payload) {
             if (line) update_eval_bar_4pc(line, flip, ourSeat);
             // Help Mode draws the move instead of playing it, exactly as on an 8x8 board. The
             // renderer understands 14x14 now, so this is just a matter of asking for it.
-            if (config.help_mode) request_draw_hint([{move: best, color: '#14b8a6', width: 0.22}]);
-            else request_clear_hint();
+            // One arrow per line, thickest and most saturated for the best -- the same
+            // convention and the same palette the 8x8 board uses, so a four-player board reads the
+            // same way. Deduped on the move: Tetrarch can return the same first move in two lines
+            // when they transpose, and two arrows on one square is just a darker arrow.
+            if (config.help_mode) {
+                const seen = new Set();
+                const arrows = (res.lines || [])
+                    .map(l => l && (l.move || (l.pv && l.pv[0])))
+                    .filter(mv => mv && !seen.has(mv) && seen.add(mv))
+                    .slice(0, effective_multipv())
+                    .map((mv, i) => ({move: mv, color: line_color(i), width: i === 0 ? 0.22 : 0.14}));
+                request_draw_hint(arrows.length ? arrows
+                    : [{move: best, color: line_color(0), width: 0.22}]);
+            } else request_clear_hint();
             if (ours && config.autoplay && !config.help_mode) request_automove_4pc(best);
             else if (config.autoplay) {
                 // "Autoplay does nothing in four-player chess" has been reported more than once, and

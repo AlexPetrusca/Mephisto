@@ -1634,6 +1634,30 @@ function is4PC() {
 // but there is nothing to play: clicking pieces around those is the failure this guard was written
 // for. Measured: the analysis board is /variants/4-player-chess/analysis, and autoplay silently
 // refused every move there.
+// Whose turn it is, as a pure function of what the page showed. Kept out of scrapePosition4PC so it
+// can be driven without a DOM: elimination has never been seen in a real game, so a synthetic
+// position is the only test it is ever going to get.
+//
+//   lastFilled -- index of the last filled cell in the four-column move table, or -1 before any move
+//   movedSeat  -- the seat the BOARD DIFF says just moved, when the two disagree
+//   isAlive    -- seat -> does it still have a king
+function fourPCTurnFrom(lastFilled, movedSeat, isAlive) {
+    const nextLiving = (from) => {
+        let i = FOURPC_SEATS.indexOf(from);
+        for (let n = 0; n < 4; n++) {
+            i = (i + 1) % 4;
+            if (isAlive(FOURPC_SEATS[i])) return FOURPC_SEATS[i];
+        }
+        return FOURPC_SEATS[(FOURPC_SEATS.indexOf(from) + 1) % 4]; // nobody left; the game is over
+    };
+    // The board repaints before the move table does. When the diff names a seat, it is the fresher
+    // of the two and the table has simply not caught up.
+    const lastMover = movedSeat || (lastFilled >= 0 ? FOURPC_SEATS[lastFilled % 4] : null);
+    if (lastMover) return nextLiving(lastMover);
+    // No move yet: Red starts, unless Red is somehow already out.
+    return isAlive('R') ? 'R' : nextLiving('R');
+}
+
 function is4PCGame() {
     return site === 'chesscom'
         && /^\/variants\/4-player[\w-]*\/(game\/\d+|analysis)/.test(location.pathname);
@@ -1848,21 +1872,20 @@ function scrapePosition4PC() {
     //
     // chess.com renders all four seat cells for the current round and leaves the unplayed ones empty,
     // so only non-empty cells count as moves.
-    const played = [...document.querySelectorAll('.moves-table-cell.moves-move')]
-        .filter(c => c.textContent.trim()).length;
-    let turn = FOURPC_SEATS[played % 4];
-    // The board and the move table do not repaint in the same frame. When the board has already moved
-    // and the table has not caught up, the diff is the fresher of the two -- but it only ever nudges
-    // the count-derived answer forward by one seat, it can no longer replace it.
-    if (d && d.moved && FOURPC_SEATS[played % 4] === d.moved.seat) {
-        let i = FOURPC_SEATS.indexOf(d.moved.seat);
-        for (let n = 0; n < 4; n++) { i = (i + 1) % 4; if (alive(FOURPC_SEATS[i])) break; }
-        turn = FOURPC_SEATS[i];
+    // POSITION, NOT COUNT. chess.com lays the move table out as four columns in seat order and
+    // leaves a seat's cell empty until it plays, so the INDEX of the last filled cell names the seat
+    // that moved last. Counting filled cells and taking `count % 4` gives the same answer only while
+    // all four are alive: once a seat is eliminated its column stops filling, every later round has
+    // three moves instead of four, and the modulo drifts one seat further out per round. That is the
+    // elimination bug, and it is why this reads the position instead.
+    const cells = [...document.querySelectorAll('.moves-table-cell.moves-move')];
+    let lastFilled = -1;
+    for (let i = 0; i < cells.length; i++) if (cells[i].textContent.trim()) lastFilled = i;
+    const turn = fourPCTurnFrom(lastFilled, d && d.moved && d.moved.seat, alive);
+    if (turn !== fourPCTurn) {
+        bgLogAlways('4PC turn', {turn, lastFilled, cells: cells.length,
+            diff: d && d.moved && d.moved.seat, dead: FOURPC_SEATS.filter(x => !alive(x)).join('') || 'none'});
     }
-    // ponytail: an eliminated seat stops taking turns, which `played % 4` cannot know about, so skip
-    // forward off a dead seat. Untested -- no game has been observed past an elimination yet.
-    for (let n = 0; n < 4 && !alive(turn); n++) turn = FOURPC_SEATS[(FOURPC_SEATS.indexOf(turn) + 1) % 4];
-    if (turn !== fourPCTurn) bgLogAlways('4PC turn', {turn, played, diff: d && d.moved && d.moved.seat});
     fourPCTurn = turn;
     // `dead` is no longer hardcoded either -- a seat with no king is out, and in Teams that changes
     // the evaluation substantially.
@@ -1919,6 +1942,67 @@ function fourPCOurSeat() {
     return null;
 }
 
+// --- 4PC promotion picker -------------------------------------------------------------------
+// chess.com opens a small panel over the board holding the four promotion pieces in a 2x2 grid --
+// queen, bishop on the top row; rook, knight on the bottom -- with a dismiss control under them.
+//
+// FOUND BY SHAPE, NOT BY CLASS NAME. Every class on that board is generated, and a selector guessed
+// from a screenshot is a selector that clicks the wrong thing the day it changes. Instead: look for
+// a small container that has appeared over the board and holds exactly four clickable children
+// arranged two-by-two. If nothing matches that description, NOTHING IS CLICKED -- the move is
+// already played, and leaving the piece to you is the same behaviour as before. A wrong guess must
+// never turn into a wrong piece.
+const FOURPC_PROMO_ORDER = ['q', 'b', 'r', 'n'];   // reading order of the 2x2 grid
+const FOURPC_PROMO_WAIT_MS = 1800;
+
+function fourPCFindPromoPicker() {
+    const geo = fourPCGeometry();
+    if (!geo) return null;
+    const sq = geo.size;
+    for (const el of document.querySelectorAll('div, dialog')) {
+        const r = el.getBoundingClientRect();
+        // Roughly two squares wide and two to three tall, sitting over the board.
+        if (r.width < sq * 1.4 || r.width > sq * 3.2) continue;
+        if (r.height < sq * 1.4 || r.height > sq * 4) continue;
+        if (r.right < geo.rect.left || r.left > geo.rect.right) continue;
+        if (r.bottom < geo.rect.top || r.top > geo.rect.bottom) continue;
+        // Four children of similar size laid out as two rows of two.
+        const kids = [...el.children].map(c => ({c, r: c.getBoundingClientRect()}))
+            .filter(k => k.r.width > sq * 0.4 && k.r.height > sq * 0.4);
+        if (kids.length !== 4) continue;
+        const tops = [...new Set(kids.map(k => Math.round(k.r.top)))];
+        const lefts = [...new Set(kids.map(k => Math.round(k.r.left)))];
+        if (tops.length !== 2 || lefts.length !== 2) continue;
+        kids.sort((a, b) => (a.r.top - b.r.top) || (a.r.left - b.r.left));
+        return {el, kids: kids.map(k => k.r)};
+    }
+    return null;
+}
+
+async function promote4PC(piece) {
+    const want = String(piece || '').toLowerCase();
+    const idx = FOURPC_PROMO_ORDER.indexOf(want);
+    if (idx < 0) return;                       // not a piece we know how to pick
+    // The picker is drawn after the move lands, so poll briefly rather than looking once. A REAL
+    // deadline, not a sum of the step size: Chrome clamps timers to one a second in a hidden tab, so
+    // a loop that adds up what it ASKED for is out by up to 20x. Same rule as the animation wait.
+    const deadline = Date.now() + FOURPC_PROMO_WAIT_MS; // real time, not accumulated steps
+    let found = null;
+    while (!found && Date.now() < deadline) {
+        found = fourPCFindPromoPicker();
+        if (!found) await promiseTimeout(120);
+    }
+    if (!found) {
+        dropMove(`Promotion to ${want.toUpperCase()} — pick the piece on the board yourself.`,
+            'PROMOTION: no picker matched the expected shape', {piece: want});
+        return;
+    }
+    const r = found.kids[idx];
+    bgLogAlways('4PC promotion', {piece: want, idx,
+        x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)});
+    await simulateClickSquare(r, 0.8, 220);
+}
+
 // Play a 4PC move. simulateMove is 8x8 to its bones -- an [a-h][1-8] regex and boardBounds/8 -- so
 // this is a separate path rather than a parameterisation of it. Only the square->rect step differs;
 // the clicking itself is the same primitive, so cursor travel and the move-time budget behave
@@ -1960,9 +2044,8 @@ function simulateMove4PC(move, think = null) {
         await click(m[1], total * 0.25);
         await click(m[2], total * 0.75);
         if (m[3]) {
-            // Promotion. 4PC's picker has not been read yet, so the move is played and the picker is
-            // left to the user rather than clicking blind at a guessed offset.
-            console.warn(`Mephisto: 4PC promotion to '${m[3]}' -- pick the piece manually (picker not wired yet)`);
+            // Promotion: the picker chess.com opens over the board once the pawn lands.
+            await promote4PC(m[3]);
         }
     })();
 }
