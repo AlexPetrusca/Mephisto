@@ -616,6 +616,25 @@ async function toggleOverlay() {
     // id and land in its Resource Timing (issue #35 §3.1/§3.4). getOverlayRoot() first -- the style
     // is injected into the shadow root, which must exist.
     const overlayRoot = getOverlayRoot();
+
+    // SOMETHING ON SCREEN BEFORE ANYTHING IS AWAITED. The assets come from the service worker, and a
+    // worker that is slow to wake used to mean TEN SECONDS OF NOTHING -- no frame, no spinner, no
+    // error, indistinguishable from the extension being broken. Reported exactly that way. Inline
+    // styles because the panel's own CSS is the thing we are still waiting for.
+    const placeholder = document.createElement('div');
+    placeholder.id = PANEL_OVERLAY_ID;
+    placeholder.style.cssText = 'position: fixed; top: 4px; right: 0; z-index: 2147483646; ' +
+        'width: 220px; padding: 12px 14px; border-radius: 8px; background: #23242a; color: #e6e6e6; ' +
+        'font: 13px/18px -apple-system, "Roboto", system-ui, sans-serif; ' +
+        'box-shadow: 0 6px 24px rgba(0,0,0,0.45);';
+    placeholder.textContent = 'Mephisto — starting…';
+    overlayRoot.appendChild(placeholder);
+    // Say more the longer it takes, rather than sitting on one word. Cleared either way below.
+    const slow = setTimeout(() => {
+        placeholder.textContent = 'Mephisto — waiting for the extension’s background worker. ' +
+            'It can be slow to start after a browser restart.';
+    }, 2500);
+
     let assets;
     try {
         // Tell the worker which board theme this panel will use, so it inlines that texture and
@@ -624,15 +643,27 @@ async function toggleOverlay() {
         // it reads chrome.storage, which is where the setting actually lives.
         let boardTheme = null;
         try { boardTheme = JSON.parse(MephistoConfig.get('board')) || null; } catch (e) { /* unset */ }
-        assets = await chrome.runtime.sendMessage({getPanelAssets: {board: boardTheme}});
+        // Time-boxed. sendMessage to a worker that never answers hangs for as long as Chrome feels
+        // like, and the old code awaited that with nothing on screen.
+        assets = await Promise.race([
+            chrome.runtime.sendMessage({getPanelAssets: {board: boardTheme}}),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timed out after 20s')), 20000)),
+        ]);
     } catch (e) {
-        console.warn('Mephisto: could not load panel assets', e);
-        return;
+        clearTimeout(slow);
+        bgLogAlways('panel assets failed', {why: String(e && e.message || e)});
+        placeholder.textContent = 'Mephisto could not start: ' + (e && e.message || e) +
+            '. Reload this page, or reload the extension on chrome://extensions.';
+        return;   // the placeholder stays, so the failure is visible; click the icon again to dismiss
     }
+    clearTimeout(slow);
     if (!assets || assets.error || !assets.html) {
-        console.warn('Mephisto: panel assets unavailable', assets && assets.error);
+        bgLogAlways('panel assets unavailable', {error: assets && assets.error});
+        placeholder.textContent = 'Mephisto could not load its panel' +
+            (assets && assets.error ? `: ${assets.error}` : '.') + ' Try reloading this page.';
         return;
     }
+    placeholder.remove();   // replaced by the real panel below
     // saved geometry wins (drag/resize persists it); fresh installs get the scaled default at top-right
     const saved = readOverlayBox();
     const startW = saved ? saved.width : Math.round(POPUP_W * OVERLAY_SCALE);
