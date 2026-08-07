@@ -1952,7 +1952,13 @@ function fourPCOurSeat() {
 // arranged two-by-two. If nothing matches that description, NOTHING IS CLICKED -- the move is
 // already played, and leaving the piece to you is the same behaviour as before. A wrong guess must
 // never turn into a wrong piece.
-const FOURPC_PROMO_ORDER = ['q', 'b', 'r', 'n'];   // reading order of the 2x2 grid
+// Reading order of the 2x2 grid: queen and bishop on the top row, rook and knight beneath.
+// CONFIRMED FOR RED ONLY (2026-08-07): a queen promotion picked the queen, which proves index 0 is
+// the top-left cell for a seat at the bottom of the board. The one thing still unverified is whether
+// chess.com ROTATES this picker per seat the way it rotates everything else -- if it does, the order
+// is wrong for Blue, Yellow and Green, and the symptom would be a queen promotion picking something
+// else while Red keeps working. Check the layout the first time you promote from another seat.
+const FOURPC_PROMO_ORDER = ['q', 'b', 'r', 'n'];
 const FOURPC_PROMO_WAIT_MS = 1800;
 
 function fourPCFindPromoPicker() {
