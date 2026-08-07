@@ -196,25 +196,44 @@ squares (`least sure: e4 pawn 62%`).*
 
 ### Game review
 
-Analyse a finished game on the extension's own page — **Settings → Game Review**. Paste a PGN, load a `.pgn`, or
-fetch a player's recent games from chess.com's public archive. Nothing is uploaded: the text stays in the tab and
-the search runs in the extension's own engine.
+Analyse finished games on the extension's own page — **Settings → Game Review**. Paste a PGN, load a
+`.pgn`, or fetch a player's recent games from Chess.com's public archive. Nothing is uploaded: the text
+stays in the tab and the search runs in the extension's own engine.
 
-- **Any bundled engine, at your budget** — a WASM Stockfish at a fixed depth (reproducible on any machine) or a
-  native host at a time per position. 1–10 candidate lines, your own thread and hash counts.
-- **Accuracy and move quality** — Lichess's win% and accuracy formulas, and the same 30/20/10 bands the panel judges
-  live moves by, so a review agrees with what the panel said at the time.
-- **What you actually gave up** — every position is searched once, so the score before a move and the score after it
-  come from the same search at the same budget, and the played move's rank in the engine's own list is exact.
-- **Eval graph** — click anywhere on it to jump the board there. Blunders and mistakes are marked.
-- **Think time** — read from the `[%clk ...]` comments chess.com and Lichess both write.
-- **Human model (optional)** — a second pass with Maia, which predicts what a *human* of a chosen rating plays
-  rather than what is best. Different question, different answer, and the combination is the interesting part.
-- **Fair-play indicators** — engine-match rate overall and in the positions where being right is hard, think-time
-  variability, how often the fastest moves were the engine's. Presented as **measurements, never a verdict**, each
-  with what it is worth and what else explains it.
-- **Export** — one self-contained HTML file with the graph, the move table and the indicators. No scripts, no
-  external anything; it opens anywhere, forever.
+- **Any engine, at your budget** — the bundled WASM Stockfishes, or a native host at full power. A
+  **depth** is reproducible (the same depth is the same answer on any machine) and is the default at 16;
+  a **time per move** defaults to 1s. Native hosts take either. 1–10 candidate lines, your own thread and
+  hash counts.
+- **What you actually gave up** — every position is searched once, so the score before a move and the
+  score after it come from the same search at the same budget, and the played move's rank in the engine's
+  own list is exact.
+- **Accuracy and move quality** — Lichess's win% and accuracy formulas, and the same 30/20/10 bands the
+  panel judges live moves by, so a review agrees with what the panel said at the time. Best, Excellent,
+  Good, Book, Forced, Inaccuracy, Mistake, Blunder.
+- **Eval graph** with the **opening / middlegame / endgame** boundaries marked on Lichess's own divider.
+  Click anywhere on it to jump the board there; blunders and mistakes are dotted.
+- **Openings named offline** from a bundled copy of [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings)
+  (CC0) — 3,810 lines keyed by *position*, so a transposition is named correctly and nothing is fetched.
+- **Think time** read from the `[%clk ...]` comments Chess.com and Lichess both write, and **titles and
+  ratings** from the PGN's own tags: `GM Carlsen (2839)`.
+- **Human model (optional)** — a second pass with Maia, which predicts what a *human* of a chosen rating
+  plays rather than what is best. Maia 1 across its bands (1100–2200) or Maia 3 on a rating dial. It
+  reports where your move sat in Maia's **own ranking**, not a yes/no.
+- **Human likeness (optional, off)** — the whole game read by that second judge instead: how expected each
+  move was rather than how good, and the moves the engine ranked first that the human model never saw
+  coming.
+- **Across games** — switch **Review every game** on and the whole file is analysed against one engine
+  load, with each player's numbers pooled over all of it. One game cannot answer a fair-play question; a
+  season of them starts to.
+- **Fair-play indicators** — an **overall estimate** per player, then the lines it is drawn from: the
+  engine-match rate over the moves that were a real choice (book, forced and recapture moves excluded),
+  the rate in sharp positions and per phase, the longest unbroken engine streak, how uniform the accuracy
+  is, whether the longer thinks went to the harder positions, and how far the human model was from the
+  played move. Four levels with a key that says what each means. **Measurements, never a verdict** — the
+  page says so, and the estimate says what it is worth as well as what it says.
+- **Export** — the report exactly as it looks on the page: same markup, same stylesheets inlined, board
+  and pieces embedded, the full move table and the PGN. One file, no scripts, nothing to fetch, opens
+  anywhere.
 
 ![The game review page](docs/game-review.png)
 
@@ -602,7 +621,8 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Dark Mode / Language** | Theme and language for the panel and the settings page. |
 | **Four-player Mode** | Tetrarch only, in the Variant row's place. Which rules a four-player board is played under — *Auto-detect* reads Chess.com's mode label, *Teams* and *Free-for-all* override it. See [Four-player chess](#four-player-chess). |
 | **Automatic Updates** | See [Automatic updates](#automatic-updates-opt-in). Off by default. On, it asks Chrome for permission to download this repository's releases, then updates the extension in place at the press of a button — the bundled engines are never touched. |
-| **Verbose Logging · Copy Diagnostics** | Diagnostics, not play. The trace is quiet while the game tab is focused; this turns it on. **Copy Diagnostics** (panel → Engine, or **D**) copies version, engine, what was detected, why the last move was or was not played, and the recent trace — with no addresses and nothing identifying, so it can go straight into a bug report. |
+| **Verbose Logging · Copy Diagnostics** | Diagnostics, not play. The trace is quiet while the game tab is focused; this turns it on. **Copy Diagnostics** (panel → Engine, or **D**) copies version, engine, what was detected, why the last move was or was not played, and the recent trace — with no addresses and nothing identifying, so it can go straight into a bug report. It also carries the last five **worker cold starts**, timed and written to storage rather than traced, because the trace lives in the worker and a worker that was slow to start is exactly the case where it has nothing to say. |
+| **Game Review** | Its own page. Analyse a PGN, a `.pgn` file, or a player's recent Chess.com games; see [Game review](#game-review). |
 | **Restore Defaults · Export · Import** | Reset everything on the page (not the puzzle database or hotkeys); write every setting including hotkeys and tuning to JSON, and read one back. Values that no longer exist are ignored. |
 </details>
 
