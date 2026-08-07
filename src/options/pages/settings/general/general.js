@@ -75,6 +75,7 @@ class GeneralSettings extends SettingsPage {
         this.initUpdater();
         this.initCopyDiagnostics();
         this.registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
+        this.registerFormElement('puzzle_delay', 'Puzzle Move Delay (ms):', 'input', 300);
         this.registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
         this.registerFormElement('think_time', 'Simulated Think Time (ms):', 'input', 0);
         this.registerFormElement('think_variance', 'Simulated Think Variance (ms):', 'input', 0);
@@ -147,7 +148,12 @@ class GeneralSettings extends SettingsPage {
     // HOTKEY_DEFAULTS. Clicking a key captures the next keydown (Esc cancels, Backspace/Delete clears).
     // [-] value [+] beside a number field. Steps by the input's OWN `step` and clamps to its own
     // min/max, so one handler serves ms fields (25), the poll interval (50) and Elo (10) alike.
-    // Dispatches 'change' because that -- not 'input' -- is what FormElement persists on.
+    // Dispatches BOTH 'input' and 'change'. The comment here used to say 'change' was what
+    // FormElement persists on; it is not -- FormElement binds 'input' for input/range and 'change'
+    // only for checkbox/select, so every +/- button on this page moved the number on screen and
+    // saved NOTHING. Leave the page, come back, and it had reverted. Typing into the same field
+    // always worked, which is what hid it. 'change' is kept because other rows (the humanize mix)
+    // listen for it on their own inputs.
     initSteppers() {
         for (const btn of document.querySelectorAll('.set-step-btn')) {
             btn.addEventListener('click', () => {
@@ -158,6 +164,7 @@ class GeneralSettings extends SettingsPage {
                 if (input.min !== '') val = Math.max(+input.min, val);
                 if (input.max !== '') val = Math.min(+input.max, val);
                 input.value = val;
+                input.dispatchEvent(new Event('input', {bubbles: true}));
                 input.dispatchEvent(new Event('change', {bubbles: true}));
             });
         }
