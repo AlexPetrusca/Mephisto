@@ -1,0 +1,288 @@
+<!-- Game Review.
+
+     Runs entirely on this page: the PGN never leaves the browser, and the analysis runs in the
+     extension's own offscreen engine (or a native host) rather than on anyone's server.
+
+     Layout follows the settings pages -- one column of "label ....... control" rows under a plain
+     heading over a hairline -- for the options block, and then its own grid for the results, which
+     are not settings and do not read as a form.
+
+     Structural contracts, all id- or class-based:
+       - every control id is read by review.js by id and nothing else
+       - `.scrollspy` ids match the table-of-contents hrefs
+       - data-i18n / data-i18n-tip: 14 languages read these. Long explanatory paragraphs are
+         deliberately English-only and fall back through i18n's English default. -->
+<div class="row">
+    <div class="col s12 m11 offset-m1 xl10 offset-xl1">
+        <div id="form_container" class="big-section">
+
+            <!-- ============================== GAME =============================== -->
+            <section id="rv-game" class="set-sec scrollspy">
+                <h3 data-i18n="rv.game" class="set-h">Game</h3>
+
+                <div class="set-row rv-stack">
+                    <div class="set-lbl">
+                        <span data-i18n="rv.pgn" data-i18n-tip="rv.tip.pgn" class="tooltipped" data-position="right"
+                              data-tooltip="Paste a PGN, or load a .pgn file. Chess.com and Lichess exports both work,
+                                            including the clock comments -- those are where the time-usage numbers come
+                                            from. A file holding several games gives you a list to pick from. Nothing
+                                            is uploaded: the text stays in this page and the analysis runs here.">
+                            PGN <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl rv-wide">
+                        <textarea id="rv_pgn" class="rv-pgn browser-default" spellcheck="false"
+                                  placeholder="[Event &quot;Live Chess&quot;] ... 1. e4 e5 2. Nf3 ..."></textarea>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl"><span data-i18n="rv.load" >Load</span></div>
+                    <div class="set-ctl rv-btns">
+                        <button id="rv_file_btn" class="set-btn" type="button" data-i18n="rv.from_file">From file</button>
+                        <input id="rv_file" type="file" accept=".pgn,.txt,text/plain" hidden>
+                        <button id="rv_clip_btn" class="set-btn" type="button" data-i18n="rv.from_clipboard">From clipboard</button>
+                        <button id="rv_sample_btn" class="set-btn" type="button" data-i18n="rv.sample">Sample game</button>
+                        <button id="rv_clear_btn" class="set-btn" type="button" data-i18n="rv.clear">Clear</button>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="rv.chesscom" data-i18n-tip="rv.tip.chesscom" class="tooltipped" data-position="right"
+                              data-tooltip="Fetch a player's recent games from Chess.com's public API. Public data
+                                            only -- the same games anyone can see on their profile -- and no login.
+                                            The request goes out from this extension page, so the game site never
+                                            sees it.">
+                            Chess.com <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl rv-btns">
+                        <input id="rv_user" class="rv-input browser-default" type="text" placeholder="username" spellcheck="false">
+                        <button id="rv_fetch_btn" class="set-btn" type="button" data-i18n="rv.fetch">Fetch games</button>
+                    </div>
+                </div>
+
+                <div id="rv_games_row" class="set-row hidden">
+                    <div class="set-lbl"><span data-i18n="rv.which_game">Which game</span></div>
+                    <div class="set-ctl rv-wide">
+                        <select id="rv_game_select" class="rv-select browser-default"></select>
+                    </div>
+                </div>
+
+                <div id="rv_pgn_status" class="rv-status"></div>
+            </section>
+
+            <!-- ============================ ANALYSIS ============================== -->
+            <section id="rv-analysis" class="set-sec scrollspy">
+                <h3 data-i18n="rv.analysis" class="set-h">Analysis</h3>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="panel.engine" data-i18n-tip="rv.tip.engine" class="tooltipped" data-position="right"
+                              data-tooltip="Which engine judges the game. The WASM builds run inside the extension and
+                                            need nothing installed. The native entries are the full-power local
+                                            engines and are much faster, but only appear once their host is installed
+                                            and answering -- and they take a time budget only, never a depth.">
+                            Engine <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <select id="rv_engine" class="rv-select browser-default"></select>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="rv.budget" data-i18n-tip="rv.tip.budget" class="tooltipped" data-position="right"
+                              data-tooltip="How hard the engine works on EACH position. Depth is reproducible -- the
+                                            same depth is the same answer on any machine -- and is the better choice
+                                            when you want to compare two reviews. Time is the only budget a native
+                                            host accepts. A game is roughly 2 positions per move, so 80 positions at
+                                            300ms is about 25 seconds.">
+                            Budget <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl rv-btns">
+                        <select id="rv_limit_kind" class="rv-select rv-narrow browser-default">
+                            <option value="depth" data-i18n="rv.depth">Depth</option>
+                            <option value="time" data-i18n="rv.time_per_move">Time per move</option>
+                        </select>
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="rv_limit_value" type="number" min="1" max="60000" step="1">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                        <span id="rv_limit_unit" class="rv-unit"></span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="rv.lines" data-i18n-tip="rv.tip.lines" class="tooltipped" data-position="right"
+                              data-tooltip="How many alternatives the engine keeps per position. More lines let the
+                                            review say where your move ranked rather than only whether it was the
+                                            best one, and they are what the board's coloured arrows show. They also
+                                            cost search: 5 lines is meaningfully slower than 1 at the same depth.">
+                            Lines <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="rv_multipv" type="number" min="1" max="10" step="1">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl"><span data-i18n="panel.threads">Threads</span></div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="rv_threads" type="number" min="1" max="64" step="1">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl"><span data-i18n="rv.hash">Hash (MB)</span></div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-16">&minus;</button>
+                            <input id="rv_hash" type="number" min="16" max="4096" step="16">
+                            <button type="button" class="set-step-btn" data-step="16">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="rv.human_model" data-i18n-tip="rv.tip.human_model" class="tooltipped" data-position="right"
+                              data-tooltip="An optional second pass with Maia, a network trained to predict what a
+                                            HUMAN of a given rating plays -- not what is best. It answers a different
+                                            question from the engine: how expected was this move for a player at this
+                                            level. It roughly doubles the run time.">
+                            Human model <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl rv-btns">
+                        <select id="rv_human" class="rv-select browser-default">
+                            <option value="" data-i18n="rv.off">Off</option>
+                            <option value="maia">Maia 1 (band)</option>
+                            <option value="maia3">Maia 3 (rating)</option>
+                        </select>
+                        <select id="rv_maia_band" class="rv-select rv-narrow browser-default hidden">
+                            <option value="1100">1100</option>
+                            <option value="1200">1200</option>
+                            <option value="1300">1300</option>
+                            <option value="1400">1400</option>
+                            <option value="1500">1500</option>
+                            <option value="1600">1600</option>
+                            <option value="1700">1700</option>
+                            <option value="1800">1800</option>
+                            <option value="1900">1900</option>
+                        </select>
+                        <span id="rv_maia3_wrap" class="set-step hidden">
+                            <button type="button" class="set-step-btn" data-step="-100">&minus;</button>
+                            <input id="rv_maia3_elo" type="number" min="600" max="2600" step="100">
+                            <button type="button" class="set-step-btn" data-step="100">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl">
+                        <span data-i18n="rv.opening_book" data-i18n-tip="rv.tip.opening_book" class="tooltipped" data-position="right"
+                              data-tooltip="Look the opening up in the Lichess masters database, so book moves are
+                                            named rather than scored. It stops at the first position the database
+                                            does not know, so it is a handful of requests at the start of the game
+                                            and nothing after that.">
+                            Name the opening <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="rv_book" type="checkbox" class="set-cb">
+                        <label for="rv_book" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl"><span data-i18n="rv.run">Run</span></div>
+                    <div class="set-ctl rv-btns">
+                        <button id="rv_run" class="set-btn set-btn-go" type="button" data-i18n="rv.analyse">Analyse game</button>
+                        <button id="rv_stop" class="set-btn" type="button" disabled data-i18n="rv.stop">Stop</button>
+                        <button id="rv_export" class="set-btn" type="button" disabled data-i18n="rv.export">Export report</button>
+                    </div>
+                </div>
+
+                <div id="rv_progress_wrap" class="rv-progress-wrap hidden">
+                    <div class="rv-progress"><div id="rv_progress_bar"></div></div>
+                    <div id="rv_progress_text" class="rv-status"></div>
+                </div>
+            </section>
+
+            <!-- ============================= REPORT =============================== -->
+            <section id="rv-report" class="set-sec scrollspy hidden">
+                <h3 data-i18n="rv.report" class="set-h">Report</h3>
+
+                <div id="rv_header" class="rv-header"></div>
+                <div id="rv_cards" class="rv-cards"></div>
+
+                <div class="rv-graph-wrap">
+                    <div id="rv_graph"></div>
+                    <div id="rv_graph_legend" class="rv-legend"></div>
+                </div>
+
+                <div class="rv-main">
+                    <div class="rv-left">
+                        <div id="rv_board_wrap" class="rv-board-wrap">
+                            <div id="rv_board" class="rv-board"></div>
+                            <svg id="rv_arrows" class="rv-arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
+                        </div>
+                        <div class="rv-nav">
+                            <button id="rv_first" class="set-btn" type="button" title="Start">&laquo;</button>
+                            <button id="rv_prev" class="set-btn" type="button" title="Previous">&lsaquo;</button>
+                            <button id="rv_next" class="set-btn" type="button" title="Next">&rsaquo;</button>
+                            <button id="rv_last" class="set-btn" type="button" title="End">&raquo;</button>
+                            <button id="rv_flip" class="set-btn" type="button" data-i18n="rv.flip">Flip</button>
+                        </div>
+                        <div id="rv_move_detail" class="rv-detail"></div>
+                        <div id="rv_lines" class="rv-lines"></div>
+                    </div>
+                    <div class="rv-right">
+                        <div id="rv_moves" class="rv-moves"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- =========================== INDICATORS ============================= -->
+            <section id="rv-indicators" class="set-sec scrollspy hidden">
+                <h3 data-i18n="rv.indicators" class="set-h">Fair-play indicators</h3>
+                <p class="rv-caveat" data-i18n-html="rv.caveat">
+                    These are <strong>measurements, not a verdict</strong>. Every number below is
+                    something you can re-derive from the move table, and every one of them has an
+                    innocent explanation as well as a guilty one: short games, forced sequences,
+                    pre-moves and blitz all push the same numbers up. One game is never enough to
+                    conclude anything, and this page cannot see the things a real investigation uses.
+                    If you think someone is cheating, report them to the site and let it look.
+                </p>
+                <div id="rv_indicators" class="rv-indicators"></div>
+            </section>
+
+        </div>
+    </div>
+
+    <div class="col hide-on-med-and-down xl1">
+        <ul id="toc" class="section table-of-contents">
+            <li><a href="#rv-game" data-i18n="rv.game">Game</a></li>
+            <li><a href="#rv-analysis" data-i18n="rv.analysis">Analysis</a></li>
+            <li><a href="#rv-report" data-i18n="rv.report">Report</a></li>
+            <li><a href="#rv-indicators" data-i18n="rv.indicators">Fair-play indicators</a></li>
+        </ul>
+    </div>
+</div>

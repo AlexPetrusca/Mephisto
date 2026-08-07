@@ -6,6 +6,10 @@
     <link rel="stylesheet" href="/lib/materialize/material-icons.min.css">
     <link rel="stylesheet" href="/lib/materialize/materialize.min.css">
     <!-- AFTER materialize: this sheet overrides it, and on equal specificity source order decides. -->
+    <!-- The board renderer emits chessboard.js class names, so its 718 bytes of square colours
+         and notation positioning come along with it. Every selector in it is one of those
+         obfuscated names, so it touches nothing else on this page. -->
+    <link rel="stylesheet" href="/lib/chessboard/chessboard.min.css">
     <link rel="stylesheet" href="options.css"/>
     <script src="/lib/materialize/materialize.min.js"></script>
     <script src="/src/scripts/config-store.js"></script>
@@ -16,6 +20,11 @@
     <!-- Self-update. Here rather than in the worker: only a page can run showDirectoryPicker(), and
          the extension's own folder is the one thing an update has to be able to write. -->
     <script src="/src/scripts/updater.js"></script>
+    <!-- Game Review. panel-board.js is the panel's own board renderer (it only needs a container
+         and sets `self.MephistoBoard`); review-core.js is the review's arithmetic, kept apart from
+         its page so the same file can be run under node by the test ladder. -->
+    <script src="/src/scripts/panel-board.js"></script>
+    <script src="/src/options/pages/review/review-core.js"></script>
     <script src="/src/i18n/i18n.js"></script>
     <script type="module" src="framework/require.js"></script>
     <script type="module" src="options.js"></script>
@@ -54,6 +63,7 @@
                 </li>
             </ul>
         </li>
+        <li class="bold"><a id="review" href="#review" class="menu-item waves-effect waves-pink" data-i18n="nav.review">Game Review</a></li>
         <li class="bold"><a id="about" href="#about" class="menu-item waves-effect waves-pink" data-i18n="nav.about">About</a></li>
         <li class="bold"><a id="disclaimers" href="#disclaimers" class="menu-item waves-effect waves-pink" data-i18n="nav.disclaimers">Disclaimers</a></li>
     </ul>
