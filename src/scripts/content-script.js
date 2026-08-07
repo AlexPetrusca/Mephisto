@@ -618,7 +618,13 @@ async function toggleOverlay() {
     const overlayRoot = getOverlayRoot();
     let assets;
     try {
-        assets = await chrome.runtime.sendMessage({getPanelAssets: true});
+        // Tell the worker which board theme this panel will use, so it inlines that texture and
+        // not the other two. 784 KB of the old payload was base64 for themes that were not selected.
+        // MephistoConfig, not raw localStorage: it is a content script loaded ahead of this one and
+        // it reads chrome.storage, which is where the setting actually lives.
+        let boardTheme = null;
+        try { boardTheme = JSON.parse(MephistoConfig.get('board')) || null; } catch (e) { /* unset */ }
+        assets = await chrome.runtime.sendMessage({getPanelAssets: {board: boardTheme}});
     } catch (e) {
         console.warn('Mephisto: could not load panel assets', e);
         return;

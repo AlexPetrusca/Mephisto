@@ -28,7 +28,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // shipping the bytes means the page never sees a chrome-extension:// URL -- no <link>/<img> to read
   // and, crucially, nothing recognizable in the page's Resource Timing (issue #35 §3.4).
   if (msg.getPanelAssets) {
-    buildPanelAssets().then(sendResponse).catch(e => sendResponse({error: String(e)}));
+    buildPanelAssets(msg.getPanelAssets?.board).then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true;
   }
   // Opening-explorer lookup. Deliberately done HERE, in the service worker, and never in the panel:
@@ -504,8 +504,14 @@ async function dataUri(path, mime) {
   return `data:${mime};base64,${btoa(bin)}`;
 }
 
-async function buildPanelAssets() {
-  if (!panelAssetCache) {
+// `board` is the theme the panel is about to use. Only three themes have a texture (wood, marble,
+// newspaper); the other nine are flat colours. Inlining all three put 784 KB of base64 into a 973 KB
+// payload -- 80% of it for images that cannot all be on screen at once, shipped over sendMessage and
+// parsed into the shadow root on EVERY open. Inline the one in use, or none.
+async function buildPanelAssets(board) {
+  const want = TEXTURED_THEMES.includes(board) ? board : null;
+  if (panelAssetCache && panelAssetCache.board === want) return panelAssetCache.assets;
+  {
     const rawHtml = await text('src/popup/popup.html');
     // body markup only -- the scripts in <head> already run as content scripts
     const body = rawHtml.replace(/[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*/i, '');
@@ -523,14 +529,25 @@ async function buildPanelAssets() {
     // Inline every url() asset (the wood/marble/newspaper board textures). Injected into the page's
     // shadow root, a path like /res/chessboards/wood.jpeg would resolve against the SITE (404), and a
     // chrome-extension:// URL would leak our id via Resource Timing. So ship the bytes.
-    css = await inlineCssUrls(css);
-    panelAssetCache = {html: body, css};
+    css = await inlineCssUrls(css, want);
+    panelAssetCache = {board: want, assets: {html: body, css}};
   }
-  return panelAssetCache;
+  return panelAssetCache.assets;
 }
 
 // rewrite url(/path.ext) -> url(data:...;base64,...) for every extension-local asset in the CSS
-async function inlineCssUrls(css) {
+const TEXTURED_THEMES = ['wood', 'marble', 'newspaper'];
+
+// `keep` is the one board texture worth carrying. Every other /res/chessboards/*.jpeg reference is
+// left as-is: the rule it belongs to is for a theme that is not selected, so the browser never
+// resolves the url and never notices that it points at nothing reachable from the page.
+async function inlineCssUrls(css, keep) {
+  // NEUTRALISE the textures we are not carrying, rather than leaving their url() in place. Left
+  // alone, a rule like url(/res/chessboards/wood.jpeg) resolves against THE SITE if it is ever
+  // applied -- a 404 the page can see in its Resource Timing, which is precisely the footprint this
+  // whole asset-shipping design exists to avoid. `none` can never resolve to anything.
+  css = css.replace(/url\(\s*["']?(\/res\/chessboards\/[^)"']+)["']?\s*\)/g,
+    (m, ref) => (keep && ref.includes(`/${keep}.`)) ? m : 'none');
   const refs = [...new Set([...css.matchAll(/url\(\s*["']?(\/[^)"']+)["']?\s*\)/g)].map(m => m[1]))];
   for (const ref of refs) {
     const ext = ref.split('.').pop().toLowerCase();
