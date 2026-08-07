@@ -1,16 +1,32 @@
+// STARTUP TIMING, and it has to be persisted rather than traced. The trace ring below lives in this
+// worker's memory, so when the WORKER is the thing that was asleep -- reported as ten seconds of
+// nothing after a browser restart -- the ring is empty by definition and explains nothing. These
+// marks are written to storage instead, so the next Copy Diagnostics shows where a cold start
+// actually spent its time even though the worker that spent it is long gone.
+const WORKER_T0 = Date.now();
+// `+0ms` on the first mark is not "instant": WORKER_T0 is the first line of this file, so everything
+// Chrome does BEFORE that (waking the worker, fetching and parsing this script) is invisible here
+// and is exactly where a slow cold start can also hide.
+
+const startupMarks = [];
+function mark(what) { startupMarks.push(`${what} +${Date.now() - WORKER_T0}ms`); }
+
 // The puzzle database lives in the EXTENSION's IndexedDB, and this worker is the only context the
 // panel can reach that has it: the panel runs in the page's isolated world, whose indexedDB is the
 // SITE's. Same file the options page uses for the import, so the key format cannot drift apart.
 importScripts('/src/scripts/puzzle-db.js');
+mark('puzzle-db');
 // The language list + the locale loader, shared with the options page and the panel so there is one
 // definition of which codes exist -- which is also what makes the fetch below safe, since `lang`
 // arrives from a setting.
 importScripts('/src/i18n/i18n.js');
+mark('i18n');
 // The self-updater, for the two questions the PANEL cannot answer for itself: is auto-updating set
 // up, and start it. The install proper never runs here -- it needs showDirectoryPicker, which only a
 // page has. Imported rather than reimplemented so the origin list and the handle store have one
 // definition (see updater.js).
 importScripts('/src/scripts/updater.js');
+mark('updater');
 
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // the content-script asks for its own tab id so its popup iframe can talk to ONLY this tab
@@ -271,6 +287,19 @@ function isNewer(candidate, current) {
   return false;
 }
 
+// Keep the last few cold starts. Five is enough to tell a one-off from a pattern and small enough
+// that nobody has to think about the storage it uses.
+const STARTUP_KEEP = 5;
+
+async function saveStartup() {
+  mark('ready');
+  try {
+    const {mephisto_startup: prev = []} = await chrome.storage.local.get('mephisto_startup');
+    const rec = `${new Date(WORKER_T0).toISOString().slice(11, 19)}  ${startupMarks.join('  ')}`;
+    await chrome.storage.local.set({mephisto_startup: [...prev, rec].slice(-STARTUP_KEEP)});
+  } catch (e) { /* storage full or the worker died first -- never break startup for a measurement */ }
+}
+
 // --- Diagnostics ---------------------------------------------------------------------------------
 // A ring of the most recent traces, so "it did nothing" can be answered from evidence instead of by
 // asking someone to reproduce it with a console open. 200 lines is a few minutes of real play and a
@@ -285,6 +314,7 @@ async function buildDiagnostics(ctx = {}) {
   const m = chrome.runtime.getManifest();
   const assets = await checkBundledAssets();
   const perm = await chrome.permissions.getAll().catch(() => ({origins: []}));
+  const {mephisto_startup: starts = []} = await chrome.storage.local.get('mephisto_startup').catch(() => ({}));
   const lines = [
     `Mephisto ${m.version}  (${m.name})`,
     `chrome    ${(navigator.userAgent.match(/Chrome\/[\d.]+/) || ['?'])[0]}  ${navigator.platform}`,
@@ -297,6 +327,9 @@ async function buildDiagnostics(ctx = {}) {
     ctx.reason ? `reason    ${ctx.reason}` : null,
     ctx.toggles ? `toggles   ${ctx.toggles}` : null,
     ctx.fen ? `position  ${ctx.fen}` : null,
+    '',
+    '--- worker cold starts (most recent last) ---',
+    ...(starts.length ? starts : ['(none recorded)']),
     '',
     `--- last ${traceRing.length} trace lines ---`,
     ...traceRing,
@@ -674,7 +707,8 @@ async function ensureOffscreen() {
     console.log('[Mephisto] ensureOffscreen:', String(e));
   }
 }
-ensureOffscreen();
+// Every cold start pays for this, so it is worth knowing what it costs before assuming it is free.
+ensureOffscreen().then(() => mark('offscreen')).finally(saveStartup);
 
 // UI mode toggle (Settings -> General). Two ways to show the panel:
 //   'floating' (default) -- an in-page overlay injected on toolbar click. Richer UX, but the panel

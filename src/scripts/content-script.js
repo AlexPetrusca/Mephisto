@@ -647,6 +647,7 @@ async function toggleOverlay() {
         // not the other two. 784 KB of the old payload was base64 for themes that were not selected.
         // MephistoConfig, not raw localStorage: it is a content script loaded ahead of this one and
         // it reads chrome.storage, which is where the setting actually lives.
+        const assetsAsked = Date.now();
         let boardTheme = null;
         try { boardTheme = JSON.parse(MephistoConfig.get('board')) || null; } catch (e) { /* unset */ }
         // Time-boxed. sendMessage to a worker that never answers hangs for as long as Chrome feels
@@ -657,6 +658,9 @@ async function toggleOverlay() {
         ]);
     } catch (e) {
         clearTimeout(slow);
+        // How long the worker actually took to answer, traced ungated so it reaches a bug report.
+        // This is the number the "waiting for the background worker" message is about.
+        bgLogAlways('panel assets', {ms: Date.now() - assetsAsked});
         bgLogAlways('panel assets failed', {why: String(e && e.message || e)});
         placeholder.textContent = 'Mephisto could not start: ' + (e && e.message || e) +
             '. Reload this page, or reload the extension on chrome://extensions.';
