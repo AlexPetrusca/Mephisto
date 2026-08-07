@@ -1415,16 +1415,18 @@ function syncLimitUi() {
     updateEngineOptions();
 }
 
+// A native engine is disabled for ONE reason only: its host is not installed. It used to be greyed
+// out in depth mode as well, because the host took a time budget and nothing else -- it takes a
+// depth now, and an old host that does not understand the field falls back to the time cap, so
+// there is no longer a combination that cannot run.
 function updateEngineOptions() {
     const sel = $('rv_engine');
     if (!sel) return;
-    const depthMode = $('rv_limit_kind').value === 'depth';
     const current = sel.value;
     sel.innerHTML = ENGINES.map(e => {
         const missing = e.kind === 'native' && nativeAvailable && !nativeAvailable[e.id];
-        const noDepth = e.kind === 'native' && depthMode;
-        const why = missing ? ' — host not installed' : (noDepth ? ' — needs a time budget' : '');
-        return `<option value="${e.id}"${missing || noDepth ? ' disabled' : ''}>${esc(e.label + why)}</option>`;
+        return `<option value="${e.id}"${missing ? ' disabled' : ''}>`
+            + `${esc(e.label + (missing ? ' — host not installed' : ''))}</option>`;
     }).join('');
     const opt = [...sel.options].find(o => o.value === current && !o.disabled);
     sel.value = opt ? current : ([...sel.options].find(o => !o.disabled)?.value || ENGINES[0].id);
