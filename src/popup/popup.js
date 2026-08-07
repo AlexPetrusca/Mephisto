@@ -309,6 +309,7 @@ async function initPanel(root, tabId) {
         move_variance: (moveVariance != null) ? moveVariance : 400,
         humanize: JSON.parse(MephistoConfig.get('humanize')) || false,
         clock_mode: JSON.parse(MephistoConfig.get('clock_mode')) || false,
+        clock_pace: JSON.parse(MephistoConfig.get('clock_pace')) || false,
         // Diagnostics, not play: forces the worker trace on even while the tab is focused. The
         // gate that suppresses it by default is the right default and the wrong thing to have to
         // guess at, so it gets a switch.
@@ -782,7 +783,7 @@ function init_quick_settings() {
                              ['qs_evalbar', 'eval_bar'], ['qs_evalhist', 'eval_history'],
                              ['qs_tablebase', 'tablebase'],
                              ['qs_humanize', 'humanize'],
-                             ['qs_clock', 'clock_mode'], ['qs_mirror', 'mirror_mode'],
+                             ['qs_clock', 'clock_mode'], ['qs_clockpace', 'clock_pace'], ['qs_mirror', 'mirror_mode'],
                              ['qs_manual', 'manual_mode'],
                              ['qs_explorer', 'explorer'], ['qs_book', 'book_play']]) {
         const elem = PANEL_ROOT.getElementById(id);
@@ -4182,11 +4183,49 @@ function clock_aware() {
 // per-move time budget in ms from the scraped clock, or null when no clock-aware mode is on
 // (or the clock is unreadable). ~T/30 + 60% of the increment, never more than T/8.
 function clock_budget_ms() {
-    if (!clock_aware() || !last_clocks || last_clocks.mine == null) return null;
+    if (!clock_aware()) return null;
+    return clock_move_budget_ms();
+}
+
+// The same arithmetic WITHOUT the Clock Mode gate. Split out so a second feature can read the clock
+// without switching Clock Mode on -- turning that toggle on has always meant "pace the SEARCH to the
+// clock", and quietly making it mean something else as well would change what it does for everyone
+// already using it.
+function clock_move_budget_ms() {
+    if (!last_clocks || last_clocks.mine == null) return null;
     const elapsed = (Date.now() - last_clocks.at) / 1000; // the scrape is a moment old
     const T = Math.max(1, last_clocks.mine - elapsed);
     const I = last_clocks.increment || 0;
     return Math.max(120, Math.min((T / 30 + 0.6 * I) * 1000, T * 1000 / 8));
+}
+
+// --- Clock-paced move timing (opt-in, `clock_pace`) ----------------------------------------------
+// Clock Mode paces the SEARCH. Nothing ever paced the SIMULATED HUMAN DELAY -- the think pause and
+// the cursor travel -- so in a 10-second scramble the extension still spent a fixed 400ms moving the
+// mouse, which is exactly when you cannot afford it.
+//
+// This scales those, and only those, and only when switched on. With clock to spare your settings
+// are used EXACTLY as configured: it never makes a move slower, only shorter, and never below a
+// floor where the click stops looking like a hand moved it.
+const CLOCK_PACE_SHARE = 0.35;    // of the per-move budget, spent on looking human
+const CLOCK_PACE_FLOOR_MS = 150;  // a move still has to travel and land
+
+function clock_pace_timing(t) {
+    if (!config.clock_pace) return t;
+    const budget = clock_move_budget_ms();
+    if (budget == null) return t;                  // no readable clock -> your settings, untouched
+    // Mean rather than max: variance is symmetric, so the average move costs half of it.
+    const want = t.think_time + t.think_variance / 2 + t.move_time + t.move_variance / 2;
+    const cap = Math.max(CLOCK_PACE_FLOOR_MS, budget * CLOCK_PACE_SHARE);
+    if (!(want > cap)) return t;                   // enough clock: leave everything alone
+    const k = cap / want;
+    return {
+        think_time: Math.round(t.think_time * k),
+        think_variance: Math.round(t.think_variance * k),
+        // the move itself keeps the floor; the pause before it is what gives way first
+        move_time: Math.max(CLOCK_PACE_FLOOR_MS, Math.round(t.move_time * k)),
+        move_variance: Math.round(t.move_variance * k),
+    };
 }
 
 // time reserved (ms) to actually click the move + engine stop/flush overhead, so the SEARCH never
@@ -4395,12 +4434,15 @@ function fresh_timing() {
         const v = JSON.parse(MephistoConfig.get(key));
         return (v != null) ? v : fallback;
     };
-    return {
+    // Read fresh from storage, THEN paced to the clock if that is switched on -- so editing the
+    // sliders mid-game still applies to the very next move, and the pacing works from what you
+    // actually set rather than from a snapshot.
+    return clock_pace_timing({
         think_time: num('think_time', config.think_time),
         think_variance: num('think_variance', config.think_variance),
         move_time: num('move_time', config.move_time),
         move_variance: num('move_variance', config.move_variance),
-    };
+    });
 }
 
 // ---- Self-test: a one-tap health check shown in the status line for a few seconds. Scrape = a
@@ -4508,7 +4550,7 @@ function manual_play() {
 // its change event, so they reuse ALL the existing wiring (config write, push, engine re-init).
 const HOTKEY_TOGGLES = { // action -> the quick-settings checkbox it flips
     autoplay: 'qs_autoplay', premove: 'qs_premove', help_mode: 'qs_help', humanize: 'qs_humanize',
-    clock_mode: 'qs_clock', mirror_mode: 'qs_mirror', manual_mode: 'qs_manual',
+    clock_mode: 'qs_clock', clock_pace: 'qs_clockpace', mirror_mode: 'qs_mirror', manual_mode: 'qs_manual',
     eval_bar: 'qs_evalbar', eval_history: 'qs_evalhist', tablebase: 'qs_tablebase', puzzle_mode: 'qs_puzzle',
     explorer: 'qs_explorer', book_play: 'qs_book',
 };
@@ -5268,7 +5310,7 @@ const LIVE_CONFIG_KEYS = [
     'computer_evaluation', 'multiple_lines', 'compute_time', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
-    'verbose_log', 'fourpc_mode',
+    'verbose_log', 'fourpc_mode', 'clock_pace',
 ];
 
 function watch_config_changes() {

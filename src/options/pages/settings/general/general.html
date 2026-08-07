@@ -575,6 +575,26 @@
 
                 <div class="set-row set-toggle">
                     <div class="set-lbl">
+                        <span data-i18n="panel.pace_to_clock">Pace to Clock</span>
+                        <span class="set-tip tooltipped" data-position="left" data-i18n-tip="panel.tip.pace_to_clock"
+                              data-tooltip="Shrink the SIMULATED delay (the think pause and the cursor travel) when the
+                                            clock gets short. Clock Mode paces the engine's search; this paces the
+                                            human-looking part, which is what actually costs you time in a scramble.
+                                            With clock to spare your settings are used exactly as they are: it only ever
+                                            makes a move shorter, never slower, and never below the point where the click
+                                            stops looking like a hand moved it."><i class="material-icons info-tooltip">info</i></span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="clock_pace_checkbox" type="checkbox" class="set-cb">
+                        <label for="clock_pace_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl">
                         <span data-i18n="panel.mirror_time">Mirror Time</span>
                         <span class="set-tip tooltipped" data-position="left" data-i18n-tip="set.tip.pace_to_the_opponent_instead"
                               data-tooltip="Pace to the opponent instead: spend what they spent on their last

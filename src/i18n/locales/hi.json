@@ -259,5 +259,7 @@
   "panel.updated_to": "v{v} पर अपडेट हुआ",
   "panel.updated_to_with_note": "v{v} पर अपडेट हुआ — {note}",
   "set.copy_diagnostics": "डायग्नोस्टिक्स कॉपी करें",
-  "panel.diagnostics_copied": "डायग्नोस्टिक्स क्लिपबोर्ड पर कॉपी हो गया।"
+  "panel.diagnostics_copied": "डायग्नोस्टिक्स क्लिपबोर्ड पर कॉपी हो गया।",
+  "panel.pace_to_clock": "घड़ी के अनुसार",
+  "panel.tip.pace_to_clock": "Shrink the SIMULATED delay (the think pause and the cursor travel) when the clock gets short. Clock Mode paces the engine's search; this paces the human-looking part, which is what actually costs you time in a scramble. With clock to spare your settings are used exactly as they are: it only ever makes a move shorter, never slower, and never below the point where the click stops looking like a hand moved it."
 }

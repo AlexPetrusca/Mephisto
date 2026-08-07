@@ -58,6 +58,7 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('help_mode', 'Help Mode:', 'checkbox', false);
         this.registerFormElement('humanize', 'Humanize:', 'checkbox', false);
         this.registerFormElement('clock_mode', 'Clock Mode:', 'checkbox', false);
+        this.registerFormElement('clock_pace', 'Pace to Clock:', 'checkbox', false);
         this.registerFormElement('mirror_mode', 'Mirror Time:', 'checkbox', false);
         this.registerFormElement('manual_mode', 'Manual Mode:', 'checkbox', false);
         this.registerFormElement('opp_alert', 'Opponent Mistake Alert:', 'checkbox', false);
@@ -166,7 +167,7 @@ class GeneralSettings extends SettingsPage {
         const DEFAULTS = MephistoConfig.HOTKEY_DEFAULTS; // shared source (config-store.js)
         const LABELS = {
             manual_play: 'Play move (Manual Mode)', autoplay: 'Toggle Autoplay', premove: 'Toggle Premove',
-            help_mode: 'Toggle Help Mode', humanize: 'Toggle Humanize', clock_mode: 'Toggle Clock Mode',
+            help_mode: 'Toggle Help Mode', humanize: 'Toggle Humanize', clock_mode: 'Toggle Clock Mode', clock_pace: 'Toggle Pace to Clock',
             mirror_mode: 'Toggle Mirror Time', manual_mode: 'Toggle Manual Mode', eval_bar: 'Toggle Eval Bar',
             eval_history: 'Toggle Eval History', tablebase: 'Toggle Endgame Tablebase',
             puzzle_mode: 'Toggle Puzzle Mode', explorer: 'Toggle Opening Explorer',
@@ -174,7 +175,7 @@ class GeneralSettings extends SettingsPage {
             redetect: 'Re-detect game',
         };
         const ORDER = ['manual_play', 'manual_mode', 'autoplay', 'premove', 'explorer', 'book_play',
-            'help_mode', 'humanize', 'clock_mode', 'mirror_mode', 'eval_bar', 'eval_history', 'tablebase', 'puzzle_mode',
+            'help_mode', 'humanize', 'clock_mode', 'clock_pace', 'mirror_mode', 'eval_bar', 'eval_history', 'tablebase', 'puzzle_mode',
             'copy_fen', 'copy_pgn', 'copy_diagnostics', 'redetect'];
         // same normalization as the content-script listener, so what we store matches what it compares
         const keyString = (e) => {

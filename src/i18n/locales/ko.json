@@ -259,5 +259,7 @@
   "panel.updated_to": "v{v}(으)로 업데이트됨",
   "panel.updated_to_with_note": "v{v}(으)로 업데이트됨 — {note}",
   "set.copy_diagnostics": "진단 복사",
-  "panel.diagnostics_copied": "진단을 클립보드에 복사했습니다."
+  "panel.diagnostics_copied": "진단을 클립보드에 복사했습니다.",
+  "panel.pace_to_clock": "시계에 맞추기",
+  "panel.tip.pace_to_clock": "Shrink the SIMULATED delay (the think pause and the cursor travel) when the clock gets short. Clock Mode paces the engine's search; this paces the human-looking part, which is what actually costs you time in a scramble. With clock to spare your settings are used exactly as they are: it only ever makes a move shorter, never slower, and never below the point where the click stops looking like a hand moved it."
 }

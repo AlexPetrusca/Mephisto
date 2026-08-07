@@ -259,5 +259,7 @@
   "panel.updated_to": "Atualizado para v{v}",
   "panel.updated_to_with_note": "Atualizado para v{v} — {note}",
   "set.copy_diagnostics": "Copiar diagnóstico",
-  "panel.diagnostics_copied": "Diagnóstico copiado para a área de transferência."
+  "panel.diagnostics_copied": "Diagnóstico copiado para a área de transferência.",
+  "panel.pace_to_clock": "Ajustar ao relógio",
+  "panel.tip.pace_to_clock": "Shrink the SIMULATED delay (the think pause and the cursor travel) when the clock gets short. Clock Mode paces the engine's search; this paces the human-looking part, which is what actually costs you time in a scramble. With clock to spare your settings are used exactly as they are: it only ever makes a move shorter, never slower, and never below the point where the click stops looking like a hand moved it."
 }

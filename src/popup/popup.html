@@ -142,6 +142,11 @@
         <label for="qs_mirror" data-i18n="panel.mirror_time" data-i18n-tip="panel.tip.pace_to_the_opponent_instead" class="qs-label tooltipped" data-position="left"
               data-tooltip="Pace to the opponent instead: spend what they spent on their last move, minus 10%, staying just ahead on the clock (30% extra haste when behind). Uses the Clock Mode budget for the first move / when their spend is unknown. Recaptures and forced moves stay instant. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Mirror Time</label>
     </div>
+    <div class="qs-row qs-toggle">
+        <input id="qs_clockpace" type="checkbox" class="qs-cb">
+        <label for="qs_clockpace" data-i18n="panel.pace_to_clock" data-i18n-tip="panel.tip.pace_to_clock" class="qs-label tooltipped" data-position="left"
+              data-tooltip="Shrink the SIMULATED delay (the think pause and the cursor travel below) when the clock gets short. Clock Mode paces the engine's search; this paces the human-looking part, which is what actually costs you time in a scramble. With clock to spare your settings are used exactly as they are: it only ever makes a move shorter, never slower, and never below the point where the click stops looking like a hand moved it.">Pace to Clock</label>
+    </div>
     <div class="qs-row qs-nums">
         <span data-i18n="panel.move_time_var_ms" class="qs-label">Move Time ± Var (ms)</span>
         <div class="qs-stepper">
