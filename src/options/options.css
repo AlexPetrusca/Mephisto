@@ -173,6 +173,10 @@ footer { font-size: 12.5px; }
 
 /* A section is a heading over a rule, then rows. No cards, no boxes inside boxes. */
 .set-sec { margin: 0 0 34px; }
+/* The page title sits directly above the first section and `#title { padding-bottom: 0 }` left the
+   two touching -- "General Settings" with "Engine" and its rule immediately beneath. Every later
+   section gets 34px of air from the one before it; the first had none from the title. */
+.set-sec:first-child { margin-top: 18px; }
 
 h3.set-h {
     font-size: 12px;

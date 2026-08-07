@@ -4661,6 +4661,49 @@ function request_automove_4pc(move) {
                         deselect: null, verify: false, manual: false});
 }
 
+// One arrow spec per engine line, best first, in the 8x8 board's palette. Falls back to the single
+// best move when the host returned no line array at all (MultiPV 1, or an older host).
+function fourpc_arrow_specs(lines, best) {
+    const seen = new Set();
+    const specs = (lines || [])
+        .map(l => l && (l.move || (l.pv && l.pv[0])))
+        .filter(mv => mv && !seen.has(mv) && seen.add(mv))
+        .slice(0, effective_multipv())
+        .map((mv, i) => ({move: mv, color: line_color(i), width: i === 0 ? 0.22 : 0.14}));
+    return specs.length ? specs : (best ? [{move: best, color: line_color(0), width: 0.22}] : []);
+}
+
+// The list under the board, coloured to match the arrows so it reads as their legend -- the same
+// thing render_alt_lines does for 8x8. Separate because there is no chess.js for a 14x14 board and
+// therefore no SAN: four-player moves are shown as the coordinates the rest of this lane uses.
+// `flip` normalises the score to YOUR team, exactly as the readout does, so a line does not read
+// +3 and -3 on alternate plies.
+function render_alt_lines_4pc(lines, flip) {
+    const panel = PANEL_ROOT.getElementById('alt-lines');
+    if (!panel) return;
+    if (effective_multipv() <= 1 || !lines || lines.length < 2) {
+        panel.style.display = 'none';
+        panel.innerHTML = '';
+        return;
+    }
+    panel.style.display = '';
+    const rows = [];
+    for (let i = 0; i < Math.min(lines.length, effective_multipv()); i++) {
+        const line = lines[i];
+        if (!line) continue;
+        const moves = line.pv && line.pv.length ? line.pv : (line.move ? [line.move] : []);
+        if (!moves.length) continue;
+        const evalTxt = ('mate' in line) ? `#${flip * line.mate}`
+                                         : (flip * (line.score || 0) / 100).toFixed(2);
+        const head = moves[0];
+        const cont = moves.slice(1, 7).join(' ');
+        rows.push(`<div class="alt-line"><span class="alt-eval" style="color:${line_color(i)}">${evalTxt}</span> ` +
+            `<span class="alt-moves">${head}</span>` +
+            (cont ? ` <span class="alt-cont">${cont}</span>` : '') + `</div>`);
+    }
+    panel.innerHTML = rows.join('');
+}
+
 // The eval bar in 4PC. Two teams, not two colours: R+Y against B+G (RULES.md 2), so the bar is Team
 // Red against Team Blue and YOUR team always grows from the bottom -- the same "bottom belongs to
 // you" convention the two-player bar uses for board orientation.
@@ -4825,24 +4868,22 @@ function on_new_pos_4pc(payload) {
                 update_evaluation(i18n('panel.msg.score_at_depth', 'Score: {score} at depth {depth}',
                     {score: (flip * line.score / 100).toFixed(2), depth: line.depth ?? 0}));
             }
-            try { board4pc?.highlight(best); } catch (e) { /* board swapped away mid-search */ }
             if (line) update_eval_bar_4pc(line, flip, ourSeat);
             // Help Mode draws the move instead of playing it, exactly as on an 8x8 board. The
             // renderer understands 14x14 now, so this is just a matter of asking for it.
-            // One arrow per line, thickest and most saturated for the best -- the same
-            // convention and the same palette the 8x8 board uses, so a four-player board reads the
-            // same way. Deduped on the move: Tetrarch can return the same first move in two lines
-            // when they transpose, and two arrows on one square is just a darker arrow.
-            if (config.help_mode) {
-                const seen = new Set();
-                const arrows = (res.lines || [])
-                    .map(l => l && (l.move || (l.pv && l.pv[0])))
-                    .filter(mv => mv && !seen.has(mv) && seen.add(mv))
-                    .slice(0, effective_multipv())
-                    .map((mv, i) => ({move: mv, color: line_color(i), width: i === 0 ? 0.22 : 0.14}));
-                request_draw_hint(arrows.length ? arrows
-                    : [{move: best, color: line_color(0), width: 0.22}]);
-            } else request_clear_hint();
+            // One arrow per line, thickest and most saturated for the best -- the same convention
+            // and the same palette the 8x8 board uses, so a four-player board reads the same way.
+            // Deduped on the move: Tetrarch can return the same first move in two lines when they
+            // transpose, and two arrows on one square is just a darker arrow.
+            //
+            // Built ONCE and used three times: the page board, the panel's own 14x14 board, and the
+            // eval list under it. They were three different amounts of information about the same
+            // search, which is what "the mini board does not show them" was.
+            const arrows = fourpc_arrow_specs(res.lines, best);
+            try { board4pc?.highlight(arrows); } catch (e) { /* board swapped away mid-search */ }
+            render_alt_lines_4pc(res.lines, flip);
+            if (config.help_mode) request_draw_hint(arrows);
+            else request_clear_hint();
             if (ours && config.autoplay && !config.help_mode) request_automove_4pc(best);
             else if (config.autoplay) {
                 // "Autoplay does nothing in four-player chess" has been reported more than once, and

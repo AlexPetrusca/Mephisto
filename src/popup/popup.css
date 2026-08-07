@@ -648,6 +648,17 @@ html, body {
 }
 #quick-settings #qs_variant_detect:hover { background: #f0f0f0; }
 
+/* Label left, button right, on ONE line. A plain .qs-row carries no layout of its own -- the
+   toggle rows bring their own flex and the select rows are laid out by the full-width select -- so
+   this one wrapped into two cramped lines with the button tucked under the label. */
+#quick-settings .qs-row:has(#qs_copydiag) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 28px;
+    margin-top: 10px;
+}
 /* Same pill as the detect button beside it, just wide enough for a word. */
 #quick-settings #qs_copydiag {
     flex: 0 0 auto;

@@ -299,7 +299,7 @@
         cfg = cfg || {};
         const host = (typeof elOrId === 'string') ? (cfg.root || document).getElementById(elOrId) : elOrId;
         let pos = {}, seat = 'r';                      // `seat` is whoever sits at the BOTTOM
-        let hl = null;                                 // {from, to}: the move to draw an arrow for
+        let hl = [];   // [{from, to, color, width}] -- one per engine line, best first
         let last = null;                               // the FEN4 on screen, so a re-scrape is a no-op
         const SQ4 = /^([a-n](?:1[0-4]|[1-9]))([a-n](?:1[0-4]|[1-9]))/;
 
@@ -342,30 +342,34 @@
             // The suggested move, as an arrow. The page-side arrows the two-player panel relies on are
             // drawn over an 8x8 board and know nothing about a 14x14 one, so without this the move is
             // text only -- and `a8f13` is not something you can find on a 196-square board at a glance.
-            const a = hl && centre[hl.from], b2 = hl && centre[hl.to];
-            if (a && b2) {
+            // Drawn back to front, so the best line's arrow sits on top of the alternatives.
+            const drawable = hl.map(h => ({h, a: centre[h.from], b: centre[h.to]}))
+                               .filter(x => x.a && x.b);
+            if (drawable.length) {
                 const NS = 'http://www.w3.org/2000/svg';
                 const svg = document.createElementNS(NS, 'svg');
                 svg.setAttribute('width', sq * 14);
                 svg.setAttribute('height', sq * 14);
                 svg.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none';
-                const ang = Math.atan2(b2.y - a.y, b2.x - a.x);
-                const head = Math.max(6, sq * 0.42);
-                // stop the shaft short of the head so the two do not overlap into a blob
-                const tx = b2.x - Math.cos(ang) * head, ty = b2.y - Math.sin(ang) * head;
-                const line = document.createElementNS(NS, 'line');
-                line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
-                line.setAttribute('x2', tx); line.setAttribute('y2', ty);
-                line.setAttribute('stroke', '#14b8a6');
-                line.setAttribute('stroke-width', Math.max(3, sq * 0.2));
-                line.setAttribute('stroke-linecap', 'round');
-                line.setAttribute('opacity', '0.9');
-                const tip = document.createElementNS(NS, 'polygon');
-                const wing = (k) => `${b2.x - Math.cos(ang - k) * head},${b2.y - Math.sin(ang - k) * head}`;
-                tip.setAttribute('points', `${b2.x},${b2.y} ${wing(0.5)} ${wing(-0.5)}`);
-                tip.setAttribute('fill', '#14b8a6');
-                tip.setAttribute('opacity', '0.9');
-                svg.appendChild(line); svg.appendChild(tip);
+                for (const {h, a, b: b2} of drawable.slice().reverse()) {
+                    const ang = Math.atan2(b2.y - a.y, b2.x - a.x);
+                    const head = Math.max(6, sq * 0.42);
+                    // stop the shaft short of the head so the two do not overlap into a blob
+                    const tx = b2.x - Math.cos(ang) * head, ty = b2.y - Math.sin(ang) * head;
+                    const line = document.createElementNS(NS, 'line');
+                    line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+                    line.setAttribute('x2', tx); line.setAttribute('y2', ty);
+                    line.setAttribute('stroke', h.color);
+                    line.setAttribute('stroke-width', Math.max(2, sq * h.width));
+                    line.setAttribute('stroke-linecap', 'round');
+                    line.setAttribute('opacity', '0.9');
+                    const tip = document.createElementNS(NS, 'polygon');
+                    const wing = (k) => `${b2.x - Math.cos(ang - k) * head},${b2.y - Math.sin(ang - k) * head}`;
+                    tip.setAttribute('points', `${b2.x},${b2.y} ${wing(0.5)} ${wing(-0.5)}`);
+                    tip.setAttribute('fill', h.color);
+                    tip.setAttribute('opacity', '0.9');
+                    svg.appendChild(line); svg.appendChild(tip);
+                }
                 board.appendChild(svg);
             }
             host.innerHTML = '';
@@ -381,14 +385,25 @@
             // the arrow a second after it was drawn.
             position(fen4) {
                 if (fen4 === last) return;
-                last = fen4; pos = fen4ToObj(fen4); hl = null; render();
+                last = fen4; pos = fen4ToObj(fen4); hl = []; render();
             },
             orientation(s) {
                 const next = (s || 'r').toLowerCase();
                 if (next === seat) return;
                 seat = next; render();
             },
-            highlight(move) { const m = SQ4.exec(move || ''); hl = m ? {from: m[1], to: m[2]} : null; render(); },
+            // A move, or a list of them: [{move, color, width}]. The panel board is the same
+            // answer as the page board, so it shows the same arrows -- one per engine line rather
+            // than only the best, which is what Multiple Lines asks for everywhere else.
+            highlight(moves) {
+                const list = Array.isArray(moves) ? moves : (moves ? [{move: moves}] : []);
+                hl = list.map(x => {
+                    const m = SQ4.exec((typeof x === 'string' ? x : x && x.move) || '');
+                    return m ? {from: m[1], to: m[2],
+                                color: (x && x.color) || '#14b8a6', width: (x && x.width) || 0.2} : null;
+                }).filter(Boolean);
+                render();
+            },
             resize() { render(); },
         };
     }
