@@ -76,6 +76,8 @@ class GeneralSettings extends SettingsPage {
         this.initCopyDiagnostics();
         this.registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
         this.registerFormElement('puzzle_delay', 'Puzzle Move Delay (ms):', 'input', 300);
+        this.registerFormElement('puzzle_auto_next', 'Auto-Next Puzzle:', 'checkbox', false);
+        this.registerFormElement('puzzle_next_delay', 'Auto-Next Delay (ms):', 'input', 300);
         this.registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
         this.registerFormElement('think_time', 'Simulated Think Time (ms):', 'input', 0);
         this.registerFormElement('think_variance', 'Simulated Think Variance (ms):', 'input', 0);

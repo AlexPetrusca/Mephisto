@@ -1639,6 +1639,8 @@ function is4PC() {
 
 // ...but CLICKING is gated harder: only inside a real game, never on the lobby's preview board or a
 // setup page. Those render a full, perfectly scrapeable position, and autoplay would happily start
+// clicking pieces around a board that is not a game. The setup slug varies (4-player-chess,
+// 4-player-classic, ...) while the game path does not: /variants/<slug>/game/<id>.
 // Boards it is sensible to CLICK on. A real game, and the analysis board -- which is your own
 // private board, so playing a line out on it is a normal thing to want and cannot affect anyone
 // else's game. What stays excluded is the lobby and the variant setup pages, where a board is drawn
@@ -2274,11 +2276,78 @@ function pushWhenSettled(tries = 12) {
     setTimeout(() => pushWhenSettled(tries - 1), 40);
 }
 
+// --- Auto-advance chess.com puzzles ---------------------------------------------------------------
+// When a puzzle ends, chess.com swaps the control row under the board: mid-puzzle it holds a single
+// secondary "Hint", and once the puzzle is over (solved OR failed) it holds Retry, Analysis and one
+// PRIMARY button, which is Next Puzzle. That primary-vs-secondary difference is the signal, read off
+// the live page in both states -- not the aria-label, which is whatever language the site runs in,
+// and not a generated class name.
+//
+// OPT IN (Settings -> General -> Puzzles -> Auto-Next Puzzle), and only with Puzzle Mode and
+// Autoplay also on -- advancing for someone who is solving by hand would take the board away.
+//
+// TWO PAGES ONLY, listed rather than pattern-matched. Puzzle Rush, Streak and Battle advance
+// themselves, so there is nothing to press there; lesson practice and the daily puzzle have their
+// own end-of-exercise UI that this has never been shown. A primary button on a page nobody checked
+// is a button clicked for reasons nobody predicted, so the list is exactly what was verified.
+const PUZZLE_NEXT_PATHS = ['/puzzles/rated', '/puzzles/learning'];
+const PUZZLE_NEXT_SEL = '.primary-control-buttons-component';
+// How long to wait before pressing it, so you still see whether you got the puzzle right before the
+// board changes. The DEFAULT, not the value -- it is a setting (Auto-Next Delay), and this is what
+// an unset or out-of-range one falls back to.
+const PUZZLE_NEXT_DELAY_MS = 300;
+
+function puzzleNextDelayMs() {
+    const v = config && config.puzzle_next_delay;
+    return (typeof v === 'number' && v >= 0 && v <= 5000) ? v : PUZZLE_NEXT_DELAY_MS;
+}
+// The button is re-created per puzzle, so remembering the ELEMENT is what stops a double click --
+// a boolean would have to guess when to reset, and clicking twice skips a puzzle unsolved.
+let puzzleNextClicked = null;
+let puzzleNextTimer = null;
+
+function puzzleNextButton() {
+    if (site !== 'chesscom') return null;
+    const path = location.pathname.replace(/\/+$/, '');   // a trailing slash is the same page
+    if (!PUZZLE_NEXT_PATHS.includes(path)) return null;
+    const row = document.querySelector(PUZZLE_NEXT_SEL);
+    if (!row) return null;
+    const btn = row.querySelector('button.cc-button-primary');
+    // Present, enabled and actually on screen. Mid-puzzle this row holds only a secondary button,
+    // so finding a PRIMARY one in it is itself the end-of-puzzle signal.
+    if (!btn || btn.disabled || !(btn.offsetWidth || btn.offsetHeight)) return null;
+    return btn;
+}
+
+function maybeAdvancePuzzle() {
+    if (!config || !config.puzzle_auto_next || !config.puzzle_mode || !config.autoplay) return;
+    const btn = puzzleNextButton();
+    if (!btn) {
+        // the row is back to its mid-puzzle shape: a new puzzle is live, so arm for the next end
+        if (puzzleNextClicked && !document.contains(puzzleNextClicked)) puzzleNextClicked = null;
+        return;
+    }
+    if (btn === puzzleNextClicked || puzzleNextTimer) return;
+    puzzleNextTimer = setTimeout(() => {
+        puzzleNextTimer = null;
+        // re-read everything: the wait is long enough for the page, or you, to have moved on
+        const now = puzzleNextButton();
+        if (!now || now === puzzleNextClicked) return;
+        if (!config || !config.puzzle_auto_next || !config.puzzle_mode || !config.autoplay) return;
+        puzzleNextClicked = now;
+        bgLogAlways('puzzle: advancing to the next one', {label: now.getAttribute('aria-label') || ''});
+        now.click();
+    }, puzzleNextDelayMs());
+}
+
 function schedulePush() {
     if (pushDebounce) return;
     pushDebounce = setTimeout(() => {
         pushDebounce = null;
         pushPosition();
+        // Same trigger, no second observer: the control row swapping IS a DOM mutation, so the push
+        // a finished puzzle causes is exactly the moment to look for the Next button.
+        try { maybeAdvancePuzzle(); } catch (e) { /* never let this break a scrape */ }
     }, 30);
 }
 
@@ -2358,6 +2427,11 @@ function pushPosition() {
             // advance lastPushKey: the authoritative full push must still fire once `moving` clears.
             if (key === lastDisplayKey) return; // dedupe repeat display pushes of the same position
             lastDisplayKey = key;
+            // A display-only push is the one shape that looks exactly like nothing happening: the
+            // panel redraws and never re-analyses, so "the extension stopped" and "the move guard is
+            // still set" are indistinguishable from the outside. Say which.
+            bgLog('push held back: a move is still in flight', {
+                heldForMs: movingSince ? Date.now() - movingSince : 0, budget: movingBudget});
             sendToPanel({ dom: res, orient, clocks: scrapeClocks(), fenresponse: true, displayOnly: true });
             return;
         }

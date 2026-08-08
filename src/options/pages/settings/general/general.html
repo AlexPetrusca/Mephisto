@@ -513,6 +513,45 @@
                     </div>
                 </div>
 
+                <div class="set-row set-toggle">
+                    <div class="set-lbl">
+                        <span data-i18n="set.puzzle_auto_next" data-i18n-tip="set.tip.puzzle_auto_next" class="tooltipped" data-position="right"
+                              data-tooltip="Press Chess.com's Next Puzzle button for you when a puzzle ends, so a
+                                            session runs without you. Off by default, and it also needs Puzzle Mode
+                                            and Autoplay -- advancing while you are solving by hand would take the
+                                            board away mid-thought. Only on the rated and learning puzzle pages:
+                                            Puzzle Rush and Streak move on by themselves, and nothing else has been
+                                            checked. It waits a moment first so you still see whether you got it.">
+                            Auto-Next Puzzle <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="puzzle_auto_next_checkbox" type="checkbox" class="set-cb">
+                        <label for="puzzle_auto_next_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="set.puzzle_next_delay" data-i18n-tip="set.tip.puzzle_next_delay" class="tooltipped" data-position="right"
+                              data-tooltip="How long Auto-Next waits before pressing the button. The pause is there so
+                                            you can see whether you solved it before the board changes -- raise it to
+                                            read the position, lower it to grind. 0 presses as soon as the puzzle
+                                            ends. Does nothing unless Auto-Next Puzzle is on.">
+                            Auto-Next Delay (ms) <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="puzzle_next_delay_input" type="number" min="0" max="5000" step="50">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
                 <div class="set-row">
                     <div class="set-lbl">
                         <span data-i18n="set.puzzle_move_delay" data-i18n-tip="set.tip.puzzle_move_delay" class="tooltipped" data-position="right"
