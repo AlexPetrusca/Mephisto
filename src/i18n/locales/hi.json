@@ -311,5 +311,7 @@
   "set.tip.puzzle_auto_next": "Press Chess.com's Next Puzzle button for you when a puzzle ends, so a session runs without you. Off by default, and it also needs Puzzle Mode and Autoplay -- advancing while you are solving by hand would take the board away mid-thought. Only on the rated and learning puzzle pages: Puzzle Rush and Streak move on by themselves, and nothing else has been checked. It waits a moment first so you still see whether you got it.",
   "set.puzzle_next_delay": "अगली पहेली विलंब (ms)",
   "set.tip.puzzle_next_delay": "How long Auto-Next waits before pressing the button. The pause is there so you can see whether you solved it before the board changes -- raise it to read the position, lower it to grind. 0 presses as soon as the puzzle ends. Does nothing unless Auto-Next Puzzle is on.",
-  "panel.msg.from_database": "From the puzzle database"
+  "panel.msg.from_database": "From the puzzle database",
+  "set.drag_moves": "मोहरे खींचें",
+  "set.tip.drag_moves": "Play moves by dragging the piece instead of clicking the two squares. Most boards accept either, so this is off by default and the two clicks stay the normal path. Chess.com's VARIANTS boards are the exception -- a quiet move works either way there, but a CAPTURE only registers as a drag -- so they always drag whatever this is set to. Turn it on if a board takes your quiet moves and silently ignores your captures. It costs the same move time either way."
 }

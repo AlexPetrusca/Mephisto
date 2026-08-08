@@ -3181,6 +3181,27 @@ function dispatchSimulateClick(x, y, travelMs = 0) {
     }
 }
 
+// Drag a piece from one square to another. Same transport as a click, one gesture instead of two.
+function dispatchSimulateDrag(x1, y1, x2, y2, travelMs = 0) {
+    try {
+        if (document.hidden) travelMs = 0; // same reasoning as dispatchSimulateClick
+        bgLog('dispatching drag', {x1: Math.round(x1), y1: Math.round(y1),
+                                   x2: Math.round(x2), y2: Math.round(y2), travelMs});
+        const started = Date.now();
+        return Promise.resolve(sendToPanel({drag: true, x1, y1, x2, y2, travelMs}))
+            .then((r) => { bgLog('drag returned', {ms: Date.now() - started, r}); return r; })
+            .catch((e) => { bgLog('drag FAILED', {ms: Date.now() - started, e: String(e)}); throw e; });
+    } catch (e) {
+        // orphaned content-script (extension reloaded) -- swallowed like the click path
+    }
+}
+
+function simulateDragSquares(fromBounds, toBounds, range = 0.8, travelMs = 0) {
+    const [x1, y1] = getRandomSampledXY(fromBounds, range);
+    const [x2, y2] = getRandomSampledXY(toBounds, range);
+    return dispatchSimulateDrag(x1, y1, x2, y2, travelMs);
+}
+
 function simulateClickSquare(bounds, range = 0.8, travelMs = 0) {
     const [x, y] = getRandomSampledXY(bounds, range);
     return dispatchSimulateClick(x, y, travelMs);
@@ -3227,6 +3248,17 @@ function simulateMove(move, deselect, think = null) {
         // Two clicks: piece then target. Both are awaited, and each is a real cursor path -- so the
         // wall-clock IS approachMs + travelMs, spent as motion (M2). The caller splits the total
         // move_time budget between them (default 25% / 75%).
+        // DRAG, either because you asked for it or because the board demands it. Chess.com's variants
+        // boards play a quiet move from two clicks but do NOT play a CAPTURE -- the piece has to be
+        // carried onto the one it takes -- so they drag whatever the setting says. Everywhere else it
+        // is opt-in (Settings -> General -> Drag Pieces) and off by default, because two clicks is
+        // what every other board has always taken. Quiet moves accept a drag too, so this needs no
+        // guess about which moves capture.
+        if (config.drag_moves || isChesscomVariants()) {
+            await simulateDragSquares(getBoundsFromCoords(move.substring(0, 2)),
+                                      getBoundsFromCoords(move.substring(2)), 0.8, approachMs + travelMs);
+            return;
+        }
         await simulateClickSquare(getBoundsFromCoords(move.substring(0, 2)), 0.8, approachMs);
         await simulateClickSquare(getBoundsFromCoords(move.substring(2)), 0.8, travelMs);
     }

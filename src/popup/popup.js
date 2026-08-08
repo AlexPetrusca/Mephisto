@@ -318,6 +318,7 @@ async function initPanel(root, tabId) {
         clock_mode: JSON.parse(MephistoConfig.get('clock_mode')) || false,
         clock_pace: JSON.parse(MephistoConfig.get('clock_pace')) || false,
         puzzle_auto_next: JSON.parse(MephistoConfig.get('puzzle_auto_next')) || false,
+        drag_moves: JSON.parse(MephistoConfig.get('drag_moves')) || false,
         // the content script reads this off the pushed config, so it has to travel with it
         puzzle_next_delay: JSON.parse(MephistoConfig.get('puzzle_next_delay') ?? 'null') ?? 300,
         // Diagnostics, not play: forces the worker trace on even while the tab is focused. The
@@ -545,6 +546,11 @@ async function initPanel(root, tabId) {
             // there and fails ("Cannot access a chrome:// URL"). Returned so the in-page caller can
             // AWAIT the click (its cursor travel paces the from->to gap -- see performSimulatedMoveClicks).
             return dispatch_click_event(response.x, response.y, sender?.tab?.id, response.travelMs);
+        } else if (response.drag) {
+            // Same tab and the same await, but press-carry-release: chess.com's variants board only
+            // accepts a CAPTURE as a drag (see cdpDrag).
+            return dispatch_drag_event(response.x1, response.y1, response.x2, response.y2,
+                                       sender?.tab?.id, response.travelMs);
         }
     };
     // Only the toolbar popup needs the runtime listener; in-page, content-script.js calls
@@ -5526,6 +5532,7 @@ const LIVE_CONFIG_KEYS = [
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
     'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay', 'puzzle_auto_next', 'puzzle_next_delay',
+    'drag_moves',
 ];
 
 function watch_config_changes() {
@@ -5855,6 +5862,27 @@ async function dispatch_click_event(x, y, tabId, travelMs) {
         await request_backend_click(x, y); // the python clicker moves the real mouse itself
     } else {
         await request_debugger_click(x, y, tabId, travelMs);
+    }
+}
+
+async function dispatch_drag_event(x1, y1, x2, y2, tabId, travelMs) {
+    if (![x1, y1, x2, y2].every(Number.isFinite)) {
+        console.warn(`Ignoring drag with invalid coordinates: (${x1}, ${y1}) -> (${x2}, ${y2})`);
+        return;
+    }
+    // The python clicker moves the real mouse and has no drag verb, so fall back to the two clicks
+    // it does have. That path is unchanged and still works everywhere click-click works.
+    if (config.python_autoplay_backend) {
+        await request_backend_click(x1, y1);
+        await request_backend_click(x2, y2);
+        return;
+    }
+    const id = await resolve_click_tab(tabId);
+    try {
+        const r = await chrome.runtime.sendMessage({cdpDrag: true, tabId: id, x1, y1, x2, y2, travelMs});
+        if (r && r.error) console.warn('CDP drag failed:', r.error);
+    } catch (e) {
+        console.warn('CDP drag failed:', e);
     }
 }
 

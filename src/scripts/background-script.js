@@ -192,6 +192,20 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     cdpClick(tabId, msg.x, msg.y, msg.travelMs).then(() => sendResponse({ok: true})).catch(e => sendResponse({error: String(e)}));
     return true;
   }
+  if (msg.cdpDrag) {
+    // Same authentication as cdpClick above, and for the same reason: never trust a tab id from a
+    // content script, but do honour one from our own extension pages (the toolbar popup has no tab).
+    const fromOwnExtensionPage = !sender.tab
+        && sender.id === chrome.runtime.id
+        && typeof sender.url === 'string'
+        && sender.url.startsWith(`chrome-extension://${chrome.runtime.id}/`);
+    const tabId = sender.tab?.id
+        ?? ((fromOwnExtensionPage && Number.isInteger(msg.tabId)) ? msg.tabId : undefined);
+    if (!tabId) { sendResponse({error: 'no sender tab'}); return; }
+    cdpDrag(tabId, msg.x1, msg.y1, msg.x2, msg.y2, msg.travelMs)
+        .then(() => sendResponse({ok: true})).catch(e => sendResponse({error: String(e)}));
+    return true;
+  }
   // Same tab rules as cdpClick, but attaches only -- no input. A move calls this before it measures
   // anything, so the debugger infobar is already up and the board has stopped moving.
   if (msg.cdpWarm) {
@@ -530,6 +544,7 @@ async function explorerLookup({fen, db}) {
             : `HTTP ${r.status}`};
       // log the REQUEST, not just the verdict: "no moves" is indistinguishable from "wrong FEN"
       // without seeing exactly what was asked for
+      // the URL only -- the Authorization header is deliberately not logged
       console.log('[Explorer]', r.status, url, out.error ? out.error : `${out.moves?.length ?? 0} moves`);
     } catch (e) {
       out = {error: String(e)}; // offline / aborted / DNS
@@ -640,7 +655,10 @@ const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
 // cursor always travels to the square first (issue #36 / audit M2). The path is eased (accelerate,
 // decelerate), gently bowed, and jittered so it isn't a ruler-straight teleport, and it is spread
 // across travelMs so the motion actually consumes the caller's move-time budget instead of snapping.
-async function cdpMove(target, fromX, fromY, x, y, travelMs) {
+async function cdpMove(target, fromX, fromY, x, y, travelMs, held = false) {
+  // `held` = the left button is already down and this is the middle of a DRAG. Chrome only treats a
+  // move as part of a drag when the event says the button is down (button + the buttons bitmask);
+  // sent as a plain hover it reads as the cursor passing over the square and the drop never lands.
   // travelMs 0 means the caller wants no path at all (a hidden tab -- see dispatchSimulateClick).
   // Honour that literally: every step here is an awaited round-trip, and the minimum of three was
   // costing whole seconds in exactly the case the caller is trying to keep cheap.
@@ -655,7 +673,8 @@ async function cdpMove(target, fromX, fromY, x, y, travelMs) {
     const arc = Math.sin(t * Math.PI) * bow;  // 0 at both ends, peak mid-path
     const mx = fromX + (x - fromX) * ease + px * arc + (Math.random() - 0.5) * 1.5;
     const my = fromY + (y - fromY) * ease + py * arc + (Math.random() - 0.5) * 1.5;
-    await cdpDispatch(target, {type: 'mouseMoved', x: mx, y: my, button: 'none'});
+    await cdpDispatch(target, held ? {type: 'mouseMoved', x: mx, y: my, button: 'left', buttons: 1}
+                                   : {type: 'mouseMoved', x: mx, y: my, button: 'none'});
     if (travelMs > 0) await cdpSleep(travelMs / steps);
   }
 }
@@ -676,6 +695,35 @@ function cdpClick(tabId, x, y, travelMs = 0) {
         const opts = {x, y, button: 'left', clickCount: 1};
         await cdpDispatch(target, {...opts, type: 'mousePressed'});
         await cdpDispatch(target, {...opts, type: 'mouseReleased'});
+        resolve();
+      } catch (e) { reject(e); }
+    };
+    cdpAttach(tabId).then(send, reject);
+  });
+}
+
+// Press at the origin, travel with the button DOWN, release at the destination.
+//
+// Click-click is not enough on chess.com's variants board: a plain move registers, but a CAPTURE
+// does not -- you have to drag the piece onto the one it takes. That is what "it fails to reach some
+// squares" was: every quiet move worked and every capture silently did nothing.
+function cdpDrag(tabId, x1, y1, x2, y2, travelMs = 0) {
+  return new Promise((resolve, reject) => {
+    if (!tabId) return reject(new Error('no tabId'));
+    const target = {tabId};
+    const send = async () => {
+      try {
+        const from = lastPos.get(tabId) || {x: x1 - 40 - Math.random() * 40, y: y1 - 30 - Math.random() * 30};
+        // Reach for the piece, then carry it: the budget is split so the whole gesture still costs
+        // what the caller's move-time budget says, exactly like the two clicks it replaces.
+        const reach = Math.max(0, travelMs) * 0.35, carry = Math.max(0, travelMs) * 0.65;
+        await cdpMove(target, from.x, from.y, x1, y1, reach);
+        await cdpDispatch(target, {type: 'mousePressed', x: x1, y: y1, button: 'left', buttons: 1, clickCount: 1});
+        await cdpMove(target, x1, y1, x2, y2, carry, true);
+        // Land ON the destination before releasing: the eased path stops a hair short of it.
+        await cdpDispatch(target, {type: 'mouseMoved', x: x2, y: y2, button: 'left', buttons: 1});
+        await cdpDispatch(target, {type: 'mouseReleased', x: x2, y: y2, button: 'left', buttons: 0, clickCount: 1});
+        lastPos.set(tabId, {x: x2, y: y2});
         resolve();
       } catch (e) { reject(e); }
     };

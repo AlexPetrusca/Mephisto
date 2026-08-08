@@ -760,6 +760,27 @@
                     </div>
                 </div>
 
+                <div class="set-row set-toggle">
+                    <div class="set-lbl">
+                        <span data-i18n="set.drag_moves" data-i18n-tip="set.tip.drag_moves" class="tooltipped" data-position="right"
+                              data-tooltip="Play moves by dragging the piece instead of clicking the two squares.
+                                            Most boards accept either, so this is off by default and the two
+                                            clicks stay the normal path. Chess.com's VARIANTS boards are the
+                                            exception -- a quiet move works either way there, but a CAPTURE only
+                                            registers as a drag -- so they always drag whatever this is set to.
+                                            Turn it on if a board takes your quiet moves and silently ignores
+                                            your captures. It costs the same move time either way.">
+                            Drag Pieces <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="drag_moves_checkbox" type="checkbox" class="set-cb">
+                        <label for="drag_moves_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
                 <p data-i18n="set.note.priority_time_mirror_clock" class="set-note">
                     Priority — Time: Mirror ▸ Clock ▸ Humanize ▸ Search Time. Move: Book ▸ Humanize ▸ engine best.
                 </p>
