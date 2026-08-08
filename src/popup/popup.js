@@ -81,7 +81,14 @@ const i18n = (key, dflt, vars) => {
 // identical from the other end.
 function bgTrace(...args) {
     try {
-        if (document.visibilityState === 'visible' && document.hasFocus()) return;
+        // VERBOSE LOGGING WINS, exactly as it does for the content-script's bgLog. The gate below is
+        // the right default -- ordinary play should not fill the worker console -- but it is silent
+        // precisely when someone is sitting there watching the panel fail to move, so every
+        // diagnostics report of "it just stops" arrived with the panel's half of the story missing
+        // and only the content-script's lines in it. That ambiguity is the entire reason both halves
+        // exist. Same lesson as the four-player traces, in the other half of the codebase.
+        if (!(config && config.verbose_log)
+            && document.visibilityState === 'visible' && document.hasFocus()) return;
         chrome.runtime.sendMessage({bgTrace: {from: 'panel', args: args.map((v) => {
             if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) return v;
             try { return JSON.parse(JSON.stringify(v)); } catch (e) { return String(v); }
@@ -310,6 +317,9 @@ async function initPanel(root, tabId) {
         humanize: JSON.parse(MephistoConfig.get('humanize')) || false,
         clock_mode: JSON.parse(MephistoConfig.get('clock_mode')) || false,
         clock_pace: JSON.parse(MephistoConfig.get('clock_pace')) || false,
+        puzzle_auto_next: JSON.parse(MephistoConfig.get('puzzle_auto_next')) || false,
+        // the content script reads this off the pushed config, so it has to travel with it
+        puzzle_next_delay: JSON.parse(MephistoConfig.get('puzzle_next_delay') ?? 'null') ?? 300,
         // Diagnostics, not play: forces the worker trace on even while the tab is focused. The
         // gate that suppresses it by default is the right default and the wrong thing to have to
         // guess at, so it gets a switch.
@@ -1502,12 +1512,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                     : (book && premove_reply_playable(last_eval.fen, book)) ? book : best;
                 if (tb_ok && tb !== best) console.log(`Tablebase: playing ${tb} over ${best} (solved position)`);
                 if (!tb_ok && played !== best) console.log(`Book: playing ${played} over ${best} (weighted random)`);
-                if (puzzle_display_search) {
-                    // A depth-10 look at a position whose answer is already known. Showing it is the
-                    // whole point; playing it is how you fail a puzzle with a stronger move.
-                    puzzle_display_search = false;
-                    console.log('Puzzle: display-only search finished -- the known solution stands');
-                } else if ((config.humanize || clock_aware()) && !config.puzzle_mode) {
+                if ((config.humanize || clock_aware()) && !config.puzzle_mode) {
                     const pick = humanize_pick(best);
                     if (played !== best) pick.move = played; // book wins the move, humanize keeps the clock
                     if (pick.move !== best) console.log(`Humanize: playing ${pick.move} over ${best}`);
@@ -1542,6 +1547,29 @@ function on_engine_best_move(best, threat, isTerminal=false) {
 
     note_engine_healthy(); // a search that finished is the only evidence the engine is well
     toggle_calculating(false);
+}
+
+// A drawn bar for a position no engine evaluated (a puzzle answered straight from the database).
+// Deliberately NOT record_eval_history: 0.5 here means "not measured", and writing it into the
+// history strip would draw it as a measured equality alongside real scores.
+function draw_eval_bar_unevaluated() {
+    const bar = PANEL_ROOT.getElementById('eval-bar-white');
+    if (bar) {
+        if (bar.style.background) {
+            bar.style.background = '';
+            const wrap = PANEL_ROOT.getElementById('eval-bar');
+            if (wrap) wrap.style.background = '';
+        }
+        const flipped = board.orientation() === 'black';
+        bar.style.top = flipped ? '0' : 'auto';
+        bar.style.bottom = flipped ? 'auto' : '0';
+        bar.style.height = '50%';
+    }
+    if (config.eval_bar) {
+        request_draw_eval_bar({frac: 0.5, text: '0.0', winningWhite: true,
+                               history: config.eval_history ? eval_history : null,
+                               phases: null});
+    }
 }
 
 function update_eval_bar(line) {
@@ -2337,10 +2365,23 @@ function puzzle_expand(fen, solution) {
         const chess = new Chess(config.variant, fen);
         const moves = solution.split(' ').filter(Boolean);
         for (let i = 0; i < moves.length; i++) {
-            if (i % 2 === 0) map.set(puzzle_key(chess.fen()), moves[i]);
+            // EVERY position of the line goes in, not just the ones we move from: ours carry the
+            // move, theirs carry null. Membership is then the answer to "is this position part of the
+            // puzzle in hand", and that is a fact about the line rather than an inference about the
+            // board. Their positions used to be held out of the engine by `!our_turn` alone -- and on
+            // a chess.com puzzle page the side to move is inferred from a scrape of the PIECES, with
+            // no move list to check it against. One poll that reads it wrong sends a position in the
+            // middle of a solved line to a full search, which then draws its own arrow over the
+            // solution and moves the eval bar. The next scrape lands back in the line and it snaps
+            // back: an arrow that jumps to a different move in a puzzle that has a fixed one.
+            map.set(puzzle_key(chess.fen()), (i % 2 === 0) ? moves[i] : null);
             const m = moves[i];
             if (!chess.move({from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4]})) break;
         }
+        // ...and the position the line ENDS on, which belongs to the puzzle as much as any other and
+        // is the one the board sits in from the last move until the next puzzle loads. Searching it
+        // is the engine eval that appears between puzzles.
+        map.set(puzzle_key(chess.fen()), null);
     } catch (e) {
         return map; // a line that doesn't replay gives back whatever it managed; the rest just misses
     }
@@ -2394,7 +2435,13 @@ function request_puzzle_solution(fen) {
                     (puzzle_rating ? ` (rated ${puzzle_rating})` : ''));
         update_best_move_suffix();
         // The answer landed after on_new_pos ran: draw it and play it now.
-        if (last_eval.fen === fen) draw_moves();
+        // The panel already ran on_new_pos for this position and found nothing, so it has to be
+        // told the answer as well as shown it -- with Autoplay off nothing below will do it.
+        if (last_eval.fen === fen) {
+            const pick = puzzle_pick(fen);
+            if (pick) show_puzzle_answer(pick);
+            draw_moves();
+        }
         maybe_play_puzzle_move(fen);
     });
 }
@@ -2417,6 +2464,13 @@ function release_deferred_search(fen) {
     clearTimeout(puzzle_defer_timer);
     console.log('Puzzle DB: no entry for this position -- searching normally');
     on_new_pos(w.fen, w.startFen, w.moves);
+}
+
+// Is this position part of the solution line we are holding? True for THEIRS and for the position
+// the line ends on, both of which have no move for us -- which is exactly why `puzzle_pick` cannot
+// answer this: it returns null for a position the line owns and for one it has never heard of alike.
+function puzzle_in_line(fen) {
+    return !!(puzzle_db_enabled() && puzzle_solutions?.has(puzzle_key(fen)));
 }
 
 // Our move in THIS position per the database, or null.
@@ -2477,10 +2531,6 @@ function puzzle_move_delay_ms() {
     const v = JSON.parse(MephistoConfig.get('puzzle_delay') ?? 'null');
     return (typeof v === 'number' && v >= 0 && v <= 3000) ? v : PUZZLE_MOVE_DELAY_MS;
 }
-// Depth for the look-only search run when the database already knows the answer. Not a budget in
-// milliseconds: the point is a comparable number on every machine, not a fixed wait.
-const PUZZLE_DISPLAY_DEPTH = 10;
-let puzzle_display_search = false;   // the search in flight decides nothing and must not be played
 // The pending pre-move pause. Superseded rather than stacked: on_new_pos can legitimately run twice
 // for the SAME board -- a re-push flagged as a resume does exactly that -- and two live timers would
 // send the move twice, which the content-script then has to drop on its `moving` guard.
@@ -2513,8 +2563,7 @@ function maybe_play_puzzle_move(fen, opts = {}) {
     if (!uci) return false;
     console.log(`Puzzle DB: playing ${uci} (known solution, no search)`);
     abandon_search(); // no search is wanted here, and none of its output should arrive behind ours
-    toggle_calculating(false);
-    update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci}));
+    show_puzzle_answer(uci);
     clearTimeout(puzzle_move_timer);
     puzzle_move_timer = setTimeout(() => {
         // Only skip if the BOARD really moved on. Compared on placement + side to move, not on the
@@ -2978,7 +3027,6 @@ async function snap_follow_tick() {
             if (rot) placement = rot;
         }
         const prev = (setup_fen || '').split(' ');
-
         if (setup_fen && placement === prev[0]) return; // unchanged -- do not restart the search
         // Work out WHICH ply was played, rather than assuming one was. follow_infer_ply replays every
         // legal move from the position we hold and keeps the one that lands on what we just read, so
@@ -3161,7 +3209,102 @@ function clear_setup_fen() {
     PANEL_ROOT.getElementById('recheck')?.click(); // back to the live game, same path as Re-detect
 }
 
+// A board that differs from a position in the line we are holding by EXACTLY ONE SQUARE.
+//
+// That cannot be a real position. Every legal move empties the square it leaves and fills the one it
+// lands on, so any move changes AT LEAST two squares -- castling and en passant change more. One
+// square different is arithmetically impossible from a move and can only be a bad read of the board.
+//
+// They happen. chess.com puzzle pages carry no move list, so the position is rebuilt from the piece
+// elements on the board, and a poll landing mid-animation can read one of them wrong. The one that
+// produced this: a black queen on c6 came back as a WHITE KNIGHT, in a game where white had no
+// knight at all and our move onto that square was a PAWN capture. Identical to the real board in the
+// other 63 squares.
+//
+// Left alone it was not merely cosmetic. The phantom is in no puzzle line, so it fell through to a
+// full engine search, and that search's move was then drawn over the solution -- an arrow flicking to
+// e1e7 in a puzzle whose answer was d5c6, and an eval bar moving for a position that has never
+// existed. Ignoring the poll costs nothing: they arrive every few milliseconds and the next one is
+// clean.
+// A misread is a poll landing mid-animation, so it is gone within a frame or two. Anything still
+// arriving a second later is the board's actual state, whatever it looks like, and must be allowed
+// through -- ignoring it forever would be a panel that never moves again, which is the worse
+// failure of the two by a distance. (This is the same lesson as the database lookup's own timeout:
+// a wait that cannot end is not a safety measure.)
+const MISREAD_TOLERANCE_MS = 1000;
+let misread_board = null;   // the placement we are currently ignoring, and since when
+let misread_since = 0;
+
+function puzzle_misread(fen) {
+    if (!puzzle_db_enabled() || !puzzle_solutions?.size) return false;
+    const board = expand_placement(fen);
+    if (!board) return false;
+    const stm = String(fen).split(' ')[1] || 'w';
+    let bad = false;
+    for (const key of puzzle_solutions.keys()) {
+        const [placement, known_stm] = key.split(' ');
+        const known = expand_placement(placement);
+        if (!known) continue;
+        let diff = 0;
+        for (let i = 0; i < 64 && diff < 2; i++) if (board[i] !== known[i]) diff++;
+        // Same board, same side to move: this IS that position. Nothing else can outvote it.
+        if (diff === 0 && stm === known_stm) { misread_board = null; return false; }
+        // Same board, the OTHER side to move. Also impossible: every ply flips the side, so for a
+        // placement to come back in a line the side to move comes back with it. This is the read
+        // that survived the first version of this check -- placements compared, side ignored -- and
+        // it cost a full engine search and a wrong arrow in the middle of a solved line.
+        // One square different is impossible for the same reason a move cannot change fewer than two.
+        if (diff === 1 || (diff === 0 && stm !== known_stm)) bad = true;
+    }
+    if (bad) {
+        const seen = puzzle_key(fen);
+        if (misread_board !== seen) { misread_board = seen; misread_since = Date.now(); }
+        else if (Date.now() - misread_since > MISREAD_TOLERANCE_MS) {
+            console.warn('Mephisto: a board that cannot be a real position has persisted -- ' +
+                         'treating it as real');
+            return false;
+        }
+        return true;
+    }
+    misread_board = null;
+    return false;
+}
+
+// A FEN's placement field as a flat 64-character board, '.' for an empty square. Null if it isn't one.
+function expand_placement(fen) {
+    const rows = String(fen).split(' ')[0].split('/');
+    if (rows.length !== 8) return null;
+    let out = '';
+    for (const row of rows) {
+        for (const c of row) out += /[1-8]/.test(c) ? '.'.repeat(Number(c)) : c;
+    }
+    return out.length === 64 ? out : null;
+}
+
+// Everything the panel SHOWS for a database answer, in one place.
+//
+// All of this used to live inside maybe_play_puzzle_move, which returns immediately when the toggles
+// forbid playing -- so with Autoplay off the panel drew the arrow and then said NOTHING: no move, no
+// score, the previous position's numbers still sitting there. Showing the answer and playing it are
+// different jobs and only the second one is Autoplay's business.
+function show_puzzle_answer(uci) {
+    toggle_calculating(false);
+    update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci}));
+    // Nothing searched this position, so the number in the readout belongs to a DIFFERENT one --
+    // usually the previous puzzle. Left there it reads as a live evaluation next to the words
+    // "puzzle database". A database answer has no score, and saying so is the honest readout.
+    update_evaluation(i18n('panel.msg.from_database', 'From the puzzle database'));
+    last_eval.lines = [];        // and no stale line for draw_moves or the alt-line list to redraw
+    draw_eval_bar_unevaluated(); // ...nor a stale bar, which would claim an eval that was never made
+}
+
 function on_new_pos(fen, startFen, moves) {
+    // BEFORE the repaint and before the annotations are cleared: a misread must leave the panel
+    // exactly as it was, and both of those are visible changes.
+    if (puzzle_misread(fen)) {
+        bgTrace('puzzle misread -- ignoring this poll', {fen: String(fen).split(' ')[0]});
+        return;
+    }
     clear_idle_reason();   // a new position: whatever stopped the last move no longer applies
 
     console.log("on_new_pos", fen, startFen, moves);
@@ -3206,6 +3349,20 @@ function on_new_pos(fen, startFen, moves) {
     // Do we already know this position's move (ply 2+ of a solution looked up a move ago)? Decided
     // HERE so the engine branch below can be skipped, but PLAYED at the very end of this function --
     // request_automove reads last_eval, and last_eval only describes this position once we get there.
+    // TWO DIFFERENT QUESTIONS, and conflating them was the bug.
+    //
+    //   puzzle_have  -- does the DATABASE hold a move for this position? A fact about the database.
+    //   puzzle_known -- may we PLAY it right now? A fact about the toggles: puzzle_move_ready
+    //                   returns null with Autoplay off, or Help/Manual/Simon-Says on.
+    //
+    // Everything below except the actual move wants the FIRST one. Using the second meant that with
+    // Help Mode on -- or Autoplay simply off -- the panel concluded it did not know a position the
+    // database had answered, deferred the search, and RETURNED before the line that draws the
+    // solution arrow. Every poll: annotations cleared at the top of this function, never redrawn.
+    // Then the deferral watchdog gave up and ran a full engine search on a puzzle whose answer was
+    // already in hand. Missing arrows and a busy engine, from one variable answering the wrong
+    // question.
+    const puzzle_have = !!puzzle_pick(fen);
     const puzzle_known = puzzle_move_ready(fen);
     toggle_calculating(true);
     // SIZE THE SEARCH TO THE PACE. When a clock-aware mode intends to spend, say, 1.2s on this move,
@@ -3248,24 +3405,25 @@ function on_new_pos(fen, startFen, moves) {
     }
     // whose move is it -- drives the ponder budget (remote/native) and the per-turn thread cap (WASM)
     const our_turn = ((turn === 'w') ? 'white' : 'black') === our_side();
-    // Ponder width, hoisted ABOVE the engine branch because it is engine-agnostic. It used to live in
-    // the WASM branch only, so on a native engine Pondering never actually widened the candidate list
-    // and premove_lines stayed at 2 -- the width bought nothing there.
-    const ponder_now = config.ponder && !our_turn;
-    premove_lines = ponder_now ? ponder_line_count(fen, moves ? moves.trim().split(' ').pop() : null) : 2;
-    const want_multipv = ponder_now ? premove_lines : effective_multipv();
-
     // Puzzle Mode never analyses the opponent's turn. In a puzzle their reply is scripted and lands
     // in a couple of hundred ms, and nothing consumes an opponent-turn search here: Premove is
     // disabled in Puzzle Mode (all three entry points bail on it), so there is no certification to
     // feed, and the bestmove it produces moves one of THEIR pieces, which premove_reply_playable
     // rejects anyway. It only burns cores and leaves a search in flight that the real position then
     // has to supersede. Stop whatever is running and wait for their move instead.
+    // Ponder width, hoisted ABOVE the engine branch because it is engine-agnostic. It used to live in
+    // the WASM branch only, so on a native engine Pondering never actually widened the candidate list
+    // and premove_lines stayed at 2 -- the width bought nothing there. See the remote branch below
+    // for why the configure has to be awaited rather than fired alongside the analyse.
+    const ponder_now = config.ponder && !our_turn;
+    premove_lines = ponder_now ? ponder_line_count(fen, moves ? moves.trim().split(' ').pop() : null) : 2;
+    const want_multipv = ponder_now ? premove_lines : effective_multipv();
+
     // WAIT FOR THE DATABASE BEFORE SEARCHING. The lookup is a message to the worker plus a disk
     // read; a search is slower, but not always, and the engine finishing first is what produced
     // moves that failed puzzles the database could have solved. Deferred, not skipped: the answer
     // re-enters this function, so a miss searches exactly as it always did.
-    if (puzzle_db_enabled() && !puzzle_known && puzzle_answered !== puzzle_key(fen)) {
+    if (puzzle_db_enabled() && !puzzle_have && puzzle_answered !== puzzle_key(fen)) {
         puzzle_deferred = {fen, startFen, moves};
         abandon_search();
         toggle_calculating(true);
@@ -3277,21 +3435,35 @@ function on_new_pos(fen, startFen, moves) {
         }, PUZZLE_LOOKUP_WAIT_MS);
         return;
     }
-    if (puzzle_known) {
-        // THE MOVE IS ALREADY DECIDED, so this search chooses nothing -- it runs only so the panel
-        // still shows an evaluation for the position instead of a blank readout. Bounded at depth 10:
-        // deep enough to mean something, cheap enough to be free next to a solution we already hold.
-        // Its bestmove must never be played (see puzzle_display_search in on_engine_best_move) --
-        // the puzzle's line wins, and an objectively stronger move still fails the puzzle.
+    if (puzzle_have) {
+        // Nothing is searched here, so nothing will ever repaint the readout or the eval bar -- and
+        // left alone they keep showing the LAST position's score over this one, which reads as a live
+        // evaluation of a position no engine has looked at. That is where "why is the engine still
+        // evaluating?" comes from about an engine that is not running. A database answer has no
+        // score: say so, and park the bar at a draw. No eval, no claim.
+        //
+        // Both are done HERE rather than in maybe_play_puzzle_move, which only runs when the move is
+        // actually played -- with Autoplay off the stale number stayed on screen.
+        // THE MOVE IS ALREADY DECIDED, SO NOTHING IS SEARCHED. `puzzle_have`, not `puzzle_known`:
+        // the answer is in the database whether or not the toggles let us play it, and Help Mode
+        // wants to be SHOWN that answer without an engine deciding anything. The database answer is the move; an
+        // evaluation of a position we are not choosing in is a number nobody acts on, bought with a
+        // search on every puzzle.
+        //
+        // There used to be a depth-10 "display only" search here, purely so the readout had a score
+        // in it. It cost two bugs in one day: the flag that marked its result unplayable was cleared
+        // in exactly one place, so any path that ended the search another way -- the next puzzle
+        // arriving, or simply having Autoplay off, which put the clear behind an unreachable branch
+        // -- left it set, and the NEXT position's real bestmove was then discarded as "display
+        // only". No move, no error, no second search. A feature whose entire output was a number on
+        // screen is not worth a latch that can swallow the next move.
         abandon_search();
-        if (!is_remote()) {
-            puzzle_display_search = true;
-            send_engine_uci(moves ? `position fen ${startFen} moves ${moves}` : `position fen ${fen}`);
-            send_engine_uci(`go depth ${PUZZLE_DISPLAY_DEPTH}`);
-            search_active = true;
-        }
-    } else if (config.puzzle_mode && !our_turn) {
+    } else if (config.puzzle_mode && (!our_turn || puzzle_in_line(fen))) {
+        // Their turn, OR a position inside the line we are already holding. Nothing here is ours to
+        // decide, so nothing is searched -- and the second test does not depend on having read the
+        // side to move correctly off the board.
         abandon_search();
+        if (puzzle_in_line(fen)) draw_eval_bar_unevaluated();
     } else if (is_remote()) {
         // pure analysis (Help Mode / Autoplay off) keeps deepening like the WASM `go infinite`: give
         // it a long budget that the next position (a new request supersedes this one) cuts short.
@@ -3433,7 +3605,21 @@ function on_new_pos(fen, startFen, moves) {
         lastMove: moves ? moves.trim().split(' ').pop() : null}; // opp's last move (humanize recapture check)
     // A known solution means no search ran, so nothing else will ever call draw_moves for this
     // position -- the arrow has to be drawn from here or there is no arrow at all.
-    if (puzzle_pick(fen)) draw_moves();
+    //
+    // INSTRUMENTED: `puzzle_known` and `puzzle_solutions` are two pieces of state that can disagree
+    // -- known says "this puzzle is in the database", the Map says "and here is the move for THIS
+    // position in it". A position the line has already passed leaves the first true and the second
+    // empty, which would clear the arrows on every poll and never redraw them. Reported as both, so
+    // the next trace says which.
+    const pick = puzzle_pick(fen);
+    bgTrace('puzzle arrow', {pick: pick || null, known: puzzle_known,
+        haveSolutions: !!puzzle_solutions, entries: puzzle_solutions ? puzzle_solutions.size : 0,
+        key: puzzle_key(fen)});
+    // AFTER last_eval was moved to this position, not in the branch above it. The readout's own
+    // label calls puzzle_pick(last_eval.fen) to decide whether to say "Puzzle database (Rating N)",
+    // so showing the answer any earlier labelled the PREVIOUS position -- which is why the rating
+    // was missing.
+    if (pick) { show_puzzle_answer(pick); draw_moves(); }
     if (puzzle_known) maybe_play_puzzle_move(fen);
 }
 
@@ -4661,7 +4847,7 @@ function is_fourpc_engine() {
 // is a chore the page can do for us.
 //
 // `fourpc_prev_engine` holds what to go back to AND doubles as "we are the ones who switched" -- so a
-// deliberate choice is never overridden, matching auto_puzzle_mode. Changing engine reloads the
+// deliberate choice is never overridden, matching the Puzzle Mode follow. Changing engine reloads the
 // panel, which is why every path here returns unless something actually has to change: a switch that
 // re-fires on each poll would reload the panel once a second.
 let fourpc_prev_engine = null;
@@ -4830,7 +5016,6 @@ function on_new_pos_4pc(payload) {
     const mode = payload.slice(i + 1, j);
     const fen4 = payload.slice(j + 1);
     if (!fen4) return;
-
     // A position arriving mid-search used to be DROPPED, and `fourpc_last` had already been set to
     // the in-flight one -- so once the board settled on a position we skipped, nothing re-triggered
     // it and the panel sat there until the page was reloaded. Hold the newest instead and pick it up
@@ -4921,6 +5106,9 @@ function on_new_pos_4pc(payload) {
                 update_evaluation(i18n('panel.msg.score_at_depth', 'Score: {score} at depth {depth}',
                     {score: (flip * line.score / 100).toFixed(2), depth: line.depth ?? 0}));
             }
+            // NOT gated on config.eval_bar: that toggle governs the PAGE overlay, and the
+            // normal path calls update_eval_bar unconditionally. Gating this one meant the
+            // panel strip kept its default white/black instead of the two team colours.
             if (line) update_eval_bar_4pc(line, flip, ourSeat);
             // Help Mode draws the move instead of playing it, exactly as on an 8x8 board. The
             // renderer understands 14x14 now, so this is just a matter of asking for it.
@@ -5001,17 +5189,11 @@ function request_automove(move, think = null, manual = false, opts = {}) {
             clearTimeout(puzzle_move_timer);
             puzzle_move_timer = setTimeout(
                 () => request_automove(move, think, manual, {...opts, paused: true, checked: true}),
-                PUZZLE_MOVE_DELAY_MS);
+                puzzle_move_delay_ms());
             return;
         }
     }
     bgTrace('request_automove', {move, think, puzzle: config.puzzle_mode});
-    // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
-    // queues a blind premove (it won't appear in the move list until they move), so it must NOT be
-    // verified/retried; an on-turn move must be. The popup is authoritative here -- decide from the
-    // position's side-to-move (== our colour) rather than letting the content-script re-derive the
-    // turn from fragile DOM highlights (which throws on e.g. the lichess analysis board, silently
-    // skipping verification). last_eval.fen is the current position (on_new_pos ran before this).
     // Is this a REAL move on our own turn, or a BLIND premove during the opponent's turn? The site
     // queues a blind premove (it won't appear in the move list until they move), so it must NOT be
     // verified/retried; an on-turn move must be. The popup is authoritative here -- decide from the
@@ -5321,7 +5503,7 @@ const LIVE_CONFIG_KEYS = [
     'computer_evaluation', 'multiple_lines', 'compute_time', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
-    'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay',
+    'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay', 'puzzle_auto_next', 'puzzle_next_delay',
 ];
 
 function watch_config_changes() {
@@ -5396,6 +5578,10 @@ function draw_moves() {
     // draw nothing at all. Not gated on Autoplay the way playing the move is: Help Mode wants to be
     // SHOWN the answer, which is exactly when an arrow is the whole point.
     const solution = puzzle_pick(last_eval.fen);
+    // Three ways out of here and only one of them puts an arrow on the board. Which one it was is
+    // exactly the thing a report of "no arrows" cannot tell you from the outside.
+    bgTrace('draw_moves', {solution: solution || null, haveLine0: !!last_eval.lines[0],
+        help: !!config.help_mode, fen: String(last_eval.fen || '').split(' ')[0]});
     if (solution) {
         clear_annotations();
         draw_move(solution, line_color(0), PANEL_ROOT.getElementById('move-annotations'), 0.25);
@@ -5802,7 +5988,6 @@ function check_for_update() {
 // The original body of check_for_update: what it did before the what's-new note took precedence.
 function check_for_update_assets(el) {
     if (!el) return;
-
     // AN INCOMPLETE INSTALL OUTRANKS AN AVAILABLE UPDATE. If the engines are missing there is no
     // point telling someone a newer version exists -- the build they have cannot run at all, and the
     // fix is the FULL archive rather than whatever is newest. Checked first, and it short-circuits.
@@ -5990,15 +6175,16 @@ function on_native_info(info, fen) {
     // depths 13 / 14 / latest, exactly like the WASM `info depth` parser -- without this they'd
     // never premove, since certification is what the premove path waits on.
     // Bound by premove_lines rather than a hardcoded 2, to match the WASM parser and
-    // premove_instant_reply (which scans idx < premove_lines). NOTE this is currently the SAME
-    // number: the ponder width (ponder_line_count, up to 5) is applied in the WASM branch of
-    // on_new_pos only -- the remote/native branch never reassigns premove_lines and never pushes a
-    // per-position MultiPV, so on native engines Pondering does NOT widen the candidate list and
-    // premove still certifies at most 2 lines. Widening it there needs a configure round-trip per
-    // position; until that exists, this line is consistency, not a new capability.
-    // `info.bound` marks an aspiration re-search: its pv is unresolved, so it must not reach the
-    // depth-13/14 snapshots -- but it IS still displayed, which is why the host flags rather than
-    // swallows it. Dropping them left the panel with no updates at all through those windows.
+    // premove_instant_reply (which scans idx < premove_lines). This is now a real width on native
+    // too: on_new_pos sets premove_lines above the engine branch and the remote path configures the
+    // matching MultiPV on its host, so Pondering widens the candidate list here exactly as it does
+    // for WASM. It used to be capped at 2 regardless, which made the ponder width a no-op.
+    // `!info.bound` is the native equivalent of the WASM parser's lowerbound/upperbound drop. An
+    // aspiration re-search carries an UNRESOLVED pv -- the window failed, the engine has not settled
+    // on that line -- so it must not feed certification. The hosts have always tagged these frames
+    // for exactly this purpose; the flag was simply never read here, which let a late fail-low
+    // re-assert an abandoned 13/14 pair and fire a premove on a reply the engine had discarded.
+    // The frame still reaches the display below: depth/eval/nps are fine, only the pv is provisional.
     if (config.premove && info.pv && info.pv[0] != null
             && !info.bound && pvIdx < premove_lines && Number.isInteger(info.depth)) {
         const pred = String(info.pv[0]), reply = (info.pv[1] != null) ? String(info.pv[1]) : '';
@@ -6094,7 +6280,23 @@ self.MephistoPanel = {
     hotkey: (action) => { try { return do_hotkey(action); } catch (e) { console.warn('Mephisto: hotkey failed', e); return false; } },
     // content-script.js pushes positions/clocks straight in (same realm, no messaging)
     // returns the handler's value so a click can be awaited (the click branch returns its dispatch promise)
-    onContentMessage: (msg) => { try { return PANEL_MSG_HANDLER && PANEL_MSG_HANDLER(msg, {}); } catch (e) { console.warn('Mephisto: content->panel failed', e); } },
+    // A THROW IN HERE IS INVISIBLE, and that is how a dead panel looks exactly like a quiet one:
+    // on_new_pos clears the annotations at the top and redraws them at the bottom, so an exception
+    // between the two wipes the arrows and never puts them back -- on every poll, forever, with a
+    // console.warn in the PAGE's console that no diagnostics report has ever carried. Trace it.
+    onContentMessage: (msg) => {
+        try {
+            return PANEL_MSG_HANDLER && PANEL_MSG_HANDLER(msg, {});
+        } catch (e) {
+            console.warn('Mephisto: content->panel failed', e);
+            bgTrace('PANEL THREW', {
+                on: Object.keys(msg || {}).slice(0, 4).join(','),
+                error: String(e && e.message || e),
+                // the frame that actually threw, which is the whole point of surfacing this
+                at: String(e && e.stack || '').split('\n').slice(1, 4).map(l => l.trim()).join(' | '),
+            });
+        }
+    },
     // Called by the content-script when the panel closes (X button, panel-style change, page unload).
     // Closing means CLOSED. abandon_search() stops the search, PANEL_BOOTED=false makes every
     // incoming position push inert, the engine is shut down, and the held position is forgotten.
