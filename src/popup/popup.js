@@ -3850,7 +3850,9 @@ function parse_position_from_response(txt) {
         return parse_position_from_moves(txt);
     } else if (metaTag.includes('puz')) { // chess.com & blitztactics.com puzzle pages
         return parse_position_from_pieces(txt);
-    } else if (metaTag === 'cbfen') { // ChessBase Tactics: a complete FEN shipped as-is
+    } else if (metaTag === 'cbfen' || metaTag === 'ccfen') { // a complete FEN shipped as-is: ChessBase, and the chess.com
+        // variants boards that are read geometrically (Setup Chess builds its own start position,
+        // so there is no move list to replay and no start to replay it from).
         turn = txt.split(' ')[1] || 'w';
         return {fen: txt};
     } else { // chess.com and lichess.org pages

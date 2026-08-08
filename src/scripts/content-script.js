@@ -1170,8 +1170,144 @@ function detectChesscomVariant() {
         'antichess': 'antichess', 'giveaway': 'antichess', 'chess960': 'fischerandom',
         'duck': 'duck', 'minihouse': 'minihouse', 's-chess': 'seirawan', 'seirawan': 'seirawan',
         'chaturanga': 'chaturanga', 'standard': 'chess',
+        // Setup Chess: you BUY your back rank out of a points budget, then play ordinary chess with
+        // it. There is no engine variant for that and none is needed -- the resulting position is a
+        // legal chess position with an unusual first rank, which is exactly what `chess` plays.
+        // (Its board is read geometrically; see CC_GEOMETRIC_VARIANTS.)
+        'setup-chess': 'chess',
     };
     return map[slug] || map[slug.replace(/-/g, '')] || null;
+}
+
+// ==================================================================================================
+// READING THE CHESS.COM VARIANTS BOARD GEOMETRICALLY
+//
+// The variants adapter normally replays the SAN move list from a known start position. Setup Chess
+// has NEITHER: you build the start position yourself out of a 39-point budget, and until the setup
+// phase ends there is no move list at all. So read the pieces themselves.
+//
+// MEASURED on the live boards (Setup Chess and Crazyhouse, 2026-08-08) -- none of this is inferred:
+//   * pieces are `.piece` carrying `data-piece` (PNBRQK) and `data-color`, 5 = White, 6 = Black.
+//     The same two codes on both boards, so they are the two-player codes rather than a per-variant
+//     thing. (They are NOT the 4PC seat codes 0=R/1=B/2=Y/3=G -- that lane stays separate.)
+//   * position comes from `transform: translate(Xpx, Ypx)`, relative to `.TheBoard-squares`, whose
+//     rect is IDENTICAL to `.TheBoard-layers` -- which is what getBoard() returns, so the existing
+//     click geometry already lands on the right squares and autoplay needed no new code.
+//   * THE PIECE BANK SHARES THE SAME CONTAINER as the board pieces and sits at NEGATIVE
+//     coordinates. Nothing in the markup separates them, so being inside the board is the only
+//     test there is -- read the bank as board pieces and every Setup Chess position is garbage.
+//   * the `Coordinates-component` svg carries one text label per file and per rank, in board units,
+//     which is what makes a flipped board read correctly without a flip class to look for.
+const CC_VARIANTS_COLORS = {'5': 'w', '6': 'b'};
+// Only boards the SAN path cannot do. The other variants replay their move list and work; routing
+// them through here would be churn for no gain and would risk seven working adapters.
+const CC_GEOMETRIC_VARIANTS = ['setup-chess'];
+
+function isGeometricVariantsBoard() {
+    if (!isChesscomVariants()) return false;
+    const slug = (location.pathname.match(/\/variants\/([^/]+)/) || [])[1];
+    return CC_GEOMETRIC_VARIANTS.includes(slug);
+}
+
+// ponytail: an 8x8-only twin of fourPCGeometry, which is hardcoded to 14x14. Kept separate rather
+// than parameterised because that one is load-bearing for a shipped lane and this is new; fold them
+// together once this has run on real games.
+function variantsGeometry() {
+    const svg = [...document.querySelectorAll('svg')]
+        .find(e => /Coordinates/.test(String(e.getAttribute('class') || '')));
+    if (!svg) return null;
+    const labels = [...svg.querySelectorAll('text')].map(t => ({
+        v: (t.textContent || '').trim(), x: parseFloat(t.getAttribute('x')), y: parseFloat(t.getAttribute('y')),
+    })).filter(t => isFinite(t.x) && isFinite(t.y));
+    const digits = labels.filter(t => /^\d+$/.test(t.v));
+    const letters = labels.filter(t => /^[a-h]$/.test(t.v));
+    if (digits.length !== 8 || letters.length !== 8) return null; // not an 8x8 board; 4PC has its own
+    const spread = (a, k) => new Set(a.map(t => Math.floor(t[k]))).size;
+    const rankAxis = spread(digits, 'x') > spread(digits, 'y') ? 'x' : 'y';
+    const fileAxis = rankAxis === 'x' ? 'y' : 'x';
+    const rankAt = {}, fileAt = {};
+    for (const t of digits) rankAt[Math.floor(t[rankAxis])] = parseInt(t.v, 10);
+    for (const t of letters) fileAt[Math.floor(t[fileAxis])] = t.v;
+    const host = document.querySelector('.TheBoard-squares') || svg.parentElement;
+    const rect = host.getBoundingClientRect();
+    if (!rect.width) return null;
+    return {rankAxis, fileAxis, rankAt, fileAt, size: rect.width / 8, rect};
+}
+
+// piece elements -> {square: 'K'|'k'|...}, board squares only.
+function variantsBoard(geo) {
+    const board = {};
+    for (const p of document.querySelectorAll('.piece')) {
+        const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(p.getAttribute('style') || '');
+        if (!m) continue;
+        const col = Math.round(parseFloat(m[1]) / geo.size);
+        const row = Math.round(parseFloat(m[2]) / geo.size);
+        if (col < 0 || col > 7 || row < 0 || row > 7) continue; // the bank, beside the board
+        const file = geo.fileAt[geo.fileAxis === 'x' ? col : row];
+        const rank = geo.rankAt[geo.rankAxis === 'x' ? col : row];
+        const type = p.getAttribute('data-piece');
+        const colour = CC_VARIANTS_COLORS[p.getAttribute('data-color')];
+        if (!file || !rank || !type || !colour) continue;
+        board[file + rank] = (colour === 'w') ? type.toUpperCase() : type.toLowerCase();
+    }
+    return board;
+}
+
+// Whose move. From the MOVE LIST, not from any text on the page.
+//
+// The first attempt matched the name in the "X's move" readout against the player boxes, on the
+// theory that it needed no vocabulary. It was wrong in the only place that mattered: in a real game
+// the boxes carry USERNAMES while the readout still says "White's move", so nothing matched, the
+// fallback returned 'w' every time, and the panel thought it was our turn for the whole game.
+//
+// The move table is the FOUR-player one with two seats unused, so a row is four cells and the COLUMN
+// says who moved: 0 = White, 2 = Black. Reading the column beats counting plies because a Setup
+// Chess opening is not strictly alternating -- the two sides buy different numbers of pieces out of
+// the same points budget, so a parity count drifts the moment one of them finishes placing first.
+function variantsTurn() {
+    const cells = [...document.querySelectorAll('.moves-table-cell.moves-move')];
+    const played = cells.map((c, i) => ({san: (c.innerText || '').trim(), seat: i % 4}))
+                        .filter(m => m.san);
+    // chess.com's own "<at>/<total>" counter follows you back through the move list, so a position
+    // you have browsed to reads ITS turn rather than the live one.
+    const m = /^(\d+)\s*\/\s*(\d+)$/.exec(
+        (document.querySelector('.moves-atMoveOfTotal')?.innerText || '').trim());
+    const upto = m ? Math.min(parseInt(m[1], 10), played.length) : played.length;
+    return variantsTurnFrom(played, upto);
+}
+
+// Pure, so the ladder can check the part that was wrong without a DOM.
+function variantsTurnFrom(played, upto) {
+    if (!upto) return 'w';                             // nothing played yet: White opens
+    return (played[upto - 1].seat === 0) ? 'b' : 'w';  // the other side to whoever just moved
+}
+
+// A board map -> a FEN placement field. Pure, so the ladder can check it without a DOM.
+function variantsPlacement(board) {
+    const rows = [];
+    for (let r = 8; r >= 1; r--) {
+        let row = '', empty = 0;
+        for (const f of 'abcdefgh') {
+            const pc = board[f + r];
+            if (pc) { if (empty) { row += empty; empty = 0; } row += pc; }
+            else empty++;
+        }
+        rows.push(row + (empty || ''));
+    }
+    return rows.join('/');
+}
+
+function scrapePositionVariantsFen() {
+    const geo = variantsGeometry();
+    if (!geo) return undefined;
+    const board = variantsBoard(geo);
+    // An empty board is the setup phase before anything is placed, not a position. Analysing it
+    // would park the engine on a bare board and report mate.
+    const kings = Object.values(board).filter(p => p === 'K' || p === 'k').length;
+    if (kings < 2) return undefined;
+    // Castling '-' on purpose: a Setup Chess back rank is bought, not dealt, so the usual
+    // king-and-rook-on-home-squares inference means nothing here.
+    return `${variantsPlacement(board)} ${variantsTurn()} - - 0 1`;
 }
 
 // MISMATCH GUARD. The panel analysed the position we last pushed (lastPushKey); by the time its move
@@ -1239,6 +1375,15 @@ function scrapePosition() {
         // 4PC url but is4PC() said no -- that can only be `site`, which is assigned in window.onload
         // and so is undefined in a content script injected into an already-loaded page.
         return fourPCFail(`4-player url but site=${JSON.stringify(site)} -- reload the page`);
+    }
+    // Read the pieces, not a move list. Returns early like the ChessBase path because the sanitizer
+    // below strips the '/' and ' ' a FEN is made of.
+    if (isGeometricVariantsBoard()) {
+        const fen = scrapePositionVariantsFen();
+        // '***ccfen***', not the ChessBase tag it started as: the first two characters pick the
+        // "detected on" label, and reusing cb's made the panel announce ChessBase Tactics on a
+        // chess.com board.
+        return fen ? '***ccfen***' + fen : undefined;
     }
     if (site === 'taketaketake') return scrapePositionTT(); // state-based, no DOM to scrape
     if (site === 'chessbase') return scrapePositionCB(); // FEN straight from the page's CB.* model
@@ -1529,6 +1674,20 @@ function getOrientation() {
 // near-empty antichess/atomic endgames) -- falls back to 'white' (un-flipped) when it can't tell.
 function getChesscomVariantsOrientation() {
     const pieces = [...document.querySelectorAll('.piece.BasePiece-component:not([data-dead])')];
+    // TWO-PLAYER BOARDS SAY IT OUTRIGHT. data-color is 5=White / 6=Black there (measured on Setup
+    // Chess and Crazyhouse), so which colour sits lower needs no guessing -- and this runs on every
+    // scrape and every click, where the fallback below decodes a base64 SVG per piece to average its
+    // fill colours. That heuristic stays for 4PC, whose four seats are not light-vs-dark at all.
+    const two = pieces.filter(p => CC_VARIANTS_COLORS[p.getAttribute('data-color')]);
+    if (two.length >= 2) {
+        const ys = {w: [], b: []};
+        for (const p of two) {
+            const y = parseFloat((/,\s*(-?\d+(?:\.\d+)?)px/.exec(p.getAttribute('style')) || [0, 0])[1]);
+            ys[CC_VARIANTS_COLORS[p.getAttribute('data-color')]].push(y);
+        }
+        const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+        if (ys.w.length && ys.b.length) return (avg(ys.w) > avg(ys.b)) ? 'white' : 'black';
+    }
     const groups = {}; // colour code -> {ys:[...], light}
     for (const p of pieces) {
         const c = p.getAttribute('data-color');
@@ -2743,7 +2902,13 @@ function getBoard() {
         return document.querySelector('canvas[class*="aspect-square"]') || document.querySelector('canvas');
     }
     if (isChesscomVariants()) {
-        board = document.querySelector('.TheBoard-layers');
+        // .TheBoard-squares, NOT .TheBoard-layers. Pieces are positioned by a transform relative to
+        // the SQUARES, so that is the rect a square's coordinates have to come from -- every click
+        // and every arrow is derived from this. The two measured identical on the analysis board,
+        // but layers is the outer box and also hosts the banks and the player boxes; anywhere they
+        // differ, clicks drift further the further across the board they go, which is what "it
+        // fails to reach some squares" looks like. Fall back to layers if the inner box is missing.
+        board = document.querySelector('.TheBoard-squares') || document.querySelector('.TheBoard-layers');
     } else if (site === 'chesscom') {
         board = document.querySelector('.board');
     } else if (site === 'lichess') {
