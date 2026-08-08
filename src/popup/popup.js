@@ -4801,18 +4801,38 @@ function do_hotkey(action) {
 // one move at a time, the opponent's turn not analysed, Premove disabled -- so leaving it latched on
 // when you go back to a real game would be a worse bug than never having offered this. It is only
 // undone if WE were the one who turned it on: a manual choice is never overridden.
-let auto_puzzle_mode = false; // did this panel switch Puzzle Mode on for a puzzle page?
+// Did THIS extension switch Puzzle Mode on for a puzzle page? STORED, not a variable.
+//
+// It was a variable, and that made the off half quietly stop working. The panel is rebuilt far more
+// often than it looks -- every page load, every tab switch, every time the service worker is woken --
+// and each new panel starts with the flag false while `puzzle_mode` comes back true from storage.
+// The two then agree ("already where it should be"), so nothing records that the switch was ours,
+// and leaving the site hits the "you turned it on yourself" guard and leaves Puzzle Mode latched on
+// in a real game. Reloading once on a puzzle page was enough to lose it for the rest of the session.
+function auto_puzzle_flag() {
+    return MephistoConfig.get('auto_puzzle_mode') === 'true';
+}
+function set_auto_puzzle_flag(on) {
+    if (auto_puzzle_flag() === !!on) return;   // a write per poll otherwise, forever, in every game
+    MephistoConfig.set('auto_puzzle_mode', on ? 'true' : 'false');
+}
 
+// `onPuzzlePage` is the content-script's `isPuzzlePage()` and nothing else -- ONE predicate decides
+// both directions, so Puzzle Mode can only be switched off outside exactly the URLs that switch it
+// on. The panel deliberately holds no list of its own to drift from that one.
 function sync_puzzle_mode_to_page(onPuzzlePage) {
     if (onPuzzlePage == null) return;              // site the content-script does not classify
     if (onPuzzlePage === !!config.puzzle_mode) {   // already where it should be
-        if (!onPuzzlePage) auto_puzzle_mode = false;
+        // On a puzzle page with it already on, this is either our own doing carried across a reload
+        // or your manual choice -- and the stored flag is the only thing that can still tell them
+        // apart, so it is left exactly as it is.
+        if (!onPuzzlePage) set_auto_puzzle_flag(false);
         return;
     }
-    if (!onPuzzlePage && !auto_puzzle_mode) return; // you turned it on yourself -- leave it alone
+    if (!onPuzzlePage && !auto_puzzle_flag()) return; // you turned it on yourself -- leave it alone
     const box = PANEL_ROOT.getElementById('qs_puzzle');
     if (!box) return;
-    auto_puzzle_mode = onPuzzlePage;
+    set_auto_puzzle_flag(onPuzzlePage);
     // Flip the checkbox and fire its change event rather than writing config directly: that is the
     // one path that also saves, pushes to the content-script and re-renders, and it is what the
     // hotkeys use for the same reason.
