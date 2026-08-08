@@ -2133,7 +2133,14 @@ const FOURPC_PROMO_ORDER = ['q', 'b', 'r', 'n'];
 const FOURPC_PROMO_WAIT_MS = 1800;
 
 function fourPCFindPromoPicker() {
-    const geo = fourPCGeometry();
+    return findTheBoardPromoPicker(fourPCGeometry());
+}
+
+// The promotion picker on chess.com's TheBoard component, found BY SHAPE -- a 2x2 grid of four
+// similar children sitting over the board -- because it carries no class worth anchoring on. Shared
+// by the 14x14 four-player lane and the 8x8 variants boards, which are the same component; only the
+// geometry it measures against differs.
+function findTheBoardPromoPicker(geo) {
     if (!geo) return null;
     const sq = geo.size;
     for (const el of document.querySelectorAll('div, dialog')) {
@@ -2942,6 +2949,15 @@ function getPromotionSelection(promotion) {
     // move-verify retry + watchdog keep the extension unstuck).
     if (site === 'taketaketake') return undefined;
     let promotions;
+    // The variants board is a different React component and has no `.promotion-piece` -- looking for
+    // one there is why promotion has never worked on it. Same picker as four-player chess, so the
+    // same shape-based finder answers for both.
+    if (isChesscomVariants()) {
+        const found = findTheBoardPromoPicker(variantsGeometry());
+        if (!found) return undefined;
+        const idx = FOURPC_PROMO_ORDER.indexOf(String(promotion || '').toLowerCase());
+        return (idx < 0) ? undefined : found.el.children[idx];
+    }
     if (site === 'chesscom') {
         const promotionElems = document.querySelectorAll('.promotion-piece');
         if (promotionElems.length) promotions = promotionElems;
