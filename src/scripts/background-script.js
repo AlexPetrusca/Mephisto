@@ -189,6 +189,10 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     const tabId = sender.tab?.id
         ?? ((fromOwnExtensionPage && Number.isInteger(msg.tabId)) ? msg.tabId : undefined);
     if (!tabId) { sendResponse({error: 'no sender tab'}); return; }
+    if (Number.isFinite(msg.sentAt)) {
+      hopLastMs = Math.max(0, Date.now() - msg.sentAt);
+      if (hopLastMs > hopWorstMs) hopWorstMs = hopLastMs;
+    }
     cdpClick(tabId, msg.x, msg.y, msg.travelMs).then(() => sendResponse({ok: true})).catch(e => sendResponse({error: String(e)}));
     return true;
   }
@@ -346,6 +350,7 @@ async function buildDiagnostics(ctx = {}) {
     ctx.reason ? `reason    ${ctx.reason}` : null,
     ctx.toggles ? `toggles   ${ctx.toggles}` : null,
     ctx.content ? `content   ${ctx.content}` : null,
+    `worker    ${workerLoadLine()}`,
     ctx.fen ? `position  ${ctx.fen}` : null,
     '',
     '--- worker cold starts (most recent last) ---',
@@ -647,9 +652,16 @@ const attached = new Set();
 const lastPos = new Map(); // tabId -> {x, y}: where the synthetic cursor was left after the last click
 const cdpSleep = (ms) => new Promise(r => setTimeout(r, ms));
 const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
-  chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', params, () =>
-    chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve());
-
+  const t0 = Date.now();
+  cdpPending++;
+  const hungAt = setTimeout(() => { cdpHung++; }, CDP_HUNG_MS);
+  chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', params, () => {
+    clearTimeout(hungAt);
+    cdpPending--;
+    const dt = Date.now() - t0;
+    cdpCalls++; cdpTotalMs += dt; if (dt > cdpWorstMs) cdpWorstMs = dt;
+    return chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve();
+  });
 });
 
 // Move the synthetic cursor from its last position to (x, y) as a series of mouseMoved events before
@@ -870,6 +882,49 @@ const popupPortsByName = {};         // port name -> Set of popup Ports
 // outer id -> {port, innerId}
 const nativeRequestOwner = new Map();
 let nativeSeq = 0;
+// THE WORKER'S OWN LOAD, because nothing has ever reported it. A native engine's frames are relayed
+// HERE, one per search depth, on the same single thread that dispatches every click -- so "clicks
+// get slower the longer the game runs" and "it stays slow in the next game" are both questions about
+// numbers only this file can see. Counted, never inferred.
+// WHERE A CLICK'S TIME ACTUALLY GOES. A click is two costs and they need opposite fixes:
+//   hop  = page -> worker. Big means the worker was asleep or busy, and the fix is here.
+//   cdp  = chrome.debugger.sendCommand. Big means the RENDERER is busy -- input dispatch is handled
+//          by the page's main thread, so a blocked page makes a trivial click take seconds, and no
+//          amount of work in this file would help.
+// Worst-case is what matters, not the average: one 3s command is the timeout.
+let hopWorstMs = 0, hopLastMs = 0;
+let cdpWorstMs = 0, cdpCalls = 0, cdpTotalMs = 0;
+// A COMMAND THAT NEVER CALLS BACK IS INVISIBLE to the stats above, and that is exactly the failure:
+// the averages stay at single-digit ms while a click sits at 3s and hits the panel's cap. Input
+// dispatch is executed by the PAGE's renderer, so a hang here means the renderer stopped servicing
+// input -- nothing in this worker can be the cause OR the fix. Counted separately so it stops
+// hiding behind a healthy average.
+let cdpPending = 0, cdpHung = 0;
+const CDP_HUNG_MS = 1000;
+let nativeFramesIn = 0;       // frames received from any native host since this worker started
+let nativeFramesOut = 0;      // ...and how many panel messages they turned into
+let nativeFramesRecent = [];  // arrival times in the last second, for a live rate
+const workerStarted = Date.now();
+
+function workerLoadLine() {
+  const now = Date.now();
+  nativeFramesRecent = nativeFramesRecent.filter(t => now - t < 1000);
+  const peers = Object.entries(popupPortsByName).map(([n, s]) => `${n}:${s.size}`).join(',') || 'none';
+  return [
+    `frames=${nativeFramesIn}`,
+    `fanout=${nativeFramesOut}`,
+    `rate=${nativeFramesRecent.length}/s`,
+    `owners=${nativeRequestOwner.size}`,   // leaks one per ABANDONED search: watch it climb
+    `panels=${peers}`,
+    `attached=${attached.size}`,
+    `hop=${hopLastMs}/${hopWorstMs}ms`,                                   // last / worst page->worker
+    `cdp=${cdpCalls ? Math.round(cdpTotalMs / cdpCalls) : 0}/${cdpWorstMs}ms`, // avg / worst debugger call
+    `cdpHung=${cdpHung}`,        // dispatches that took over a second -- the renderer stalling
+    `cdpPending=${cdpPending}`,  // ...and any still outstanding right now
+    `up=${Math.round((now - workerStarted) / 1000)}s`,
+  ].join('  ');
+}
+
 function ensureNative(name) {
   if (nativePorts[name]) return nativePorts[name];
   const {app, label} = NATIVE_HOSTS[name];
@@ -877,6 +932,8 @@ function ensureNative(name) {
   nativePorts[name] = np;
   const peers = () => popupPortsByName[name] || new Set();
   np.onMessage.addListener(frame => {
+    nativeFramesIn++;
+    nativeFramesRecent.push(Date.now());
     nativeTrace('<- host', name, frame);
     const owner = (frame && frame.id != null) ? nativeRequestOwner.get(frame.id) : null;
     if (owner) {
@@ -885,7 +942,7 @@ function ensureNative(name) {
       // (engine died mid-search) cannot pin the entry forever.
       if (!frame.info) nativeRequestOwner.delete(frame.id);
       // renumber back to what the asking panel called it -- it knows nothing of our numbering
-      try { owner.port.postMessage({...frame, id: owner.innerId}); } catch (e) { nativeRequestOwner.delete(frame.id); }
+      try { nativeFramesOut++; owner.port.postMessage({...frame, id: owner.innerId}); } catch (e) { nativeRequestOwner.delete(frame.id); }
       return;
     }
     // No known owner: an unsolicited frame, or one whose asker has gone. Broadcast as before --

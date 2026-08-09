@@ -339,6 +339,19 @@ chrome.runtime.onMessage.addListener(handleExtensionMessage); // background + to
 // The in-page panel is popup.js running in THIS isolated world, so it talks to us by direct call.
 self.MephistoContent = {
     handle: (msg) => handleExtensionMessage(msg, {}, () => {}),
+    // THE HALF OF THE STORY NO REPORT HAS EVER CARRIED. Every scrape sits behind
+    // `if (!moving && config)` and answers 'no' in silence, so a content script that never received
+    // its config is indistinguishable from a page with no board -- the panel just sits on the start
+    // position telling you to reload. One line in the diagnostics separates them for good.
+    status: () => [
+        `config=${config ? 'yes' : 'NO -- nothing can be scraped without it'}`,
+        `asks=${configTries}`,
+        `site=${site || 'UNSET'}`,
+        `observer=${positionObserver ? 'on' : 'off'}`,
+        `board=${(() => { try { return getBoard() ? 'found' : 'not found'; } catch (e) { return 'threw'; } })()}`,
+        `moving=${moving ? 'yes' : 'no'}`,
+        lastScrapeFail ? `lastScrapeFail=${lastScrapeFail}` : null,
+    ].filter(Boolean).join('  '),
     detectVariant: () => ({variant: detectVariant(), href: location.href}),
     // popup.js's apply_compact calls this: the panel is a fixed-size scaled box, so hiding its
     // contents can't shrink it -- see setPanelCompact. Also keeps the title-bar icon in sync when

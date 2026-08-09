@@ -5631,6 +5631,8 @@ function push_config() {
     send_to_active_tab({pushConfig: true, config: config});
 }
 
+let last_draw_trace = null; // see the note in draw_moves: this trace is per-CHANGE, not per-call
+
 function draw_moves() {
     // A known puzzle solution replaces the engine's arrow entirely -- and it is the only arrow there
     // is, since a database hit skips the search, so last_eval.lines is empty and the loop below would
@@ -5639,9 +5641,18 @@ function draw_moves() {
     const solution = puzzle_pick(last_eval.fen);
     // Three ways out of here and only one of them puts an arrow on the board. Which one it was is
     // exactly the thing a report of "no arrows" cannot tell you from the outside.
-
-    bgTrace('draw_moves', {solution: solution || null, haveLine0: !!last_eval.lines[0],
-        help: !!config.help_mode, fen: String(last_eval.fen || '').split(' ')[0]});
+    //
+    // ONLY WHEN THE ANSWER CHANGES. draw_moves runs on every engine info frame -- dozens a second --
+    // and each trace line is a message to the SERVICE WORKER, which is the same worker that
+    // dispatches clicks and relays a native engine's frames. Tracing every call put ~100 messages a
+    // second in front of every click: 500ms clicks, one timing out at 3s, and moves held in flight
+    // for ten seconds. The state this reports changes at most once per position.
+    const drawKey = `${solution || ''}|${!!last_eval.lines[0]}|${!!config.help_mode}|${last_eval.fen || ''}`;
+    if (drawKey !== last_draw_trace) {
+        last_draw_trace = drawKey;
+        bgTrace('draw_moves', {solution: solution || null, haveLine0: !!last_eval.lines[0],
+            help: !!config.help_mode, fen: String(last_eval.fen || '').split(' ')[0]});
+    }
     if (solution) {
         clear_annotations();
         draw_move(solution, line_color(0), PANEL_ROOT.getElementById('move-annotations'), 0.25);
@@ -5954,7 +5965,9 @@ const CLICK_TIMEOUT_MS = 3000;
 async function do_debugger_click(id, x, y, travelMs) {
     if (document.hidden) console.log('[Mephisto/bg] CDP click ->', {tab: id, x: Math.round(x), y: Math.round(y)});
     try {
-        const r = await chrome.runtime.sendMessage({cdpClick: true, tabId: id, x, y, travelMs});
+        // sentAt lets the worker measure the hop into itself -- see the note on hopWorstMs.
+        const r = await chrome.runtime.sendMessage({cdpClick: true, tabId: id, x, y, travelMs,
+                                                    sentAt: Date.now()});
         if (r && r.error) console.warn('CDP click failed:', r.error);
     } catch (e) {
         console.warn('CDP click failed:', e);
@@ -6142,6 +6155,10 @@ function copy_diagnostics(onDone = () => {}) {
             toggles: ['autoplay', 'premove', 'help_mode', 'manual_mode', 'humanize', 'puzzle_mode',
                       'clock_mode', 'mirror_mode', 'background_play', 'verbose_log']
                 .filter(k => config[k]).join(' ') || 'none on',
+            // The page-side script's own view. Without this a dead content script and a page with no
+            // board produce byte-identical reports.
+            content: (() => { try { return self.MephistoContent?.status?.() || 'no page script'; }
+                              catch (e) { return 'status threw: ' + (e && e.message); } })(),
         };
         chrome.runtime.sendMessage({diagnostics: ctx}, (res) => {
             if (chrome.runtime.lastError || !res || res.error) {
