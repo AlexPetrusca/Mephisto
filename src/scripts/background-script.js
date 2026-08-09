@@ -193,7 +193,15 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       hopLastMs = Math.max(0, Date.now() - msg.sentAt);
       if (hopLastMs > hopWorstMs) hopWorstMs = hopLastMs;
     }
-    cdpClick(tabId, msg.x, msg.y, msg.travelMs).then(() => sendResponse({ok: true})).catch(e => sendResponse({error: String(e)}));
+    // Per-click accounting, because the CUMULATIVE counters cleared this path and the click was slow
+    // anyway: avg 6ms/dispatch and cdpHung=0 cannot add up to a 1.6s click. workerMs is everything
+    // this worker spent; dispMs is how much of that was actually in chrome.debugger. The caller
+    // subtracts both from its own round trip, and what is left is outside this file entirely.
+    const workerT0 = Date.now(), calls0 = cdpCalls, total0 = cdpTotalMs;
+    const account = () => ({workerMs: Date.now() - workerT0, disp: cdpCalls - calls0, dispMs: cdpTotalMs - total0});
+    cdpClick(tabId, msg.x, msg.y, msg.travelMs)
+      .then(() => sendResponse({ok: true, ...account()}))
+      .catch(e => sendResponse({error: String(e), ...account()}));
     return true;
   }
   if (msg.cdpDrag) {

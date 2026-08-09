@@ -3244,7 +3244,10 @@ function dispatchSimulateClick(x, y, travelMs = 0) {
         // A click that is dispatched but never returns, and one that returns and changes nothing, are
         // different failures; the log could not tell them apart.
         const clickStarted = Date.now();
-        return Promise.resolve(sendToPanel({click: true, x: x, y: y, travelMs}))
+        // sentAt is stamped HERE, not in the panel. The panel's own `sentAt` only ever measured the
+        // panel->worker hop (it read 1-3ms while a click measured 1.6s), so the content->panel leg
+        // and the panel's own queueing were the one part of the round trip nothing timed.
+        return Promise.resolve(sendToPanel({click: true, x: x, y: y, travelMs, sentAt: Date.now()}))
             .then((r) => { bgLog('click returned', {ms: Date.now() - clickStarted, r}); return r; })
             .catch((e) => { bgLog('click FAILED', {ms: Date.now() - clickStarted, e: String(e)}); throw e; });
     } catch (e) {

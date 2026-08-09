@@ -564,7 +564,7 @@ async function initPanel(root, tabId) {
             // otherwise a move firing while you're on another tab (e.g. chrome://extensions) dispatches
             // there and fails ("Cannot access a chrome:// URL"). Returned so the in-page caller can
             // AWAIT the click (its cursor travel paces the from->to gap -- see performSimulatedMoveClicks).
-            return dispatch_click_event(response.x, response.y, sender?.tab?.id, response.travelMs);
+            return dispatch_click_event(response.x, response.y, sender?.tab?.id, response.travelMs, response.sentAt);
         } else if (response.drag) {
             // Same tab and the same await, but press-carry-release: chess.com's variants board only
             // accepts a CAPTURE as a drag (see cdpDrag).
@@ -5894,7 +5894,7 @@ function toggle_calculating(on) {
     }
 }
 
-async function dispatch_click_event(x, y, tabId, travelMs) {
+async function dispatch_click_event(x, y, tabId, travelMs, sentAt) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
         // NaN/undefined coords (e.g. a crazyhouse drop move) serialize badly and the debugger rejects them
         console.warn(`Ignoring click with invalid coordinates: (${x}, ${y})`);
@@ -5902,9 +5902,9 @@ async function dispatch_click_event(x, y, tabId, travelMs) {
     }
     if (config.python_autoplay_backend) {
         await request_backend_click(x, y); // the python clicker moves the real mouse itself
-    } else {
-        await request_debugger_click(x, y, tabId, travelMs);
+        return;
     }
+    return request_debugger_click(x, y, tabId, travelMs, sentAt);
 }
 
 async function dispatch_drag_event(x1, y1, x2, y2, tabId, travelMs) {
@@ -5936,7 +5936,7 @@ function resolve_click_tab(tabId) {
     return new Promise(res => chrome.tabs.query({active: true, currentWindow: true}, t => res(t[0]?.id)));
 }
 
-async function request_debugger_click(x, y, tabId, travelMs) {
+async function request_debugger_click(x, y, tabId, travelMs, sentAt) {
     // chrome.debugger is NOT available to a content script (which is what this file is once the panel
     // lives in-page), so the background owns the attach + Input.dispatchMouseEvent. Still a TRUSTED
     // click -- isTrusted can't tell it from a human one (issue #35 §2). The background traces a
@@ -5948,14 +5948,18 @@ async function request_debugger_click(x, y, tabId, travelMs) {
     // returns wedges every subsequent move until the 15s stale-latch budget expires. In a hidden tab
     // that is the difference between playing and stopping. Resolve either way and let the move's own
     // verification decide whether it worked; a click we cannot confirm is not worse than no click.
+    // reached = content -> panel -> here. Everything before the worker is asked to do anything.
+    const reachedMs = Number.isFinite(sentAt) ? Math.max(0, Date.now() - sentAt) : null;
     const settled = await Promise.race([
-        do_debugger_click(id, x, y, travelMs).then(() => 'ok'),
+        do_debugger_click(id, x, y, travelMs),
         new Promise((r) => setTimeout(() => r('timeout'), CLICK_TIMEOUT_MS)),
     ]);
     if (settled === 'timeout') {
         bgTrace('click TIMED OUT', {x: Math.round(x), y: Math.round(y), ms: CLICK_TIMEOUT_MS});
         console.warn('Mephisto: CDP click did not return in time -- continuing');
+        return {reachedMs, timeout: true};
     }
+    return {reachedMs, ...(settled || {})};
 }
 
 // How long a single click round-trip may take before the move gives up waiting on it. Generous
@@ -5966,9 +5970,12 @@ async function do_debugger_click(id, x, y, travelMs) {
     if (document.hidden) console.log('[Mephisto/bg] CDP click ->', {tab: id, x: Math.round(x), y: Math.round(y)});
     try {
         // sentAt lets the worker measure the hop into itself -- see the note on hopWorstMs.
+        const askedAt = Date.now();
         const r = await chrome.runtime.sendMessage({cdpClick: true, tabId: id, x, y, travelMs,
-                                                    sentAt: Date.now()});
+                                                    sentAt: askedAt});
         if (r && r.error) console.warn('CDP click failed:', r.error);
+        // roundMs - workerMs = the two message hops plus whatever kept THIS realm from resuming.
+        return {roundMs: Date.now() - askedAt, workerMs: r?.workerMs, disp: r?.disp, dispMs: r?.dispMs};
     } catch (e) {
         console.warn('CDP click failed:', e);
     }
