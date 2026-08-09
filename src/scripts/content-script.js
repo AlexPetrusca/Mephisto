@@ -3309,7 +3309,7 @@ function simulateMove(move, deselect, think = null) {
         return config.move_time + Math.random() * config.move_variance;
     }
 
-    async function performSimulatedMoveClicks(approachMs, travelMs) {
+    async function performSimulatedMoveClicks(approachMs, travelMs, total) {
         await warmClicker();
         // Clear a stale selection (a piece left selected by a prior failed click would be DESELECTED
         // by our from-click, making the move a no-op). `deselect` is an empty square the moving piece
@@ -3329,21 +3329,33 @@ function simulateMove(move, deselect, think = null) {
         // is opt-in (Settings -> General -> Drag Pieces) and off by default, because two clicks is
         // what every other board has always taken. Quiet moves accept a drag too, so this needs no
         // guess about which moves capture.
-        if (config.drag_moves || isChesscomVariants()) {
-            await simulateDragSquares(getBoundsFromCoords(move.substring(0, 2)),
-                                      getBoundsFromCoords(move.substring(2)), 0.8, approachMs + travelMs);
-            return;
-        }
-        // MOVE TIME IS A DEADLINE, measured here on the page's own clock. Whatever the two clicks
+        // Below CURSOR_PATH_MIN_MS there is no path at all -- see the constant. The BUDGET is
+        // unaffected: it is paid below, on this page's clock.
+        const pathA = cursorPathFor(total, approachMs), pathB = cursorPathFor(total, travelMs);
+        // MOVE TIME IS A DEADLINE, measured here on the page's own clock. Whatever the clicks
         // actually cost, the gap between them is the budget you asked for -- if the first click ran
         // over, the second fires at once instead of adding its share on top. Set 125ms and the first
         // click to the second is 125ms, cursor travel included, which is the whole point of the
         // setting. Without this a busy worker turned a 125ms move into three seconds.
+        //
+        // The clock lives HERE and not in the worker deliberately. The page's renderer is scheduled
+        // as user-interactive; the extension's service worker is not, and under load it stops
+        // resuming between awaits (measured: workerMs 1466 with only 132ms of it inside
+        // chrome.debugger). A deadline kept on this side survives that; one kept there does not.
         const started = Date.now();
-        await simulateClickSquare(getBoundsFromCoords(move.substring(0, 2)), 0.8, approachMs);
+        if (config.drag_moves || isChesscomVariants()) {
+            await simulateDragSquares(getBoundsFromCoords(move.substring(0, 2)),
+                                      getBoundsFromCoords(move.substring(2)), 0.8, pathA + pathB);
+            // With no path the gesture is press-move-release and costs nothing, so the budget the
+            // caller asked for still has to be paid -- a drag used to spend it purely as motion.
+            const dueDrag = (approachMs + travelMs) - (Date.now() - started);
+            if (dueDrag > 0) await promiseTimeout(dueDrag);
+            return;
+        }
+        await simulateClickSquare(getBoundsFromCoords(move.substring(0, 2)), 0.8, pathA);
         const dueSecond = approachMs - (Date.now() - started);
         if (dueSecond > 0) await promiseTimeout(dueSecond);
-        await simulateClickSquare(getBoundsFromCoords(move.substring(2)), 0.8, travelMs);
+        await simulateClickSquare(getBoundsFromCoords(move.substring(2)), 0.8, pathB);
         const dueEnd = (approachMs + travelMs) - (Date.now() - started);
         if (dueEnd > 0) await promiseTimeout(dueEnd);
     }
@@ -3356,10 +3368,10 @@ function simulateMove(move, deselect, think = null) {
         await promiseTimeout(getThinkTime());
         const total = getMoveTime();
         if (move[4]) {
-            await performSimulatedMoveClicks(total * 0.20, total * 0.55);
-            await simulatePromotionClicks(move[4], total * 0.25);
+            await performSimulatedMoveClicks(total * 0.20, total * 0.55, total);
+            await simulatePromotionClicks(move[4], total * 0.25, total);
         } else {
-            await performSimulatedMoveClicks(total * 0.25, total * 0.75);
+            await performSimulatedMoveClicks(total * 0.25, total * 0.75, total);
         }
     }
 
@@ -3477,7 +3489,29 @@ function simulatePvMoves(pv) {
     return performSimulatedPvMoveSequence();
 }
 
-async function simulatePromotionClicks(promotion, travelMs = 250) {
+// A move time under this gets NO cursor path: press and release on the two squares, nothing between.
+//
+// The path is 3-40 awaited round trips per click through the service worker, and each await is a
+// chance for that worker to be descheduled -- it does not get the tab renderer's user-interactive
+// priority, and with a NATIVE engine it is also relaying a frame per search depth. Measured under
+// load: a click reported workerMs 1466 of which only 132ms was inside chrome.debugger, and 12
+// dispatches per move turned that into whole seconds. WASM never showed it because an idle worker
+// resumes instantly.
+//
+// 200ms is where the path stops fitting: a dispatch costs ~20ms, and the floor of 3 steps per click
+// is 12 dispatches for a two-click move, so ~250ms of unavoidable motion. Asking for less than that
+// was never honoured anyway -- pacing can wait, it cannot make a round trip cheaper.
+// NOT zero. A press whose point the cursor was never at is the giveaway the path exists to avoid
+// (M2) -- so a short move still sends ONE mouseMoved, which is one round trip instead of five to
+// forty-two. Zero stays reserved for a HIDDEN tab, where a real cursor is not over the board either
+// and drawing one is itself the anomaly; dispatchSimulateClick still overrides this to 0 there.
+// 8ms is one step at the path's own ~16ms-per-step rate.
+const CURSOR_SNAP_MS = 8;
+const CURSOR_PATH_MIN_MS = 200;
+const cursorPathFor = (total, slice) =>
+    (Number.isFinite(total) && total < CURSOR_PATH_MIN_MS) ? CURSOR_SNAP_MS : slice;
+
+async function simulatePromotionClicks(promotion, travelMs = 250, total = null) {
     // taketaketake has no DOM picker (canvas app; it auto-queens) -- don't poll, just skip.
     if (site === 'taketaketake') return;
     // The promotion picker renders a frame or two AFTER the to-click lands, and on a slow render it
@@ -3491,8 +3525,12 @@ async function simulatePromotionClicks(promotion, travelMs = 250) {
     }
     if (promotionChoice) {
         // the cursor travels to the chosen piece over the caller-supplied budget slice (~25% of the
-        // move_time total for a promo move)
-        await simulateClickSquare(promotionChoice.getBoundingClientRect(), 0.8, travelMs);
+        // move_time total for a promo move) -- unless the total is too short to carry a path at all,
+        // in which case the slice is still spent, just as a wait rather than as motion.
+        const started = Date.now();
+        await simulateClickSquare(promotionChoice.getBoundingClientRect(), 0.8, cursorPathFor(total, travelMs));
+        const due = travelMs - (Date.now() - started);
+        if (due > 0) await promiseTimeout(due);
     } else {
         console.warn('Mephisto: promotion picker never appeared; move may need a retry');
     }

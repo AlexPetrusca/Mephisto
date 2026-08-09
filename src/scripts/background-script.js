@@ -677,6 +677,10 @@ const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
 // cursor always travels to the square first (issue #36 / audit M2). The path is eased (accelerate,
 // decelerate), gently bowed, and jittered so it isn't a ruler-straight teleport, and it is spread
 // across travelMs so the motion actually consumes the caller's move-time budget instead of snapping.
+// How many mouseMoved events a path of this length is worth. Shared with cdpClick, which needs to
+// know whether the path is a single snap BEFORE it decides to batch.
+const pathSteps = (travelMs) => Math.max(1, Math.min(40, Math.round(travelMs / 16)));
+
 async function cdpMove(target, fromX, fromY, x, y, travelMs, held = false) {
   // `held` = the left button is already down and this is the middle of a DRAG. Chrome only treats a
   // move as part of a drag when the event says the button is down (button + the buttons bitmask);
@@ -686,7 +690,14 @@ async function cdpMove(target, fromX, fromY, x, y, travelMs, held = false) {
   // costing whole seconds in exactly the case the caller is trying to keep cheap.
   if (travelMs <= 0) return;
   const dist = Math.hypot(x - fromX, y - fromY);
-  const steps = Math.max(3, Math.min(40, Math.round(travelMs / 16))); // ~60fps, bounded either way
+  // Floor of ONE, not three. Every step is an awaited round trip through this worker, and this
+  // worker is not scheduled as user-interactive -- measured under load, a click reported workerMs
+  // 1466 with only 132ms of it inside chrome.debugger, the rest being the worker failing to resume
+  // between awaits. Three was a floor on REALISM, but one mouseMoved already buys the thing that
+  // matters (the press is not the cursor's first appearance at that point); steps two and three
+  // bought nothing and cost two more chances to be descheduled. Above ~48ms the rate picks the
+  // count as before, so a real path is unchanged.
+  const steps = pathSteps(travelMs); // ~60fps, bounded either way
   const px = dist ? -(y - fromY) / dist : 0, py = dist ? (x - fromX) / dist : 0; // perpendicular unit
   const bow = (Math.random() - 0.5) * Math.min(dist * 0.15, 24); // sideways arc, scales with distance
   // PACE TO A DEADLINE, never by adding a fixed sleep after each step.
@@ -723,9 +734,26 @@ function cdpClick(tabId, x, y, travelMs = 0) {
       try {
         // first click on a fresh tab: no known cursor pos -- start a short hop away so there's still travel
         const from = lastPos.get(tabId) || {x: x - 40 - Math.random() * 40, y: y - 30 - Math.random() * 30};
+        const opts = {x, y, button: 'left', clickCount: 1};
+        // ONE SCHEDULING SLOT, NOT FOUR. Every `await` here needs this worker's process scheduled
+        // again, and that process is only busy when a WASM engine is running in the offscreen
+        // document beside it. With a NATIVE engine it is idle, so a loaded machine deprioritises it
+        // and each resumption waits hundreds of ms -- measured: workerMs 1365 with 19ms of it inside
+        // chrome.debugger, and the same load stretched this worker's own i18n load from ~10ms to
+        // 3.8s. The click path is identical for both engines; only the process's state differs.
+        //
+        // The DevTools protocol keeps command order per session, so a snap click's events can be
+        // issued in ONE task and awaited together instead of one at a time. Only when the path is a
+        // single step: a real path has to be PACED, and pacing is what the awaits are for.
+        if (pathSteps(Math.max(0, travelMs)) <= 1) {
+          const evts = travelMs > 0 ? [{type: 'mouseMoved', x, y, button: 'none'}] : [];
+          evts.push({...opts, type: 'mousePressed'}, {...opts, type: 'mouseReleased'});
+          lastPos.set(tabId, {x, y});
+          await Promise.all(evts.map(e => cdpDispatch(target, e)));
+          return resolve();
+        }
         await cdpMove(target, from.x, from.y, x, y, Math.max(0, travelMs));
         lastPos.set(tabId, {x, y});
-        const opts = {x, y, button: 'left', clickCount: 1};
         await cdpDispatch(target, {...opts, type: 'mousePressed'});
         await cdpDispatch(target, {...opts, type: 'mouseReleased'});
         resolve();
