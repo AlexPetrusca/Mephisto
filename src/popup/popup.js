@@ -136,6 +136,9 @@ let remote_gen = 0;
 // that queues behind the first. The panel then drops the first as superseded and waits on a second
 // the host has not begun. Observed as two identical `on_new_pos` lines, one "dropping a superseded
 // remote result", and then silence. One request per position fixes it at the source.
+// The longest a NATIVE analyse may run. An abandoned one keeps going at the host (see the note where
+// this is applied), so this is the ceiling on how long a dead search can block the live one.
+const NATIVE_MAX_RT = 8000;
 let native_inflight = null;
 let search_active = false; // a 'go' was issued whose bestmove hasn't arrived yet (is_calculating can't be
                            // used for this: it flips false on the first info line, not on bestmove)
@@ -268,6 +271,11 @@ async function initPanel(root, tabId) {
     if (root) { PANEL_ROOT = root; PANEL_TIP_HOST = root; }
     else { PANEL_TIP_HOST = document.body || document.documentElement; }
     if (tabId != null) { MY_TAB_ID = tabId; ENGINE_CLIENT = String(tabId); } // no ?tab= when in-page
+    // BOOTED means "can answer", not "has started". isBooted() is what makes the content script
+    // hand us messages directly instead of posting into the runtime, and PANEL_MSG_HANDLER is
+    // assigned ~160 lines below this -- so anything arriving in between hit
+    // `PANEL_MSG_HANDLER && PANEL_MSG_HANDLER(...)`, evaluated to null, and was dropped WITHOUT a
+    // word. The config hand-off is the message that lands in that window.
     PANEL_BOOTED = true;
     // The 4PC lane keeps its own dedupe, and popup.js is a CONTENT SCRIPT -- it survives the panel
     // being closed and reopened on the same page. So `fourpc_last` still held the position on screen,
@@ -463,6 +471,17 @@ async function initPanel(root, tabId) {
                 return; // transient scrape garbage — the next poll (100ms) retries
             }
             let {fen, startFen, moves} = parsed;
+            // AN EMPTY FEN IS NOT A POSITION. A scrape can parse "successfully" into nothing -- a
+            // board element that exists with its pieces not yet rendered, a move list the replay
+            // could not apply -- and the panel then adopted it: the board wiped, "invalid fen" on
+            // screen, and every later scrape deduped against that empty string. Keep the last good
+            // position and let the next push retry, exactly as an unparseable scrape already does.
+            if (!fen || !String(fen).trim()) {
+                bgTrace('scrape parsed to an empty position -- keeping the last one', {
+                    head: String(response.dom || '').slice(0, 60),
+                    startFen: startFen || null, moves: moves ? String(moves).slice(0, 40) : null});
+                return;
+            }
             cross_check_position(fen); // warns only; never gates the move
             if (!is_legal_position(fen)) {
                 // a corrupt/transient scrape (mid-animation, wrong turn guess) can yield an
@@ -3490,7 +3509,18 @@ function on_new_pos(fen, startFen, moves) {
         // is real and worth naming: analysis stops deepening at the move budget instead of running
         // indefinitely. That is the trade for MultiPV working at all -- and at Multi Lines 1, which
         // is the default, nothing changes.
-        const rt = (open_ended && !(uses_native() && want_multipv > 1)) ? 3600000 : movetime;
+        let rt = (open_ended && !(uses_native() && want_multipv > 1)) ? 3600000 : movetime;
+        // A NATIVE SEARCH CANNOT BE CALLED BACK, so it must never be open-ended.
+        //
+        // `abandon_search()` sends UCI `stop`, and send_engine_uci is a NO-OP for a native host --
+        // `engine` is only ever set for the WASM lane. So an abandoned native search is not
+        // abandoned at all: the host keeps working on it and the next request QUEUES BEHIND IT.
+        // On the analysis rail (Help Mode, Manual Mode, or simply Autoplay off) that orphan was an
+        // HOUR long, and the watchdog that would free the slot only arms below 60s -- so one toggle
+        // of Autoplay could leave the host chewing on a dead position for the rest of the session,
+        // which is why it stayed slow into the next GAME: the host process outlives the page.
+        // Bounded, the orphan dies on its own and the watchdog always arms.
+        if (uses_native()) rt = Math.min(rt, NATIVE_MAX_RT);
         const posKey = moves ? `${startFen}|${moves}` : fen;
         const send_analysis = () => {
             if (uses_native() && native_inflight === posKey) {
@@ -3856,7 +3886,7 @@ function parse_position_from_response(txt) {
         return parse_position_from_moves(txt);
     } else if (metaTag.includes('puz')) { // chess.com & blitztactics.com puzzle pages
         return parse_position_from_pieces(txt);
-    } else if (metaTag === 'cbfen' || metaTag === 'ccfen') { // a complete FEN shipped as-is: ChessBase, and the chess.com
+    } else if (metaTag === 'cbfen' || metaTag === 'ccgeo') { // a complete FEN shipped as-is: ChessBase, and the chess.com
         // variants boards that are read geometrically (Setup Chess builds its own start position,
         // so there is no move list to replay and no start to replay it from).
         turn = txt.split(' ')[1] || 'w';
@@ -5609,6 +5639,7 @@ function draw_moves() {
     const solution = puzzle_pick(last_eval.fen);
     // Three ways out of here and only one of them puts an arrow on the board. Which one it was is
     // exactly the thing a report of "no arrows" cannot tell you from the outside.
+
     bgTrace('draw_moves', {solution: solution || null, haveLine0: !!last_eval.lines[0],
         help: !!config.help_mode, fen: String(last_eval.fen || '').split(' ')[0]});
     if (solution) {

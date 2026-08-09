@@ -345,6 +345,7 @@ async function buildDiagnostics(ctx = {}) {
     ctx.detection ? `detection ${ctx.detection}` : null,
     ctx.reason ? `reason    ${ctx.reason}` : null,
     ctx.toggles ? `toggles   ${ctx.toggles}` : null,
+    ctx.content ? `content   ${ctx.content}` : null,
     ctx.fen ? `position  ${ctx.fen}` : null,
     '',
     '--- worker cold starts (most recent last) ---',
@@ -648,6 +649,7 @@ const cdpSleep = (ms) => new Promise(r => setTimeout(r, ms));
 const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
   chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', params, () =>
     chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve());
+
 });
 
 // Move the synthetic cursor from its last position to (x, y) as a series of mouseMoved events before
@@ -667,6 +669,16 @@ async function cdpMove(target, fromX, fromY, x, y, travelMs, held = false) {
   const steps = Math.max(3, Math.min(40, Math.round(travelMs / 16))); // ~60fps, bounded either way
   const px = dist ? -(y - fromY) / dist : 0, py = dist ? (x - fromX) / dist : 0; // perpendicular unit
   const bow = (Math.random() - 0.5) * Math.min(dist * 0.15, 24); // sideways arc, scales with distance
+  // PACE TO A DEADLINE, never by adding a fixed sleep after each step.
+  //
+  // Each dispatch is an awaited round-trip, and this worker also relays every frame a NATIVE engine
+  // streams -- one per search depth. When that traffic makes a dispatch slow, sleeping a full slice
+  // on top of it means the path costs (dispatch + slice) per step instead of max(dispatch, slice),
+  // and the error compounds over the steps: a 125ms move measured 3s and hit the click timeout,
+  // while the same settings on a WASM engine (which runs offscreen and never touches this worker)
+  // were exact. Sleeping only until the step is DUE spends the caller's budget and not a millisecond
+  // more -- and when the worker is idle the motion is spread exactly as before.
+  const startedAt = Date.now();
   for (let i = 1; i <= steps; i++) {
     const t = i / steps;
     const ease = t * t * (3 - 2 * t);         // smoothstep: slow-fast-slow
@@ -675,7 +687,8 @@ async function cdpMove(target, fromX, fromY, x, y, travelMs, held = false) {
     const my = fromY + (y - fromY) * ease + py * arc + (Math.random() - 0.5) * 1.5;
     await cdpDispatch(target, held ? {type: 'mouseMoved', x: mx, y: my, button: 'left', buttons: 1}
                                    : {type: 'mouseMoved', x: mx, y: my, button: 'none'});
-    if (travelMs > 0) await cdpSleep(travelMs / steps);
+    const behind = (startedAt + travelMs * t) - Date.now();
+    if (behind > 0) await cdpSleep(behind);
   }
 }
 
@@ -857,7 +870,6 @@ const popupPortsByName = {};         // port name -> Set of popup Ports
 // outer id -> {port, innerId}
 const nativeRequestOwner = new Map();
 let nativeSeq = 0;
-
 function ensureNative(name) {
   if (nativePorts[name]) return nativePorts[name];
   const {app, label} = NATIVE_HOSTS[name];
@@ -865,6 +877,7 @@ function ensureNative(name) {
   nativePorts[name] = np;
   const peers = () => popupPortsByName[name] || new Set();
   np.onMessage.addListener(frame => {
+    nativeTrace('<- host', name, frame);
     const owner = (frame && frame.id != null) ? nativeRequestOwner.get(frame.id) : null;
     if (owner) {
       // An `info` frame is one of many for this request; anything else is its terminal reply, so the

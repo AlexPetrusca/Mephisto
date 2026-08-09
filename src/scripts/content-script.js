@@ -100,7 +100,15 @@ const DEFAULT_POSITION = 'w*****b-r-a8*****b-n-b8*****b-b-c8*****b-q-d8*****b-k-
 const MEPHISTO_BUILD = (() => {
     try { return chrome.runtime.getManifest().version; } catch (e) { return '?'; }
 })();
-window.onload = () => {
+// BOOT. `site` is assigned here and everything downstream is dead without it: getBoard() returns
+// undefined, scrapePosition bails on `if (!getBoard()) return;`, and NO position ever reaches the
+// panel -- which then sits on the start position showing "try reloading the page".
+//
+// This hung off `window.onload` alone, and that event NEVER FIRES for a content script injected into
+// a page that has already finished loading. Reloading the extension with a game open is exactly that
+// case, so the extension came back dead on every tab that was already open, on every site. Reloading
+// the PAGE fixed it, which is why it read as flaky rather than as the deterministic thing it is.
+const bootContentScript = () => {
     console.log(`content-script build ${MEPHISTO_BUILD}`); // debranded: no product name in the page console (L8)
     const siteMap = {
         'lichess.org': 'lichess',
@@ -119,6 +127,16 @@ window.onload = () => {
     if (!site) return;
     determineStartPosition();
 };
+
+// Already loaded (injected into an open tab) -> the load event is never coming, so boot ourselves.
+//
+// DEFERRED, not called here. `window.onload` fires after the WHOLE script has run, and boot reaches
+// forward into things this file has not defined yet at this line -- `self.MephistoContent` (the
+// panel's only way back to us) is ~200 lines below. Calling boot inline sent the config request out
+// before the answer had anywhere to land, and the reply was dropped in silence. A task boundary
+// reproduces onload's ordering exactly.
+if (document.readyState === 'complete') setTimeout(bootContentScript, 0);
+else window.addEventListener('load', bootContentScript);
 
 function handleExtensionMessage(response, sender, sendResponse) {
     if (response.toggleOverlay) {
@@ -1380,10 +1398,12 @@ function scrapePosition() {
     // below strips the '/' and ' ' a FEN is made of.
     if (isGeometricVariantsBoard()) {
         const fen = scrapePositionVariantsFen();
-        // '***ccfen***', not the ChessBase tag it started as: the first two characters pick the
-        // "detected on" label, and reusing cb's made the panel announce ChessBase Tactics on a
-        // chess.com board.
-        return fen ? '***ccfen***' + fen : undefined;
+        // '***ccgeo***'. NOT 'ccfen' -- that tag ALREADY EXISTS: chess.com's ordinary move-list
+        // scrape ships '***cc' + 'fen***', and teaching the panel to read ccfen as a bare FEN
+        // hijacked every normal chess.com game into the wrong parser, which produced an empty
+        // position and a dead panel in every game while the lobby (which uses 'ccpuz') kept working.
+        // The first two characters still pick the "detected on" label, so this stays Chess.com.
+        return fen ? '***ccgeo***' + fen : undefined;
     }
     if (site === 'taketaketake') return scrapePositionTT(); // state-based, no DOM to scrape
     if (site === 'chessbase') return scrapePositionCB(); // FEN straight from the page's CB.* model
@@ -2373,8 +2393,31 @@ function endMoving(gen) {
     schedulePush(); // catch up: board mutations during the automove were suppressed
 }
 
+// ASK THE PANEL, AND KEEP ASKING.
+//
+// The handler for this lives in the panel's own message handler, and the panel is a SIBLING content
+// script in this page -- chrome.runtime.sendMessage cannot reach it. (The panel says exactly that
+// where it registers its runtime listener.) The service worker has no pullConfig handler at all, so
+// with the in-page panel -- which is every real game -- this request went NOWHERE. config was then
+// only ever set if the panel happened to push it unprompted while we were already listening.
+//
+// Miss that one push and this content script is dead for the life of the tab. Every scrape sits
+// behind `if (!moving && config)` and yields 'no' SILENTLY: no error, no trace line, nothing in the
+// log to find -- just a panel parked on the start position telling you to reload the page. Which
+// worked, but only because it rebuilt both halves in the right order.
+//
+// So: ask over the channel that reaches the panel, and retry until it answers. A single attempt at
+// boot is a coin flip -- the panel is frequently built after us, and sendToPanel falls back to the
+// runtime (i.e. nowhere) while it isn't booted yet.
+const CONFIG_RETRY_MS = 400;
+const CONFIG_RETRY_MAX = 25;   // ~10s, then stop: this tab has no panel, which is normal and fine
+let configTries = 0;
+
 function pullConfig() {
-    chrome.runtime.sendMessage({ pullConfig: true });
+    if (config) return;                       // answered -- pushConfig set it and started the pipeline
+    sendToPanel({pullConfig: true});
+    if (++configTries >= CONFIG_RETRY_MAX) return;
+    setTimeout(pullConfig, CONFIG_RETRY_MS);
 }
 
 // -------------------------------------------------------------------------------------------
@@ -3275,8 +3318,18 @@ function simulateMove(move, deselect, think = null) {
                                       getBoundsFromCoords(move.substring(2)), 0.8, approachMs + travelMs);
             return;
         }
+        // MOVE TIME IS A DEADLINE, measured here on the page's own clock. Whatever the two clicks
+        // actually cost, the gap between them is the budget you asked for -- if the first click ran
+        // over, the second fires at once instead of adding its share on top. Set 125ms and the first
+        // click to the second is 125ms, cursor travel included, which is the whole point of the
+        // setting. Without this a busy worker turned a 125ms move into three seconds.
+        const started = Date.now();
         await simulateClickSquare(getBoundsFromCoords(move.substring(0, 2)), 0.8, approachMs);
+        const dueSecond = approachMs - (Date.now() - started);
+        if (dueSecond > 0) await promiseTimeout(dueSecond);
         await simulateClickSquare(getBoundsFromCoords(move.substring(2)), 0.8, travelMs);
+        const dueEnd = (approachMs + travelMs) - (Date.now() - started);
+        if (dueEnd > 0) await promiseTimeout(dueEnd);
     }
 
     // move_time (+ variance) is the TOTAL wall-clock budget for the click sequence -- whatever the
