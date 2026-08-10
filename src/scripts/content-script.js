@@ -3329,6 +3329,24 @@ function simulateMove(move, deselect, think = null) {
         // is opt-in (Settings -> General -> Drag Pieces) and off by default, because two clicks is
         // what every other board has always taken. Quiet moves accept a drag too, so this needs no
         // guess about which moves capture.
+        //
+        // A DRAG NEVER SNAPS (user call 2026-08-09). The held motion IS what a drop handler reads,
+        // so below DRAG_MIN_MS the opt-in toggle goes INERT and the move falls back to the two
+        // clicks, which work everywhere the toggle is optional. The variants board cannot fall
+        // back -- a capture is not playable there any other way -- so a short Move Time is FLOORED
+        // to DRAG_MIN_MS instead of honoured.
+        const started = Date.now();
+        // Gated on the SETTING, not this move's randomized total: with Move Variance a total-based
+        // gate would flip a game between drags and clicks move by move.
+        if (isChesscomVariants() || (config.drag_moves && config.move_time >= DRAG_MIN_MS)) {
+            const dragMs = Math.max(approachMs + travelMs, isChesscomVariants() ? DRAG_MIN_MS : 0);
+            await simulateDragSquares(getBoundsFromCoords(move.substring(0, 2)),
+                                      getBoundsFromCoords(move.substring(2)), 0.8, dragMs);
+            // The gesture is the budget here; top up only if it came home early.
+            const dueDrag = dragMs - (Date.now() - started);
+            if (dueDrag > 0) await promiseTimeout(dueDrag);
+            return;
+        }
         // Below CURSOR_PATH_MIN_MS there is no path at all -- see the constant. The BUDGET is
         // unaffected: it is paid below, on this page's clock.
         const pathA = cursorPathFor(total, approachMs), pathB = cursorPathFor(total, travelMs);
@@ -3342,16 +3360,6 @@ function simulateMove(move, deselect, think = null) {
         // as user-interactive; the extension's service worker is not, and under load it stops
         // resuming between awaits (measured: workerMs 1466 with only 132ms of it inside
         // chrome.debugger). A deadline kept on this side survives that; one kept there does not.
-        const started = Date.now();
-        if (config.drag_moves || isChesscomVariants()) {
-            await simulateDragSquares(getBoundsFromCoords(move.substring(0, 2)),
-                                      getBoundsFromCoords(move.substring(2)), 0.8, pathA + pathB);
-            // With no path the gesture is press-move-release and costs nothing, so the budget the
-            // caller asked for still has to be paid -- a drag used to spend it purely as motion.
-            const dueDrag = (approachMs + travelMs) - (Date.now() - started);
-            if (dueDrag > 0) await promiseTimeout(dueDrag);
-            return;
-        }
         await simulateClickSquare(getBoundsFromCoords(move.substring(0, 2)), 0.8, pathA);
         const dueSecond = approachMs - (Date.now() - started);
         if (dueSecond > 0) await promiseTimeout(dueSecond);
@@ -3369,7 +3377,7 @@ function simulateMove(move, deselect, think = null) {
         const total = getMoveTime();
         if (move[4]) {
             await performSimulatedMoveClicks(total * 0.20, total * 0.55, total);
-            await simulatePromotionClicks(move[4], total * 0.25, total);
+            await simulatePromotionClicks(move[4], total * 0.25);
         } else {
             await performSimulatedMoveClicks(total * 0.25, total * 0.75, total);
         }
@@ -3510,8 +3518,17 @@ const CURSOR_SNAP_MS = 8;
 const CURSOR_PATH_MIN_MS = 200;
 const cursorPathFor = (total, slice) =>
     (Number.isFinite(total) && total < CURSOR_PATH_MIN_MS) ? CURSOR_SNAP_MS : slice;
+// A drag below this is not played as a drag (user call 2026-08-09). Where dragging is optional the
+// toggle goes inert and the two clicks play instead; where the board demands it (chess.com
+// variants) the gesture is floored to this, because a snapped drag is exactly the shape that
+// dropped captures silently in 3.1.221.
+const DRAG_MIN_MS = 250;
+// A promotion picker click always gets a real cursor path and at least this much time, on TOP of
+// the configured Move Time if need be (user call 2026-08-09: promotions may run over). Only the
+// picker leg is floored -- the two board clicks keep the configured budget.
+const PROMO_MIN_MS = 200;
 
-async function simulatePromotionClicks(promotion, travelMs = 250, total = null) {
+async function simulatePromotionClicks(promotion, travelMs = 250) {
     // taketaketake has no DOM picker (canvas app; it auto-queens) -- don't poll, just skip.
     if (site === 'taketaketake') return;
     // The promotion picker renders a frame or two AFTER the to-click lands, and on a slow render it
@@ -3524,12 +3541,13 @@ async function simulatePromotionClicks(promotion, travelMs = 250, total = null) 
         promotionChoice = getPromotionSelection(promotion);
     }
     if (promotionChoice) {
-        // the cursor travels to the chosen piece over the caller-supplied budget slice (~25% of the
-        // move_time total for a promo move) -- unless the total is too short to carry a path at all,
-        // in which case the slice is still spent, just as a wait rather than as motion.
+        // The picker click never snaps: it gets a real cursor path over at least PROMO_MIN_MS,
+        // whatever Move Time says -- a promotion is allowed to run over the budget (user call
+        // 2026-08-09). At the default slice (25% of a 1000ms move) nothing changes.
+        const promoMs = Math.max(travelMs, PROMO_MIN_MS);
         const started = Date.now();
-        await simulateClickSquare(promotionChoice.getBoundingClientRect(), 0.8, cursorPathFor(total, travelMs));
-        const due = travelMs - (Date.now() - started);
+        await simulateClickSquare(promotionChoice.getBoundingClientRect(), 0.8, promoMs);
+        const due = promoMs - (Date.now() - started);
         if (due > 0) await promiseTimeout(due);
     } else {
         console.warn('Mephisto: promotion picker never appeared; move may need a retry');
