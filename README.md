@@ -1,5 +1,15 @@
 ![Mephisto](https://raw.githubusercontent.com/AlexPetrusca/Mephisto/master/res/mephisto_banner_lowercase.png)
 
+<div align="center">
+
+![Version](https://img.shields.io/badge/version-3.1.225-3fb950)
+![Engines](https://img.shields.io/badge/engines-8-58a6ff)
+![Sites](https://img.shields.io/badge/sites-5-8b949e)
+![Languages](https://img.shields.io/badge/languages-14-f0883e)
+![Source](https://img.shields.io/badge/source-MIT-green)
+
+</div>
+
 **Real-time chess analysis and automated play on Chess.com, Lichess, BlitzTactics, TakeTakeTake and ChessBase
 Tactics.** Mephisto reads the position straight off the page, runs **Stockfish** (NNUE), **Fairy-Stockfish** or
 **Maia** entirely in your browser — no server, no account — and draws the best move on the board, or plays it for you
@@ -168,6 +178,9 @@ instead of analysing the wrong position.
 
 ### Analysis
 
+<details>
+<summary>Opening Explorer, tablebase, eval bar and history, screen reading</summary>
+
 - **Multiple lines** — top 1–5 candidates (MultiPV), each drawn with its evaluation.
 - **Eval bar** — vertical bar beside the board, from your perspective, plus an **eval history graph** shaped like
   Lichess's, marking where the opening, middlegame and endgame begin (ported from scalachess's `Divider`).
@@ -196,7 +209,12 @@ instead of analysing the wrong position.
 *Reading a position straight off a YouTube video — a board reading is a guess and says so, naming its least-confident
 squares (`least sure: e4 pawn 62%`).*
 
+</details>
+
 ### Game review
+
+<details>
+<summary>accuracy, move quality, alternate lines, fair-play measurements</summary>
 
 Analyse finished games on the extension's own page — **Settings → Game Review**. Paste a PGN, load a
 `.pgn`, or fetch a player's recent games from Chess.com's public archive. Nothing is uploaded: the text
@@ -239,7 +257,12 @@ stays in the tab and the search runs in the extension's own engine.
 
 ![The game review page](docs/game-review.png)
 
+</details>
+
 ### Automated play
+
+<details>
+<summary>autoplay, premove, Help and Manual mode, hotkeys</summary>
 
 - **Autoplay** — plays the engine's move for you. **Help Mode** draws the arrows instead and overrides it.
 - **Safe Premove** — while the opponent thinks, certifies a reply to their *predicted* move: the same move at
@@ -257,7 +280,12 @@ stays in the tab and the search runs in the extension's own engine.
 - **Background Play** (off by default) — moves fire only while the tab is focused and visible; a move that comes due
   while you're away is deferred and re-issued when you return.
 
+</details>
+
 ### Humanize
+
+<details>
+<summary>move mix, pacing, Clock Mode and Mirror Time</summary>
 
 ![The move mix and move-quality thresholds, with live accuracy estimates](docs/humanize.png)
 
@@ -280,6 +308,8 @@ your settings are used exactly as they are: it only ever makes a move shorter, n
 point where the click stops looking like a hand moved it.
 
 > **Priority** — *Time:* Mirror ▸ Clock ▸ Humanize ▸ Search Time. *Move:* Book ▸ Humanize ▸ engine best.
+
+</details>
 
 ### Puzzles
 
@@ -667,6 +697,9 @@ No schedule — added whenever I feel like it. Checked means shipped.
 
 ### Planned
 
+<details>
+<summary>32 items</summary>
+
 - [ ] **More engines** — the lineup covers *strong* and *human-like* and not much between. Variety of character, not
   more strength. **lc0 (Leela)** in WASM would be for comparing styles, not for strength.
 - [ ] **Duck Chess autoplay** — detection and analysis work; the duck-placement step doesn't.
@@ -794,7 +827,12 @@ benchmark against Maia-3 at the same rating, which is a training campaign with a
 afternoon. The cheaper route to the same goal is blending what is already here: Maia-3 at the band you want, a Stockfish
 veto for real blunders, and the clock rules above.
 
+</details>
+
 ### Shipped
+
+<details>
+<summary>18 items</summary>
 
 - [x] **Setup Chess** (v3.1.222) — the board is read from the pieces themselves (there is no move list to replay
   and no fixed start position to replay it from), moves are dragged because a capture is not playable there any
@@ -833,6 +871,8 @@ veto for real blunders, and the clock rules above.
   (v3.1.55).
 
 ---
+
+</details>
 
 ## Contributing
 
