@@ -684,6 +684,26 @@ No schedule — added whenever I feel like it. Checked means shipped.
   exhausted, and it was never the thing that catches people.
 - [ ] **ChessBase Tactics arrows + autoplay** — analysis works; drawing and clicking don't. ChessBase renders its own
   board with no class to match, and finding it by shape was slow and unreliable.
+- [ ] **Talking Mode** — the engine as a voice. Not a number and an arrow but a running commentary in plain
+  language: what the position wants, what it is worried about, why the move it likes actually wins something.
+  The pieces exist (eval, lines, the explanation work below); the hard part is saying it like a person and
+  knowing when to shut up.
+- [ ] **Explain moves properly** — today a move comes with an eval and a line, and the *why* is your job. The aim
+  is the reason in words: what it threatens, what it stops, what breaks if you play something else. Feeds
+  Talking Mode and Game Review both.
+- [ ] **Game Review, built out** — it earns its keep already; this is depth, not rescue. Richer alternate-line
+  commentary, phase-by-phase accuracy, and the move explanations above feeding straight into it. On the
+  *"chess.com review without the subscription"* idea: their API route is automated use of a paid feature on an
+  authenticated account — ban territory, and unlike everything else here it is trivially attributable. The
+  built-in review is the answer; it just has to get good enough that the comparison stops mattering.
+- [ ] **Arrow opacity** — a slider for how loud the overlay is. Full-strength arrows over a real board are
+  sometimes exactly what you don't want on screen.
+- [ ] **A speed and polish pass on the panel** — the FEN input glares white out of a dark panel, and the left
+  column starts hiding things once five lines and the screen follower are both up. General de-jank alongside:
+  fewer reflows, tidier grouping, nothing moved for the sake of moving it.
+- [ ] **Arrows on the screen reader** — screen reading currently hands back a position and the panel shows the
+  answer *over there*. The natural end state is the best-move arrow drawn straight onto the region being
+  followed — screenshot or live — so the answer sits on the board it belongs to.
 - [ ] **Bug fixes**, open-ended. Several of the sharpest bugs so far were invisible rather than loud: autoplay that
   skipped a move with nothing logged, an engine that never loaded, a veto inverted only for Black. Reports of *"it
   did nothing"* are worth more than they sound.
