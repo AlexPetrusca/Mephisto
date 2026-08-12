@@ -710,7 +710,8 @@ No schedule — added whenever I feel like it. Checked means shipped.
 - [ ] **Whatever you want it to do** — most of what's here arrived because something was annoying in a real game.
 
 **Blocked upstream** — no engine supports these, so there's nothing to build against: Fog of War (imperfect
-information), Setup Chess, Spell Chess, Bughouse and Chess-with-Checkers.
+information), Spell Chess, Bughouse and Chess-with-Checkers. Setup Chess used to sit in this list; it turned out to
+need no engine support at all — once the pieces are down it is ordinary chess — and shipped in v3.1.222.
 
 **Looked at and dropped** — *Lichess cloud evaluation.* It's a crowdsourced cache of positions other people's
 browsers have already analysed, not a server-side engine, and its coverage is the problem: deep on openings and
@@ -720,6 +721,9 @@ post-game review, where the hit rate is higher and the eval is context rather th
 
 ### Shipped
 
+- [x] **Setup Chess** (v3.1.222) — the board is read from the pieces themselves (there is no move list to replay
+  and no fixed start position to replay it from), moves are dragged because a capture is not playable there any
+  other way, and promotions work. Plays as ordinary chess once the setup phase ends.
 - [x] **[Game review](#game-review)** (v3.1.218) — a finished game analysed on the extension's own page: accuracy,
   move quality, alternate lines, an eval graph, think time from the clock comments, an optional Maia pass, and
   fair-play measurements that deliberately stop short of a verdict. Exports as one self-contained HTML file.
