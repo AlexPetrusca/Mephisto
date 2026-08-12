@@ -957,6 +957,24 @@ stopped being scraped correctly, an engine that misbehaves, a feature you want, 
 diagnosis or a reproduction; "it stopped playing moves on lichess this morning" is a perfectly good issue. PRs are
 welcome too.
 
+**Paste a diagnostics report into the issue.** Press **D** on the page, or open the panel's **Engine** tab and
+click **Copy Diagnostics**, then paste. It is the single most useful thing you can attach: it carries the build,
+the engine in use, what was detected and on which site, the state of the page script, whether the last move played
+and why not if it didn't, the worker's load, where a click's time went, and the recent trace. It deliberately
+carries **no addresses, no account, no API token and nothing identifying**, so it can go straight into a public
+issue.
+
+Two things make a report much sharper, both optional:
+
+- **Turn on Verbose Logging first** (Settings → Engine) and reproduce the problem before copying. The trace is
+  what turns *"it was slow"* into a line naming which part was slow — without it the report has the state but
+  not the history.
+- **Copy while it is broken.** The report is a snapshot: reloading the page or the extension to "get a clean
+  one" throws away exactly the state that explains the fault.
+
+*"It did nothing"* with a diagnostics dump attached is worth more than a careful description without one. The
+quiet failures are the expensive ones here, and the report is what makes them visible.
+
 **If the Windows four-player setup fails, an issue is especially useful** — it is built and symbol-checked but has
 never been run on a real Windows machine, and native-messaging failures there are silent: Chrome reports the host as
 unavailable and says nothing about why. Testing it in stages turns that into something actionable, so please say

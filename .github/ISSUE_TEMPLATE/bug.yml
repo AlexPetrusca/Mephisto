@@ -8,6 +8,11 @@ body:
         You don't need to know what caused it. Several of the worst bugs here were silent rather
         than loud — autoplay skipping a move with nothing logged, an engine that never loaded — so
         "it did nothing" is a real report, not a vague one.
+
+        **The most useful thing you can attach is a diagnostics report.** Press **D** on the page,
+        or open the panel's **Engine** tab and click **Copy Diagnostics**, then paste it below. It
+        contains no addresses, no account, no API token and nothing identifying. Copy it *while the
+        problem is happening* — reloading to get a clean one throws away the state that explains it.
   - type: textarea
     id: what
     attributes:
@@ -15,16 +20,27 @@ body:
       placeholder: It stopped playing moves on lichess this morning. Panel showed a move, nothing clicked.
     validations:
       required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: >
+        Press D on the page, or panel → Engine → Copy Diagnostics, and paste. Carries the build,
+        the engine, what was detected, whether the last move played and why not if it didn't, and
+        the recent trace. Turning on Verbose Logging (Settings → Engine) before reproducing makes
+        it considerably more useful.
+      render: text
   - type: input
     id: version
     attributes:
       label: Version
-      description: Shown at the top of the extension's settings page.
+      description: Skip this if you pasted a diagnostics report — it already says.
       placeholder: "3.1.200"
   - type: input
     id: where
     attributes:
       label: Site and browser
+      description: Skip this too if you pasted a report; only the browser version is missing from it.
       placeholder: chess.com, Chrome 141 on Windows 11
   - type: dropdown
     id: windows-4pc
