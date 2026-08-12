@@ -336,7 +336,7 @@ position would be a guaranteed miss.
 
 **Chess.com puzzles.** The reader shipped in v3.1.207 — the same settings page, the same import button, and the
 format is detected from the file, so there is nothing extra to choose. Importing both databases gives you both: they
-key on the position, so neither overwrites the other. A database of **620,000+ Chess.com puzzles with their
+key on the position, so neither overwrites the other. A database of **820,000+ Chess.com puzzles with their
 solutions** will be published once [the upstream pull request](https://github.com/AlexPetrusca/Mephisto/pull/37) is
 merged; it covers rated tactics and the daily archive.
 
