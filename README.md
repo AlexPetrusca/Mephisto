@@ -698,32 +698,66 @@ No schedule — added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>32 items</summary>
+<summary>38 items, sorted by upside and effort</summary>
 
-- [ ] **More engines** — the lineup covers *strong* and *human-like* and not much between. Variety of character, not
-  more strength. **lc0 (Leela)** in WASM would be for comparing styles, not for strength.
-- [ ] **Duck Chess autoplay** — detection and analysis work; the duck-placement step doesn't.
-- [ ] **Four-player chess, the rest of it** — Teams mode works, promotions are played and eliminations are
-  handled. What is left: free-for-all needs engine support, and no real game has yet been seen past an
-  elimination, so that path is pinned by synthetic positions rather than by having happened. Chaturaji,
-  4P Giveaway and Self Partnering are untouched.
-- [ ] **Four-player chess on Windows, confirmed** — built and symbol-checked, never run on a real Windows machine.
-  See [Contributing](#contributing) for the four stages worth reporting.
-- [ ] **Short videos and more screenshots** — a premove firing, Humanize pacing a move, the screen reader following a
-  board. Some of this only makes sense in motion.
-- [ ] **Translate the README** — the interface speaks fourteen languages; the documentation still speaks one.
-- [ ] **Shrink the footprint further** — what's left is hardening the one rendezvous the MAIN-world probes need and
-  tightening how scraped positions are sanitised. Being straight about the ceiling: the client side is nearly
-  exhausted, and it was never the thing that catches people.
-- [ ] **ChessBase Tactics arrows + autoplay** — analysis works; drawing and clicking don't. ChessBase renders its own
-  board with no class to match, and finding it by shape was slow and unreliable.
+**Quick wins.** Small changes with an obvious payoff. This is where to start.
+
+- [ ] **Search by depth, not only by clock** — the panel budgets a move in milliseconds. Game Review already
+  offers a depth instead, which is reproducible: the same depth is the same answer on any machine. The panel
+  should take either.
+
+- [ ] **Notation, your choice** — SAN or UCI, everywhere the extension writes a move: the panel's lines, the
+  readout, the arrows, Game Review, the diagnostics. `e2e4` and `Nf3` are the same move, and different people
+  read them at different speeds.
+
+- [ ] **Arrows that say more** — every arrow carrying its own evaluation, and a number for where its line ranks:
+  1 for the engine's best, 2 through 5 for the rest, so the board alone tells you the order without a glance at
+  the panel. Together with lifting Multiple Lines to whatever the engine actually supports instead of the
+  current ceiling.
+
+- [ ] **Overlay controls** — a slider for arrow opacity, because full-strength arrows over a real board are
+  sometimes exactly what you don't want on screen. Alongside it, board animation you can opt into or switch
+  off, and enough control over the drawing to suit the board you're actually looking at.
+
+- [ ] **Live stats** — accuracy as it happens, beside the eval history rather than instead of it: a running
+  accuracy for both sides, the move-quality tally the review already computes, and how long you are actually
+  taking compared to how long you think you are. The maths is all here — the panel and Game Review judge moves
+  by the same win% bands — so this is mostly keeping the running totals and finding the room. It belongs on the
+  eval graph's strip, since the two answer the same question from opposite ends.
+
+- [ ] **A first-run check in the panel** — *"it did nothing"* is the most common report and the hardest to act
+  on. One button that names the missing part: board detected, engine loaded, native host reachable, settings
+  received, permissions granted. The diagnostics already gather every one of those; this is about showing them
+  before somebody has to ask.
+
+- [ ] **Settings profiles** — bullet and classical want different move times, a different appetite for
+  premoves, different everything. Save a set, name it, switch between them; ideally picked automatically by
+  site and time control.
+
+
+**Worth real work.** The ones that would change how this feels to use, and cost accordingly.
+
+- [ ] **A test rail that can actually click** — the suite reads source and runs extracted functions, which is
+  exactly why a scrape-tag collision that broke every Chess.com game once passed it cleanly. Two halves are
+  worth building: saved copies of real page markup, so a scraper is tested against the DOM a site genuinely
+  served instead of against a guess, and a headless browser that loads the extension and plays a game end to
+  end. Nearly every silent failure this project has had would have been caught by one or the other.
+
+- [ ] **Explain moves properly** — today a move comes with an eval and a line, and the *why* is your job. The aim
+  is the reason in words: what it threatens, what it stops, what breaks if you play something else. Feeds
+  Talking Mode and Game Review both.
+
 - [ ] **Talking Mode** — the engine as a voice. Not a number and an arrow but a running commentary in plain
   language: what the position wants, what it is worried about, why the move it likes actually wins something.
   The pieces exist (eval, lines, the explanation work below); the hard part is saying it like a person and
   knowing when to shut up.
-- [ ] **Explain moves properly** — today a move comes with an eval and a line, and the *why* is your job. The aim
-  is the reason in words: what it threatens, what it stops, what breaks if you play something else. Feeds
-  Talking Mode and Game Review both.
+
+- [ ] **A dedicated analysis page** — the panel is the right shape for a live game and the wrong one for
+  studying. A full page instead: a large board, the move list beside it, both engines shown together — what a
+  human of a chosen rating would play next to what Stockfish wants — win% and eval bars, per-move probability
+  across the rating bands, and the blunder / mistake / best-move tallies. Some of it belongs in Game Review as
+  well, which already computes most of the numbers.
+
 - [ ] **Game Review, built out** — it earns its keep already; this is depth, not rescue. The page should lead
   with the board: bigger, the move list narrowed down the side, and the engine's candidate lines labelled so it
   is obvious at a glance which one it actually likes. Then richer alternate-line commentary, phase-by-phase
@@ -731,80 +765,122 @@ No schedule — added whenever I feel like it. Checked means shipped.
   *"chess.com review without the subscription"* idea: their API route is automated use of a paid feature on an
   authenticated account — ban territory, and unlike everything else here it is trivially attributable. The
   built-in review is the answer; it just has to get good enough that the comparison stops mattering.
-- [ ] **Overlay controls** — a slider for arrow opacity, because full-strength arrows over a real board are
-  sometimes exactly what you don't want on screen. Alongside it, board animation you can opt into or switch
-  off, and enough control over the drawing to suit the board you're actually looking at.
-- [ ] **A speed and polish pass on the panel** — the FEN input glares white out of a dark panel, and the left
-  column starts hiding things once five lines and the screen follower are both up. General de-jank alongside:
-  fewer reflows, tidier grouping, nothing moved for the sake of moving it.
-- [ ] **Arrows on the screen reader** — screen reading currently hands back a position and the panel shows the
-  answer *over there*. The natural end state is the best-move arrow drawn straight onto the region being
-  followed — screenshot or live — so the answer sits on the board it belongs to.
-- [ ] **Forced lines, drawn ahead** — when a continuation is forced the panel already knows the next few moves
-  and still draws only one. Draw the chain: an arrow per forced ply, up to five, coloured by order so the
-  sequence reads at a glance and the premove *after* this one is visible before it happens. The forcing
-  detection exists already, behind Safe Premove and double premove.
+
 - [ ] **A premove framework, and Maia premoves** — premoving is welded to the engines whose search happens to
   stream a multi-move line. It should be a setting: when to arm one, how many, on what confidence, with the
   existing safety gates untouched. Maia is the case that proves the point — it answers with a single move at
   depth one and cannot certify a reply the way a search can, so it needs a second opinion rather than a
   deeper look.
-- [ ] **Search by depth, not only by clock** — the panel budgets a move in milliseconds. Game Review already
-  offers a depth instead, which is reproducible: the same depth is the same answer on any machine. The panel
-  should take either.
-- [ ] **Polyglot books** — bring your own `.bin`. Book play exists and is driven by the Opening Explorer's
-  statistics; a Polyglot file is the other half of that tradition, and the format most published repertoires
-  are actually distributed in.
+
+- [ ] **Forced lines, drawn ahead** — when a continuation is forced the panel already knows the next few moves
+  and still draws only one. Draw the chain: an arrow per forced ply, up to five, coloured by order so the
+  sequence reads at a glance and the premove *after* this one is visible before it happens. The forcing
+  detection exists already, behind Safe Premove and double premove.
+
 - [ ] **Playing with a net** — for when the moves are yours. Live feedback you opt into, and underneath it a
   quieter mode that says nothing at all unless you are about to throw the game away: not the best move, just
   the set of moves that keep the result. The win% bands the panel already judges moves by are the right ruler.
-- [ ] **Clock rules per situation** — pacing is one distribution for every move today. Real players are slower
-  with the queen than the king, instant on a recapture, and slow again when they can see the mate. Rules keyed
-  to what the move *is*, not just to how many have been played — and to what the clock says, because nobody
-  spends twelve seconds on move forty with thirty left.
-- [ ] **Cloud evaluation** — chess-api.com and stockfish.online run real server-side Stockfish over HTTP or
-  WebSocket, which is a different thing from the Lichess position cache below. The case for it is a machine
-  that cannot run a strong engine locally, which is exactly the case that needs it. The cost, stated plainly:
-  the position leaves your machine, and a native host is both faster and private — so this is a fallback, not
-  an upgrade.
-- [ ] **Better board reading from the screen** — screenshot-to-FEN works; its failures are the interesting
-  part. Unusual piece sets, low resolution, boards at an angle, and a quicker way to correct the one square it
-  got wrong instead of starting over.
-- [ ] **Mirroring another bot** — run a second game in a background tab and relay its moves into yours, so what
-  you play carries another bot's character instead of a raw engine line. Two caveats worth having up front: it
-  doubles the footprint rather than halving it, and what actually catches people is the shape of the moves
-  across many games, which does not change based on where they came from.
-- [ ] **Streaming opponents** — kept because it might turn into something, but under-specified as it stands:
-  notice when an opponent is streaming. It needs a decision about what the extension would *do* with that
-  before there is anything to build.
-- [ ] **An LLM at the board** *(barely serious)* — hand a model the FEN, the move history and the legal moves
-  and let it choose. Language models play badly and propose illegal moves, so as a source of moves this is a
-  curiosity. One step across it is genuinely interesting: the same model as the voice behind Talking Mode and
-  the move explanations, which is where the effort belongs.
-- [ ] **Live stats** — accuracy as it happens, beside the eval history rather than instead of it: a running
-  accuracy for both sides, the move-quality tally the review already computes, and how long you are actually
-  taking compared to how long you think you are. The maths is all here — the panel and Game Review judge moves
-  by the same win% bands — so this is mostly keeping the running totals and finding the room. It belongs on the
-  eval graph's strip, since the two answer the same question from opposite ends.
-- [ ] **A test rail that can actually click** — the suite reads source and runs extracted functions, which is
-  exactly why a scrape-tag collision that broke every Chess.com game once passed it cleanly. Two halves are
-  worth building: saved copies of real page markup, so a scraper is tested against the DOM a site genuinely
-  served instead of against a guess, and a headless browser that loads the extension and plays a game end to
-  end. Nearly every silent failure this project has had would have been caught by one or the other.
-- [ ] **The pause after a browser restart** — for several seconds after Chrome starts, the extension is
-  unresponsive, and then it recovers on its own. Long-standing, instrumented, never explained. The worker's
-  cold-start timings are recorded now, which is where to start looking.
+
+- [ ] **Drill mode** — the parts are all here: the puzzle database, the Opening Explorer's statistics, and Maia
+  at a rating band. Put them together and a repertoire can be drilled against an opponent who plays like a human
+  of the strength you pick, telling you the moment you leave your own lines.
+
+- [ ] **Your history across games** — Live Stats answers *how am I doing right now*; this answers *how have I
+  been doing*. Accuracy over time, which openings actually lose, whether the Humanize settings you chose still
+  look like you. Game Review computes the per-game numbers already; this keeps them.
+
+
+**Known problems.** Named faults rather than ideas: blocked on a diagnosis or on a site, not on wanting to.
+
 - [ ] **Playing while the machine is busy** — with an unrelated CPU-heavy job running, a native engine's moves
   stall while a WASM engine's do not. The cause is understood: the extension's process is not scheduled as
   user-interactive, and a WASM engine happens to keep that same process on CPU while a native one leaves it
   idle. A click is down from twelve round trips to four; what remains is finding a route that does not depend
   on that process being scheduled at all.
-- [ ] **Settings profiles** — bullet and classical want different move times, a different appetite for
-  premoves, different everything. Save a set, name it, switch between them; ideally picked automatically by
-  site and time control.
+
+- [ ] **The pause after a browser restart** — for several seconds after Chrome starts, the extension is
+  unresponsive, and then it recovers on its own. Long-standing, instrumented, never explained. The worker's
+  cold-start timings are recorded now, which is where to start looking.
+
+- [ ] **ChessBase Tactics arrows + autoplay** — analysis works; drawing and clicking don't. ChessBase renders its own
+  board with no class to match, and finding it by shape was slow and unreliable.
+
+- [ ] **Four-player chess, the rest of it** — Teams mode works, promotions are played and eliminations are
+  handled. What is left: free-for-all needs engine support, and no real game has yet been seen past an
+  elimination, so that path is pinned by synthetic positions rather than by having happened. Chaturaji,
+  4P Giveaway and Self Partnering are untouched.
+
+- [ ] **Four-player chess on Windows, confirmed** — built and symbol-checked, never run on a real Windows machine.
+  See [Contributing](#contributing) for the four stages worth reporting.
+
+- [ ] **Duck Chess autoplay** — detection and analysis work; the duck-placement step doesn't.
+
+
+**Smaller improvements.** Worth having, not worth dropping anything else for.
+
+- [ ] **Polyglot books** — bring your own `.bin`. Book play exists and is driven by the Opening Explorer's
+  statistics; a Polyglot file is the other half of that tradition, and the format most published repertoires
+  are actually distributed in.
+
+- [ ] **Clock rules per situation** — pacing is one distribution for every move today. Real players are slower
+  with the queen than the king, instant on a recapture, and slow again when they can see the mate. Rules keyed
+  to what the move *is*, not just to how many have been played — and to what the clock says, because nobody
+  spends twelve seconds on move forty with thirty left.
+
+- [ ] **Better board reading from the screen** — screenshot-to-FEN works; its failures are the interesting
+  part. Unusual piece sets, low resolution, boards at an angle, and a quicker way to correct the one square it
+  got wrong instead of starting over.
+
+- [ ] **Arrows on the screen reader** — screen reading currently hands back a position and the panel shows the
+  answer *over there*. The natural end state is the best-move arrow drawn straight onto the region being
+  followed — screenshot or live — so the answer sits on the board it belongs to.
+
+- [ ] **A speed and polish pass on the panel** — the FEN input glares white out of a dark panel, and the left
+  column starts hiding things once five lines and the screen follower are both up. General de-jank alongside:
+  fewer reflows, tidier grouping, nothing moved for the sake of moving it.
+
+- [ ] **Shrink the footprint further** — what's left is hardening the one rendezvous the MAIN-world probes need and
+  tightening how scraped positions are sanitised. Being straight about the ceiling: the client side is nearly
+  exhausted, and it was never the thing that catches people.
+
+- [ ] **Cloud evaluation** — chess-api.com and stockfish.online run real server-side Stockfish over HTTP or
+  WebSocket, which is a different thing from the Lichess position cache below. The case for it is a machine
+  that cannot run a strong engine locally, which is exactly the case that needs it. The cost, stated plainly:
+  the position leaves your machine, and a native host is both faster and private — so this is a fallback, not
+  an upgrade.
+
+- [ ] **More engines** — the lineup covers *strong* and *human-like* and not much between. Variety of character, not
+  more strength. **lc0 (Leela)** in WASM would be for comparing styles, not for strength.
+
+- [ ] **Short videos and more screenshots** — a premove firing, Humanize pacing a move, the screen reader following a
+  board. Some of this only makes sense in motion.
+
+- [ ] **Translate the README** — the interface speaks fourteen languages; the documentation still speaks one.
+
+
+**Speculative.** Kept because they might turn into something, not because they are planned.
+
+- [ ] **Mirroring another bot** — run a second game in a background tab and relay its moves into yours, so what
+  you play carries another bot's character instead of a raw engine line. Two caveats worth having up front: it
+  doubles the footprint rather than halving it, and what actually catches people is the shape of the moves
+  across many games, which does not change based on where they came from.
+
+- [ ] **Streaming opponents** — kept because it might turn into something, but under-specified as it stands:
+  notice when an opponent is streaming. It needs a decision about what the extension would *do* with that
+  before there is anything to build.
+
+- [ ] **An LLM at the board** *(barely serious)* — hand a model the FEN, the move history and the legal moves
+  and let it choose. Language models play badly and propose illegal moves, so as a source of moves this is a
+  curiosity. One step across it is genuinely interesting: the same model as the voice behind Talking Mode and
+  the move explanations, which is where the effort belongs.
+
+
+**Always open.**
+
 - [ ] **Bug fixes**, open-ended. Several of the sharpest bugs so far were invisible rather than loud: autoplay that
   skipped a move with nothing logged, an engine that never loaded, a veto inverted only for Black. Reports of *"it
   did nothing"* are worth more than they sound.
+
 - [ ] **Whatever you want it to do** — most of what's here arrived because something was annoying in a real game.
 
 **Blocked upstream** — no engine supports these, so there's nothing to build against: Fog of War (imperfect
