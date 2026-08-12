@@ -727,7 +727,8 @@ No schedule — added whenever I feel like it. Checked means shipped.
   the set of moves that keep the result. The win% bands the panel already judges moves by are the right ruler.
 - [ ] **Clock rules per situation** — pacing is one distribution for every move today. Real players are slower
   with the queen than the king, instant on a recapture, and slow again when they can see the mate. Rules keyed
-  to what the move *is*, not just to how many have been played.
+  to what the move *is*, not just to how many have been played — and to what the clock says, because nobody
+  spends twelve seconds on move forty with thirty left.
 - [ ] **Cloud evaluation** — chess-api.com and stockfish.online run real server-side Stockfish over HTTP or
   WebSocket, which is a different thing from the Lichess position cache below. The case for it is a machine
   that cannot run a strong engine locally, which is exactly the case that needs it. The cost, stated plainly:
@@ -747,6 +748,27 @@ No schedule — added whenever I feel like it. Checked means shipped.
   and let it choose. Language models play badly and propose illegal moves, so as a source of moves this is a
   curiosity. One step across it is genuinely interesting: the same model as the voice behind Talking Mode and
   the move explanations, which is where the effort belongs.
+- [ ] **Live stats** — accuracy as it happens, beside the eval history rather than instead of it: a running
+  accuracy for both sides, the move-quality tally the review already computes, and how long you are actually
+  taking compared to how long you think you are. The maths is all here — the panel and Game Review judge moves
+  by the same win% bands — so this is mostly keeping the running totals and finding the room. It belongs on the
+  eval graph's strip, since the two answer the same question from opposite ends.
+- [ ] **A test rail that can actually click** — the suite reads source and runs extracted functions, which is
+  exactly why a scrape-tag collision that broke every Chess.com game once passed it cleanly. Two halves are
+  worth building: saved copies of real page markup, so a scraper is tested against the DOM a site genuinely
+  served instead of against a guess, and a headless browser that loads the extension and plays a game end to
+  end. Nearly every silent failure this project has had would have been caught by one or the other.
+- [ ] **The pause after a browser restart** — for several seconds after Chrome starts, the extension is
+  unresponsive, and then it recovers on its own. Long-standing, instrumented, never explained. The worker's
+  cold-start timings are recorded now, which is where to start looking.
+- [ ] **Playing while the machine is busy** — with an unrelated CPU-heavy job running, a native engine's moves
+  stall while a WASM engine's do not. The cause is understood: the extension's process is not scheduled as
+  user-interactive, and a WASM engine happens to keep that same process on CPU while a native one leaves it
+  idle. A click is down from twelve round trips to four; what remains is finding a route that does not depend
+  on that process being scheduled at all.
+- [ ] **Settings profiles** — bullet and classical want different move times, a different appetite for
+  premoves, different everything. Save a set, name it, switch between them; ideally picked automatically by
+  site and time control.
 - [ ] **Bug fixes**, open-ended. Several of the sharpest bugs so far were invisible rather than loud: autoplay that
   skipped a move with nothing logged, an engine that never loaded, a veto inverted only for Black. Reports of *"it
   did nothing"* are worth more than they sound.
