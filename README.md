@@ -691,19 +691,62 @@ No schedule — added whenever I feel like it. Checked means shipped.
 - [ ] **Explain moves properly** — today a move comes with an eval and a line, and the *why* is your job. The aim
   is the reason in words: what it threatens, what it stops, what breaks if you play something else. Feeds
   Talking Mode and Game Review both.
-- [ ] **Game Review, built out** — it earns its keep already; this is depth, not rescue. Richer alternate-line
-  commentary, phase-by-phase accuracy, and the move explanations above feeding straight into it. On the
+- [ ] **Game Review, built out** — it earns its keep already; this is depth, not rescue. The page should lead
+  with the board: bigger, the move list narrowed down the side, and the engine's candidate lines labelled so it
+  is obvious at a glance which one it actually likes. Then richer alternate-line commentary, phase-by-phase
+  accuracy, and the move explanations above feeding straight into it. On the
   *"chess.com review without the subscription"* idea: their API route is automated use of a paid feature on an
   authenticated account — ban territory, and unlike everything else here it is trivially attributable. The
   built-in review is the answer; it just has to get good enough that the comparison stops mattering.
-- [ ] **Arrow opacity** — a slider for how loud the overlay is. Full-strength arrows over a real board are
-  sometimes exactly what you don't want on screen.
+- [ ] **Overlay controls** — a slider for arrow opacity, because full-strength arrows over a real board are
+  sometimes exactly what you don't want on screen. Alongside it, board animation you can opt into or switch
+  off, and enough control over the drawing to suit the board you're actually looking at.
 - [ ] **A speed and polish pass on the panel** — the FEN input glares white out of a dark panel, and the left
   column starts hiding things once five lines and the screen follower are both up. General de-jank alongside:
   fewer reflows, tidier grouping, nothing moved for the sake of moving it.
 - [ ] **Arrows on the screen reader** — screen reading currently hands back a position and the panel shows the
   answer *over there*. The natural end state is the best-move arrow drawn straight onto the region being
   followed — screenshot or live — so the answer sits on the board it belongs to.
+- [ ] **Forced lines, drawn ahead** — when a continuation is forced the panel already knows the next few moves
+  and still draws only one. Draw the chain: an arrow per forced ply, up to five, coloured by order so the
+  sequence reads at a glance and the premove *after* this one is visible before it happens. The forcing
+  detection exists already, behind Safe Premove and double premove.
+- [ ] **A premove framework, and Maia premoves** — premoving is welded to the engines whose search happens to
+  stream a multi-move line. It should be a setting: when to arm one, how many, on what confidence, with the
+  existing safety gates untouched. Maia is the case that proves the point — it answers with a single move at
+  depth one and cannot certify a reply the way a search can, so it needs a second opinion rather than a
+  deeper look.
+- [ ] **Search by depth, not only by clock** — the panel budgets a move in milliseconds. Game Review already
+  offers a depth instead, which is reproducible: the same depth is the same answer on any machine. The panel
+  should take either.
+- [ ] **Polyglot books** — bring your own `.bin`. Book play exists and is driven by the Opening Explorer's
+  statistics; a Polyglot file is the other half of that tradition, and the format most published repertoires
+  are actually distributed in.
+- [ ] **Playing with a net** — for when the moves are yours. Live feedback you opt into, and underneath it a
+  quieter mode that says nothing at all unless you are about to throw the game away: not the best move, just
+  the set of moves that keep the result. The win% bands the panel already judges moves by are the right ruler.
+- [ ] **Clock rules per situation** — pacing is one distribution for every move today. Real players are slower
+  with the queen than the king, instant on a recapture, and slow again when they can see the mate. Rules keyed
+  to what the move *is*, not just to how many have been played.
+- [ ] **Cloud evaluation** — chess-api.com and stockfish.online run real server-side Stockfish over HTTP or
+  WebSocket, which is a different thing from the Lichess position cache below. The case for it is a machine
+  that cannot run a strong engine locally, which is exactly the case that needs it. The cost, stated plainly:
+  the position leaves your machine, and a native host is both faster and private — so this is a fallback, not
+  an upgrade.
+- [ ] **Better board reading from the screen** — screenshot-to-FEN works; its failures are the interesting
+  part. Unusual piece sets, low resolution, boards at an angle, and a quicker way to correct the one square it
+  got wrong instead of starting over.
+- [ ] **Mirroring another bot** — run a second game in a background tab and relay its moves into yours, so what
+  you play carries another bot's character instead of a raw engine line. Two caveats worth having up front: it
+  doubles the footprint rather than halving it, and what actually catches people is the shape of the moves
+  across many games, which does not change based on where they came from.
+- [ ] **Streaming opponents** — kept because it might turn into something, but under-specified as it stands:
+  notice when an opponent is streaming. It needs a decision about what the extension would *do* with that
+  before there is anything to build.
+- [ ] **An LLM at the board** *(barely serious)* — hand a model the FEN, the move history and the legal moves
+  and let it choose. Language models play badly and propose illegal moves, so as a source of moves this is a
+  curiosity. One step across it is genuinely interesting: the same model as the voice behind Talking Mode and
+  the move explanations, which is where the effort belongs.
 - [ ] **Bug fixes**, open-ended. Several of the sharpest bugs so far were invisible rather than loud: autoplay that
   skipped a move with nothing logged, an engine that never loaded, a veto inverted only for Black. Reports of *"it
   did nothing"* are worth more than they sound.
@@ -713,11 +756,21 @@ No schedule — added whenever I feel like it. Checked means shipped.
 information), Spell Chess, Bughouse and Chess-with-Checkers. Setup Chess used to sit in this list; it turned out to
 need no engine support at all — once the pieces are down it is ordinary chess — and shipped in v3.1.222.
 
-**Looked at and dropped** — *Lichess cloud evaluation.* It's a crowdsourced cache of positions other people's
-browsers have already analysed, not a server-side engine, and its coverage is the problem: deep on openings and
-popular lines, absent on ordinary middlegames. That's the inverse of where extra depth would change a move, and the
-openings are already covered by the [Opening Explorer](#analysis) and book play. Might be worth revisiting for
-post-game review, where the hit rate is higher and the eval is context rather than a move to play.
+**Looked at and dropped**
+
+*Lichess cloud evaluation.* It's a crowdsourced cache of positions other people's browsers have already analysed, not a
+server-side engine, and its coverage is the problem: deep on openings and popular lines, absent on ordinary middlegames.
+That's the inverse of where extra depth would change a move, and the openings are already covered by the [Opening
+Explorer](#analysis) and book play. Might be worth revisiting for post-game review, where the hit rate is higher and the
+eval is context rather than a move to play.
+
+*Training more Maia rating bands.* **Maia-3 already covers 600–2600 on one continuous slider**, so new discrete bands
+above 2200 would mostly duplicate what ships today. Human move-matching data also thins out at the top, where strong
+play converges on the moves an engine would pick anyway — so the expensive end of the range is precisely where a new
+band is least distinctive. And it could not honestly be called an improvement without a held-out move-agreement
+benchmark against Maia-3 at the same rating, which is a training campaign with a measurement plan attached, not an
+afternoon. The cheaper route to the same goal is blending what is already here: Maia-3 at the band you want, a Stockfish
+veto for real blunders, and the clock rules above.
 
 ### Shipped
 
