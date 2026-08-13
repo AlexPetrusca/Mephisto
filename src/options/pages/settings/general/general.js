@@ -110,15 +110,22 @@ class GeneralSettings extends SettingsPage {
         const engineLabelUntooltiped = document.querySelector('#engine-label-untooltiped');
         for (const range of [multipv_range, threads_range, memory_range, arrow_opacity_range]) {
             range.registerChangeListener(() => {
-                let section = range.elem;
-                while (!section.classList.contains('section')) {
-                    section = section.parentElement
+                // SCOPED TO THE ROW, not to the enclosing section. This used to walk up to `.section`
+                // and take the FIRST `.set-val` inside it -- which is the right span only while a
+                // section holds exactly one range. The first section to hold two put Arrow Opacity's
+                // value into the readout of the row above it: the number moved, just not where you
+                // were looking, and the slider you were dragging stayed blank.
+                //
+                // `.set-val` explicitly, NOT the first `.value`: M.Range injects its own
+                // <span class="value"> inside the drag thumb, and since the readout sits AFTER the
+                // input, a bare `.value` lookup finds that hidden bubble instead.
+                const row = range.elem.closest?.('.set-row');
+                let scope = row;
+                if (!scope) {                       // markup without .set-row -- fall back as before
+                    scope = range.elem;
+                    while (scope && !scope.classList.contains('section')) scope = scope.parentElement;
                 }
-                // `.set-val` explicitly, NOT the first `.value` in the row: M.Range injects its own
-                // <span class="value"> inside the drag thumb, and since the readout now sits AFTER
-                // the input, a bare `.value` lookup finds that hidden bubble instead. Falls back for
-                // a stale cached page whose markup predates .set-val.
-                const out = section.querySelector('.set-val') || section.querySelector('.value');
+                const out = scope && (scope.querySelector('.set-val') || scope.querySelector('.value'));
                 if (out) out.innerText = range.getValue();
             });
         }
