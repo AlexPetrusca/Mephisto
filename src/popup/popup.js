@@ -329,9 +329,19 @@ async function initPanel(root, tabId) {
         move_notation: (JSON.parse(MephistoConfig.get('move_notation')) === 'uci') ? 'uci' : 'san',
         // Off by default: the labels are genuinely useful and they are also more ink on the board.
         arrow_labels: JSON.parse(MephistoConfig.get('arrow_labels')) || false,
-        // How loud the arrows are. Full strength over a real board is sometimes exactly what you
-        // do not want on screen, and the right answer depends on the board you are looking at.
-        arrow_opacity: JSON.parse(MephistoConfig.get('arrow_opacity')) || 0.75,
+        // The rank badge is its own decision. It has been drawn unconditionally since 3.1.226, so
+        // it stays ON by default -- turning it off is the new option, not turning it on.
+        arrow_rank: (JSON.parse(MephistoConfig.get('arrow_rank')) !== false),
+        // How loud the arrows are, as a PERCENTAGE (1..100) -- what the slider shows is what is
+        // stored, so the number in the settings and the number on disk are the same thing.
+        //
+        // 3.1.228 stored a 0..1 fraction, and 0.75 read as a percentage is 0.75% -- invisible arrows
+        // on every install that had ever touched the slider. Anything at or below 1 is therefore
+        // read as the old scale and scaled up. EXACTLY 1 is claimed by both scales -- full opacity
+        // then, 1% now -- and resolves as the old meaning on purpose: an install sitting at maximum
+        // stays at maximum, where the other reading would turn its arrows invisible. 1% is reachable
+        // again the moment the slider is touched.
+        arrow_opacity: read_arrow_opacity(),
         // Board animation, opt-out. Nothing about a move needs to slide to be understood.
         board_animation: (JSON.parse(MephistoConfig.get('board_animation')) !== false),
         // Accuracy as it happens, on its own strip under the eval history.
@@ -3052,7 +3062,6 @@ function rotate_fen_180(fen) {
 // to re-scan before one. Each pass is the ordinary recognise path with detection skipped, so it is
 // as cheap as it can be, and a scan that reads the SAME position does nothing at all -- an unchanged
 // board must not restart the search on every tick.
-const SNAP_FOLLOW_MS = 250;
 let snap_follow_timer = null;
 let snap_follow_busy = false;
 
@@ -3079,11 +3088,15 @@ function snap_follow_start() {
         await snap_follow_tick();
         snap_last_read_ms = Date.now() - t0;
         if (snap_follow_timer === null) return;
-        snap_follow_timer = setTimeout(loop, Math.max(SNAP_FOLLOW_MS - snap_last_read_ms, 0));
+        // STRAIGHT BACK IN (user call 2026-08-09). The chain already guarantees one read at a time,
+        // so a gap on top of it only ever adds latency between a move happening and the panel seeing
+        // it. setTimeout(0) rather than a direct call: it yields to the event loop, so a follow that
+        // is running flat out still lets clicks, config pushes and the engine's own frames through.
+        snap_follow_timer = setTimeout(loop, 0);
     };
     snap_follow_timer = setTimeout(loop, 0);
     update_snap_follow_button();
-    setup_fen_msg(i18n('panel.fen.following', 'Following the screen · {ms}ms', {ms: SNAP_FOLLOW_MS})); // terse: it sits above the buttons
+    setup_fen_msg(i18n('panel.fen.following', 'Following the screen')); // terse: it sits above the buttons
 }
 
 function snap_follow_toggle() {
@@ -4968,7 +4981,8 @@ function manual_play() {
 const HOTKEY_TOGGLES = { // action -> the quick-settings checkbox it flips
     autoplay: 'qs_autoplay', premove: 'qs_premove', help_mode: 'qs_help', humanize: 'qs_humanize',
     clock_mode: 'qs_clock', clock_pace: 'qs_clockpace', mirror_mode: 'qs_mirror', manual_mode: 'qs_manual',
-    eval_bar: 'qs_evalbar', eval_history: 'qs_evalhist', tablebase: 'qs_tablebase', puzzle_mode: 'qs_puzzle',
+    eval_bar: 'qs_evalbar', eval_history: 'qs_evalhist', live_stats: 'qs_livestats',
+    tablebase: 'qs_tablebase', puzzle_mode: 'qs_puzzle',
     explorer: 'qs_explorer', book_play: 'qs_book',
 };
 // Returns true if it handled the action (the content-script listener only swallows the key then, so
@@ -5602,7 +5616,10 @@ function game_phases(startFen, movesStr) {
 }
 
 function record_eval_history(frac) {
-    if (!config.eval_history || typeof frac !== 'number') return;
+    // Recorded for EITHER reader. Live Stats derives its accuracy from this same array, so gating
+    // the recording on the graph's own toggle left the strip with nothing to read and looking broken.
+    // One number per ply either way -- there is nothing to save by not recording it.
+    if ((!config.eval_history && !config.live_stats) || typeof frac !== 'number') return;
     // premove_tracker is the one place the CURRENT position's startFen + move list are kept
     // (on_new_pos sets it unconditionally, whether or not Premove is on). last_eval carries neither.
     const startFen = premove_tracker.startFen || '';
@@ -5739,8 +5756,9 @@ function maybe_autodetect_variant() {
 const LIVE_CONFIG_KEYS = [
     'autoplay', 'premove', 'ponder', 'tablebase', 'background_play', 'hide_opponent',
     'explorer', 'book_play', 'explorer_db', 'help_mode', 'humanize', 'clock_mode', 'mirror_mode',
-    'manual_mode', 'eval_bar', 'eval_history', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
-    'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode', 'move_time', 'move_variance', 'move_reason',
+    'manual_mode', 'eval_bar', 'eval_history', 'live_stats', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
+    'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode',
+    'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
     'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay', 'puzzle_auto_next', 'puzzle_next_delay',
@@ -5897,7 +5915,7 @@ function draw_moves() {
         const stroke_width = strokeFunc(last_eval.lines[i]);
         // Rank AND eval travel with the arrow. Colour alone never said WHICH line an arrow was --
         // you had to look away from the board and count rows in the panel to find out.
-        const rank = i + 1;
+        const rank = config.arrow_rank ? (i + 1) : 0;
         const label = arrow_label(last_eval.lines[i]);
         draw_move(last_eval.lines[i].move, arrow_color, PANEL_ROOT.getElementById('move-annotations'),
                   stroke_width, rank, label);
@@ -5977,11 +5995,21 @@ function draw_threat() {
 // An arrow's own evaluation, from White's point of view like every other score the panel shows, so
 // a line does not read one way on the board and the other way in the panel. Mate is written as #N
 // rather than as a centipawn score, because a mate is not a number of pawns.
+// See the config note: values <= 1 are the pre-3.1.229 fraction, everything else is a percentage.
+function read_arrow_opacity() {
+    const raw = JSON.parse(MephistoConfig.get('arrow_opacity'));
+    if (!Number.isFinite(raw) || raw <= 0) return 75;
+    return Math.max(1, Math.min(100, raw <= 1 ? Math.round(raw * 100) : Math.round(raw)));
+}
+
 // The configured opacity, scaled against whatever this overlay's baseline was, so a slider at its
 // default leaves every arrow exactly as it has always looked.
 function arrow_alpha(base) {
-    const o = Number(config.arrow_opacity);
-    return Math.max(0.05, Math.min(1, base * ((Number.isFinite(o) ? o : 0.75) / 0.75))).toFixed(3);
+    const pct = Number(config.arrow_opacity);
+    const frac = (Number.isFinite(pct) ? pct : 75) / 100;
+    // scaled against this overlay's own baseline, so the slider at 75 leaves every arrow exactly as
+    // it has always looked; floored so the slider's bottom end cannot render an invisible arrow
+    return Math.max(0.05, Math.min(1, base * (frac / 0.75))).toFixed(3);
 }
 
 function arrow_label(line) {
@@ -6092,7 +6120,7 @@ function arrow_badge_svg(x1, y1, color, rank, label) {
         // one character away from being something else if the source ever changes
         const safe = String(label).replace(/[<>&]/g, '');
         parts.push(`<text x='${x1}' y='${y1 + 0.42}' text-anchor='middle' dominant-baseline='central'` +
-            ` font-size='0.22' font-weight='600' fill='${color}' opacity='0.95'` +
+            ` font-size='0.30' font-weight='700' fill='${color}' opacity='0.95'` +
             ` stroke='#000' stroke-width='0.05' paint-order='stroke'>${safe}</text>`);
     }
     return parts.join('');
@@ -6347,6 +6375,20 @@ function check_for_update_version(el) {
         chrome.runtime.sendMessage({updateCheck: true}, (res) => {
             // the version compare lives in the SW (isNewer) -- one implementation, not two
             if (chrome.runtime.lastError || !res || res.error || !res.latest || !res.newer) return;
+            // ALREADY INSTALLED, JUST NOT RELOADED YET. getManifest() reports the running version,
+            // and a self-update writes files that Chrome has not picked up -- so `newer` stays true
+            // against a version already on disk and the notice offered an update you had. The
+            // installer records what it wrote; if that is the release being offered, say nothing.
+            chrome.storage.local.get('mephisto_installed_version', (got) => {
+                if (!chrome.runtime.lastError && got?.mephisto_installed_version === res.latest) return;
+                show_update_notice(el, res);
+            });
+        });
+    } catch (e) { /* extension context gone -- nothing to notify about */ }
+}
+
+function show_update_notice(el, res) {
+    {
             el.textContent = i18n('panel.update_available', 'Update available — v{latest} (you have v{current})',
       {latest: res.latest, current: res.current});
             el.hidden = false;
@@ -6365,8 +6407,16 @@ function check_for_update_version(el) {
             // The panel cannot run the install itself (it lives in the page's isolated world, where
             // there is no showDirectoryPicker and no access to the extension's IndexedDB), so the
             // click hands off to the worker, which opens the settings page and lets it run.
-            chrome.runtime.sendMessage({updateReady: true}, (ready) => {
-                if (chrome.runtime.lastError || !ready?.ok) return;
+        // WHERE THE NOTICE SENDS YOU depends on whether self-updating is switched ON, not on whether
+        // it happens to be fully set up (user call 2026-08-09):
+        //   off            -> the release page, which is the only way to get it
+        //   on + ready     -> install it, one click, no page to visit
+        //   on, not ready  -> the Updates section, where the missing piece (a folder, a permission)
+        //                     is chosen -- sending someone to GitHub there is sending them to do by
+        //                     hand the thing they already asked the extension to do for them.
+        chrome.runtime.sendMessage({updateReady: true}, (ready) => {
+            if (chrome.runtime.lastError) return;
+            if (ready?.ok) {
                 el.textContent = i18n('panel.update_install_now',
                     'Update available — v{latest} (you have v{current}) — click to install',
                     {latest: res.latest, current: res.current});
@@ -6374,9 +6424,17 @@ function check_for_update_version(el) {
                     e.preventDefault();
                     chrome.runtime.sendMessage({startUpdate: true});
                 };
-            });
+            } else if (ready?.enabled) {
+                el.textContent = i18n('panel.update_finish_setup',
+                    'Update available — v{latest} — finish setting up automatic updates',
+                    {latest: res.latest});
+                el.onclick = (e) => {
+                    e.preventDefault();
+                    chrome.runtime.sendMessage({openUpdates: true});
+                };
+            }
         });
-    } catch (e) { /* extension context gone -- nothing to notify about */ }
+    }
 }
 
 // Everything worth knowing about a failure, in one paste. The worker holds the trace ring and

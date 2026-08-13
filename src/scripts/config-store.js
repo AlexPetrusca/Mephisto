@@ -59,7 +59,12 @@
         // is undefined in some contexts, so fall back to the old fixed default.
         defaultThreads() {
             const cores = navigator.hardwareConcurrency;
-            return cores ? Math.max(1, Math.min(24, cores - 1)) : 8;
+            // HALF the cores, not all-but-one (user call 2026-08-09). All-but-one leaves nothing for
+            // the browser on a small machine, and the engine's own scheduling is not the only thing
+            // competing -- the page is being scraped and rendered on the same box. Half is a default,
+            // not a ceiling: the slider still goes to 24, and an existing install keeps its saved value
+            // because this is only consulted when nothing has been stored yet.
+            return cores ? Math.max(1, Math.min(24, Math.floor(cores / 2))) : 4;
         },
         // Default hotkeys (action -> key-combo), shared by the keydown listener (content script), the
         // rebind UI (options page), and the panel's "(A)" label hints -- ONE source so they can't drift.
@@ -68,7 +73,7 @@
         HOTKEY_DEFAULTS: {
             manual_play: ' ',
             manual_mode: 'n', autoplay: 'a', premove: 'p', help_mode: 'h', humanize: 'u',
-            clock_mode: 'c', clock_pace: 'k', mirror_mode: 'm', eval_bar: 'e', eval_history: 'y', tablebase: 't', puzzle_mode: 'z',
+            clock_mode: 'c', clock_pace: 'k', mirror_mode: 'm', eval_bar: 'e', eval_history: 'y', live_stats: 'l', tablebase: 't', puzzle_mode: 'z',
             explorer: 'o', book_play: 'b',
             copy_fen: 'f', copy_pgn: 'g', copy_diagnostics: 'd', redetect: 'r',
         },

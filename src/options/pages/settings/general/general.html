@@ -146,7 +146,7 @@
                 <div class="set-row">
                     <div class="set-lbl">
                         <span data-i18n-tip="set.tip.live_stats" class="tooltipped" data-position="right"
-                              data-tooltip="Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Judged by the same win% bands Game Review uses. Needs Eval History."><span data-i18n="set.live_stats">Live Stats</span></span>
+                              data-tooltip="Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Judged by the same win% bands Game Review uses."><span data-i18n="set.live_stats">Live Stats</span></span>
                     </div>
                     <div class="set-ctl">
                         <input id="live_stats_checkbox" type="checkbox" class="set-cb">
@@ -162,8 +162,8 @@
                               data-tooltip="How strongly the arrows are drawn, on the panel board and the page board alike. Full strength over a real board is sometimes exactly what you do not want on screen."><span data-i18n="set.arrow_opacity">Arrow Opacity</span></span>
                     </div>
                     <div class="set-ctl">
-                        <input id="arrow_opacity_range" type="range" min="0.1" max="1" step="0.05">
-                        <span class="set-val" id="arrow_opacity_val"></span>
+                        <input id="arrow_opacity_range" type="range" min="1" max="100" step="1">
+                        <span class="value set-val"></span>
                     </div>
                 </div>
 
@@ -175,6 +175,19 @@
                     <div class="set-ctl">
                         <input id="board_animation_checkbox" type="checkbox" class="set-cb">
                         <label for="board_animation_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.arrow_rank" class="tooltipped" data-position="right"
+                              data-tooltip="Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards for the rest. On by default -- with more than a couple of lines the colours alone stop being enough to tell them apart."><span data-i18n="set.arrow_rank">Number Arrows</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="arrow_rank_checkbox" type="checkbox" class="set-cb">
+                        <label for="arrow_rank_checkbox" class="set-tgl">
                             <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
                         </label>
                     </div>
@@ -1077,6 +1090,11 @@
                     <button data-i18n="set.finish_update" id="update_resume_btn" type="button" class="set-btn hidden">Finish Interrupted Update</button>
                 </div>
                 <p id="update_status" class="set-status"></p>
+                <p class="set-status">
+                    <a href="https://github.com/IchNukeDichWeg/Mephisto/releases"
+                       target="_blank" rel="noreferrer noopener"
+                       data-i18n="set.all_releases">All releases and their notes on GitHub</a>
+                </p>
             </section>
 
             <div class="set-btnrow set-btnrow-end">

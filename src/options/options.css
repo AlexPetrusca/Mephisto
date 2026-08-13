@@ -44,6 +44,9 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
+/* The sidebar is Materialize's own 300px. Narrowed here rather than in its width, so nothing that
+   positions against .sidenav-fixed has to be found and matched -- the nav keeps its width and the
+   content simply starts sooner. */
 header, main, footer { padding-left: 300px; }
 main > .container, nav > .container, footer > .container { width: 100% !important; }
 
@@ -213,7 +216,15 @@ h3.set-h {
     padding: 9px 2px;
     border-bottom: 1px solid var(--mp-hair);
     min-height: 46px;
+    /* THE GAP NEXT TO THE TEXT. The label takes all the free space and the control is pushed to the
+       far edge, so on a wide window a checkbox sat a screen's width from the thing it belongs to and
+       the eye had to travel to pair them up. Capped so a row stays a readable line-length whatever
+       the window does; below the cap nothing changes at all. */
+    max-width: 720px;
 }
+/* the wide blocks -- the humanize table, the puzzle-database prose -- are not label/control rows and
+   keep the full column */
+.set-row.set-wide, .set-row.set-mix { max-width: none; }
 .set-row:last-of-type { border-bottom: 0; }
 
 .set-lbl {

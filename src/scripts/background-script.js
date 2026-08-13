@@ -28,6 +28,21 @@ mark('i18n');
 importScripts('/src/scripts/updater.js');
 mark('updater');
 
+// PRELOAD THE PANEL'S ASSETS. The pieces and board textures are bundled, so nothing is downloaded
+// -- but they are read, rehomed and inlined as data URIs on first use, and panelAssetCache dies with
+// the worker. A worker is evicted constantly, so "first panel open" pays that cost again and again
+// and reads as the board appearing a beat late. Warmed here, off the critical path: nothing awaits
+// it, every failure is swallowed, and the on-demand build stays exactly as it was if this loses the
+// race. Uses the SAVED board theme, since building the wrong one would warm a cache nobody wants.
+try {
+  chrome.storage.local.get('board', ({board}) => {
+    if (chrome.runtime.lastError) return;
+    let theme = null;
+    try { theme = JSON.parse(board); } catch (e) { theme = null; }
+    buildPanelAssets(theme).then(() => mark('panel-assets')).catch(() => {});
+  });
+} catch (e) { /* no storage here -- the on-demand path still builds them */ }
+
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // the content-script asks for its own tab id so its popup iframe can talk to ONLY this tab
   // (not whatever tab is active) -- otherwise a background tab's popup drives the foreground tab.
@@ -69,7 +84,14 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // download permission is still granted, and a folder has been chosen. Anything less and the notice
   // stays a link to the release page, because there is nothing to click that would work.
   if (msg.updateReady) {
-    MephistoUpdater.isReady().then(ok => sendResponse({ok})).catch(() => sendResponse({ok: false}));
+    // TWO facts, not one. `ok` is "can install right now"; `enabled` is "you asked for automatic
+    // updates at all". The panel needs both to decide where its notice should send you -- a switch
+    // that is ON but half set up wants the Updates section, not the release page.
+    Promise.all([
+      MephistoUpdater.isReady().catch(() => false),
+      MephistoUpdater.enabled().catch(() => false),
+    ]).then(([ok, enabled]) => sendResponse({ok, enabled}))
+      .catch(() => sendResponse({ok: false, enabled: false}));
     return true; // async sendResponse
   }
   // The panel asking us to run it. The install lives on the settings page (only a page can hold the

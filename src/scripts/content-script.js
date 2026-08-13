@@ -547,23 +547,48 @@ function startDragSelect() {
 // local -- it changes nothing the site sees. Worth knowing: this is the one feature that
 // deliberately adds a <style> to the page, so it is off unless you ask for it.
 const HIDE_OPP_ID = 'mephisto-hide-opp';
+// EVERY ONE OF THESE IS A GUESS ABOUT SOMEBODY ELSE'S MARKUP, and nothing else in this file
+// corroborates them -- the scrapers read the board and the move list, never the player boxes. So
+// when a site renames a class this list silently matches nothing, the stylesheet is injected over
+// an empty set, and the setting looks broken with no error anywhere. That is exactly how it was
+// reported. The list is broadened below, and applyHideOpponent now COUNTS what it matched so a
+// future rename is a line in the diagnostics rather than a mystery.
 const HIDE_OPP_SELECTORS = [
-    // chess.com
+    // chess.com -- board player boxes, the tagline under them, and the avatars
     '.player-component .user-username-component', '.player-tagline .user-username-component',
     '.user-tagline-username', '.player-avatar', '.user-avatar-component',
-    // lichess
+    '.player-row-component .cc-user-username-component', '.cc-user-username-component',
+    '.player-component .user-username', '[data-test-element="user-tagline-username"]',
+    // lichess -- the game meta panel and the two player rows beside the board
     '.game__meta .player .user-link', '.ruser a', '.ruser .name', '.game__meta .player .name',
+    '.player .user-link .name', '.game__meta__players .player a',
 ].join(', ');
+
+let hideOppMatched = null;   // last match count, for the diagnostics; null = never applied
 
 function applyHideOpponent(on) {
     const existing = document.getElementById(HIDE_OPP_ID);
-    if (!on) { existing?.remove(); return; }
-    if (existing) return;
-    const st = document.createElement('style');
-    st.id = HIDE_OPP_ID;
-    // blur rather than hide: the layout stays intact, so the page looks normal
-    st.textContent = `${HIDE_OPP_SELECTORS} { filter: blur(6px) !important; }`;
-    (document.head || document.documentElement).appendChild(st);
+    if (!on) { existing?.remove(); hideOppMatched = null; return; }
+    if (!existing) {
+        const st = document.createElement('style');
+        st.id = HIDE_OPP_ID;
+        // blur rather than hide: the layout stays intact, so the page looks normal
+        st.textContent = `${HIDE_OPP_SELECTORS} { filter: blur(6px) !important; }`;
+        (document.head || document.documentElement).appendChild(st);
+    }
+    // A STYLESHEET THAT MATCHES NOTHING IS INDISTINGUISHABLE FROM ONE THAT WORKS, from in here --
+    // which is why this was reported as "does not work" with nothing to go on. Count instead, and
+    // say so once. Re-counted on every config push because these boxes render after the board.
+    let n = 0;
+    try { n = document.querySelectorAll(HIDE_OPP_SELECTORS).length; } catch (e) { n = -1; }
+    if (n !== hideOppMatched) {
+        hideOppMatched = n;
+        bgLog('hide opponent', {matched: n, site});
+        if (n === 0) {
+            console.warn('Mephisto: Hide Opponent Name matched nothing on this page — the site has ' +
+                         'most likely renamed the classes it used to use.');
+        }
+    }
 }
 
 function removeOverlay() {
@@ -890,8 +915,10 @@ function clearHintArrow() {
 // The page board's arrows honour the same opacity setting the panel's do. Clamped so a slider at
 // zero cannot render an invisible arrow that reads as "help mode is broken".
 function arrowAlpha() {
-    const o = Number(config?.arrow_opacity);
-    return Math.max(0.05, Math.min(1, Number.isFinite(o) ? o : 0.75)).toFixed(3);
+    // a PERCENTAGE from the panel (1..100); <= 1 is the pre-3.1.229 fraction, kept working
+    const raw = Number(config?.arrow_opacity);
+    const pct = !Number.isFinite(raw) || raw <= 0 ? 75 : (raw <= 1 ? raw * 100 : raw);
+    return Math.max(0.05, Math.min(1, pct / 100)).toFixed(3);
 }
 
 function drawHintArrows(arrows) {
@@ -976,7 +1003,7 @@ function drawHintArrows(arrows) {
         if (arrow.label) {
             const safe = String(arrow.label).replace(/[<>&]/g, '');
             lines += `<text x="${x1}" y="${y1 + square * 0.42}" text-anchor="middle" dominant-baseline="central"` +
-                ` font-size="${square * 0.22}" font-weight="600" fill="${color}" opacity="0.95"` +
+                ` font-size="${square * 0.30}" font-weight="700" fill="${color}" opacity="0.95"` +
                 ` stroke="#000" stroke-width="${square * 0.05}" paint-order="stroke"` +
                 ` font-family="system-ui, sans-serif">${safe}</text>`;
         }
@@ -1099,7 +1126,7 @@ function drawEvalBar({frac, text, winningWhite, history, phases, stats}) {
     num.style.color = winningWhite ? '#403d39' : '#f0f0f0';
 
     drawEvalHistory(history, bounds, flipped, phases);
-    drawLiveStats(stats, bounds, Array.isArray(history) && history.length > 1);
+    drawLiveStats(stats, bounds);
 }
 
 // LIVE STATS: one strip under the eval graph, board width, same origin as everything else drawn on
@@ -1107,8 +1134,11 @@ function drawEvalBar({frac, text, winningWhite, history, phases, stats}) {
 // costs nothing when the toggle is off. Placed BELOW the graph rather than inside it: the graph
 // answers "how did the game go", this answers "how well have we each played", and stacking them
 // keeps both readable on a small board.
-function drawLiveStats(stats, bounds, haveHistory) {
-    if (!stats || !haveHistory) { overlayEl(LIVESTATS_OVERLAY_ID)?.remove(); return; }
+function drawLiveStats(stats, bounds) {
+    // Gated on the STATS, not on the graph's history: Live Stats has its own toggle and its own
+    // recording, so requiring the graph to be on as well made the strip look broken with the very
+    // setting that turns it on.
+    if (!stats || !stats.plies) { overlayEl(LIVESTATS_OVERLAY_ID)?.remove(); return; }
     let box = overlayEl(LIVESTATS_OVERLAY_ID);
     if (!box) {
         box = document.createElement('div');
@@ -1121,7 +1151,10 @@ function drawLiveStats(stats, bounds, haveHistory) {
     }
     box.style.left = `${bounds.left + window.scrollX}px`;
     // under the graph, which is itself 8px under the board
-    box.style.top = `${bounds.top + window.scrollY + bounds.height + 8 + EVALHIST_H + 4}px`;
+    // under the graph when the graph is there, directly under the board when it is not
+    const graph = overlayEl(EVALHIST_OVERLAY_ID);
+    const below = graph ? (8 + EVALHIST_H + 4) : 8;
+    box.style.top = `${bounds.top + window.scrollY + bounds.height + below}px`;
     box.style.width = `${Math.max(1, Math.round(bounds.width))}px`;
     box.style.boxSizing = 'border-box';
     const side = (name, s) => {

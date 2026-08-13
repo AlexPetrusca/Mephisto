@@ -39,7 +39,8 @@ class GeneralSettings extends SettingsPage {
         const elo_input = this.registerFormElement('elo', 'Elo:', 'input', 0);
         this.registerFormElement('move_notation', 'Move Notation:', 'select', 'san');
         this.registerFormElement('arrow_labels', 'Label Arrows:', 'checkbox', false);
-        const arrow_opacity_range = this.registerFormElement('arrow_opacity', 'Arrow Opacity:', 'range', 0.75);
+        const arrow_opacity_range = this.registerFormElement('arrow_opacity', 'Arrow Opacity:', 'range', 75);
+        this.registerFormElement('arrow_rank', 'Number Arrows:', 'checkbox', true);
         this.registerFormElement('board_animation', 'Board Animation:', 'checkbox', true);
         this.registerFormElement('live_stats', 'Live Stats:', 'checkbox', false);
         const search_mode_select = this.registerFormElement('search_mode', 'Search Budget:', 'select', 'time');
@@ -107,7 +108,7 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('drag_moves', 'Drag Pieces:', 'checkbox', false);
         const engineLabelTooltiped = document.querySelector('#engine-label-tooltiped');
         const engineLabelUntooltiped = document.querySelector('#engine-label-untooltiped');
-        for (const range of [multipv_range, threads_range, memory_range]) {
+        for (const range of [multipv_range, threads_range, memory_range, arrow_opacity_range]) {
             range.registerChangeListener(() => {
                 let section = range.elem;
                 while (!section.classList.contains('section')) {
@@ -203,7 +204,8 @@ class GeneralSettings extends SettingsPage {
             manual_play: 'Play move (Manual Mode)', autoplay: 'Toggle Autoplay', premove: 'Toggle Premove',
             help_mode: 'Toggle Help Mode', humanize: 'Toggle Humanize', clock_mode: 'Toggle Clock Mode', clock_pace: 'Toggle Pace to Clock',
             mirror_mode: 'Toggle Mirror Time', manual_mode: 'Toggle Manual Mode', eval_bar: 'Toggle Eval Bar',
-            eval_history: 'Toggle Eval History', tablebase: 'Toggle Endgame Tablebase',
+            eval_history: 'Toggle Eval History', live_stats: 'Toggle Live Stats',
+            tablebase: 'Toggle Endgame Tablebase',
             puzzle_mode: 'Toggle Puzzle Mode', explorer: 'Toggle Opening Explorer',
             book_play: 'Toggle Book Moves', copy_fen: 'Copy FEN', copy_pgn: 'Copy PGN', copy_diagnostics: 'Copy Diagnostics',
             redetect: 'Re-detect game',
@@ -529,6 +531,12 @@ class GeneralSettings extends SettingsPage {
                     await chrome.storage.local.set({mephisto_whats_new: {
                         version: res.installed, headline: res.headline || '', at: Date.now(),
                     }});
+                    // AND a durable record of what is on disk. getManifest() keeps reporting the OLD
+                    // version until Chrome actually reloads the extension, so the update check kept
+                    // comparing the release against a version we had already installed and the panel
+                    // went on offering an update that was sitting in the folder. whats_new cannot
+                    // serve here -- it is cleared the first time the panel shows it.
+                    await chrome.storage.local.set({mephisto_installed_version: res.installed});
                     const kept = res.backedUp ? ` Roll back to v${res.from} from this page if it misbehaves.` : '';
                     say(`Installed v${res.installed} over v${res.from} — ${res.files} files.${kept} ` +
                         `Reloading the extension; reload your game tabs.`);
@@ -574,9 +582,16 @@ class GeneralSettings extends SettingsPage {
         // this page, and the install starts on its own. The flag is cleared BEFORE anything runs, so
         // reloading this page afterwards never re-triggers an update.
         const autostart = async () => {
-            const {mephisto_autostart_update: wanted} =
-                await chrome.storage.local.get('mephisto_autostart_update');
-            if (!wanted) return;
+            // Two ways in, and they must not be confused. `autostart` means "run it": the panel had a
+            // one-click update to offer. `focus` means "come and finish setting this up": automatic
+            // updates are switched on but something is still missing, so scroll here and stop.
+            const got = await chrome.storage.local.get(
+                ['mephisto_autostart_update', 'mephisto_focus_updates']);
+            if (got.mephisto_focus_updates) {
+                await chrome.storage.local.remove('mephisto_focus_updates');
+                document.getElementById('updates')?.scrollIntoView({block: 'center'});
+            }
+            if (!got.mephisto_autostart_update) return;
             await chrome.storage.local.remove('mephisto_autostart_update');
             document.getElementById('updates')?.scrollIntoView({block: 'center'});
             if (await MephistoUpdater.isReady()) runInstall();

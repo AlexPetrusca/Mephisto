@@ -162,7 +162,7 @@
   "panel.fen.not_valid": "Nieprawidłowy FEN",
   "panel.fen.illegal": "Pozycja niemożliwa",
   "panel.fen.set": "Ustawiono — panel nie śledzi już strony",
-  "panel.fen.following": "Śledzi ekran · {ms} ms",
+  "panel.fen.following": "Following the screen",
   "panel.fen.capture_failed": "Przechwytywanie nie powiodło się ({detail})",
   "panel.eta.now": "Gra teraz ({source}){suffix}",
   "panel.eta.in": "Zagra za {secs} s ({source}){suffix}",
@@ -329,7 +329,11 @@
   "set.board_animation": "Board Animation",
   "set.tip.board_animation": "Animate the panel's own board and its overlays. Off draws every change instantly, which is steadier to read on a fast game and cheaper on a busy machine.",
   "set.live_stats": "Live Stats",
-  "set.tip.live_stats": "Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Judged by the same win% bands Game Review uses. Needs Eval History.",
+  "set.tip.live_stats": "Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Judged by the same win% bands Game Review uses.",
   "panel.live_stats": "Live Stats",
-  "panel.tip.live_stats": "Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Needs Eval History."
+  "panel.tip.live_stats": "Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders.",
+  "set.all_releases": "All releases and their notes on GitHub",
+  "panel.update_finish_setup": "Update available — v{latest} — finish setting up automatic updates",
+  "set.arrow_rank": "Number Arrows",
+  "set.tip.arrow_rank": "Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards for the rest. On by default -- with more than a couple of lines the colours alone stop being enough to tell them apart."
 }
