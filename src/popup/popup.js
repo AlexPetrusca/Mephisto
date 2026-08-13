@@ -3062,6 +3062,10 @@ function rotate_fen_180(fen) {
 // to re-scan before one. Each pass is the ordinary recognise path with detection skipped, so it is
 // as cheap as it can be, and a scan that reads the SAME position does nothing at all -- an unchanged
 // board must not restart the search on every tick.
+// Chrome's own ceiling on captureVisibleTab: roughly two calls a second, and exceeding it fails the
+// call rather than delaying it. This is the fastest a screen read can legally happen, so it is the
+// floor between reads -- not a pacing choice of ours.
+const SNAP_QUOTA_MS = 500;
 let snap_follow_timer = null;
 let snap_follow_busy = false;
 
@@ -3088,11 +3092,15 @@ function snap_follow_start() {
         await snap_follow_tick();
         snap_last_read_ms = Date.now() - t0;
         if (snap_follow_timer === null) return;
-        // STRAIGHT BACK IN (user call 2026-08-09). The chain already guarantees one read at a time,
-        // so a gap on top of it only ever adds latency between a move happening and the panel seeing
-        // it. setTimeout(0) rather than a direct call: it yields to the event loop, so a follow that
-        // is running flat out still lets clicks, config pushes and the engine's own frames through.
-        snap_follow_timer = setTimeout(loop, 0);
+        // STRAIGHT BACK IN, BUT NOT FASTER THAN CHROME ALLOWS. The chain already guarantees one read
+        // at a time, so a gap on top of that only adds latency -- except that captureVisibleTab is
+        // quota'd at about two calls a second, and asking more often does not return frames faster,
+        // it returns errors. Those are skipped reads, so over-asking is strictly slower than pacing.
+        //
+        // Measured from the START of the last read, so a slow read costs nothing extra: if it
+        // already took longer than the quota window, the next one fires immediately.
+        const since = Date.now() - t0;
+        snap_follow_timer = setTimeout(loop, Math.max(0, SNAP_QUOTA_MS - since));
     };
     snap_follow_timer = setTimeout(loop, 0);
     update_snap_follow_button();
