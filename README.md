@@ -893,11 +893,12 @@ veto for real blunders, and the clock rules above.
 <details>
 <summary>18 items</summary>
 
-- [ ] **A faster board recogniser** — measured on a live read, capture is 24ms and inference is 1109ms, so the
-  model is essentially the whole cost of following the screen. Threading it (v3.1.233) is the cheap part; past
-  that it means a smaller or quantised position model, or a GPU execution provider. Note for anyone tempted by
-  the capture side: `captureVisibleTab` is quota'd at ~2/s, but at a second per read that ceiling is nowhere
-  near, and a tab-capture MediaStream would buy almost nothing.
+- [ ] **A faster board recogniser** — the model is essentially the whole cost of following the screen. Measured
+  on the same machine: `snap=24+1109ms` single-threaded, `snap=28+620ms` on four threads (v3.1.233) — a real 1.8×,
+  well short of the 4× the thread count suggests, which says the model is partly memory-bound rather than purely
+  compute-bound. Past that it means a smaller or quantised position model, or a GPU execution provider; more
+  threads will not do it. Note for anyone tempted by the capture side: `captureVisibleTab` is quota'd at ~2/s, but
+  at half a second per read that ceiling is not close, and a tab-capture MediaStream would buy almost nothing.
 - [x] **Screen reading is quicker** (v3.1.231) — the tab is captured as JPEG rather than PNG. The encode was
   the dominant cost and was paid three times: the browser losslessly encoded the whole visible tab, the result
   travelled to the recogniser as base64, and it was decoded again — for an image immediately downsampled to
