@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.227-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.230-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -187,7 +187,7 @@ instead of analysing the wrong position.
 <details>
 <summary>Opening Explorer, tablebase, eval bar and history, screen reading</summary>
 
-- **Multiple lines** — top 1–5 candidates (MultiPV), each drawn with its evaluation.
+- **Multiple lines** — top candidates (MultiPV) up to what the engine supports, each drawn with its evaluation, its rank and its own score.
 - **Eval bar** — vertical bar beside the board, from your perspective, plus an **eval history graph** shaped like
   Lichess's, marking where the opening, middlegame and endgame begin (ported from scalachess's `Divider`).
 - **Threat analysis** — the opponent's strongest reply, so you see what they're threatening.
@@ -604,10 +604,12 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Engine** | Which engine analyses the position. The WASM builds need nothing installed; "(local, full power)" entries talk to a real binary and only appear once the native host is installed. Switching reloads the panel — the net and UCI options have to be rebuilt. |
 | **Elo** | Caps strength via `UCI_LimitStrength` + `UCI_Elo`. The range follows the engine; out-of-range values are ignored rather than clamped. `0` means no cap. |
 | **Variant** | How the position is read and analysed. Auto-detected on variant pages. Chess960 is the exception: every mainline Stockfish plays it, so it survives an engine switch. |
+| **Search Budget** | Whether the search is bounded by **time** or by **depth**. A depth is reproducible — the same depth is the same answer on any machine, where a millisecond budget is a different search on every one. Each keeps its own number, so switching back does not lose it. |
 | **Search Time** | How long the engine thinks when nothing else sets the pace. Clock Mode, Mirror Time and Humanize all override it; recaptures and forced moves ignore it entirely. |
+| **Search Depth** | Plies, when the budget is a depth. Native engines still carry the time as a ceiling: an unreachable depth cannot be called back, so an unbounded one would not merely be slow. |
 | **Fallback Poll Interval** | Position changes are event-driven and instant; this is only a slow safety net that repairs a missed update. Lowering it buys nothing. |
-| **Multiple Lines** | How many candidates the engine reports. The search splits across them, so depth drops — 1 is strongest. Humanize raises it automatically when it needs alternatives. |
-| **Threads** | The default leaves one core for the browser. Capped at 2 on the opponent's turn unless Pondering is on. |
+| **Multiple Lines** | How many candidates the engine reports, up to whatever the engine itself supports. The search splits across them, so depth drops — 1 is strongest. Humanize raises it automatically when it needs alternatives. |
+| **Threads** | A fresh install takes **half** the cores, leaving the browser something to run on; a saved value always wins over that default. Capped at 2 on the opponent's turn unless Pondering is on. |
 | **Memory** | Transposition-table size. In-browser engines are clamped to 512 MB whatever the slider says — that's the WebAssembly heap limit, not a choice. Native engines get the full value. |
 | **Panel Style** | **Floating panel** is the draggable window; it lives in the page, so a site can detect it more easily, and Autoplay and Premove need it. **Toolbar popup** renders in the browser's chrome and leaves no trace in the page, but closes when you click the board — analysis only. |
 </details>
@@ -621,7 +623,13 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Show Threat Analysis** | A red arrow for the opponent's best reply. Costs a second search per position. |
 | **"Hand & Brain" Mode** | Mephisto plays the *Brain* — names only the piece type. It deliberately withholds the move, so Autoplay does nothing while it's on. |
 | **Explain Moves** | Names the tactic behind the choice; silent when nothing is certain. |
-| **Hide Opponent Name** | Blurs their username and avatar so a screenshot doesn't expose a real person. Local and cosmetic — but it's the one option that adds a style element to the page, which is why it's off by default. |
+| **Hide Opponent Name** | Blurs their username and avatar so a screenshot doesn't expose a real person. Local and cosmetic — but it's the one option that adds a style element to the page, which is why it's off by default. It matches the sites' own class names, so a site rename can leave it blurring nothing; it reports what it matched in Copy Diagnostics rather than failing silently. |
+| **Move Notation** | SAN (`Nf3`) or UCI (`g1f3`), everywhere a move is written: the readout, the alternative lines, the arrow labels. |
+| **Label Arrows** | Print each arrow's own evaluation on the board. Off by default — useful information, and also more ink on the board. |
+| **Number Arrows** | Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards. On by default; with more than a couple of lines the colours alone stop distinguishing them. |
+| **Arrow Opacity** | How strongly arrows are drawn, 1–100, on the panel board and the page board alike. Floored so the bottom of the slider cannot render an invisible arrow. |
+| **Board Animation** | Animate the panel's board and its overlays. Off draws every change instantly. |
+| **Live Stats** | A strip under the board: running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Derived from the same eval history the graph draws and judged by the same win% bands Game Review uses, so the strip and the review agree. Works with the graph switched off. |
 | **Opponent Mistake Alert** | A toast when the opponent plays an inaccuracy, mistake or blunder, by the same Lichess win% method the move mix uses. Only fires when both positions were searched deep enough to trust. |
 </details>
 
@@ -643,6 +651,10 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Pace to Clock** | Shrinks the simulated think pause and cursor travel when the clock gets short. Off by default; never lengthens a move. |
 | **Manual Mode** | Thinks indefinitely; plays only when you press the play key. Overrides Clock/Mirror/Humanize. |
 | **Puzzle Mode** / **Puzzle Database** | See [Puzzles](#puzzles). Puzzle Mode turns itself on when you open a puzzle page and off when you leave — unless you set it yourself, which is never overridden. |
+| **Drag Pieces** | Play a move as a drag instead of two clicks. Off by default, and it needs a Move Time of at least 250ms — a snapped drag is the shape that drops captures silently. Chess.com's variants boards drag regardless, because a capture is not playable there any other way; a short Move Time is floored for them rather than honoured. |
+| **Puzzle Move Delay** | How long to wait before playing a known puzzle answer. A database hit runs no search, so without a pause the move lands the instant the position appears. |
+| **Auto-Next Puzzle** | Click through to the next puzzle when one ends. Needs Puzzle Mode and Autoplay, and runs on `/puzzles/rated` and `/puzzles/learning` only — Rush and Streak advance themselves. |
+| **Auto-Next Delay** | The pause before that click. |
 | **Python Backend** | Moves the real pointer via a local Python helper instead of synthetic clicks. Needs `mephisto-clicker.py` and PyAutoGUI permissions. Almost nobody needs this. |
 </details>
 
@@ -704,25 +716,9 @@ No schedule — added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>34 items, sorted by upside and effort</summary>
+<summary>31 items, sorted by upside and effort</summary>
 
 **Quick wins.** Small changes with an obvious payoff. This is where to start.
-
-- [ ] **Overlay controls** — a slider for arrow opacity, because full-strength arrows over a real board are
-  sometimes exactly what you don't want on screen. Alongside it, board animation you can opt into or switch
-  off, and enough control over the drawing to suit the board you're actually looking at.
-
-- [ ] **Live stats** — accuracy as it happens, on its own control below the eval history rather than folded into
-  it: a running accuracy for both sides, the move-quality tally the review already computes, and how long you are
-  actually taking against how long you think you are. The maths is all here — the panel and Game Review judge moves
-  by the same win% bands — so this is mostly keeping the running totals and finding the room, and placing the strip
-  where the board actually leaves space.
-
-- [ ] **A health check in the panel** — *"it did nothing"* is the most common report and the hardest to act on.
-  One button that names the missing part: board detected, engine loaded, native host reachable, settings received,
-  permissions granted. Not tied to a first run — a thing that breaks on day two hundred deserves the same answer as
-  one that never started. The diagnostics already gather every one of these; this is about showing them before
-  somebody has to ask.
 
 - [ ] **A test rail that can actually click** — the suite reads source and runs extracted functions, which is
   exactly why a scrape-tag collision that broke every Chess.com game once passed it cleanly. Two halves are
@@ -822,9 +818,9 @@ No schedule — added whenever I feel like it. Checked means shipped.
   answer *over there*. The natural end state is the best-move arrow drawn straight onto the region being
   followed — screenshot or live — so the answer sits on the board it belongs to.
 
-- [ ] **A speed and polish pass on the panel** — the FEN input glares white out of a dark panel, and the left
-  column starts hiding things once five lines and the screen follower are both up. General de-jank alongside:
-  fewer reflows, tidier grouping, nothing moved for the sake of moving it.
+- [ ] **A speed and polish pass on the panel** — the FEN input still glares white out of a dark panel, and the
+  left column crowds once five lines and the screen follower are both up. The settings page's half of this landed
+  in v3.1.229 (rows no longer strand their control at the far edge of the window); the panel's has not.
 
 - [ ] **Shrink the footprint further** — what's left is hardening the one rendezvous the MAIN-world probes need and
   tightening how scraped positions are sanitised. Being straight about the ceiling: the client side is nearly
@@ -897,6 +893,20 @@ veto for real blunders, and the clock rules above.
 <details>
 <summary>18 items</summary>
 
+- [x] **Live stats** (v3.1.228, standalone in v3.1.229) — a strip under the board with a running accuracy for both
+  sides and the tally of best moves, inaccuracies, mistakes and blunders. Derived from the same eval history the
+  graph draws, judged by the same win% bands Game Review uses, so the strip and the review afterwards agree.
+  Hotkey **L**.
+- [x] **Overlay controls** (v3.1.228–230) — arrow opacity as a 1–100 slider with its value shown as you drag,
+  a switch for the rank number on each arrow, a bigger evaluation on them, and board animation you can turn off.
+- [x] **A health check** (v3.1.228) — Copy Diagnostics names the missing part in the panel as well as copying the
+  report: site, board, position, settings, engine, native host. It reads in dependency order, so the first failure
+  is the cause and the rest are symptoms. Press it any time.
+- [x] **Following the screen keeps up** (v3.1.229) — the reader re-queues the instant a read returns instead of
+  waiting out a fixed slot. There is no interval left to quote, so the readout that quoted one is gone too.
+- [x] **The update notice tells the truth** (v3.1.229) — it stops offering a version already written to disk but
+  not yet reloaded, and it sends you where you can act: the release page when self-updating is off, the install
+  when it is ready, the Updates section when it is on but unfinished.
 - [x] **Search by depth, and notation you can read** (v3.1.226) — the search budget is a choice: a millisecond
   budget is a different search on every machine, a depth is the same answer on all of them, and both keep their own
   number so switching back loses nothing. Moves are written in SAN or UCI wherever the extension writes one.
