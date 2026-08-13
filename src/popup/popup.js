@@ -932,6 +932,30 @@ function init_quick_settings() {
             push_config();
         });
     }
+    // ONE stepper, TWO settings. The dropdown decides which of compute_time / compute_depth the box
+    // is currently editing; the other keeps its value untouched in config and in storage, so
+    // switching back restores the number you had rather than a default.
+    const searchModeEl = PANEL_ROOT.getElementById('qs_search_mode');
+    const searchBoxEl = PANEL_ROOT.getElementById('qs_search');
+    if (searchBoxEl) {
+        apply_search_mode_ui();
+        searchBoxEl.addEventListener('change', () => {
+            const b = SEARCH_BOUNDS[config.search_mode];
+            const value = Math.min(b.max, Math.max(b.min, parseInt(searchBoxEl.value) || b.min));
+            searchBoxEl.value = value;          // show the clamp rather than silently disagreeing
+            config[b.key] = value;
+            save(b.key, value);
+            push_config();
+        });
+    }
+    if (searchModeEl) {
+        searchModeEl.addEventListener('change', () => {
+            config.search_mode = (searchModeEl.value === 'depth') ? 'depth' : 'time';
+            save('search_mode', config.search_mode);
+            apply_search_mode_ui();
+            push_config();
+        });
+    }
     // Settings that apply WITHOUT rebuilding the panel. Threads and Hash cannot be set mid-search, so
     // they are queued and flushed at the next `go` (see flush_engine_options); the running search
     // finishes on the settings it began with. Line count and the fallback poll apply immediately.
