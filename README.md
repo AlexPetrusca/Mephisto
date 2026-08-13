@@ -718,7 +718,10 @@ No schedule — added whenever I feel like it. Checked means shipped.
 <details>
 <summary>31 items, sorted by upside and effort</summary>
 
-**Quick wins.** Small changes with an obvious payoff. This is where to start.
+**Quick wins.** Small changes with an obvious payoff. Empty at the moment — everything that was here has
+shipped, which is a good sign and also why the next item is a bigger one.
+
+**Worth real work.** The ones that would change how this feels to use, and cost accordingly.
 
 - [ ] **A test rail that can actually click** — the suite reads source and runs extracted functions, which is
   exactly why a scrape-tag collision that broke every Chess.com game once passed it cleanly. Two halves are
