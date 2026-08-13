@@ -893,10 +893,10 @@ veto for real blunders, and the clock rules above.
 <details>
 <summary>18 items</summary>
 
-- [ ] **Screen reading without the capture quota** —  is capped by Chrome at roughly two calls
+- [ ] **Screen reading without the capture quota** — `captureVisibleTab` is capped by Chrome at roughly two calls
   a second, which is the real ceiling on following the screen; JPEG cut the cost of each read but cannot raise the
   rate. A tab-capture MediaStream has no such quota and hands over frames directly, with no encode, no base64 and
-  no decode. It needs the  permission and shows a capture indicator, so it belongs behind a switch.
+  no decode. It needs the `tabCapture` permission and shows a capture indicator, so it belongs behind a switch.
 - [x] **Screen reading is quicker** (v3.1.231) — the tab is captured as JPEG rather than PNG. The encode was
   the dominant cost and was paid three times: the browser losslessly encoded the whole visible tab, the result
   travelled to the recogniser as base64, and it was decoded again — for an image immediately downsampled to
