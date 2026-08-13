@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.232-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.233-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -893,10 +893,11 @@ veto for real blunders, and the clock rules above.
 <details>
 <summary>18 items</summary>
 
-- [ ] **Screen reading without the capture quota** — `captureVisibleTab` is capped by Chrome at roughly two calls
-  a second, which is the real ceiling on following the screen; JPEG cut the cost of each read but cannot raise the
-  rate. A tab-capture MediaStream has no such quota and hands over frames directly, with no encode, no base64 and
-  no decode. It needs the `tabCapture` permission and shows a capture indicator, so it belongs behind a switch.
+- [ ] **A faster board recogniser** — measured on a live read, capture is 24ms and inference is 1109ms, so the
+  model is essentially the whole cost of following the screen. Threading it (v3.1.233) is the cheap part; past
+  that it means a smaller or quantised position model, or a GPU execution provider. Note for anyone tempted by
+  the capture side: `captureVisibleTab` is quota'd at ~2/s, but at a second per read that ceiling is nowhere
+  near, and a tab-capture MediaStream would buy almost nothing.
 - [x] **Screen reading is quicker** (v3.1.231) — the tab is captured as JPEG rather than PNG. The encode was
   the dominant cost and was paid three times: the browser losslessly encoded the whole visible tab, the result
   travelled to the recogniser as base64, and it was decoded again — for an image immediately downsampled to
