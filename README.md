@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.225-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.227-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -704,44 +704,25 @@ No schedule — added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>38 items, sorted by upside and effort</summary>
+<summary>34 items, sorted by upside and effort</summary>
 
 **Quick wins.** Small changes with an obvious payoff. This is where to start.
-
-- [ ] **Search by depth, not only by clock** — the panel budgets a move in milliseconds. Game Review already
-  offers a depth instead, which is reproducible: the same depth is the same answer on any machine. The panel
-  should take either.
-
-- [ ] **Notation, your choice** — SAN or UCI, everywhere the extension writes a move: the panel's lines, the
-  readout, the arrows, Game Review, the diagnostics. `e2e4` and `Nf3` are the same move, and different people
-  read them at different speeds.
-
-- [ ] **Arrows that say more** — every arrow carrying its own evaluation, and a number for where its line ranks:
-  1 for the engine's best, 2 through 5 for the rest, so the board alone tells you the order without a glance at
-  the panel. Together with lifting Multiple Lines to whatever the engine actually supports instead of the
-  current ceiling.
 
 - [ ] **Overlay controls** — a slider for arrow opacity, because full-strength arrows over a real board are
   sometimes exactly what you don't want on screen. Alongside it, board animation you can opt into or switch
   off, and enough control over the drawing to suit the board you're actually looking at.
 
-- [ ] **Live stats** — accuracy as it happens, beside the eval history rather than instead of it: a running
-  accuracy for both sides, the move-quality tally the review already computes, and how long you are actually
-  taking compared to how long you think you are. The maths is all here — the panel and Game Review judge moves
-  by the same win% bands — so this is mostly keeping the running totals and finding the room. It belongs on the
-  eval graph's strip, since the two answer the same question from opposite ends.
+- [ ] **Live stats** — accuracy as it happens, on its own control below the eval history rather than folded into
+  it: a running accuracy for both sides, the move-quality tally the review already computes, and how long you are
+  actually taking against how long you think you are. The maths is all here — the panel and Game Review judge moves
+  by the same win% bands — so this is mostly keeping the running totals and finding the room, and placing the strip
+  where the board actually leaves space.
 
-- [ ] **A first-run check in the panel** — *"it did nothing"* is the most common report and the hardest to act
-  on. One button that names the missing part: board detected, engine loaded, native host reachable, settings
-  received, permissions granted. The diagnostics already gather every one of those; this is about showing them
-  before somebody has to ask.
-
-- [ ] **Settings profiles** — bullet and classical want different move times, a different appetite for
-  premoves, different everything. Save a set, name it, switch between them; ideally picked automatically by
-  site and time control.
-
-
-**Worth real work.** The ones that would change how this feels to use, and cost accordingly.
+- [ ] **A health check in the panel** — *"it did nothing"* is the most common report and the hardest to act on.
+  One button that names the missing part: board detected, engine loaded, native host reachable, settings received,
+  permissions granted. Not tied to a first run — a thing that breaks on day two hundred deserves the same answer as
+  one that never started. The diagnostics already gather every one of these; this is about showing them before
+  somebody has to ask.
 
 - [ ] **A test rail that can actually click** — the suite reads source and runs extracted functions, which is
   exactly why a scrape-tag collision that broke every Chess.com game once passed it cleanly. Two halves are
@@ -916,6 +897,12 @@ veto for real blunders, and the clock rules above.
 <details>
 <summary>18 items</summary>
 
+- [x] **Search by depth, and notation you can read** (v3.1.226) — the search budget is a choice: a millisecond
+  budget is a different search on every machine, a depth is the same answer on all of them, and both keep their own
+  number so switching back loses nothing. Moves are written in SAN or UCI wherever the extension writes one.
+- [x] **Arrows that say which line they are** (v3.1.226) — each arrow carries a rank badge (1 for the engine's best,
+  2 upwards for the rest) and its own evaluation, on the panel board and the page board alike. Multiple Lines is no
+  longer capped at five.
 - [x] **Setup Chess** (v3.1.222) — the board is read from the pieces themselves (there is no move list to replay
   and no fixed start position to replay it from), moves are dragged because a capture is not playable there any
   other way, and promotions work. Plays as ordinary chess once the setup phase ends.
