@@ -39,6 +39,9 @@ class GeneralSettings extends SettingsPage {
         const elo_input = this.registerFormElement('elo', 'Elo:', 'input', 0);
         this.registerFormElement('move_notation', 'Move Notation:', 'select', 'san');
         this.registerFormElement('arrow_labels', 'Label Arrows:', 'checkbox', false);
+        const arrow_opacity_range = this.registerFormElement('arrow_opacity', 'Arrow Opacity:', 'range', 0.75);
+        this.registerFormElement('board_animation', 'Board Animation:', 'checkbox', true);
+        this.registerFormElement('live_stats', 'Live Stats:', 'checkbox', false);
         const search_mode_select = this.registerFormElement('search_mode', 'Search Budget:', 'select', 'time');
         this.registerFormElement('compute_time', 'Search Time (ms):', 'input', 300);
         this.registerFormElement('compute_depth', 'Search Depth:', 'input', 16);

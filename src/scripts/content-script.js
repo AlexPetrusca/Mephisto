@@ -887,6 +887,13 @@ function clearHintArrow() {
 
 // arrows: [{move: 'e2e4', width: 0..0.25 (in squares), color: '#rrggbb'}, ...] best line first --
 // the same set the popup draws on its mini board (multipv lines weighted by score, threat in red)
+// The page board's arrows honour the same opacity setting the panel's do. Clamped so a slider at
+// zero cannot render an invisible arrow that reads as "help mode is broken".
+function arrowAlpha() {
+    const o = Number(config?.arrow_opacity);
+    return Math.max(0.05, Math.min(1, Number.isFinite(o) ? o : 0.75)).toFixed(3);
+}
+
 function drawHintArrows(arrows) {
     // FOUR-PLAYER. The 8x8 filter below rejects a move like `m8l8` outright, which is why Help Mode
     // drew nothing at all on a 4PC board -- the arrows were requested, then discarded here. The
@@ -955,7 +962,7 @@ function drawHintArrows(arrows) {
         const xh = x1 - (x1 - x0) / dist * square * 0.4;
         const yh = y1 - (y1 - y0) / dist * square * 0.4;
         lines += `<line x1="${x0}" y1="${y0}" x2="${xh}" y2="${yh}" stroke="${color}" stroke-width="${stroke}"
-            stroke-linecap="round" opacity="0.75" marker-end="url(#${markerId(color)})"/>`;
+            stroke-linecap="round" opacity="${arrowAlpha()}" marker-end="url(#${markerId(color)})"/>`;
         // The rank and the line's own eval, at the head of the arrow. Same information the panel
         // board draws, in page pixels rather than board units, so Help Mode does not need the panel
         // open to say WHICH line an arrow is.
@@ -1036,6 +1043,7 @@ const EVALBAR_OVERLAY_ID = 'mephisto-evalbar-overlay';
 const EVALHIST_OVERLAY_ID = 'mephisto-evalhist-overlay';
 
 function clearEvalBar() {
+    overlayEl(LIVESTATS_OVERLAY_ID)?.remove();
     overlayEl(EVALHIST_OVERLAY_ID)?.remove();
     overlayEl(EVALBAR_OVERLAY_ID)?.remove();
 }
@@ -1043,7 +1051,7 @@ function clearEvalBar() {
 // frac = white's share of the bar (0..1); text = score magnitude ("1.1" / "M3"); winningWhite
 // decides which end the number sits at and its colour. Repositioned every update (like the hint
 // arrows) so it tracks the board; pointer-events:none so it never eats a click.
-function drawEvalBar({frac, text, winningWhite, history, phases}) {
+function drawEvalBar({frac, text, winningWhite, history, phases, stats}) {
     const board = getBoard();
     if (!board || typeof frac !== 'number') { clearEvalBar(); return; }
     const bounds = board.getBoundingClientRect();
@@ -1091,7 +1099,39 @@ function drawEvalBar({frac, text, winningWhite, history, phases}) {
     num.style.color = winningWhite ? '#403d39' : '#f0f0f0';
 
     drawEvalHistory(history, bounds, flipped, phases);
+    drawLiveStats(stats, bounds, Array.isArray(history) && history.length > 1);
 }
+
+// LIVE STATS: one strip under the eval graph, board width, same origin as everything else drawn on
+// the page -- so it follows the board wherever the site puts it and however it is flipped, and it
+// costs nothing when the toggle is off. Placed BELOW the graph rather than inside it: the graph
+// answers "how did the game go", this answers "how well have we each played", and stacking them
+// keeps both readable on a small board.
+function drawLiveStats(stats, bounds, haveHistory) {
+    if (!stats || !haveHistory) { overlayEl(LIVESTATS_OVERLAY_ID)?.remove(); return; }
+    let box = overlayEl(LIVESTATS_OVERLAY_ID);
+    if (!box) {
+        box = document.createElement('div');
+        box.id = LIVESTATS_OVERLAY_ID;
+        box.style.cssText = 'position: absolute; z-index: 2147483646; pointer-events: none; ' +
+            'background: #262421; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.4); ' +
+            'font: 11px system-ui, sans-serif; color: #d8d8d8; padding: 4px 6px; ' +
+            'display: flex; justify-content: space-between; gap: 8px;';
+        getOverlayRoot().appendChild(box);
+    }
+    box.style.left = `${bounds.left + window.scrollX}px`;
+    // under the graph, which is itself 8px under the board
+    box.style.top = `${bounds.top + window.scrollY + bounds.height + 8 + EVALHIST_H + 4}px`;
+    box.style.width = `${Math.max(1, Math.round(bounds.width))}px`;
+    box.style.boxSizing = 'border-box';
+    const side = (name, s) => {
+        const acc = (s.accuracy == null) ? '—' : `${s.accuracy}%`;
+        return `<span><b style="color:#fff">${name}</b> ${acc}` +
+               `<span style="opacity:.75"> · ${s.best}✓ ${s.inaccuracy}?! ${s.mistake}? ${s.blunder}??</span></span>`;
+    };
+    box.innerHTML = side('White', stats.white) + side('Black', stats.black);
+}
+
 
 // The eval graph: the game so far as a curve, in the shape lichess's computer-analysis graph uses.
 // White's advantage rides above the midline, black's below, the area between curve and midline is
@@ -1103,6 +1143,8 @@ function drawEvalBar({frac, text, winningWhite, history, phases}) {
 // hard stop sits exactly at the midline. Above it the gradient is light, below it dark, so each
 // segment is coloured correctly by construction and crossings need no maths at all.
 const EVALHIST_H = 96;   // tall enough that a swing is a shape, not a wobble
+
+const LIVESTATS_OVERLAY_ID = 'mephisto-live-stats';
 
 function drawEvalHistory(history, bounds, flipped, phases) {
     if (!Array.isArray(history) || history.length < 2) {

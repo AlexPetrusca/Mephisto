@@ -323,5 +323,13 @@
   "set.notation_uci": "UCI (g1f3)",
   "set.tip.move_notation": "How moves are written wherever the extension shows one: the readout, the alternative lines, the arrows' labels. SAN is Nf3, UCI is g1f3 -- the same move either way.",
   "set.arrow_labels": "Label Arrows",
-  "set.tip.arrow_labels": "Write each arrow's rank and its own evaluation on the board: 1 for the engine's best line, 2 upwards for the rest. Off by default -- it is useful information and it is also more ink on the board."
+  "set.tip.arrow_labels": "Write each arrow's rank and its own evaluation on the board: 1 for the engine's best line, 2 upwards for the rest. Off by default -- it is useful information and it is also more ink on the board.",
+  "set.arrow_opacity": "Arrow Opacity",
+  "set.tip.arrow_opacity": "How strongly the arrows are drawn, on the panel board and the page board alike. Full strength over a real board is sometimes exactly what you do not want on screen.",
+  "set.board_animation": "Board Animation",
+  "set.tip.board_animation": "Animate the panel's own board and its overlays. Off draws every change instantly, which is steadier to read on a fast game and cheaper on a busy machine.",
+  "set.live_stats": "Live Stats",
+  "set.tip.live_stats": "Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Judged by the same win% bands Game Review uses. Needs Eval History.",
+  "panel.live_stats": "Live Stats",
+  "panel.tip.live_stats": "Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Needs Eval History."
 }

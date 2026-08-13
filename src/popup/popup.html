@@ -176,6 +176,11 @@
               data-tooltip="A graph under the board showing the whole game so far: white's advantage above the midline, black's below, with the opening/middlegame/endgame boundaries marked. Needs Eval Bar.">Eval History</label>
     </div>
     <div class="qs-row qs-toggle">
+        <input id="qs_livestats" type="checkbox" class="qs-cb">
+        <label for="qs_livestats" data-i18n="panel.live_stats" data-i18n-tip="panel.tip.live_stats" class="qs-label tooltipped" data-position="left"
+              data-tooltip="Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Judged by the same win% bands Game Review uses, so the strip and the review afterwards agree. Needs Eval History.">Live Stats</label>
+    </div>
+    <div class="qs-row qs-toggle">
         <input id="qs_puzzle" type="checkbox" class="qs-cb">
         <label for="qs_puzzle" data-i18n="panel.puzzle_mode" class="qs-label">Puzzle Mode</label>
     </div>
@@ -304,7 +309,7 @@
 <div class="qs-row">
         <span data-i18n="set.copy_diagnostics" class="qs-label">Copy Diagnostics</span>
         <button id="qs_copydiag" type="button"
-                title="Copy version, engine, what was detected, why the last move was or was not played, and the recent trace. Safe to paste into a bug report.">Copy</button>
+                title="Names the missing part in the panel -- site, board, position, settings, engine, native host -- AND copies the full report: version, engine, what was detected, why the last move was or was not played, and the recent trace. Press it any time; safe to paste into a bug report.">Copy</button>
     </div>
     </div>
     </div>

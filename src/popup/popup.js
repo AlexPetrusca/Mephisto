@@ -140,6 +140,10 @@ let remote_gen = 0;
 // this is applied), so this is the ceiling on how long a dead search can block the live one.
 const NATIVE_MAX_RT = 8000;
 let native_inflight = null;
+// Has a native host actually answered this session? The health check needs the difference between
+// "a native engine is selected" and "a native engine is talking to us" -- an installer that was
+// never run looks exactly like the former and is the commonest cause of a silent panel.
+let native_alive = false;
 let search_active = false; // a 'go' was issued whose bestmove hasn't arrived yet (is_calculating can't be
                            // used for this: it flips false on the first info line, not on bestmove)
 let last_pos = {startFen: null, moves: ''}; // the position's own start + UCI move list, for Copy PGN
@@ -325,6 +329,13 @@ async function initPanel(root, tabId) {
         move_notation: (JSON.parse(MephistoConfig.get('move_notation')) === 'uci') ? 'uci' : 'san',
         // Off by default: the labels are genuinely useful and they are also more ink on the board.
         arrow_labels: JSON.parse(MephistoConfig.get('arrow_labels')) || false,
+        // How loud the arrows are. Full strength over a real board is sometimes exactly what you
+        // do not want on screen, and the right answer depends on the board you are looking at.
+        arrow_opacity: JSON.parse(MephistoConfig.get('arrow_opacity')) || 0.75,
+        // Board animation, opt-out. Nothing about a move needs to slide to be understood.
+        board_animation: (JSON.parse(MephistoConfig.get('board_animation')) !== false),
+        // Accuracy as it happens, on its own strip under the eval history.
+        live_stats: JSON.parse(MephistoConfig.get('live_stats')) || false,
         compute_depth: JSON.parse(MephistoConfig.get('compute_depth')) || 16,
         fen_refresh: (fenRefresh != null) ? fenRefresh : 1000, // FALLBACK poll; positions arrive event-driven
         multiple_lines: JSON.parse(MephistoConfig.get('multiple_lines')) || 1,
@@ -828,6 +839,7 @@ function init_quick_settings() {
     for (const [id, key] of [['qs_autoplay', 'autoplay'], ['qs_premove', 'premove'],
                              ['qs_puzzle', 'puzzle_mode'], ['qs_help', 'help_mode'],
                              ['qs_evalbar', 'eval_bar'], ['qs_evalhist', 'eval_history'],
+                             ['qs_livestats', 'live_stats'],
                              ['qs_tablebase', 'tablebase'],
                              ['qs_humanize', 'humanize'],
                              ['qs_clock', 'clock_mode'], ['qs_clockpace', 'clock_pace'], ['qs_mirror', 'mirror_mode'],
@@ -1087,6 +1099,14 @@ function init_quick_settings() {
         diagBtn.addEventListener('click', () => {
             const was = diagBtn.textContent;
             diagBtn.disabled = true;
+            // The report is for somebody else; THIS is for you. The same facts, named in the panel
+            // the moment you press it, so the commonest report -- "it did nothing" -- often does not
+            // need to be filed at all. Not tied to a first run: something that breaks on day two
+            // hundred deserves the same answer as something that never started.
+            const bad = health_rows(health_state()).filter(r => r.ok === false);
+            set_idle_reason(bad.length
+                ? `${bad[0].label}: ${bad[0].detail || 'not working'}`
+                : 'All checks passed — board, settings and engine are all live.');
             copy_diagnostics((err) => {
                 diagBtn.textContent = err ? '✕' : '✓';
                 if (err) set_idle_reason(err);
@@ -1628,6 +1648,7 @@ function draw_eval_bar_unevaluated() {
     if (config.eval_bar) {
         request_draw_eval_bar({frac: 0.5, text: '0.0', winningWhite: true,
                                history: config.eval_history ? eval_history : null,
+                               stats: config.live_stats ? live_stats(eval_history) : null,
                                phases: null});
     }
 }
@@ -1671,6 +1692,7 @@ function update_eval_bar(line) {
         const text = ('mate' in line) ? `M${Math.abs(line.mate)}` : (Math.abs(line.score) / 100).toFixed(1);
         request_draw_eval_bar({frac, text, winningWhite: frac >= 0.5,
                                history: config.eval_history ? eval_history : null,
+                               stats: config.live_stats ? live_stats(eval_history) : null,
                                phases: config.eval_history
                                    ? game_phases(premove_tracker.startFen, premove_tracker.moves) : null});
     }
@@ -4793,6 +4815,80 @@ async function run_self_test() {
 // ---- Lichess win% + accuracy (win-percent model, PR #11148 + AccuracyPercent.scala). cp is
 // white/side-relative centipawns. Used by the opponent-mistake alert and mirrored in the options
 // page's threshold readout, so both label a move exactly as a Lichess game review would.
+// LIVE STATS, derived entirely from the eval history rather than from new bookkeeping. The history
+// is one white-win fraction per ply, so every move's cost is the change across it -- and the panel
+// and Game Review already agree that a win% drop is what makes a move good or bad. Nothing here is
+// measured a second way, which is the only reason the strip can agree with the review afterwards.
+//
+// Lichess's accuracy curve, the same one Game Review uses. A move is scored on the drop it caused
+// FOR THE SIDE THAT PLAYED IT; the other side's turn is not their responsibility.
+function accuracy_from_drop(drop) {
+    return Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * Math.max(0, drop)) - 3.1669));
+}
+
+// HEALTH CHECK. "It did nothing" is the commonest report and the hardest to act on, and every fact
+// needed to answer it is already gathered for the diagnostics -- it was simply never shown until
+// somebody asked. Deliberately NOT tied to a first run: something that stops working on day two
+// hundred deserves the same answer as something that never started.
+//
+// Returns rows rather than a rendered string so the caller decides how to show them, and so this is
+// testable without a panel. `ok: null` means "not applicable here" -- a native host is not a fault
+// on a WASM engine, and reporting it as one would send people chasing the wrong thing.
+// One place that knows where each fact lives, so the check and the diagnostics cannot drift.
+function health_state() {
+    return {
+        site: (typeof site !== 'undefined' && site) || null,
+        board: !!(last_eval && last_eval.fen),
+        fen: (last_eval && last_eval.fen) || null,
+        config: !!config,
+        engine: !!engine || uses_native() || is_remote(),
+        engineName: config?.engine || null,
+        usesNative: uses_native(),
+        nativeUp: native_alive,
+    };
+}
+
+function health_rows(state) {
+    const st = state || {};
+    const rows = [];
+    const row = (label, ok, detail) => rows.push({label, ok, detail});
+    row('Site recognised', !!st.site, st.site || 'this page is not one of the supported sites');
+    row('Board found', !!st.board, st.board ? '' : 'the page has no board the scraper recognises');
+    row('Position read', !!st.fen, st.fen ? '' : 'nothing has been scraped yet');
+    row('Settings received', !!st.config, st.config ? '' : 'the page script never got its settings');
+    row('Engine loaded', !!st.engine, st.engineName || 'no engine has answered yet');
+    row('Native host', st.usesNative ? !!st.nativeUp : null,
+        st.usesNative ? (st.nativeUp ? st.engineName : 'the host is not answering -- run its installer once')
+                      : 'not needed for this engine');
+    return rows;
+}
+
+function live_stats(history) {
+    const empty = () => ({moves: 0, accuracy: null, best: 0, inaccuracy: 0, mistake: 0, blunder: 0});
+    const out = {white: empty(), black: empty(), plies: 0};
+    if (!Array.isArray(history) || history.length < 2) return out;
+    const acc = {white: [], black: []};
+    for (let i = 0; i + 1 < history.length; i++) {
+        const before = history[i], after = history[i + 1];
+        if (typeof before !== 'number' || typeof after !== 'number') continue;
+        // ply i is played BY the side to move at ply i: white on even plies.
+        const side = (i % 2 === 0) ? 'white' : 'black';
+        // a drop is always measured in the mover's own favour, so both sides read the same way
+        const drop = (side === 'white' ? 1 : -1) * (before - after) * 100;
+        const s = out[side];
+        s.moves++;
+        acc[side].push(accuracy_from_drop(drop));
+        const label = win_drop_label(drop);
+        if (label) s[label]++; else s.best++;
+        out.plies = i + 1;
+    }
+    for (const side of ['white', 'black']) {
+        const a = acc[side];
+        out[side].accuracy = a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
+    }
+    return out;
+}
+
 function win_percent(cp) {
     return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
 }
@@ -5881,6 +5977,13 @@ function draw_threat() {
 // An arrow's own evaluation, from White's point of view like every other score the panel shows, so
 // a line does not read one way on the board and the other way in the panel. Mate is written as #N
 // rather than as a centipawn score, because a mate is not a number of pawns.
+// The configured opacity, scaled against whatever this overlay's baseline was, so a slider at its
+// default leaves every arrow exactly as it has always looked.
+function arrow_alpha(base) {
+    const o = Number(config.arrow_opacity);
+    return Math.max(0.05, Math.min(1, base * ((Number.isFinite(o) ? o : 0.75) / 0.75))).toFixed(3);
+}
+
 function arrow_label(line) {
     if (!line || !config.arrow_labels) return '';
     if (Number.isFinite(line.mate) && line.mate !== 0) return `#${Math.abs(line.mate)}`;
@@ -5954,7 +6057,7 @@ function draw_move(move, color, overlay, stroke_width = 0.225, rank = 0, label =
                         <path d='M1,5.75 L3,7 L1,8.25' fill='${color}' />
                     </marker>
                 </defs>
-                <line x1='${ax0}' y1='${ay0}' x2='${ax1}' y2='${ay1}' stroke='${color}' fill=${color}' opacity='0.4'
+                <line x1='${ax0}' y1='${ay0}' x2='${ax1}' y2='${ay1}' stroke='${color}' fill=${color}' opacity='${arrow_alpha(0.4)}'
                     stroke-width='${stroke_width}' marker-end='url(#arrow-${marker_id})'/>
                 ${arrow_badge_svg(x1, y1, color, rank, label)}
             </svg>
@@ -6406,6 +6509,7 @@ function native_send(cmd, data, onInfo) {
 // WASM `info depth` handling: refresh the eval/best-move display live AND feed premove_tracker.
 // Bound to the fen it was requested for, so late frames from a superseded search are ignored.
 function on_native_info(info, fen) {
+    native_alive = true;                     // it spoke, whatever else happens to this frame
     if (premove_tracker.fen !== fen) return; // stale: position already moved on
     const pvIdx = (info.multipv || 1) - 1;
     // Premove certification for the native engines: track how stable each line's reply is across

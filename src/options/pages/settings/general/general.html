@@ -145,6 +145,43 @@
 
                 <div class="set-row">
                     <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.live_stats" class="tooltipped" data-position="right"
+                              data-tooltip="Accuracy as it happens, on a strip under the eval history: a running accuracy for both sides and the tally of best moves, inaccuracies, mistakes and blunders. Judged by the same win% bands Game Review uses. Needs Eval History."><span data-i18n="set.live_stats">Live Stats</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="live_stats_checkbox" type="checkbox" class="set-cb">
+                        <label for="live_stats_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.arrow_opacity" class="tooltipped" data-position="right"
+                              data-tooltip="How strongly the arrows are drawn, on the panel board and the page board alike. Full strength over a real board is sometimes exactly what you do not want on screen."><span data-i18n="set.arrow_opacity">Arrow Opacity</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="arrow_opacity_range" type="range" min="0.1" max="1" step="0.05">
+                        <span class="set-val" id="arrow_opacity_val"></span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.board_animation" class="tooltipped" data-position="right"
+                              data-tooltip="Animate the panel's own board and its overlays. Off draws every change instantly, which is steadier to read on a fast game and cheaper on a busy machine."><span data-i18n="set.board_animation">Board Animation</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="board_animation_checkbox" type="checkbox" class="set-cb">
+                        <label for="board_animation_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
                         <span data-i18n-tip="set.tip.arrow_labels" class="tooltipped" data-position="right"
                               data-tooltip="Write each arrow's rank and its own evaluation on the board: 1 for the engine's best line, 2 upwards for the rest. Off by default -- it is useful information and it is also more ink on the board."><span data-i18n="set.arrow_labels">Label Arrows</span></span>
                     </div>
