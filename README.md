@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.230-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.231-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -893,6 +893,12 @@ veto for real blunders, and the clock rules above.
 <details>
 <summary>18 items</summary>
 
+- [x] **Screen reading is quicker** (v3.1.231) — the tab is captured as JPEG rather than PNG. The encode was
+  the dominant cost and was paid three times: the browser losslessly encoded the whole visible tab, the result
+  travelled to the recogniser as base64, and it was decoded again — for an image immediately downsampled to
+  256×256. The position model was verified reading exact FENs at JPEG q20 when it was integrated, so this is well
+  clear of the edge. Copy Diagnostics now reports the capture and the inference separately, since the two have
+  entirely different fixes.
 - [x] **Live stats** (v3.1.228, standalone in v3.1.229) — a strip under the board with a running accuracy for both
   sides and the tally of best moves, inaccuracies, mistakes and blunders. Derived from the same eval history the
   graph draws, judged by the same win% bands Game Review uses, so the strip and the review afterwards agree.

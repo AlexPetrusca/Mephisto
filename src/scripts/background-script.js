@@ -174,9 +174,26 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
         const tab = sender.tab;
         if (!tab || tab.id == null) return sendResponse({error: 'no sender tab'});
         if (!tab.active) return sendResponse({error: 'tab is not visible'});
-        const dataUri = await chrome.tabs.captureVisibleTab(tab.windowId, {format: 'png'});
+        // JPEG, NOT PNG. This is the dominant cost of a screen read and it was being paid three
+        // times over: PNG makes the browser losslessly encode the whole visible tab, the result
+        // travels to the offscreen document as a base64 string, and it is decoded again there. On a
+        // large display that is megabytes per frame for an image the recogniser immediately
+        // downsamples to 256x256.
+        //
+        // Safe on the evidence rather than on the hope: when the position model was integrated it
+        // was verified to read EXACT FENs on boards degraded to JPEG q20, among other abuses. 80 is
+        // far above that, and the board is the least compressible thing on screen anyway.
+        const t0 = Date.now();
+        const dataUri = await chrome.tabs.captureVisibleTab(tab.windowId,
+                                                           {format: 'jpeg', quality: SNAP_JPEG_QUALITY});
+        const tCap = Date.now() - t0;
         await ensureOffscreen();
+        const t1 = Date.now();
         const res = await chrome.runtime.sendMessage({recognizeBoard: {dataUri, crop: msg.captureAndRecognize.crop}});
+        // Split, because the two halves have completely different fixes: the capture is the
+        // browser's encoder, the recognise is the model. Without the split "screen reading is slow"
+        // points at neither.
+        snapCaptureMs = tCap; snapRecogniseMs = Date.now() - t1; snapBytes = dataUri.length;
         sendResponse(res || {error: 'no response from recogniser'});
       } catch (e) {
         sendResponse({error: String(e)});
@@ -957,6 +974,11 @@ let cdpWorstMs = 0, cdpCalls = 0, cdpTotalMs = 0;
 // dispatch is executed by the PAGE's renderer, so a hang here means the renderer stopped servicing
 // input -- nothing in this worker can be the cause OR the fix. Counted separately so it stops
 // hiding behind a healthy average.
+// Screen reading, split into the browser's encode and the model's inference (see captureAndRecognize)
+let snapCaptureMs = 0, snapRecogniseMs = 0, snapBytes = 0;
+// Quality for the capture. Verified reading exact FENs down at q20 when the model was integrated,
+// so this is not near the edge; lower would shrink the frame further for no measured gain in accuracy.
+const SNAP_JPEG_QUALITY = 80;
 let cdpPending = 0, cdpHung = 0;
 const CDP_HUNG_MS = 1000;
 let nativeFramesIn = 0;       // frames received from any native host since this worker started
@@ -979,6 +1001,7 @@ function workerLoadLine() {
     `cdp=${cdpCalls ? Math.round(cdpTotalMs / cdpCalls) : 0}/${cdpWorstMs}ms`, // avg / worst debugger call
     `cdpHung=${cdpHung}`,        // dispatches that took over a second -- the renderer stalling
     `cdpPending=${cdpPending}`,  // ...and any still outstanding right now
+    `snap=${snapCaptureMs}+${snapRecogniseMs}ms/${Math.round(snapBytes / 1024)}KB`, // capture + recognise
     `up=${Math.round((now - workerStarted) / 1000)}s`,
   ].join('  ');
 }
