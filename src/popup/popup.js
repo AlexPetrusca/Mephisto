@@ -332,6 +332,9 @@ async function initPanel(root, tabId) {
         // The rank badge is its own decision. It has been drawn unconditionally since 3.1.226, so
         // it stays ON by default -- turning it off is the new option, not turning it on.
         arrow_rank: (JSON.parse(MephistoConfig.get('arrow_rank')) !== false),
+        // How many plies of a FORCED continuation to draw ahead. 0 is off; the ceiling is 5 because
+        // past that the arrows stop being readable on an 8x8 board rather than because the walk stops.
+        forced_lines: Math.max(0, Math.min(5, JSON.parse(MephistoConfig.get('forced_lines')) || 0)),
         // How loud the arrows are, as a PERCENTAGE (1..100) -- what the slider shows is what is
         // stored, so the number in the settings and the number on disk are the same thing.
         //
@@ -1791,6 +1794,11 @@ function render_wdl(line) {
 // reads as a legend -- the green row is the green arrow. Was: line 1 blue, every other line the same
 // grey, so 2nd/3rd/4th/5th were indistinguishable.
 const LINE_COLORS = ['#0a5bd3', '#0f9d58', '#e0a400', '#e8710a', '#9333ea'];
+// The forced chain's own ramp, deliberately not LINE_COLORS: those mean "the engine's Nth choice",
+// and reusing them would say a forced reply was an alternative you could pick. Cooling as it goes,
+// so the order reads off the board without a legend.
+const FORCED_COLORS = ['#1e88a8', '#2f7fb8', '#4a73c0', '#6a67c4', '#8a5cc4'];
+
 function line_color(i) { return LINE_COLORS[Math.min(i, LINE_COLORS.length - 1)]; }
 
 // Is this search budgeted by DEPTH rather than by the clock? Open-ended searches (Help Mode, Manual
@@ -2246,6 +2254,47 @@ function maybe_premove_forced_reply(line) {
 // forced again (1 legal move), and our follow-up then forced (1 legal move) -- that lone move is the
 // second premove. Anything less and a different opponent move could leave the second premove in a
 // position it was never meant for, so we return null and queue just the one.
+// THE WHOLE FORCED CHAIN, not just the next move. Walks the engine's line forward while every reply
+// is genuinely forced -- the side to move has exactly one legal move -- and returns each ply.
+//
+// "Forced" here means ONE LEGAL MOVE, nothing softer. A move that is merely best, or the only one
+// that does not lose, is a judgement the search makes and can revise; a position with one legal
+// reply is a fact about the rules. Drawing a five-move arrow chain off a judgement would be
+// confidently wrong exactly when the position is sharpest, which is when someone is looking at it.
+//
+// Our own moves come from the engine's pv when it has one, because ours are choices rather than
+// forced; the opponent's come from the board. The walk stops the moment either runs out.
+function forced_chain(fen, pv, maxPlies) {
+    const out = [];
+    if (!Number.isFinite(maxPlies) || maxPlies <= 0) return out;
+    try {
+        const c = new Chess(config.variant, fen);
+        const line = pv_moves(pv).filter(Boolean);
+        for (let i = 0; i < maxPlies; i++) {
+            const legal = c.moves({verbose: true});
+            if (!legal.length) break;
+            let uci;
+            if (legal.length === 1) {
+                const m = legal[0];
+                uci = `${m.from}${m.to}${m.promotion || ''}`;     // forced: the rules pick it
+            } else if (i === 0 && line.length) {
+                uci = line[0];                                    // ply 0 is OUR move: a choice
+            } else {
+                // Decided BEFORE the move is taken, not after. Checking afterwards let one unforced
+                // continuation into the chain -- and an unforced move drawn as an arrow reads as a
+                // certainty, which is the one thing this must never claim.
+                break;
+            }
+            const rec = c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+            if (!rec) break;                                      // pv disagrees with the board -- stop
+            out.push({uci, forced: legal.length === 1, ply: i});
+        }
+    } catch (e) {
+        return out; // variant chess.js cannot play -- whatever we already have is still true
+    }
+    return out;
+}
+
 function forced_second_premove(fen, pred, reply) {
     if (detected_prefix !== 'cc' || (config.variant && config.variant !== 'chess')) return null;
     try {
@@ -4046,6 +4095,33 @@ function update_evaluation(eval_string) {
 const REASON_PIECE_CP = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 0};
 const REASON_FORK_MIN = 320; // only a knight or better counts as a forked target
 
+// The most valuable piece the side to move could take for free right now, or null. "For free" is
+// the whole point: a defended piece is a trade, not a threat, and calling every capture a threat
+// would make the explanation noise. Undefended is checked by asking whether the CAPTURED square is
+// covered by the other side once the capture has happened.
+function biggest_hanging(fen, victimColor) {
+    try {
+        const c = new Chess(config.variant, fen);
+        if (c.turn() === victimColor) c.setTurn(victimColor === 'w' ? 'b' : 'w');
+        let best = null;
+        for (const m of c.moves({verbose: true})) {
+            if (!m.captured) continue;
+            const cp = REASON_PIECE_CP[m.captured] || 0;
+            if (cp < REASON_FORK_MIN) continue;              // a pawn is not worth a sentence
+            const probe = new Chess(config.variant, c.fen());
+            const rec = probe.move({from: m.from, to: m.to, promotion: m.promotion});
+            if (!rec) continue;
+            const defended = probe.moves({verbose: true}).some(r => r.to === m.to);
+            if (defended && cp <= (REASON_PIECE_CP[m.piece] || 0)) continue;  // an even trade is not a threat
+            const name = ({p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen'})[m.captured];
+            if (!best || cp > best.cp) best = {cp, name};
+        }
+        return best;
+    } catch (e) {
+        return null;   // a variant chess.js will not flip -- say nothing rather than guess
+    }
+}
+
 function move_reason(fen, uci) {
     if (!config.move_reason) return '';
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci ?? '')) return '';
@@ -4086,6 +4162,24 @@ function move_reason(fen, uci) {
         if (targets >= 2) reasons.push('a fork');
         else if (givesCheck && targets >= 1) reasons.push('a fork with check');
         else if (givesCheck) reasons.push('check');
+
+        // WHAT IT STOPS. Everything above says what the move DOES; the commonest honest answer to
+        // "why this move" is what would have happened otherwise. Asked the only way that cannot be
+        // wrong: play the opponent's best capture in the position we came FROM, and see whether this
+        // move took it off the board. No search, no judgement -- one legal-move comparison.
+        const threat = biggest_hanging(fen, mover.color);
+        if (threat && !captured) {
+            const still = biggest_hanging(before.fen(), mover.color);
+            if (!still || still.cp < threat.cp) reasons.push(`saves the ${threat.name}`);
+        }
+
+        // WHAT IT THREATENS, when it does not already win something outright. Same method, the other
+        // way round: what can WE take next that we could not before.
+        if (!captured && targets < 2 && !givesCheck) {
+            const now = biggest_hanging(before.fen(), mover.color === 'w' ? 'b' : 'w');
+            const was = biggest_hanging(fen, mover.color === 'w' ? 'b' : 'w');
+            if (now && (!was || now.cp > was.cp)) reasons.push(`threatens the ${now.name}`);
+        }
 
         return reasons.length ? reasons.join(', ') : '';
     } catch (e) {
@@ -5766,7 +5860,7 @@ const LIVE_CONFIG_KEYS = [
     'explorer', 'book_play', 'explorer_db', 'help_mode', 'humanize', 'clock_mode', 'mirror_mode',
     'manual_mode', 'eval_bar', 'eval_history', 'live_stats', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
     'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode',
-    'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'move_time', 'move_variance', 'move_reason',
+    'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'forced_lines', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
     'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay', 'puzzle_auto_next', 'puzzle_next_delay',
@@ -5916,6 +6010,20 @@ function draw_moves() {
 
     clear_annotations();
     const hint_arrows = []; // help mode mirrors the popup's arrows onto the site's board
+    // THE FORCED CONTINUATION, drawn ahead of itself. Everything after the engine's own move is a
+    // move nobody has a choice about, so it can be shown as fact rather than as a suggestion -- and
+    // seeing it is the difference between playing a move and knowing why it is safe. Drawn FIRST so
+    // the engine's live arrows sit on top of it.
+    const chain = config.forced_lines
+        ? forced_chain(last_eval.fen, last_eval.lines[0]?.pv, config.forced_lines + 1)
+        : [];
+    for (let i = chain.length - 1; i >= 1; i--) {   // skip ply 0: that is the move the panel already draws
+        const step = chain[i];
+        if (!step.forced) continue;                 // only the certain part of the line
+        const color = FORCED_COLORS[Math.min(i - 1, FORCED_COLORS.length - 1)];
+        draw_move(step.uci, color, PANEL_ROOT.getElementById('move-annotations'), 0.12, 0, '');
+        if (config.help_mode) hint_arrows.push({move: step.uci, width: 0.12, color, rank: 0, label: ''});
+    }
     for (let i = 0; i < last_eval.activeLines; i++) {
         if (!last_eval.lines[i]) continue;
 

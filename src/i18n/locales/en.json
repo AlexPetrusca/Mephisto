@@ -342,5 +342,7 @@
   "set.all_releases": "All releases and their notes on GitHub",
   "panel.update_finish_setup": "Update available — v{latest} — finish setting up automatic updates",
   "set.arrow_rank": "Number Arrows",
-  "set.tip.arrow_rank": "Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards for the rest. On by default -- with more than a couple of lines the colours alone stop being enough to tell them apart."
+  "set.tip.arrow_rank": "Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards for the rest. On by default -- with more than a couple of lines the colours alone stop being enough to tell them apart.",
+  "set.forced_lines": "Forced Lines Ahead",
+  "set.tip.forced_lines": "Draw the forced continuation ahead of itself: when the reply is the opponent's ONLY legal move, and so is the one after it, each is drawn as its own arrow, cooling in colour as the line goes on. 0 is off. Only genuinely forced moves are drawn -- a move that is merely best is a judgement, and drawing it as an arrow would read as a certainty."
 }

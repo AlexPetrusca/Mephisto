@@ -182,6 +182,20 @@
 
                 <div class="set-row">
                     <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.forced_lines" class="tooltipped" data-position="right"
+                              data-tooltip="Draw the forced continuation ahead of itself: when the reply is the opponent's ONLY legal move, and so is the one after it, each is drawn as its own arrow, cooling in colour as the line goes on. 0 is off. Only genuinely forced moves are drawn -- a move that is merely best is a judgement, and drawing it as an arrow would read as a certainty."><span data-i18n="set.forced_lines">Forced Lines Ahead</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="forced_lines_input" type="number" min="0" max="5" step="1">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
                         <span data-i18n-tip="set.tip.arrow_rank" class="tooltipped" data-position="right"
                               data-tooltip="Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards for the rest. On by default -- with more than a couple of lines the colours alone stop being enough to tell them apart."><span data-i18n="set.arrow_rank">Number Arrows</span></span>
                     </div>

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.233-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.234-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -626,6 +626,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Hide Opponent Name** | Blurs their username and avatar so a screenshot doesn't expose a real person. Local and cosmetic — but it's the one option that adds a style element to the page, which is why it's off by default. It matches the sites' own class names, so a site rename can leave it blurring nothing; it reports what it matched in Copy Diagnostics rather than failing silently. |
 | **Move Notation** | SAN (`Nf3`) or UCI (`g1f3`), everywhere a move is written: the readout, the alternative lines, the arrow labels. |
 | **Label Arrows** | Print each arrow's own evaluation on the board. Off by default — useful information, and also more ink on the board. |
+| **Forced Lines Ahead** | How many plies of a forced continuation to draw ahead of the move, 0–5. Only moves that are genuinely forced — the side to move has exactly one legal reply — are drawn. 0 is off. |
 | **Number Arrows** | Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards. On by default; with more than a couple of lines the colours alone stop distinguishing them. |
 | **Arrow Opacity** | How strongly arrows are drawn, 1–100, on the panel board and the page board alike. Floored so the bottom of the slider cannot render an invisible arrow. |
 | **Board Animation** | Animate the panel's board and its overlays. Off draws every change instantly. |
@@ -716,7 +717,7 @@ No schedule — added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>31 items, sorted by upside and effort</summary>
+<summary>29 items, sorted by upside and effort</summary>
 
 **Quick wins.** Small changes with an obvious payoff. Empty at the moment — everything that was here has
 shipped, which is a good sign and also why the next item is a bigger one.
@@ -729,9 +730,6 @@ shipped, which is a good sign and also why the next item is a bigger one.
   served instead of against a guess, and a headless browser that loads the extension and plays a game end to
   end. Nearly every silent failure this project has had would have been caught by one or the other.
 
-- [ ] **Explain moves properly** — today a move comes with an eval and a line, and the *why* is your job. The aim
-  is the reason in words: what it threatens, what it stops, what breaks if you play something else. Feeds
-  Talking Mode and Game Review both.
 
 - [ ] **Talking Mode** — the engine as a voice. Not a number and an arrow but a running commentary in plain
   language: what the position wants, what it is worried about, why the move it likes actually wins something.
@@ -758,10 +756,6 @@ shipped, which is a good sign and also why the next item is a bigger one.
   depth one and cannot certify a reply the way a search can, so it needs a second opinion rather than a
   deeper look.
 
-- [ ] **Forced lines, drawn ahead** — when a continuation is forced the panel already knows the next few moves
-  and still draws only one. Draw the chain: an arrow per forced ply, up to five, coloured by order so the
-  sequence reads at a glance and the premove *after* this one is visible before it happens. The forcing
-  detection exists already, behind Safe Premove and double premove.
 
 - [ ] **Playing with a net** — for when the moves are yours. Live feedback you opt into, and underneath it a
   quieter mode that says nothing at all unless you are about to throw the game away: not the best move, just
@@ -902,6 +896,14 @@ veto for real blunders, and the clock rules above.
   compute-bound. Past that it means a smaller or quantised position model, or a GPU execution provider; more
   threads will not do it. Note for anyone tempted by the capture side: `captureVisibleTab` is quota'd at ~2/s, but
   at half a second per read that ceiling is not close, and a tab-capture MediaStream would buy almost nothing.
+- [x] **Forced lines, drawn ahead** (v3.1.234) — when the reply is the opponent's ONLY legal move, and so is the
+  one after it, each is drawn as its own arrow, cooling in colour as the line runs on. Up to five plies, off by
+  default. Only genuinely forced moves are drawn: a position with one legal reply is a fact about the rules, where
+  a move that is merely best is a judgement the search can revise — and a judgement drawn as an arrow reads as a
+  certainty exactly when the position is sharpest.
+- [x] **Explain moves says what a move saves and threatens** (v3.1.234) — beyond naming the tactic, it now reports
+  the piece a move rescues and the one it starts attacking, asked the only way that cannot be wrong: by playing the
+  position out and comparing. An even trade is never called a threat.
 - [x] **Screen reading is quicker** (v3.1.231) — the tab is captured as JPEG rather than PNG. The encode was
   the dominant cost and was paid three times: the browser losslessly encoded the whole visible tab, the result
   travelled to the recogniser as base64, and it was decoded again — for an image immediately downsampled to

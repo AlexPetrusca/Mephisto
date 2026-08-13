@@ -41,6 +41,7 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('arrow_labels', 'Label Arrows:', 'checkbox', false);
         const arrow_opacity_range = this.registerFormElement('arrow_opacity', 'Arrow Opacity:', 'range', 75);
         this.registerFormElement('arrow_rank', 'Number Arrows:', 'checkbox', true);
+        this.registerFormElement('forced_lines', 'Forced Lines Ahead:', 'input', 0);
         this.registerFormElement('board_animation', 'Board Animation:', 'checkbox', true);
         this.registerFormElement('live_stats', 'Live Stats:', 'checkbox', false);
         const search_mode_select = this.registerFormElement('search_mode', 'Search Budget:', 'select', 'time');
