@@ -314,6 +314,18 @@ async function initPanel(root, tabId) {
         maia_level: JSON.parse(MephistoConfig.get('maia_level')) || '1500', // which Maia net (rating band) when engine=maia
         maia3_elo: JSON.parse(MephistoConfig.get('maia3_elo')) || 1500, // Maia-3 target Elo (600-2600, live input, not a reload)
         compute_time: (computeTime != null) ? computeTime : 300,
+        // TIME OR DEPTH, and BOTH are kept. A depth is reproducible -- the same depth is the same
+        // answer on any machine, where a millisecond budget is a different search on every box --
+        // so the two are different instruments, not two spellings of one. Switching back and forth
+        // must not forget the other number, which is why they are separate keys rather than one
+        // value with a unit attached.
+        search_mode: (JSON.parse(MephistoConfig.get('search_mode')) === 'depth') ? 'depth' : 'time',
+        // SAN or UCI, everywhere a move is written. Nf3 and g1f3 are the same move; which one
+        // reads faster is a property of the reader, not of the move.
+        move_notation: (JSON.parse(MephistoConfig.get('move_notation')) === 'uci') ? 'uci' : 'san',
+        // Off by default: the labels are genuinely useful and they are also more ink on the board.
+        arrow_labels: JSON.parse(MephistoConfig.get('arrow_labels')) || false,
+        compute_depth: JSON.parse(MephistoConfig.get('compute_depth')) || 16,
         fen_refresh: (fenRefresh != null) ? fenRefresh : 1000, // FALLBACK poll; positions arrive event-driven
         multiple_lines: JSON.parse(MephistoConfig.get('multiple_lines')) || 1,
         threads: JSON.parse(MephistoConfig.get('threads')) || MephistoConfig.defaultThreads(),
@@ -908,14 +920,13 @@ function init_quick_settings() {
             if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); }
         });
     }
-    // timing settings apply live: compute_time is read at every 'go', think/move times are pushed to the page
-    for (const [id, key] of [['qs_search', 'compute_time'],
-                             ['qs_move', 'move_time'], ['qs_move_var', 'move_variance']]) {
+    // timing settings apply live: the search budget is read at every 'go', think/move times are pushed to the page
+    for (const [id, key] of [['qs_move', 'move_time'], ['qs_move_var', 'move_variance']]) {
         const elem = PANEL_ROOT.getElementById(id);
         if (!elem) continue;
         elem.value = config[key];
         elem.addEventListener('change', () => {
-            const value = Math.max((key === 'compute_time') ? 50 : 0, parseInt(elem.value) || 0);
+            const value = Math.max(0, parseInt(elem.value) || 0);
             config[key] = value;
             save(key, value);
             push_config();
@@ -1452,7 +1463,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         // engine (WASM, native SF/Fairy, remote) does.
         const pondering = config.ponder && toplay.toLowerCase() !== our_side()
             && config.engine !== 'maia' && config.engine !== 'maia3';
-        update_best_move(`${pondering ? i18n('panel.msg.pondering', 'Pondering — ') : ''}` + i18n('panel.msg.to_play_best', '{side} to play, best move is {move}', {side: toplay, move: best}));
+        update_best_move(`${pondering ? i18n('panel.msg.pondering', 'Pondering — ') : ''}` + i18n('panel.msg.to_play_best', '{side} to play, best move is {move}', {side: toplay, move: notate(last_eval.fen, best)}));
     }
 
     if (toplay.toLowerCase() === our_side()) {
@@ -1726,15 +1737,60 @@ function render_wdl(line) {
 const LINE_COLORS = ['#0a5bd3', '#0f9d58', '#e0a400', '#e8710a', '#9333ea'];
 function line_color(i) { return LINE_COLORS[Math.min(i, LINE_COLORS.length - 1)]; }
 
+// Is this search budgeted by DEPTH rather than by the clock? Open-ended searches (Help Mode, Manual
+// Mode, pondering) are neither -- they run until the position changes -- so this only ever decides
+// between `go depth` and `go movetime`.
+function searching_by_depth() {
+    return config.search_mode === 'depth' && config.compute_depth > 0;
+}
+
+// What the shared stepper means in each mode. The step matters as much as the range: 25 is a
+// sensible nudge in milliseconds and nonsense in plies.
+const SEARCH_BOUNDS = {
+    time:  {key: 'compute_time',  min: 50, max: 30000, step: 25},
+    depth: {key: 'compute_depth', min: 1,  max: 60,    step: 1},
+};
+
+// Point the one stepper at the setting the dropdown currently names.
+function apply_search_mode_ui() {
+    const sel = PANEL_ROOT.getElementById('qs_search_mode');
+    const box = PANEL_ROOT.getElementById('qs_search');
+    if (!box) return;
+    const b = SEARCH_BOUNDS[config.search_mode] || SEARCH_BOUNDS.time;
+    if (sel) sel.value = config.search_mode;
+    box.min = b.min; box.max = b.max; box.step = b.step;
+    box.value = config[b.key];
+}
+
 // pv arrives as a space-joined STRING from the wasm engines but can be a LIST of UCI moves from a
 // native/remote host (python-chess formats pv as an array) -- normalize before any .split use
 function pv_moves(pv) {
     return Array.isArray(pv) ? pv.map(String) : (pv || '').split(' ');
 }
 
-// first few moves of a UCI pv as SAN, for the alternative-lines panel
+// ONE move, in whichever notation is configured. Everything that writes a move for a human to read
+// goes through here or through line_preview below, so the setting cannot be honoured in some places
+// and forgotten in others.
+//
+// SAN needs the position the move is played FROM -- that is what makes it short -- so a caller with
+// no fen gets UCI back rather than a guess. UCI is also the fallback on any parse failure: a raw
+// `g1f3` is still a readable move, where an empty string is a bug that looks like a missing answer.
+function notate(fen, uci) {
+    if (!uci || typeof uci !== 'string') return uci || '';
+    if (config.move_notation === 'uci' || !fen) return uci;
+    try {
+        const mv = new Chess(config.variant, fen)
+            .move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+        return mv?.san || uci;
+    } catch (e) {
+        return uci;
+    }
+}
+
+// first few moves of a UCI pv, in the configured notation, for the alternative-lines panel
 function san_preview(fen, pv, plies = 6) {
     const ucis = pv_moves(pv).slice(0, plies);
+    if (config.move_notation === 'uci') return ucis.join(' ');
     try {
         const chess = new Chess(config.variant, fen);
         return ucis.map(u => chess.move({from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4]}).san).join(' ');
@@ -3543,10 +3599,10 @@ function on_new_pos(fen, startFen, moves) {
                 }
             }
             if (moves) {
-                request_remote_analysis(startFen, rt, moves)
+                request_remote_analysis(startFen, rt, moves, searching_by_depth() ? config.compute_depth : null)
                     .then(fresh(on_engine_response)).catch(fresh(on_remote_error)).finally(settle);
             } else {
-                request_remote_analysis(fen, rt)
+                request_remote_analysis(fen, rt, null, searching_by_depth() ? config.compute_depth : null)
                     .then(fresh(on_engine_response)).catch(fresh(on_remote_error)).finally(settle);
             }
         };
@@ -3623,6 +3679,12 @@ function on_new_pos(fen, startFen, moves) {
         // the instant they move (its bestmove is discarded, being for the opponent's side).
         if (config.help_mode || !config.autoplay || config.manual_mode || (config.ponder && !our_turn)) {
             send_engine_uci('go infinite'); // pure analysis / manual / ponder: keep deepening until the position changes
+        } else if (searching_by_depth()) {
+            // `go depth` only -- NOT `go depth N movetime M`. A movetime alongside a depth is a
+            // race, and whichever fires first decides, which would make the reproducible instrument
+            // stop being reproducible on a slow machine. The pacing modes still hold the move back
+            // afterwards; they just no longer cut the search short.
+            send_engine_uci(`go depth ${config.compute_depth}`);
         } else {
             send_engine_uci(`go movetime ${movetime}`); // autoplay needs a final bestmove to act on
         }
@@ -3634,7 +3696,7 @@ function on_new_pos(fen, startFen, moves) {
         const toplay = (turn === 'w') ? 'White' : 'Black';
         if (toplay.toLowerCase() !== our_side()) {
             draw_moves();
-            request_console_log('Best Move: ' + last_eval.bestmove);
+            request_console_log('Best Move: ' + notate(last_eval.fen, last_eval.bestmove));
         }
     }
     last_eval = {fen, activeLines: 0, lines: new Array(config.multiple_lines),
@@ -5558,7 +5620,7 @@ const LIVE_CONFIG_KEYS = [
     'autoplay', 'premove', 'ponder', 'tablebase', 'background_play', 'hide_opponent',
     'explorer', 'book_play', 'explorer_db', 'help_mode', 'humanize', 'clock_mode', 'mirror_mode',
     'manual_mode', 'eval_bar', 'eval_history', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
-    'computer_evaluation', 'multiple_lines', 'compute_time', 'move_time', 'move_variance', 'move_reason',
+    'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
     'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay', 'puzzle_auto_next', 'puzzle_next_delay',
@@ -5605,11 +5667,11 @@ function sync_quick_settings() {
             box.checked = config[key];
         }
     }
-    for (const [id, key] of [['qs_search', 'compute_time'], ['qs_move', 'move_time'],
-                             ['qs_move_var', 'move_variance']]) {
+    for (const [id, key] of [['qs_move', 'move_time'], ['qs_move_var', 'move_variance']]) {
         const el = PANEL_ROOT.getElementById(id);
         if (el && String(el.value) !== String(config[key])) el.value = config[key];
     }
+    apply_search_mode_ui(); // the shared stepper: mode AND the value that mode names
     mark_autoplay_overridden();
 }
 
@@ -5713,9 +5775,15 @@ function draw_moves() {
 
         const arrow_color = line_color(i); // per-rank colour (was blue for #1, grey for all the rest)
         const stroke_width = strokeFunc(last_eval.lines[i]);
-        draw_move(last_eval.lines[i].move, arrow_color, PANEL_ROOT.getElementById('move-annotations'), stroke_width);
+        // Rank AND eval travel with the arrow. Colour alone never said WHICH line an arrow was --
+        // you had to look away from the board and count rows in the panel to find out.
+        const rank = i + 1;
+        const label = arrow_label(last_eval.lines[i]);
+        draw_move(last_eval.lines[i].move, arrow_color, PANEL_ROOT.getElementById('move-annotations'),
+                  stroke_width, rank, label);
         if (config.help_mode && stroke_width > 0 && last_eval.lines[i].move) {
-            hint_arrows.push({move: last_eval.lines[i].move, width: stroke_width, color: arrow_color});
+            hint_arrows.push({move: last_eval.lines[i].move, width: stroke_width, color: arrow_color,
+                              rank, label});
         }
     }
     if (config.help_mode) {
@@ -5786,7 +5854,18 @@ function draw_threat() {
     }
 }
 
-function draw_move(move, color, overlay, stroke_width = 0.225) {
+// An arrow's own evaluation, from White's point of view like every other score the panel shows, so
+// a line does not read one way on the board and the other way in the panel. Mate is written as #N
+// rather than as a centipawn score, because a mate is not a number of pawns.
+function arrow_label(line) {
+    if (!line || !config.arrow_labels) return '';
+    if (Number.isFinite(line.mate) && line.mate !== 0) return `#${Math.abs(line.mate)}`;
+    if (!Number.isFinite(line.score)) return '';
+    const cp = (turn === 'w' ? 1 : -1) * line.score / 100;
+    return (cp > 0 ? '+' : '') + cp.toFixed(2);
+}
+
+function draw_move(move, color, overlay, stroke_width = 0.225, rank = 0, label = '') {
     if (!move || move === '(none)') {
         overlay.lastElementChild?.remove();
         return; // hide overlay on win/loss
@@ -5853,6 +5932,7 @@ function draw_move(move, color, overlay, stroke_width = 0.225) {
                 </defs>
                 <line x1='${ax0}' y1='${ay0}' x2='${ax1}' y2='${ay1}' stroke='${color}' fill=${color}' opacity='0.4'
                     stroke-width='${stroke_width}' marker-end='url(#arrow-${marker_id})'/>
+                ${arrow_badge_svg(x1, y1, color, rank, label)}
             </svg>
         `;
 
@@ -5868,6 +5948,27 @@ function draw_move(move, color, overlay, stroke_width = 0.225) {
             `;
         }
     }
+}
+
+// The rank badge and the eval, drawn at the arrow's HEAD -- the square the move lands on, which is
+// where the eye already is. Board units (the viewBox is 0..8), so it scales with the board.
+function arrow_badge_svg(x1, y1, color, rank, label) {
+    if (!rank && !label) return '';
+    const parts = [];
+    if (rank) {
+        parts.push(`<circle cx='${x1}' cy='${y1 - 0.34}' r='0.17' fill='${color}' opacity='0.92'/>` +
+            `<text x='${x1}' y='${y1 - 0.34}' text-anchor='middle' dominant-baseline='central'` +
+            ` font-size='0.24' font-weight='700' fill='#fff'>${rank}</text>`);
+    }
+    if (label) {
+        // escaped: a score is ours, but this string is interpolated into markup and a `#` mate is
+        // one character away from being something else if the source ever changes
+        const safe = String(label).replace(/[<>&]/g, '');
+        parts.push(`<text x='${x1}' y='${y1 + 0.42}' text-anchor='middle' dominant-baseline='central'` +
+            ` font-size='0.22' font-weight='600' fill='${color}' opacity='0.95'` +
+            ` stroke='#000' stroke-width='0.05' paint-order='stroke'>${safe}</text>`);
+    }
+    return parts.join('');
 }
 
 function clear_annotations() {
@@ -6042,6 +6143,13 @@ function maybe_suggest_calibration() {
         // not in scope here: it is local to init_quick_settings, so calling it threw a ReferenceError
         // straight into the catch below and this notice has never once been shown.
         MephistoConfig.set('calibrate_pending', 'false'); // spent: offered once, taken or not
+        // A DEPTH needs no calibrating -- that is the whole point of it, and the suggestion is
+        // measured in milliseconds. Offering it here would write a time into a box showing plies.
+        //
+        // Inlined rather than calling searching_by_depth(): this whole function runs inside a
+        // try/catch, so a helper that is somehow not in scope would not throw here -- it would
+        // silently disable the notice, which is the exact bug the `save` note above records.
+        if (config.search_mode === 'depth') return;
         if (Math.abs(want - config.compute_time) < Math.max(100, config.compute_time * 0.25)) return;
         const el = PANEL_ROOT.getElementById('calibrate-notice');
         if (!el) return;
@@ -6329,17 +6437,22 @@ async function request_remote_configure(options) {
     return call_backend('http://localhost:9090/configure', options).then(parse_backend_json);
 }
 
-async function request_remote_analysis(fen, time, moves = null) {
+async function request_remote_analysis(fen, time, moves = null, depth = null) {
     if (uses_native()) {
         // guard streamed frames by the ACTUAL position (moves-mode passes startFen here, but
         // premove_tracker.fen holds the real current fen), so late frames don't leak across moves
         const posFen = premove_tracker.fen;
-        return native_send('analyse', {fen, time, moves}, info => on_native_info(info, posFen));
+        // `time` travels WITH a depth, deliberately. The host applies both as one python-chess
+        // Limit, where the time is the ceiling that stops an unreachable depth running forever on a
+        // slow machine -- and a native search cannot be called back, so an unbounded one is not
+        // merely slow, it is unstoppable (see NATIVE_MAX_RT).
+        return native_send('analyse', {fen, time, moves, depth}, info => on_native_info(info, posFen));
     }
     return call_backend('http://localhost:9090/analyse', {
         fen: fen,
         moves: moves,
         time: time,
+        depth: depth,
     }).then(parse_backend_json);
 }
 

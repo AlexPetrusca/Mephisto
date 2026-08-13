@@ -313,5 +313,15 @@
   "set.tip.puzzle_next_delay": "How long Auto-Next waits before pressing the button. The pause is there so you can see whether you solved it before the board changes -- raise it to read the position, lower it to grind. 0 presses as soon as the puzzle ends. Does nothing unless Auto-Next Puzzle is on.",
   "panel.msg.from_database": "From the puzzle database",
   "set.drag_moves": "드래그로 두기",
-  "set.tip.drag_moves": "Play moves by dragging the piece instead of clicking the two squares. Most boards accept either, so this is off by default and the two clicks stay the normal path. Chess.com's VARIANTS boards are the exception -- a quiet move works either way there, but a CAPTURE only registers as a drag -- so they always drag whatever this is set to. Turn it on if a board takes your quiet moves and silently ignores your captures. It costs the same move time either way."
+  "set.tip.drag_moves": "Play moves by dragging the piece instead of clicking the two squares. Most boards accept either, so this is off by default and the two clicks stay the normal path. Chess.com's VARIANTS boards are the exception -- a quiet move works either way there, but a CAPTURE only registers as a drag -- so they always drag whatever this is set to. Turn it on if a board takes your quiet moves and silently ignores your captures. It costs the same move time either way.",
+  "set.search_budget": "Search Budget",
+  "set.search_depth": "Search Depth",
+  "set.tip.search_budget": "How the search is budgeted. Time is what the clock allows. A Depth is reproducible -- the same depth is the same answer on any machine, where a millisecond budget is a different search on every one. Each keeps its own number, so switching back does not lose it.",
+  "panel.tip.search_budget": "How the search is budgeted. Time is what the clock allows; a Depth is reproducible -- the same depth is the same answer on any machine. Each keeps its own number.",
+  "set.move_notation": "Move Notation",
+  "set.notation_san": "SAN (Nf3)",
+  "set.notation_uci": "UCI (g1f3)",
+  "set.tip.move_notation": "How moves are written wherever the extension shows one: the readout, the alternative lines, the arrows' labels. SAN is Nf3, UCI is g1f3 -- the same move either way.",
+  "set.arrow_labels": "Label Arrows",
+  "set.tip.arrow_labels": "Write each arrow's rank and its own evaluation on the board: 1 for the engine's best line, 2 upwards for the rest. Off by default -- it is useful information and it is also more ink on the board."
 }

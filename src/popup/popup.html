@@ -260,7 +260,7 @@
         <span data-i18n="panel.multi_lines" class="qs-label">Multi Lines</span>
         <div class="qs-stepper">
             <button class="qs-step" type="button" tabindex="-1" data-for="qs_lines" data-d="-1" aria-label="less">&minus;</button>
-            <input id="qs_lines" class="browser-default" type="number" min="1" max="5" step="1">
+            <input id="qs_lines" class="browser-default" type="number" min="1" max="20" step="1">
             <button class="qs-step" type="button" tabindex="-1" data-for="qs_lines" data-d="1" aria-label="more">+</button>
         </div>
     </div>
@@ -269,7 +269,13 @@
         <input id="qs_memory" class="browser-default" type="range" min="32" max="4096" step="32">
     </div>
 <div class="qs-row qs-nums">
-        <span data-i18n="set.search_time_ms" class="qs-label">Search Time (ms)</span>
+        <!-- The budget is a CHOICE, so the label is the control: time or depth, with its own number.
+             Both numbers persist, so switching back does not lose the one you were using. -->
+        <select id="qs_search_mode" class="browser-default qs-label qs-inline-select"
+                data-i18n-tip="panel.tip.search_budget" title="How the search is budgeted. Time is what the clock allows; a Depth is reproducible -- the same depth is the same answer on any machine, where a millisecond budget is a different search on every one. Each keeps its own number.">
+            <option value="time" data-i18n="set.search_time_ms">Search Time (ms)</option>
+            <option value="depth" data-i18n="set.search_depth">Search Depth</option>
+        </select>
         <div class="qs-stepper">
             <button class="qs-step" type="button" tabindex="-1" data-for="qs_search" data-d="-1" aria-label="less">&minus;</button>
             <input id="qs_search" class="browser-default" type="number" min="50" max="30000" step="25">

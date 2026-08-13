@@ -37,7 +37,25 @@ class GeneralSettings extends SettingsPage {
         const variant_select = this.registerFormElement('variant', 'Variant:', 'select', 'chess');
         this.registerFormElement('fourpc_mode', 'Four-player Mode:', 'select', 'auto');
         const elo_input = this.registerFormElement('elo', 'Elo:', 'input', 0);
-        this.registerFormElement('compute_time', 'Stockfish Compute Time (ms):', 'input', 300);
+        this.registerFormElement('move_notation', 'Move Notation:', 'select', 'san');
+        this.registerFormElement('arrow_labels', 'Label Arrows:', 'checkbox', false);
+        const search_mode_select = this.registerFormElement('search_mode', 'Search Budget:', 'select', 'time');
+        this.registerFormElement('compute_time', 'Search Time (ms):', 'input', 300);
+        this.registerFormElement('compute_depth', 'Search Depth:', 'input', 16);
+        // Only the row the budget names is shown; the other keeps its value, it is just not in the
+        // way. Both are ordinary settings, so each is still saved on its own key.
+        //
+        // registerChangeListener, NOT addEventListener: registerFormElement hands back a FormElement
+        // wrapper, not the DOM node -- and its select branch fires `change` on the real element, so
+        // this runs on a stored value being filled in as well as on a click.
+        const sync_budget_rows = () => {
+            const depth = search_mode_select.getValue() === 'depth';
+            const row = (id) => document.getElementById(id);
+            if (row('compute_time_row')) row('compute_time_row').style.display = depth ? 'none' : '';
+            if (row('compute_depth_row')) row('compute_depth_row').style.display = depth ? '' : 'none';
+        };
+        search_mode_select.registerChangeListener(sync_budget_rows);
+        sync_budget_rows();
         this.registerFormElement('fen_refresh', 'Fallback Poll Interval (ms):', 'input', 1000);
         const multipv_range = this.registerFormElement('multiple_lines', 'Multiple Lines:', 'range', 1);
         const threads_range = this.registerFormElement('threads', 'Threads:', 'range', MephistoConfig.defaultThreads());

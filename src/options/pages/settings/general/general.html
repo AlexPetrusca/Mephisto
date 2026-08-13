@@ -112,12 +112,38 @@
                 <div class="set-row section">
                     <div class="set-lbl"><span data-i18n="set.multiple_lines">Multiple Lines</span></div>
                     <div class="set-ctl">
-                        <input id="multiple_lines_range" type="range" min="1" max="5" step="1">
+                        <input id="multiple_lines_range" type="range" min="1" max="20" step="1">
                         <span class="value set-val"></span>
                     </div>
                 </div>
 
                 <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.move_notation" class="tooltipped" data-position="right"
+                              data-tooltip="How moves are written wherever the extension shows one: the readout, the alternative lines, the arrows' labels. SAN is Nf3, UCI is g1f3 -- the same move either way."><span data-i18n="set.move_notation">Move Notation</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <select name="move_notation" id="move_notation_select">
+                            <option value="san" data-i18n="set.notation_san">SAN (Nf3)</option>
+                            <option value="uci" data-i18n="set.notation_uci">UCI (g1f3)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.arrow_labels" class="tooltipped" data-position="right"
+                              data-tooltip="Write each arrow's rank and its own evaluation on the board: 1 for the engine's best line, 2 upwards for the rest. Off by default -- it is useful information and it is also more ink on the board."><span data-i18n="set.arrow_labels">Label Arrows</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="arrow_labels_checkbox" type="checkbox" class="set-cb">
+                        <label for="arrow_labels_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row" id="compute_time_row">
                     <div class="set-lbl"><span data-i18n="set.search_time_ms">Search Time (ms)</span></div>
                     <div class="set-ctl">
                         <span class="set-step">

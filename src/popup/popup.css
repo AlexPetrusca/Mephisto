@@ -601,6 +601,32 @@ html, body {
     color: var(--mp-text);
 }
 
+/* The search budget's label IS its selector. Styled to read as the label it replaces rather than
+   as a form control: no border, no background, the row's own type size and colour. Only the caret
+   and the pointer say it can be clicked. */
+#quick-settings select.qs-inline-select {
+    width: auto;
+    height: auto;
+    padding: 0 18px 0 0;
+    border: none;
+    background: transparent;
+    color: var(--mp-text);
+    font-size: 13px;
+    line-height: inherit;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    /* caret, drawn rather than fetched -- an extension page cannot reach out for an asset */
+    background-image: linear-gradient(45deg, transparent 50%, var(--mp-text) 50%),
+                      linear-gradient(135deg, var(--mp-text) 50%, transparent 50%);
+    background-position: right 6px center, right 1px center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+}
+#quick-settings select.qs-inline-select:focus-visible { outline: 1px solid var(--mp-on); outline-offset: 2px; }
+/* the popped-open list is painted by the OS, which does not inherit the panel's colours */
+#quick-settings select.qs-inline-select option { background: var(--mp-bg); color: var(--mp-text); }
+
 #quick-settings .qs-toggle .qs-label {
     flex: 1;
     min-width: 0;

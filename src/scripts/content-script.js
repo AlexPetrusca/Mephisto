@@ -956,6 +956,23 @@ function drawHintArrows(arrows) {
         const yh = y1 - (y1 - y0) / dist * square * 0.4;
         lines += `<line x1="${x0}" y1="${y0}" x2="${xh}" y2="${yh}" stroke="${color}" stroke-width="${stroke}"
             stroke-linecap="round" opacity="0.75" marker-end="url(#${markerId(color)})"/>`;
+        // The rank and the line's own eval, at the head of the arrow. Same information the panel
+        // board draws, in page pixels rather than board units, so Help Mode does not need the panel
+        // open to say WHICH line an arrow is.
+        const r = square * 0.17;
+        if (arrow.rank) {
+            lines += `<circle cx="${x1}" cy="${y1 - square * 0.34}" r="${r}" fill="${color}" opacity="0.92"/>` +
+                `<text x="${x1}" y="${y1 - square * 0.34}" text-anchor="middle" dominant-baseline="central"` +
+                ` font-size="${square * 0.24}" font-weight="700" fill="#fff"` +
+                ` font-family="system-ui, sans-serif">${arrow.rank}</text>`;
+        }
+        if (arrow.label) {
+            const safe = String(arrow.label).replace(/[<>&]/g, '');
+            lines += `<text x="${x1}" y="${y1 + square * 0.42}" text-anchor="middle" dominant-baseline="central"` +
+                ` font-size="${square * 0.22}" font-weight="600" fill="${color}" opacity="0.95"` +
+                ` stroke="#000" stroke-width="${square * 0.05}" paint-order="stroke"` +
+                ` font-family="system-ui, sans-serif">${safe}</text>`;
+        }
     }
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
