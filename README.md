@@ -91,6 +91,12 @@ only the ~1 MB of extension code — about a hundredth the download.
 > ⚠️ **Extract the update over your existing install, never into an empty folder.** Without the engines it cannot
 > run. If you do it anyway the panel says so rather than failing obscurely — it checks for the bundled engines at
 > startup and tells you to fetch the full archive.
+>
+> **Both archives unpack into a `Mephisto-<version>/` folder**, so "over your install" means copying that folder's
+> **contents** into the folder Chrome already has loaded, replacing what is there. Dropping the folder itself in
+> leaves you with a `Mephisto-3.1.227/` sitting *inside* your install and nothing actually updated — the extension
+> keeps running the old files and looks like the update did nothing. **[Automatic updates](#automatic-updates-opt-in)
+> avoid this entirely**: they take the same archive and write the files in place for you.
 
 **Extract in place.** Chrome derives an unpacked extension's id from its folder path, so replacing files in the
 folder you already loaded keeps the same id — and native engines, which are registered against that id, keep
