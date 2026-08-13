@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.234-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.235-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -899,7 +899,9 @@ veto for real blunders, and the clock rules above.
 - [x] **Forced lines, drawn ahead** (v3.1.234) — when the reply is the opponent's ONLY legal move, and so is the
   one after it, each is drawn as its own arrow, cooling in colour as the line runs on. Up to five plies, off by
   default. Only genuinely forced moves are drawn: a position with one legal reply is a fact about the rules, where
-  a move that is merely best is a judgement the search can revise — and a judgement drawn as an arrow reads as a
+  a move that is merely best is a judgement the search can revise. The walk FOLLOWS the engine line and draws only
+  the plies that were forced, so an only-move three deep still gets an arrow even when the defender had a choice
+  before it — and a judgement drawn as an arrow reads as a
   certainty exactly when the position is sharpest.
 - [x] **Explain moves says what a move saves and threatens** (v3.1.234) — beyond naming the tactic, it now reports
   the piece a move rescues and the one it starts attacking, asked the only way that cannot be wrong: by playing the

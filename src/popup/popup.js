@@ -2262,8 +2262,14 @@ function maybe_premove_forced_reply(line) {
 // reply is a fact about the rules. Drawing a five-move arrow chain off a judgement would be
 // confidently wrong exactly when the position is sharpest, which is when someone is looking at it.
 //
-// Our own moves come from the engine's pv when it has one, because ours are choices rather than
-// forced; the opponent's come from the board. The walk stops the moment either runs out.
+// The walk FOLLOWS the engine's line and marks each ply forced or not; the drawing then takes only
+// the forced ones. Stopping at the first unforced ply (which is what this did originally) threw away
+// the common case: in a forced mate the defender usually has choices early and only-moves later, so
+// the interesting arrows are exactly the ones that came after the first free choice.
+//
+// An arrow is still only ever drawn for a ply with ONE legal move. That is a fact given the moves
+// before it -- conditional on the line, not on the engine's judgement about it -- which is why the
+// unforced plies are walked through but never drawn.
 function forced_chain(fen, pv, maxPlies) {
     const out = [];
     if (!Number.isFinite(maxPlies) || maxPlies <= 0) return out;
@@ -2277,13 +2283,10 @@ function forced_chain(fen, pv, maxPlies) {
             if (legal.length === 1) {
                 const m = legal[0];
                 uci = `${m.from}${m.to}${m.promotion || ''}`;     // forced: the rules pick it
-            } else if (i === 0 && line.length) {
-                uci = line[0];                                    // ply 0 is OUR move: a choice
+            } else if (i < line.length) {
+                uci = line[i];                                    // a choice -- follow the engine's
             } else {
-                // Decided BEFORE the move is taken, not after. Checking afterwards let one unforced
-                // continuation into the chain -- and an unforced move drawn as an arrow reads as a
-                // certainty, which is the one thing this must never claim.
-                break;
+                break;                                            // nothing forced and no line left
             }
             const rec = c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
             if (!rec) break;                                      // pv disagrees with the board -- stop

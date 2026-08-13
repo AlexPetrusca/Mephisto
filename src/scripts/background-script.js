@@ -718,7 +718,24 @@ const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
 // across travelMs so the motion actually consumes the caller's move-time budget instead of snapping.
 // How many mouseMoved events a path of this length is worth. Shared with cdpClick, which needs to
 // know whether the path is a single snap BEFORE it decides to batch.
-const pathSteps = (travelMs) => Math.max(1, Math.min(40, Math.round(travelMs / 16)));
+//
+// SIZED BY WHAT A DISPATCH ACTUALLY COSTS HERE, not by 60fps. The old rate assumed 16ms a step; a
+// dispatch measures ~26ms on a real machine, so every path overran the budget it was given -- a
+// 183ms travel drew 13 events and took 372ms. The press and release are part of that bill too, so
+// they come out of the count rather than being added on top of a full-length path.
+//
+// Self-calibrating: it reads this worker's own running average once there is enough of one to
+// trust, and falls back to the old assumption until then. A slow machine therefore draws a shorter
+// path rather than a late one, which is the right trade -- a move that arrives on time with fewer
+// waypoints beats a prettier one that misses its budget.
+function stepCostMs() {
+    return (cdpCalls > 20) ? Math.max(8, cdpTotalMs / cdpCalls) : 16;
+}
+
+function pathSteps(travelMs) {
+    const budgetSteps = Math.floor(travelMs / stepCostMs()) - 2; // press + release
+    return Math.max(1, Math.min(40, budgetSteps));
+}
 
 async function cdpMove(target, fromX, fromY, x, y, travelMs, held = false) {
   // `held` = the left button is already down and this is the middle of a DRAG. Chrome only treats a
