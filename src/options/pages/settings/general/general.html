@@ -119,6 +119,19 @@
 
                 <div class="set-row">
                     <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.search_budget" class="tooltipped" data-position="right"
+                              data-tooltip="How the search is budgeted. Time is what the clock allows. A Depth is reproducible -- the same depth is the same answer on any machine, where a millisecond budget is a different search on every one. Each keeps its own number, so switching back does not lose it."><span data-i18n="set.search_budget">Search Budget</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <select name="search_mode" id="search_mode_select">
+                            <option value="time" data-i18n="set.search_time_ms">Search Time (ms)</option>
+                            <option value="depth" data-i18n="set.search_depth">Search Depth</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
                         <span data-i18n-tip="set.tip.move_notation" class="tooltipped" data-position="right"
                               data-tooltip="How moves are written wherever the extension shows one: the readout, the alternative lines, the arrows' labels. SAN is Nf3, UCI is g1f3 -- the same move either way."><span data-i18n="set.move_notation">Move Notation</span></span>
                     </div>
@@ -149,6 +162,17 @@
                         <span class="set-step">
                             <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
                             <input id="compute_time_input" type="number" min="0" step="25">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row" id="compute_depth_row">
+                    <div class="set-lbl"><span data-i18n="set.search_depth">Search Depth</span></div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="compute_depth_input" type="number" min="1" max="60" step="1">
                             <button type="button" class="set-step-btn" data-step="1">+</button>
                         </span>
                     </div>

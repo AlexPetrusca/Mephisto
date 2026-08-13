@@ -13,9 +13,19 @@ export class FormElement {
         this.default = defaultValue;
         this.valueType = typeof defaultValue;
         this.elem = document.getElementById(`${name}_${type}`);
+        // A SETTING WITH NO CONTROL MUST COST ONLY ITSELF. When the markup for one row is missing --
+        // a hand-applied port that dropped it, a stale cached page, a typo in an id -- every method
+        // below used to dereference null, and the throw took out the whole page: registration
+        // stopped, so NO field was ever populated and nothing could be saved. It presented as "a
+        // fresh install shows no defaults and won't let me turn anything on", which points nowhere
+        // near the one row actually at fault. Now it is loud in the console and inert everywhere else.
+        if (!this.elem) console.warn(`Mephisto: settings control ${name}_${type} is missing from this page`);
     }
 
+    get missing() { return !this.elem; }
+
     registerChangeListener(fn) {
+        if (this.missing) return;
         if (this.type === 'input' || this.type === 'range') {
             this.elem.addEventListener('input', fn);
         } else if (this.type === 'checkbox') {
@@ -26,6 +36,7 @@ export class FormElement {
     }
 
     getValue() {
+        if (this.missing) return this.default;
         if (this.type === 'input' || this.type === 'range') {
             return this.elem.value;
         } else if (this.type === 'checkbox') {
@@ -36,6 +47,7 @@ export class FormElement {
     }
 
     setValue(val) {
+        if (this.missing) return;
         if (this.type === 'input' || this.type === 'range') {
             this.elem.value = val;
             this.elem.dispatchEvent(new Event('input'));
@@ -54,7 +66,11 @@ export class FormElement {
             const opt = pick(val) || pick(this.default);
             if (!opt) return; // no default option either -- keep the markup's own rather than throw
             this.elem.value = opt.value;
-            this.elem.parentElement.querySelector('input').value = opt.innerText;
+            // Materialize replaces a select with a wrapper holding a text input, and that is what
+            // the user actually sees. A select it skipped (or has not initialised yet) has no such
+            // input -- writing to it blind is the other way this file could take out a whole page.
+            const shown = this.elem.parentElement?.querySelector('input');
+            if (shown) shown.value = opt.innerText;
             this.elem.dispatchEvent(new Event('change'));
         }
     }
