@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.235-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.236-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -897,8 +897,8 @@ veto for real blunders, and the clock rules above.
   threads will not do it. Note for anyone tempted by the capture side: `captureVisibleTab` is quota'd at ~2/s, but
   at half a second per read that ceiling is not close, and a tab-capture MediaStream would buy almost nothing.
 - [x] **Forced lines, drawn ahead** (v3.1.234) — when the reply is the opponent's ONLY legal move, and so is the
-  one after it, each is drawn as its own arrow, cooling in colour as the line runs on. Up to five plies, off by
-  default. Only genuinely forced moves are drawn: a position with one legal reply is a fact about the rules, where
+  one after it, each is drawn as its own arrow -- **yours in blue, the opponent's forced replies in violet**, each
+  ramp darkening with depth so the order reads inside a side. Up to five plies, off by default. Only genuinely forced moves are drawn: a position with one legal reply is a fact about the rules, where
   a move that is merely best is a judgement the search can revise. The walk FOLLOWS the engine line and draws only
   the plies that were forced, so an only-move three deep still gets an arrow even when the defender had a choice
   before it — and a judgement drawn as an arrow reads as a

@@ -1794,10 +1794,15 @@ function render_wdl(line) {
 // reads as a legend -- the green row is the green arrow. Was: line 1 blue, every other line the same
 // grey, so 2nd/3rd/4th/5th were indistinguishable.
 const LINE_COLORS = ['#0a5bd3', '#0f9d58', '#e0a400', '#e8710a', '#9333ea'];
-// The forced chain's own ramp, deliberately not LINE_COLORS: those mean "the engine's Nth choice",
-// and reusing them would say a forced reply was an alternative you could pick. Cooling as it goes,
-// so the order reads off the board without a legend.
-const FORCED_COLORS = ['#1e88a8', '#2f7fb8', '#4a73c0', '#6a67c4', '#8a5cc4'];
+// The forced chain's own ramps, deliberately not LINE_COLORS: those mean "the engine's Nth choice",
+// and reusing them would say a forced reply was an alternative you could pick.
+//
+// TWO ramps, one per side. Whose move an arrow is matters more than how deep it sits -- a chain
+// drawn in one colour reads as one player's plan, when half of it is the reply being forced OUT of
+// the opponent. Ours cool through blue, theirs through violet, and each ramp still darkens with
+// depth so the order inside a side is readable without a legend.
+const FORCED_COLORS_OURS   = ['#1e88a8', '#2f7fb8', '#3f66c0'];
+const FORCED_COLORS_THEIRS = ['#9a5cc4', '#8348b4', '#6d36a4'];
 
 function line_color(i) { return LINE_COLORS[Math.min(i, LINE_COLORS.length - 1)]; }
 
@@ -6023,7 +6028,12 @@ function draw_moves() {
     for (let i = chain.length - 1; i >= 1; i--) {   // skip ply 0: that is the move the panel already draws
         const step = chain[i];
         if (!step.forced) continue;                 // only the certain part of the line
-        const color = FORCED_COLORS[Math.min(i - 1, FORCED_COLORS.length - 1)];
+        // ply 0 is the side to move in the analysed position -- us -- so even plies are ours.
+        // Each side's ramp advances on its OWN moves, not on the shared depth, or one side would
+        // skip every other shade and the two would stop looking like sequences.
+        const ours = (step.ply % 2) === 0;
+        const ramp = ours ? FORCED_COLORS_OURS : FORCED_COLORS_THEIRS;
+        const color = ramp[Math.min(Math.floor((step.ply - 1) / 2), ramp.length - 1)];
         draw_move(step.uci, color, PANEL_ROOT.getElementById('move-annotations'), 0.12, 0, '');
         if (config.help_mode) hint_arrows.push({move: step.uci, width: 0.12, color, rank: 0, label: ''});
     }
