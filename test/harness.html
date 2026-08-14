@@ -1,0 +1,150 @@
+<!doctype html>
+<!-- The test rail's browser half: run the REAL content-script against REAL captured page markup.
+
+     The node ladder reads source and executes extracted functions, which is exactly why a scrape-tag
+     collision that broke every Chess.com game once passed it -- it cannot render a page. This harness
+     can: each fixture under test/fixtures/ is the DOM a site actually served (captured live, scripts
+     stripped), loaded into an iframe, and the WHOLE shipped content-script is evaluated inside that
+     iframe -- so `document` IS the fixture and nothing is re-implemented or sliced.
+
+     Run it:  python3 -m http.server 8517  (from the repo root)  ->  http://localhost:8517/test/harness.html
+     Every check renders as PASS/FAIL in the page; the summary line at the top is machine-readable.
+
+     Deliberately no framework and no dependencies: the point of this file is that it cannot drift
+     from the shipped code, so it contains as little of its own logic as possible. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mephisto scraper harness</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; background: #1b1b1b; color: #ddd; margin: 2em; }
+  #summary { font-weight: 700; font-size: 16px; margin-bottom: 1em; }
+  .pass::before { content: "PASS  "; color: #4c1; font-weight: 700; }
+  .fail::before { content: "FAIL  "; color: #e33; font-weight: 700; }
+  li { list-style: none; margin: 2px 0; white-space: pre-wrap; }
+  iframe { display: none; }
+</style>
+</head>
+<body>
+<div id="summary">running…</div>
+<ul id="results"></ul>
+<script>
+const results = [];
+function check(name, cond, detail) {
+    results.push({name, ok: !!cond, detail: detail == null ? '' : String(detail)});
+    const li = document.createElement('li');
+    li.className = cond ? 'pass' : 'fail';
+    li.textContent = name + (cond ? '' : '   -- got: ' + (detail == null ? 'undefined' : String(detail)));
+    document.getElementById('results').appendChild(li);
+}
+function finish() {
+    const fails = results.filter(r => !r.ok).length;
+    document.getElementById('summary').textContent =
+        `HARNESS ${fails ? 'FAIL' : 'PASS'}: ${results.length - fails}/${results.length} ok`;
+    document.title = fails ? `FAIL ${fails}` : 'PASS';
+}
+
+// Everything the content-script touches at top level, stubbed just enough to evaluate. The stubs
+// swallow messaging -- the harness tests SCRAPING, and a scrape is a pure read of the DOM.
+const CHROME_STUB = `
+window.chrome = {
+    runtime: {
+        id: 'harness',
+        getManifest: () => ({version: 'harness'}),
+        sendMessage: (m, cb) => { if (cb) cb({}); },
+        onMessage: {addListener() {}},
+        connect: () => ({onMessage: {addListener() {}}, onDisconnect: {addListener() {}},
+                        postMessage() {}, disconnect() {}}),
+    },
+    storage: {
+        local: {get: (k, cb) => (cb ? cb({}) : Promise.resolve({})), set: () => {}, remove: () => {}},
+        onChanged: {addListener() {}},
+    },
+};`;
+
+async function runFixture(fixtureUrl, siteName, asserts) {
+    const before = results.length;
+    // The scripts the manifest actually injects, in the manifest's own order -- read from the
+    // manifest rather than listed here, so a new content script cannot silently be missing from
+    // the harness environment. (popup.js is skipped: it is the panel, boots its own UI, and the
+    // scrapers under test never call into it.)
+    const NS = {cache: 'no-store'};   // a cached input makes a green run meaningless
+    const manifest = await fetch('/manifest.json', NS).then(r => r.json());
+    const scriptPaths = manifest.content_scripts[0].js.filter(p => !p.endsWith('popup/popup.js'));
+    const [fixture, ...sources] = await Promise.all([
+        fetch(fixtureUrl, NS).then(r => r.text()),
+        ...scriptPaths.map(p => fetch('/' + p, NS).then(r => r.text())),
+    ]);
+    // The captured page carries the SITE's Content-Security-Policy meta, which would apply inside
+    // the iframe and block the very scripts this harness injects. Structure is what the scrapers
+    // read; the policy is not structure.
+    const cleaned = fixture.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/i, '');
+    const frame = document.createElement('iframe');
+    document.body.appendChild(frame);
+    frame.contentDocument.open();
+    frame.contentDocument.write(cleaned);
+    frame.contentDocument.close();
+    const run = (code) => {
+        const s = frame.contentDocument.createElement('script');
+        s.textContent = code;
+        frame.contentDocument.body.appendChild(s);
+    };
+    run(CHROME_STUB);
+    for (const src of sources) run(src);
+    // `site` and `config` are boot-assigned state the iframe cannot derive (its own location is the
+    // harness origin, not the site's) -- set them the way boot would have, then hand control to the
+    // fixture's assertion block. Top-level lets share the global lexical scope across scripts.
+    frame.contentWindow.__check = check;
+    // The assert block runs INSIDE the iframe: an exception there does not propagate to this
+    // scope, and the first version of this file silently reported a partial run as green. Every
+    // fixture therefore declares how many checks it makes, and the throw itself becomes a failure.
+    // site, config and startPosCache are BOOT state: on a real page bootContentScript establishes
+    // all three before any scrape can run, and the iframe (whose location is the harness, not the
+    // site) never boots. Recreate exactly that precondition, nothing more.
+    run(`site = ${JSON.stringify(siteName)};
+         config = {variant: 'chess', drag_moves: false, move_time: 400, arrow_opacity: 0.75};
+         startPosCache = loadStartPosCache();
+         try {
+             (${asserts.fn.toString()})(window.__check);
+         } catch (e) {
+             window.__check('fixture assertions ran without throwing', false, e && (e.stack || e));
+         }`);
+    frame.remove();
+    const made = results.length - before;
+    check(`${siteName}: all ${asserts.expected} declared checks actually ran`,
+          made === asserts.expected || made === asserts.expected + 1, `${made} ran`);
+}
+
+(async () => {
+    try {
+        await runFixture('/test/fixtures/lichess-analysis.html', 'lichess', {expected: 6, fn: (check) => {
+            // The fixture is /analysis/pgn/e4_e5_Nf3_Nc6_Bb5_a6_Ba4_Nf6_O-O_Be7_Re1_b5_Bb3_d6:
+            // the Ruy Lopez position after 7...d6, board oriented white, 14 plies on the clock.
+            check('lichess: the board is found at all', !!getBoard(), 'getBoard() falsy');
+            check('lichess: orientation reads white', getOrientation() === 'white', getOrientation());
+            const records = getMoveRecords();
+            check('lichess: all 14 plies are scraped', records && records.length === 14,
+                  records && records.length);
+            const pos = scrapePosition();
+            check('lichess: the scrape carries the li+fen tag', /^\*\*\*lifen\*\*\*/.test(pos || ''), pos);
+            // The REAL wire format, learned from this very fixture on its first run: each SAN is
+            // followed by the '*****' separator (the sanitizer keeps '*'), so the panel can split
+            // them back apart. The first draft of this check assumed concatenation and failed --
+            // which is the point of testing against captured markup instead of assumptions.
+            const want = 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 d6'
+                .split(' ').map(m => m + '*****').join('');
+            check('lichess: every move survives the scrape in order',
+                  (pos || '').endsWith(want), pos);
+            // the anchors Hide Opponent Name and the eval bar hang off -- structural presence only,
+            // this is an anonymous analysis page with no player names to blur
+            check('lichess: cg-wrap anchor exists for the overlays',
+                  !!document.querySelector('.cg-wrap'), 'missing .cg-wrap');
+        }});
+    } catch (e) {
+        check('harness ran to completion', false, e && (e.stack || e.message || e));
+    }
+    finish();
+})();
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.237-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.238-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -724,12 +724,13 @@ shipped, which is a good sign and also why the next item is a bigger one.
 
 **Worth real work.** The ones that would change how this feels to use, and cost accordingly.
 
-- [ ] **A test rail that can actually click** — the suite reads source and runs extracted functions, which is
-  exactly why a scrape-tag collision that broke every Chess.com game once passed it cleanly. Two halves are
-  worth building: saved copies of real page markup, so a scraper is tested against the DOM a site genuinely
-  served instead of against a guess, and a headless browser that loads the extension and plays a game end to
-  end. Nearly every silent failure this project has had would have been caught by one or the other.
-
+- [ ] **A test rail that can actually click** — half of it exists now (v3.1.238): `test/fixtures/` holds the DOM
+  a site actually served, captured live with scripts stripped, and `test/harness.html` runs the WHOLE shipped
+  content-script inside that page — the manifest's own script list, nothing sliced or re-implemented. On its very
+  first run it corrected a wrong assumption about the scrape wire format, and its RED check demonstrated the
+  structural move-list recovery genuinely surviving a class rename. Still to build: chess.com fixtures, a live-game
+  fixture with player names (so Hide Opponent Name is finally testable), and a headless runner so it gates releases
+  instead of being driven by hand.
 
 - [ ] **Talking Mode** — the engine as a voice. Not a number and an arrow but a running commentary in plain
   language: what the position wants, what it is worried about, why the move it likes actually wins something.
