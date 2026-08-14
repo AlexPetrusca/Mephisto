@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.243-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.244-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -753,14 +753,6 @@ shipped, which is a good sign and also why the next item is a bigger one.
   authenticated account — ban territory, and unlike everything else here it is trivially attributable. The
   built-in review is the answer; it just has to get good enough that the comparison stops mattering.
 
-- [ ] **Maia premoves: the second inference** — the framework shipped in v3.1.239 (confidence and plies are
-  settings; a rules-forced reply certifies at any depth), which gets every SEARCHING engine premoving on your
-  terms. What remains is the single-move engines: Maia answers with one move for the position it was shown and
-  has no line to certify a reply from. The mechanism is specified and waiting: when the opponent's reply to our
-  move is their only legal move, the position after it is a fact — run one extra Maia inference on that future
-  position and premove its answer. Needs an isolated request channel so the second inference cannot be mistaken
-  for the current position's, which is real plumbing rather than an afternoon.
-
 - [ ] **Playing with a net** — for when the moves are yours. Live feedback you opt into, and underneath it a
   quieter mode that says nothing at all unless you are about to throw the game away: not the best move, just
   the set of moves that keep the result. The win% bands the panel already judges moves by are the right ruler.
@@ -904,6 +896,11 @@ veto for real blunders, and the clock rules above.
   opponent reply is their only legal move, YOUR next moves from the engine's line are drawn in blue (the ones you
   could premove) and their forced replies in violet. The first position where the opponent has a real choice ends
   the chain, so everything drawn is certain given only your own choices.
+- [x] **Maia premoves: the second inference** (v3.1.244) — Maia predicts the opponent's move but never had a
+  reply of yours to premove. Now a second, isolated inference on the same net asks what you would play after
+  that prediction, and the answer rides the normal premove rails: if the opponent's most human move is taking
+  your bishop, the recapture is premoved; mates and forced replies likewise. The safety gate is unchanged — a
+  premove only queues when the reply is bound to the predicted move, so it cannot fire in a wrong position.
 - [x] **A premove framework** (v3.1.239) — when to arm and how many are settings now: **Premove Confidence** is
   the certification depth (default the measured 13/14/latest window), **Premove Plies** caps how many a forced
   sequence queues. And a reply that is the opponent's only legal move is certified by the rules at any depth —
