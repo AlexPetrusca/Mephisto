@@ -2198,8 +2198,12 @@ function premove_certified(line) {
     // Executed check (2026-08-14): a {pred, depth:1, pv:[pred]} Maia-shaped line certified true.
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(line.reply ?? '')) return false;
     // A reply that is the opponent's ONLY legal move is a fact about the rules -- no depth window
-    // can add or subtract confidence from it. This is also what lets a single-move engine premove
-    // at all: the certification comes from chess.js, not from a search it does not have.
+    // can add or subtract confidence from it. NOTE what this does NOT do: it does not let a
+    // single-move engine premove (an earlier revision of this comment claimed it did, and was
+    // wrong). Certification answers "is the prediction trustworthy" -- but a Maia line has no
+    // line.reply to PLAY, and the gate above rejects it for exactly that reason. A single-move
+    // engine premoves only once something produces the reply: the roadmap's second inference on
+    // the rules-certified future position. That mechanism plugs in here when it is built.
     if (line.pred && premove_tracker.fen) {
         try {
             const c = new Chess(config.variant, premove_tracker.fen);
