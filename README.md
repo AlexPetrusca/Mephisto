@@ -895,10 +895,6 @@ veto for real blunders, and the clock rules above.
   compute-bound. Past that it means a smaller or quantised position model, or a GPU execution provider; more
   threads will not do it. Note for anyone tempted by the capture side: `captureVisibleTab` is quota'd at ~2/s, but
   at half a second per read that ceiling is not close, and a tab-capture MediaStream would buy almost nothing.
-- [x] **Forced lines are your premoves** (v3.1.239) — reworked to what the feature was always for: while every
-  opponent reply is their only legal move, YOUR next moves from the engine's line are drawn in blue (the ones you
-  could premove) and their forced replies in violet. The first position where the opponent has a real choice ends
-  the chain, so everything drawn is certain given only your own choices.
 - [x] **Arrow colours, yours** (v3.1.247) — an Appearance section that re-colours every arrow family the
   panel draws: engine lines 1–5, forced continuations (both sides), PV Arrows, the threat arrow and book
   arrows. Native colour picker + hex field per row, synced both ways; empty means default; validation at
@@ -920,6 +916,10 @@ veto for real blunders, and the clock rules above.
   that prediction, and the answer rides the normal premove rails: if the opponent's most human move is taking
   your bishop, the recapture is premoved; mates and forced replies likewise. The safety gate is unchanged — a
   premove only queues when the reply is bound to the predicted move, so it cannot fire in a wrong position.
+- [x] **Forced lines are your premoves** (v3.1.239) — reworked to what the feature was always for: while every
+  opponent reply is their only legal move, YOUR next moves from the engine's line are drawn in blue (the ones you
+  could premove) and their forced replies in violet. The first position where the opponent has a real choice ends
+  the chain, so everything drawn is certain given only your own choices.
 - [x] **A premove framework** (v3.1.239) — when to arm and how many are settings now: **Premove Confidence** is
   the certification depth (default the measured 13/14/latest window), **Premove Plies** caps how many a forced
   sequence queues. And a reply that is the opponent's only legal move is certified by the rules at any depth —
