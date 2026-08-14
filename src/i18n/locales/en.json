@@ -344,5 +344,9 @@
   "set.arrow_rank": "Number Arrows",
   "set.tip.arrow_rank": "Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards for the rest. On by default -- with more than a couple of lines the colours alone stop being enough to tell them apart.",
   "set.forced_lines": "Forced Lines Ahead",
-  "set.tip.forced_lines": "Draw the forced continuation ahead of the move: the engine's line is followed, and every reply along it that is the opponent's ONLY legal move gets its own arrow. Plies after a free choice are conditional on the engine's line -- only plies with one legal reply are ever drawn as arrows. 0 is off."
+  "set.tip.forced_lines": "Draw your premove-able continuation ahead of the move: while every opponent reply is their ONLY legal move, your next moves from the engine's line are drawn in blue and their forced replies in violet. The first position where the opponent has a real choice ends the chain -- everything drawn is certain given only your own choices. 0 is off.",
+  "set.premove_confidence": "Premove Confidence",
+  "set.tip.premove_confidence": "How deep the search must agree with itself before a premove is armed: the (their move, our reply) pair must be identical at this depth, the depth before it, and the latest depth reported. 14 is the measured default. A reply that is the opponent's ONLY legal move is certified by the rules and ignores this dial entirely.",
+  "set.premove_plies": "Premove Plies",
+  "set.tip.premove_plies": "How many premoves a forced sequence may queue in one click session. 2 queues the follow-up when the line is forced two deep; 1 keeps premoving strictly one move at a time."
 }

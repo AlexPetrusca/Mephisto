@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.238-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.239-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -626,7 +626,9 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Hide Opponent Name** | Blurs their username and avatar so a screenshot doesn't expose a real person. Local and cosmetic — but it's the one option that adds a style element to the page, which is why it's off by default. It matches the sites' own class names, so a site rename can leave it blurring nothing; it reports what it matched in Copy Diagnostics rather than failing silently. |
 | **Move Notation** | SAN (`Nf3`) or UCI (`g1f3`), everywhere a move is written: the readout, the alternative lines, the arrow labels. |
 | **Label Arrows** | Print each arrow's own evaluation on the board. Off by default — useful information, and also more ink on the board. |
-| **Forced Lines Ahead** | How many plies of a forced continuation to draw ahead of the move, 0–5. Only moves that are genuinely forced — the side to move has exactly one legal reply — are drawn. 0 is off. |
+| **Forced Lines Ahead** | Draw your premove-able continuation, 0–5 plies: while every opponent reply is their only legal move, your next moves are drawn in blue and their forced replies in violet. The chain ends where the opponent has a real choice. 0 is off. |
+| **Premove Confidence** | The certification depth: a (their move, our reply) pair must be identical at this depth, the one before it, and the latest reported. A rules-forced reply ignores the dial — it is certain at any depth. |
+| **Premove Plies** | How many premoves a forced sequence may queue in one click session, 1–2. |
 | **Number Arrows** | Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards. On by default; with more than a couple of lines the colours alone stop distinguishing them. |
 | **Arrow Opacity** | How strongly arrows are drawn, 1–100, on the panel board and the page board alike. Floored so the bottom of the slider cannot render an invisible arrow. |
 | **Board Animation** | Animate the panel's board and its overlays. Off draws every change instantly. |
@@ -751,12 +753,13 @@ shipped, which is a good sign and also why the next item is a bigger one.
   authenticated account — ban territory, and unlike everything else here it is trivially attributable. The
   built-in review is the answer; it just has to get good enough that the comparison stops mattering.
 
-- [ ] **A premove framework, and Maia premoves** — premoving is welded to the engines whose search happens to
-  stream a multi-move line. It should be a setting: when to arm one, how many, on what confidence, with the
-  existing safety gates untouched. Maia is the case that proves the point — it answers with a single move at
-  depth one and cannot certify a reply the way a search can, so it needs a second opinion rather than a
-  deeper look.
-
+- [ ] **Maia premoves: the second inference** — the framework shipped in v3.1.239 (confidence and plies are
+  settings; a rules-forced reply certifies at any depth), which gets every SEARCHING engine premoving on your
+  terms. What remains is the single-move engines: Maia answers with one move for the position it was shown and
+  has no line to certify a reply from. The mechanism is specified and waiting: when the opponent's reply to our
+  move is their only legal move, the position after it is a fact — run one extra Maia inference on that future
+  position and premove its answer. Needs an isolated request channel so the second inference cannot be mistaken
+  for the current position's, which is real plumbing rather than an afternoon.
 
 - [ ] **Playing with a net** — for when the moves are yours. Live feedback you opt into, and underneath it a
   quieter mode that says nothing at all unless you are about to throw the game away: not the best move, just
@@ -897,6 +900,14 @@ veto for real blunders, and the clock rules above.
   compute-bound. Past that it means a smaller or quantised position model, or a GPU execution provider; more
   threads will not do it. Note for anyone tempted by the capture side: `captureVisibleTab` is quota'd at ~2/s, but
   at half a second per read that ceiling is not close, and a tab-capture MediaStream would buy almost nothing.
+- [x] **Forced lines are your premoves** (v3.1.239) — reworked to what the feature was always for: while every
+  opponent reply is their only legal move, YOUR next moves from the engine's line are drawn in blue (the ones you
+  could premove) and their forced replies in violet. The first position where the opponent has a real choice ends
+  the chain, so everything drawn is certain given only your own choices.
+- [x] **A premove framework** (v3.1.239) — when to arm and how many are settings now: **Premove Confidence** is
+  the certification depth (default the measured 13/14/latest window), **Premove Plies** caps how many a forced
+  sequence queues. And a reply that is the opponent's only legal move is certified by the rules at any depth —
+  the certification chess.js can do that a shallow search cannot.
 - [x] **Forced lines, drawn ahead** (v3.1.234) — when the reply is the opponent's ONLY legal move, and so is the
   one after it, each is drawn as its own arrow -- **yours in blue, the opponent's forced replies in violet**, each
   ramp darkening with depth so the order reads inside a side. Up to five plies, off by default. Only genuinely forced moves are drawn: a position with one legal reply is a fact about the rules, where

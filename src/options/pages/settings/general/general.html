@@ -182,8 +182,36 @@
 
                 <div class="set-row">
                     <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.premove_confidence" class="tooltipped" data-position="right"
+                              data-tooltip="How deep the search must agree with itself before a premove is armed: the (their move, our reply) pair must be identical at this depth, the depth before it, and the latest depth reported. 14 is the measured default -- pairs stable at shallow depth still flipped often enough by 14 that premoves fired on abandoned replies. A reply that is the opponent's ONLY legal move is certified by the rules and ignores this dial entirely."><span data-i18n="set.premove_confidence">Premove Confidence</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="premove_confidence_input" type="number" min="8" max="22" step="1">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.premove_plies" class="tooltipped" data-position="right"
+                              data-tooltip="How many premoves a forced sequence may queue in one click session. 2 queues the follow-up when the line is forced two deep; 1 keeps premoving strictly one move at a time."><span data-i18n="set.premove_plies">Premove Plies</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="premove_plies_input" type="number" min="1" max="2" step="1">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
                         <span data-i18n-tip="set.tip.forced_lines" class="tooltipped" data-position="right"
-                              data-tooltip="Draw the forced continuation ahead of the move: the engine's line is followed, and every reply along it that is the opponent's ONLY legal move gets its own arrow. Plies after a free choice are conditional on the engine's line -- only plies with one legal reply are ever drawn as arrows. 0 is off."><span data-i18n="set.forced_lines">Forced Lines Ahead</span></span>
+                              data-tooltip="Draw your premove-able continuation ahead of the move: while every opponent reply is their ONLY legal move, your next moves from the engine's line are drawn in blue and their forced replies in violet. The first position where the opponent has a real choice ends the chain -- everything drawn is certain given only your own choices. 0 is off."><span data-i18n="set.forced_lines">Forced Lines Ahead</span></span>
                     </div>
                     <div class="set-ctl">
                         <span class="set-step">

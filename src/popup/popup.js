@@ -335,6 +335,10 @@ async function initPanel(root, tabId) {
         // How many plies of a FORCED continuation to draw ahead. 0 is off; the ceiling is 5 because
         // past that the arrows stop being readable on an 8x8 board rather than because the walk stops.
         forced_lines: Math.max(0, Math.min(5, JSON.parse(MephistoConfig.get('forced_lines')) || 0)),
+        // The premove framework's two dials. Confidence is the certification depth (see
+        // premove_cert_last); plies is how deep a forced chain may queue (1 = single premoves).
+        premove_confidence: JSON.parse(MephistoConfig.get('premove_confidence')) || 14,
+        premove_plies: Math.max(1, Math.min(2, JSON.parse(MephistoConfig.get('premove_plies')) || 2)),
         // How loud the arrows are, as a PERCENTAGE (1..100) -- what the slider shows is what is
         // stored, so the number in the settings and the number on disk are the same thing.
         //
@@ -2004,8 +2008,8 @@ function on_engine_response(message) {
         if (config.premove && lineInfo.pv && pvIdx < premove_lines && Number.isInteger(lineInfo.depth)) {
             const [pred, reply] = lineInfo.pv.split(' ');
             const line = premove_tracker.lines[pvIdx] || (premove_tracker.lines[pvIdx] = {});
-            if (lineInfo.depth === PREMOVE_DEPTH_PREV) line.dPrev = `${pred} ${reply}`;
-            if (lineInfo.depth === PREMOVE_DEPTH_LAST) line.dLast = `${pred} ${reply}`;
+            if (lineInfo.depth === premove_cert_prev()) line.dPrev = `${pred} ${reply}`;
+            if (lineInfo.depth === premove_cert_last()) line.dLast = `${pred} ${reply}`;
             line.latest = `${pred} ${reply}`;
             line.pred = pred;
             line.reply = reply;
@@ -2147,12 +2151,33 @@ function is_legal_position(fen) {
 // must be identical at depth 13, at depth 14, and at the latest depth reported. Raised from the old
 // 6 / 9 / >=10 window -- a pair that is merely stable in shallow search still flips often enough by
 // depth 14 that premoves were firing on replies the engine went on to abandon.
-const PREMOVE_DEPTH_PREV = 13;
-const PREMOVE_DEPTH_LAST = 14;
+// The certification depth is the CONFIDENCE dial (Settings -> Premove Confidence): the pair must
+// be identical at depth N-1, at depth N, and at the latest depth reported. 14 is the measured
+// default from the 6/9/10 -> 13/14 raise; the clamp keeps a typed value inside depths engines
+// actually reach in a think.
+function premove_cert_last() {
+    const n = parseInt(config?.premove_confidence);
+    return Number.isFinite(n) ? Math.max(8, Math.min(22, n)) : 14;
+}
+function premove_cert_prev() { return premove_cert_last() - 1; }
 
 // shared by BOTH `info depth` parsers (WASM and native) so the two gates cannot drift apart
 function premove_certified(line) {
-    return !!line && line.depth >= PREMOVE_DEPTH_LAST
+    if (!line) return false;
+    // A reply that is the opponent's ONLY legal move is a fact about the rules -- no depth window
+    // can add or subtract confidence from it. This is also what lets a single-move engine premove
+    // at all: the certification comes from chess.js, not from a search it does not have.
+    if (line.pred && premove_tracker.fen) {
+        try {
+            const c = new Chess(config.variant, premove_tracker.fen);
+            const legal = c.moves({verbose: true});
+            if (legal.length === 1) {
+                const only = `${legal[0].from}${legal[0].to}${legal[0].promotion || ''}`;
+                if (only === line.pred) return true;
+            }
+        } catch (e) { /* variant chess.js cannot parse -- fall through to the depth window */ }
+    }
+    return line.depth >= premove_cert_last()
         && !!line.dPrev && line.dPrev === line.dLast && line.dPrev === line.latest;
 }
 
@@ -2243,7 +2268,8 @@ function maybe_premove_forced_reply(line) {
     // DOUBLE PREMOVE (chess.com only): if the continuation after our reply is also forced, queue a
     // second premove in the same click session. Only when the whole 2-ply line is forced can the
     // second move never land in a wrong position -- see forced_second_premove.
-    const second = forced_second_premove(premove_tracker.fen, line.pred, line.reply);
+    const second = (config.premove_plies >= 2)
+        ? forced_second_premove(premove_tracker.fen, line.pred, line.reply) : null;
     if (second) {
         console.log('Premove: forced 2-ply chain -- double premove', line.reply, second);
         request_double_premove([line.reply, second]);
@@ -2267,14 +2293,12 @@ function maybe_premove_forced_reply(line) {
 // reply is a fact about the rules. Drawing a five-move arrow chain off a judgement would be
 // confidently wrong exactly when the position is sharpest, which is when someone is looking at it.
 //
-// The walk FOLLOWS the engine's line and marks each ply forced or not; the drawing then takes only
-// the forced ones. Stopping at the first unforced ply (which is what this did originally) threw away
-// the common case: in a forced mate the defender usually has choices early and only-moves later, so
-// the interesting arrows are exactly the ones that came after the first free choice.
-//
-// An arrow is still only ever drawn for a ply with ONE legal move. That is a fact given the moves
-// before it -- conditional on the line, not on the engine's judgement about it -- which is why the
-// unforced plies are walked through but never drawn.
+// THE CHAIN IS OUR PREMOVES (user call 2026-08-14). What matters is not the opponent's forced
+// reply for its own sake -- it is that their being forced makes OUR next move safe to premove. So
+// the walk takes OUR plies from the engine's line and THEIR plies only while they are the one legal
+// move; the first ply where the opponent has a real choice ends the chain, because everything after
+// it would be conditional on a guess. Everything drawn is therefore certain given only our own
+// choices: our moves are ours to make, and their replies are the rules' to make.
 let forced_chain_key = null, forced_chain_memo = [];
 
 function forced_chain(fen, pv, maxPlies) {
@@ -2291,14 +2315,15 @@ function forced_chain(fen, pv, maxPlies) {
         for (let i = 0; i < maxPlies; i++) {
             const legal = c.moves({verbose: true});
             if (!legal.length) break;
+            const ours = (i % 2) === 0;   // ply 0 is our side to move in the analysed position
             let uci;
             if (legal.length === 1) {
                 const m = legal[0];
                 uci = `${m.from}${m.to}${m.promotion || ''}`;     // forced: the rules pick it
-            } else if (i < line.length) {
-                uci = line[i];                                    // a choice -- follow the engine's
+            } else if (ours && i < line.length) {
+                uci = line[i];                                    // OUR choice -- follow the engine's
             } else {
-                break;                                            // nothing forced and no line left
+                break;   // THEIR choice ends the chain: past here is a guess, not a fact
             }
             // chess.js THROWS on a move the position does not allow -- it never returns null -- so
             // a bare null check here was dead code and a disagreeing pv only stopped the walk by
@@ -5894,7 +5919,8 @@ const LIVE_CONFIG_KEYS = [
     'explorer', 'book_play', 'explorer_db', 'help_mode', 'humanize', 'clock_mode', 'mirror_mode',
     'manual_mode', 'eval_bar', 'eval_history', 'live_stats', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
     'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode',
-    'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'forced_lines', 'move_time', 'move_variance', 'move_reason',
+    'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'forced_lines',
+    'premove_confidence', 'premove_plies', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
     'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay', 'puzzle_auto_next', 'puzzle_next_delay',
@@ -6067,7 +6093,9 @@ function draw_moves() {
     }
     for (let i = chain.length - 1; i >= 1; i--) {   // skip ply 0: that is the move the panel already draws
         const step = chain[i];
-        if (!step.forced) continue;                 // only the certain part of the line
+        // OUR unforced moves are the point now -- they are the premoves the forced replies make
+        // safe -- so nothing is skipped: every ply that survived the walk is certain by construction
+        // (ours because we choose it, theirs because the rules do).
         // ply 0 is the side to move in the analysed position -- us -- so even plies are ours.
         // Each side's ramp advances on its OWN moves, not on the shared depth, or one side would
         // skip every other shade and the two would stop looking like sequences.
@@ -6757,8 +6785,8 @@ function on_native_info(info, fen) {
             && !info.bound && pvIdx < premove_lines && Number.isInteger(info.depth)) {
         const pred = String(info.pv[0]), reply = (info.pv[1] != null) ? String(info.pv[1]) : '';
         const line = premove_tracker.lines[pvIdx] || (premove_tracker.lines[pvIdx] = {});
-        if (info.depth === PREMOVE_DEPTH_PREV) line.dPrev = `${pred} ${reply}`;
-        if (info.depth === PREMOVE_DEPTH_LAST) line.dLast = `${pred} ${reply}`;
+        if (info.depth === premove_cert_prev()) line.dPrev = `${pred} ${reply}`;
+        if (info.depth === premove_cert_last()) line.dLast = `${pred} ${reply}`;
         line.latest = `${pred} ${reply}`;
         line.pred = pred;
         line.reply = reply;
