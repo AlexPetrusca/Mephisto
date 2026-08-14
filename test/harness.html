@@ -140,6 +140,33 @@ async function runFixture(fixtureUrl, siteName, asserts) {
             check('lichess: cg-wrap anchor exists for the overlays',
                   !!document.querySelector('.cg-wrap'), 'missing .cg-wrap');
         }});
+
+        // A LIVE GAME with player boxes -- finished lichess vs-AI page. What the analysis fixture
+        // cannot test: the player-name anchors Hide Opponent Name blurs, and a game move list.
+        await runFixture('/test/fixtures/lichess-game.html', 'lichess', {expected: 5, fn: (check) => {
+            check('lichess game: the board is found', !!getBoard(), 'getBoard() falsy');
+            check('lichess game: orientation reads a side',
+                  ['white', 'black'].includes(getOrientation()), getOrientation());
+            const n = (getMoveRecords() || []).length;
+            check('lichess game: the move list is scraped', n >= 4, n);
+            const pos = scrapePosition();
+            check('lichess game: the scrape carries a li prefix', /^\*\*\*li/.test(pos || ''), pos);
+            // the REAL selector constant, counted exactly like applyHideOpponent does
+            const hid = document.querySelectorAll(HIDE_OPP_SELECTORS).length;
+            check('lichess game: Hide Opponent Name has anchors to blur', hid > 0, hid);
+        }});
+        // chess.com bot game mid-play: wc-chess-board, the move list, and the player boxes
+        await runFixture('/test/fixtures/chesscom-game.html', 'chesscom', {expected: 5, fn: (check) => {
+            check('chesscom: the board is found', !!getBoard(), 'getBoard() falsy');
+            check('chesscom: orientation reads a side',
+                  ['white', 'black'].includes(getOrientation()), getOrientation());
+            const n = (getMoveRecords() || []).length;
+            check('chesscom: the move list is scraped', n >= 2, n);
+            const pos = scrapePosition();
+            check('chesscom: the scrape carries a cc prefix', /^\*\*\*cc/.test(pos || ''), pos);
+            const hid = document.querySelectorAll(HIDE_OPP_SELECTORS).length;
+            check('chesscom: Hide Opponent Name has anchors to blur', hid > 0, hid);
+        }});
     } catch (e) {
         check('harness ran to completion', false, e && (e.stack || e.message || e));
     }

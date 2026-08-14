@@ -22,6 +22,15 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 V="${1:?usage: ./release-zips.sh <version> [ref]}"
+
+# THE HARNESS GATES THE BUILD (v3.1.248): the fixture suite must pass before any archive is cut.
+# Skipped ONLY when puppeteer is not resolvable on this machine -- loudly, never silently.
+if node -e "require('puppeteer')" 2>/dev/null; then
+    echo "fixture harness gate..."
+    node test/run-harness.js || { echo "HARNESS FAILED -- no release" >&2; exit 1; }
+else
+    echo "WARNING: puppeteer not resolvable (set NODE_PATH); the fixture harness gate was SKIPPED" >&2
+fi
 REF="${2:-master}"
 OUT="$(cd .. && pwd)"
 
