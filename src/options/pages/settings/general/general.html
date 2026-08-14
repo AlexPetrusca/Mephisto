@@ -197,12 +197,12 @@
                 <div class="set-row">
                     <div class="set-lbl">
                         <span data-i18n-tip="set.tip.premove_plies" class="tooltipped" data-position="right"
-                              data-tooltip="How many premoves a forced sequence may queue in one click session. 2 queues the follow-up when the line is forced two deep; 1 keeps premoving strictly one move at a time."><span data-i18n="set.premove_plies">Premove Plies</span></span>
+                              data-tooltip="How many premoves a forced sequence may queue in one click session, 1-5 (default 2). Chess.com queues them all; lichess REPLACES a queued premove rather than queueing another, so anything past the first is chess.com-only. Every queued move follows the same certainty rule as the forced-lines arrows: the opponent's replies must be their only legal move and agree with the engine's line."><span data-i18n="set.premove_plies">Premove Plies</span></span>
                     </div>
                     <div class="set-ctl">
                         <span class="set-step">
                             <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
-                            <input id="premove_plies_input" type="number" min="1" max="2" step="1">
+                            <input id="premove_plies_input" type="number" min="1" max="5" step="1">
                             <button type="button" class="set-step-btn" data-step="1">+</button>
                         </span>
                     </div>

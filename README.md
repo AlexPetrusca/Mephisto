@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.239-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.240-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -628,7 +628,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Label Arrows** | Print each arrow's own evaluation on the board. Off by default — useful information, and also more ink on the board. |
 | **Forced Lines Ahead** | Draw your premove-able continuation, 0–5 plies: while every opponent reply is their only legal move, your next moves are drawn in blue and their forced replies in violet. The chain ends where the opponent has a real choice. 0 is off. |
 | **Premove Confidence** | The certification depth: a (their move, our reply) pair must be identical at this depth, the one before it, and the latest reported. A rules-forced reply ignores the dial — it is certain at any depth. |
-| **Premove Plies** | How many premoves a forced sequence may queue in one click session, 1–2. |
+| **Premove Plies** | How many premoves a forced sequence may queue in one click session, 1–5 (default 2). Chess.com queues them all; lichess replaces a queued premove rather than queueing another, so past the first it is chess.com-only. Every queued move follows the forced-lines certainty rule. |
 | **Number Arrows** | Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards. On by default; with more than a couple of lines the colours alone stop distinguishing them. |
 | **Arrow Opacity** | How strongly arrows are drawn, 1–100, on the panel board and the page board alike. Floored so the bottom of the slider cannot render an invisible arrow. |
 | **Board Animation** | Animate the panel's board and its overlays. Off draws every change instantly. |

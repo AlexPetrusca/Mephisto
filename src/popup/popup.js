@@ -338,7 +338,7 @@ async function initPanel(root, tabId) {
         // The premove framework's two dials. Confidence is the certification depth (see
         // premove_cert_last); plies is how deep a forced chain may queue (1 = single premoves).
         premove_confidence: JSON.parse(MephistoConfig.get('premove_confidence')) || 14,
-        premove_plies: Math.max(1, Math.min(2, JSON.parse(MephistoConfig.get('premove_plies')) || 2)),
+        premove_plies: Math.max(1, Math.min(5, JSON.parse(MephistoConfig.get('premove_plies')) || 2)),
         // How loud the arrows are, as a PERCENTAGE (1..100) -- what the slider shows is what is
         // stored, so the number in the settings and the number on disk are the same thing.
         //
@@ -2008,6 +2008,7 @@ function on_engine_response(message) {
         if (config.premove && lineInfo.pv && pvIdx < premove_lines && Number.isInteger(lineInfo.depth)) {
             const [pred, reply] = lineInfo.pv.split(' ');
             const line = premove_tracker.lines[pvIdx] || (premove_tracker.lines[pvIdx] = {});
+            line.pvFull = pv_moves(lineInfo.pv);   // the whole line, for the deep premove chain
             if (lineInfo.depth === premove_cert_prev()) line.dPrev = `${pred} ${reply}`;
             if (lineInfo.depth === premove_cert_last()) line.dLast = `${pred} ${reply}`;
             line.latest = `${pred} ${reply}`;
@@ -2265,14 +2266,20 @@ function maybe_premove_forced_reply(line) {
     // Humanize: hold premoves that aren't a true recapture / forced reply (see premove_human_reflex)
     if (config.humanize && !premove_human_reflex(premove_tracker.fen, line.pred, line.reply)) return;
     premove_tracker.premoved = true;
-    // DOUBLE PREMOVE (chess.com only): if the continuation after our reply is also forced, queue a
-    // second premove in the same click session. Only when the whole 2-ply line is forced can the
-    // second move never land in a wrong position -- see forced_second_premove.
-    const second = (config.premove_plies >= 2)
-        ? forced_second_premove(premove_tracker.fen, line.pred, line.reply) : null;
-    if (second) {
-        console.log('Premove: forced 2-ply chain -- double premove', line.reply, second);
-        request_double_premove([line.reply, second]);
+    // DEEP PREMOVE (chess.com only past the first move -- lichess REPLACES a queued premove
+    // rather than queueing another, so plies beyond 1 would silently overwrite themselves there).
+    // The chain is built by the same certainty rule as the on-board forced lines: their plies must
+    // be rules-forced and agree with the engine's line, ours come from that line. Premove Plies
+    // caps how many of ours queue in one click session.
+    const deepOk = detected_prefix === 'cc' && (!config.variant || config.variant === 'chess');
+    const chain = (deepOk && config.premove_plies >= 2)
+        ? forced_premove_moves(premove_tracker.fen,
+                               line.pvFull || [line.pred, line.reply], config.premove_plies)
+        : [];
+    // the chain's first move must BE the certified reply, or the pv and the tracker disagree
+    if (chain.length > 1 && chain[0] === line.reply) {
+        console.log(`Premove: forced ${chain.length}-deep chain -- queueing`, chain.join(' '));
+        request_double_premove(chain);
     } else {
         console.log('Premove: reply cannot misfire (forced/bound to predicted move) -- premoving', line.reply);
         request_automove(line.reply);
@@ -2339,21 +2346,42 @@ function forced_chain(fen, pv, maxPlies) {
     return out;
 }
 
-function forced_second_premove(fen, pred, reply) {
-    if (detected_prefix !== 'cc' || (config.variant && config.variant !== 'chess')) return null;
+// OUR premove-able moves while the opponent stays rules-forced, up to maxOurs of them. The board
+// starts with THEIR side to move (fen is the position the opponent is thinking in). Their plies must
+// be their ONLY legal move AND agree with the engine's line -- a forced reality the pv disagrees
+// with means the pv is for another branch, and the whole chain is distrusted rather than patched.
+// Our plies come from the pv (or our own only-move). Same certainty rule as the on-board forced
+// chain: everything returned is certain given only our own choices.
+function forced_premove_moves(fen, pv, maxOurs) {
+    const ours = [];
+    if (!Number.isFinite(maxOurs) || maxOurs <= 0) return ours;
     try {
         const c = new Chess(config.variant, fen);
-        if (c.moves().length !== 1) return null;                                      // opp not forced -> pred uncertain
-        c.move({from: pred.slice(0, 2), to: pred.slice(2, 4), promotion: pred[4]});   // M1: opp's only move
-        c.move({from: reply.slice(0, 2), to: reply.slice(2, 4), promotion: reply[4]}); // R1: our first premove
-        if (c.moves().length !== 1) return null;                                      // opp not forced next -> no known M2
-        c.move(c.moves({verbose: true})[0]);                                          // M2: opp's only move
-        if (c.moves().length !== 1) return null;                                      // our follow-up not forced
-        const r2 = c.moves({verbose: true})[0];                                       // R2: our only legal move
-        return `${r2.from}${r2.to}${r2.promotion || ''}`;
+        const line = pv_moves(pv).filter(Boolean);
+        for (let i = 0; ; i++) {
+            const legal = c.moves({verbose: true});
+            const theirs = (i % 2) === 0;
+            let uci;
+            if (theirs) {
+                if (legal.length !== 1) break;                     // their real choice ends certainty
+                const m = legal[0];
+                uci = `${m.from}${m.to}${m.promotion || ''}`;
+                if (line[i] && line[i] !== uci) break;             // pv is for a different branch
+            } else if (i < line.length) {
+                uci = line[i];                                     // our choice: the engine's move
+            } else if (legal.length === 1) {
+                const m = legal[0];
+                uci = `${m.from}${m.to}${m.promotion || ''}`;      // no pv left but ours is forced too
+            } else {
+                break;
+            }
+            if (!c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]})) break;
+            if (!theirs) { ours.push(uci); if (ours.length >= maxOurs) break; }
+        }
     } catch (e) {
-        return null; // couldn't build/verify the chain -> just the single premove
+        return ours; // variant chess.js cannot play -- whatever is collected is still certain
     }
+    return ours;
 }
 
 function premove_instant_reply(new_fen, new_moves) {
@@ -6785,6 +6813,7 @@ function on_native_info(info, fen) {
             && !info.bound && pvIdx < premove_lines && Number.isInteger(info.depth)) {
         const pred = String(info.pv[0]), reply = (info.pv[1] != null) ? String(info.pv[1]) : '';
         const line = premove_tracker.lines[pvIdx] || (premove_tracker.lines[pvIdx] = {});
+        line.pvFull = pv_moves(info.pv);           // same field as the WASM parser -- shared consumer
         if (info.depth === premove_cert_prev()) line.dPrev = `${pred} ${reply}`;
         if (info.depth === premove_cert_last()) line.dLast = `${pred} ${reply}`;
         line.latest = `${pred} ${reply}`;
