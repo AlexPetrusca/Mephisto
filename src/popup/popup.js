@@ -2165,6 +2165,13 @@ function premove_cert_prev() { return premove_cert_last() - 1; }
 // shared by BOTH `info depth` parsers (WASM and native) so the two gates cannot drift apart
 function premove_certified(line) {
     if (!line) return false;
+    // A LINE WITH NO REPLY CAN NEVER CERTIFY, whatever else is true of it. Maia answers with a
+    // single move at one node -- its pv has a pred and nothing after it -- and the rules bypass
+    // below would otherwise certify that line whenever the opponent happens to be forced. Every
+    // consumer of a certified line assumes line.reply is a playable move; until 3.1.241 the only
+    // thing standing between a reply-less certified line and a click was one downstream regex.
+    // Executed check (2026-08-14): a {pred, depth:1, pv:[pred]} Maia-shaped line certified true.
+    if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(line.reply ?? '')) return false;
     // A reply that is the opponent's ONLY legal move is a fact about the rules -- no depth window
     // can add or subtract confidence from it. This is also what lets a single-move engine premove
     // at all: the certification comes from chess.js, not from a search it does not have.
