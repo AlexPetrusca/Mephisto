@@ -1022,11 +1022,36 @@ function init_quick_settings() {
             push_config();
         });
     }
+    // The Maia rating band loads a different .onnx, but that is an ENGINE re-init, not a panel
+    // teardown -- initialize_engine already treats maia_level as part of the net's identity, so
+    // calling it again swaps the net while the panel, the position and the game state stay put.
+    // This used to sit in the reload group below, which is why nudging the band mid-game blanked
+    // the panel (user report 2026-08-14). Re-detect afterwards re-analyses the current position.
+    const maiaLevelEl = PANEL_ROOT.getElementById('qs_maia_level');
+    if (maiaLevelEl) {
+        maiaLevelEl.value = config.maia_level;
+        maiaLevelEl.addEventListener('change', async () => {
+            const level = maiaLevelEl.value;
+            if (level === config.maia_level) return;
+            maiaLevelEl.disabled = true;              // one swap at a time -- the net load is async
+            try {
+                abandon_search();                     // the running search is for the old band
+                config.maia_level = level;
+                save('maia_level', level);
+                await initialize_engine(false);       // maia_level is in the identity check: real re-init
+                PANEL_ROOT.getElementById('recheck')?.click(); // re-analyse the position on the new band
+            } catch (e) {
+                console.warn('Mephisto: Maia band switch failed -- falling back to a panel reload', e);
+                panel_reload();                       // the old behaviour, now only the failure path
+            } finally {
+                maiaLevelEl.disabled = false;
+            }
+        });
+    }
     // engine settings that genuinely need a full re-init; reload the panel, it re-reads storage
     for (const [id, key, parse] of [
         ['qs_engine', 'engine', v => v],
         ['qs_variant', 'variant', v => v],
-        ['qs_maia_level', 'maia_level', v => v], // changing the Maia rating loads a different net
     ]) {
         const elem = PANEL_ROOT.getElementById(id);
         if (!elem) continue;

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.241-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.242-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -601,7 +601,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 
 | Setting | What it does |
 | --- | --- |
-| **Engine** | Which engine analyses the position. The WASM builds need nothing installed; "(local, full power)" entries talk to a real binary and only appear once the native host is installed. Switching reloads the panel — the net and UCI options have to be rebuilt. |
+| **Engine** | Which engine analyses the position. The WASM builds need nothing installed; "(local, full power)" entries talk to a real binary and only appear once the native host is installed. Switching reloads the panel — the net and UCI options have to be rebuilt. The Maia rating band is the exception: it swaps the net live, panel and position untouched. |
 | **Elo** | Caps strength via `UCI_LimitStrength` + `UCI_Elo`. The range follows the engine; out-of-range values are ignored rather than clamped. `0` means no cap. |
 | **Variant** | How the position is read and analysed. Auto-detected on variant pages. Chess960 is the exception: every mainline Stockfish plays it, so it survives an engine switch. |
 | **Search Budget** | Whether the search is bounded by **time** or by **depth**. A depth is reproducible — the same depth is the same answer on any machine, where a millisecond budget is a different search on every one. Each keeps its own number, so switching back does not lose it. |
