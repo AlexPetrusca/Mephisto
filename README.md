@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.246-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.247-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -629,6 +629,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Forced Lines Ahead** | Draw your premove-able continuation, 0–5 plies: while every opponent reply is their only legal move, your next moves are drawn in magenta and their forced replies in teal — hues no engine line uses, so certainty never reads as suggestion. The chain ends where the opponent has a real choice. 0 is off. |
 | **PV Arrows** | Draw the engine's whole line ahead on the board: every ply as a thin grey numbered arrow, so you see where the line is going, not just its first move. Grey because it is the current suggestion, not a certainty — forced continuations keep their own colours on top. Off by default. |
 | **PV Arrows Length** | How many plies PV Arrows draws, 1–50 (default 5). |
+| **Arrow Colours** (Appearance) | Every arrow family re-colourable: lines 1–5, forced (yours/theirs), PV Arrows, threat, book. A native colour picker and a hex field per row, kept in sync; an empty field means the shipped default, and junk can never draw an invisible arrow. Forced ramps derive their depth shades from your base colour. Applies live. |
 | **Premove Confidence** | The certification depth: a (their move, our reply) pair must be identical at this depth, the one before it, and the latest reported. A rules-forced reply ignores the dial — it is certain at any depth. |
 | **Premove Plies** | How many premoves a forced sequence may queue in one click session, 1–5 (default 2). Chess.com queues them all; lichess replaces a queued premove rather than queueing another, so past the first it is chess.com-only. Every queued move follows the forced-lines certainty rule. |
 | **Number Arrows** | Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards. On by default; with more than a couple of lines the colours alone stop distinguishing them. |
@@ -898,6 +899,17 @@ veto for real blunders, and the clock rules above.
   opponent reply is their only legal move, YOUR next moves from the engine's line are drawn in blue (the ones you
   could premove) and their forced replies in violet. The first position where the opponent has a real choice ends
   the chain, so everything drawn is certain given only your own choices.
+- [x] **Arrow colours, yours** (v3.1.247) — an Appearance section that re-colours every arrow family the
+  panel draws: engine lines 1–5, forced continuations (both sides), PV Arrows, the threat arrow and book
+  arrows. Native colour picker + hex field per row, synced both ways; empty means default; validation at
+  the drawing site means a junk value falls back instead of vanishing an arrow. Changes repaint live.
+- [x] **Custom positions vs the computer, both sites** (v3.1.247) — chess.com's `/practice/custom` page is now
+  a first-class board (its FEN travels in the URL, which the page strips after load — it is recovered from the
+  navigation entry), and lichess **From Position** games with *black* to move first no longer fail detection:
+  the start was captured from the pieces, which cannot carry the turn, and the off-by-a-tempo reconstruction
+  failed the en-prise validator on every scrape. The page's own FEN (round JSON, or the variant-link editor
+  href on vs-AI pages) now wins at move 0. Found by engineering a forced-mate test position; verified by a
+  live 2-deep **premove chain with a queued promotion** (`f8g8 e7e8q`) on the practice board.
 - [x] **PV Arrows: the whole line on the board** (v3.1.246) — opt-in: every ply of the engine's best line as a
   thin grey numbered arrow (length 1–50, default 5), validated move by move so a garbled line never draws a wrong
   arrow. Grey is deliberate — it is the engine's current suggestion, revisable at the next depth, so it must not
