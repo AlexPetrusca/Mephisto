@@ -1284,8 +1284,11 @@ function maia2_kick(line) {
     }
     if (maia2.pending) clearTimeout(maia2.pending.timer);
     maia2.doneFen = fen;
-    // timeout: a lost offscreen answer must not wedge the pending slot for the rest of the game
-    maia2.pending = {fen, line, timer: setTimeout(() => { if (maia2) maia2.pending = null; }, 5000)};
+    // The timer only FREES the slot -- staleness is decided by the fen check when the answer
+    // arrives, so a long window never plays a stale move. It must be long: the first kick pays
+    // the :m2 client's own net load (seconds for the Maia-3 transformer), and 5s dropped the
+    // first premove opportunity of the game on exactly the engine this feature is for.
+    maia2.pending = {fen, line, timer: setTimeout(() => { if (maia2) maia2.pending = null; }, 12000)};
     try {
         chrome.runtime.sendMessage({toOffscreen: true, clientId: maia2_client(), cmd: 'uci', line: `position fen ${fen2}`});
         chrome.runtime.sendMessage({toOffscreen: true, clientId: maia2_client(), cmd: 'uci', line: 'go'});
@@ -1295,7 +1298,12 @@ function maia2_kick(line) {
 function maia2_on_line(text) {
     if (!maia2 || !maia2.pending) return; // late or duplicate answer, or already timed out
     const m = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)$/.exec(text || '');
-    if (!m) return;                       // the second client's info lines are noise here
+    if (!m) {
+        // mate/stalemate after the prediction answers "(none)": there is no reply to premove,
+        // so free the slot now instead of letting it sit until the timer does
+        if (/^bestmove \(none\)/.test(text || '')) { clearTimeout(maia2.pending.timer); maia2.pending = null; }
+        return;                           // the second client's info lines are noise here
+    }
     const p = maia2.pending;
     clearTimeout(p.timer);
     maia2.pending = null;
