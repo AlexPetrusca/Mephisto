@@ -49,7 +49,7 @@
                 </div>
 
                 <div class="set-row section">
-                    <div class="set-lbl"><span data-i18n="panel.variant">Variant</span></div>
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.variant" class="tooltipped" data-position="right" data-tooltip="Which chess variant the engine plays. Auto-detected on most sites; set it by hand when a page does not say."><span data-i18n="panel.variant">Variant</span></span></div>
                     <div class="set-ctl">
                         <select name="variant" id="variant_select">
                             <option data-i18n="set.chess" value="chess">Chess</option>
@@ -94,7 +94,7 @@
                 </div>
 
                 <div class="set-row section">
-                    <div class="set-lbl"><span data-i18n="panel.threads">Threads</span></div>
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.compute_time" class="tooltipped" data-position="right" data-tooltip="How long the engine thinks per move, in milliseconds. More time means stronger play and a slower panel."><span data-i18n="panel.threads">Threads</span></span></div>
                     <div class="set-ctl">
                         <input id="threads_range" type="range" min="1" max="24" step="1">
                         <span class="value set-val"></span>
@@ -102,7 +102,7 @@
                 </div>
 
                 <div class="set-row section">
-                    <div class="set-lbl"><span data-i18n="panel.memory">Memory</span></div>
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.compute_depth" class="tooltipped" data-position="right" data-tooltip="How many plies deep the engine searches when the budget is Depth instead of time."><span data-i18n="panel.memory">Memory</span></span></div>
                     <div class="set-ctl">
                         <input id="memory_range" type="range" min="32" max="4096" step="32">
                         <span class="value set-val"></span><span class="set-unit">MB</span>
@@ -110,7 +110,7 @@
                 </div>
 
                 <div class="set-row section">
-                    <div class="set-lbl"><span data-i18n="set.multiple_lines">Multiple Lines</span></div>
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.multiple_lines" class="tooltipped" data-position="right" data-tooltip="How many candidate lines to calculate and draw. Each extra line costs search time."><span data-i18n="set.multiple_lines">Multiple Lines</span></span></div>
                     <div class="set-ctl">
                         <input id="multiple_lines_range" type="range" min="1" max="20" step="1">
                         <span class="value set-val"></span>
@@ -276,7 +276,7 @@
                 </div>
 
                 <div class="set-row" id="compute_time_row">
-                    <div class="set-lbl"><span data-i18n="set.search_time_ms">Search Time (ms)</span></div>
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.compute_time" class="tooltipped" data-position="right" data-tooltip="How long the engine thinks per move, in milliseconds. More time means stronger play."><span data-i18n="set.search_time_ms">Search Time (ms)</span></span></div>
                     <div class="set-ctl">
                         <span class="set-step">
                             <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
@@ -287,7 +287,7 @@
                 </div>
 
                 <div class="set-row" id="compute_depth_row">
-                    <div class="set-lbl"><span data-i18n="set.search_depth">Search Depth</span></div>
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.compute_depth" class="tooltipped" data-position="right" data-tooltip="How many plies deep the engine searches when the budget is Depth instead of time."><span data-i18n="set.search_depth">Search Depth</span></span></div>
                     <div class="set-ctl">
                         <span class="set-step">
                             <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
@@ -370,7 +370,7 @@
                 </p>
 
                 <div class="set-row set-toggle">
-                    <div class="set-lbl"><span data-i18n="set.show_computer_evaluation">Show Computer Evaluation</span></div>
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.computer_evaluation" class="tooltipped" data-position="right" data-tooltip="Show the evaluation score, win percentages and depth in the panel."><span data-i18n="set.show_computer_evaluation">Show Computer Evaluation</span></span></div>
                     <div class="set-ctl">
                         <input id="computer_evaluation_checkbox" type="checkbox" class="set-cb">
                         <label for="computer_evaluation_checkbox" class="set-tgl">
@@ -380,7 +380,7 @@
                 </div>
 
                 <div class="set-row set-toggle">
-                    <div class="set-lbl"><span data-i18n="set.show_threat_analysis">Show Threat Analysis</span></div>
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.threat_analysis" class="tooltipped" data-position="right" data-tooltip="Also calculate what the opponent is threatening, and draw it as a red arrow."><span data-i18n="set.show_threat_analysis">Show Threat Analysis</span></span></div>
                     <div class="set-ctl">
                         <input id="threat_analysis_checkbox" type="checkbox" class="set-cb">
                         <label for="threat_analysis_checkbox" class="set-tgl">
@@ -448,7 +448,7 @@
                 <h3 data-i18n="set.sec.automated_play" class="set-h">Automated play</h3>
 
                 <div class="set-row set-toggle">
-                    <div class="set-lbl"><span data-i18n="panel.autoplay">Autoplay</span></div>
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.autoplay" class="tooltipped" data-position="right" data-tooltip="Play the engine's move for you automatically. Everything else automated depends on this."><span data-i18n="panel.autoplay">Autoplay</span></span></div>
                     <div class="set-ctl">
                         <input id="autoplay_checkbox" type="checkbox" class="set-cb">
                         <label for="autoplay_checkbox" class="set-tgl">

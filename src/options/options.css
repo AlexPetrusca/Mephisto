@@ -143,13 +143,20 @@ nav.top-nav h1.header {
 ul.table-of-contents { margin-top: 0; padding-top: 44px; }
 ul.table-of-contents a {
     font-size: 12.5px;
-    line-height: 1.9;
+    line-height: 1.45;
     color: var(--mp-mute) !important;
     font-weight: 400;
     border-left: 2px solid transparent;
     padding-left: 10px;
+    /* Materialize hard-codes `height: 1.5rem` on these links, so any entry that wraps to a second
+       line drew ON TOP of the next one -- "Across games" over "Human likeness" over "Fair-play
+       indicators" in the Game Review nav (user report 2026-08-15). Height comes from the content. */
     display: block;
+    height: auto;
+    padding-top: 3px;
+    padding-bottom: 3px;
 }
+ul.table-of-contents li { padding: 0; }
 ul.table-of-contents a.active {
     color: var(--mp-text) !important;
     border-left-color: var(--mp-on);
