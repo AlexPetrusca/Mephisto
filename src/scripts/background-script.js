@@ -193,7 +193,10 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
         // Split, because the two halves have completely different fixes: the capture is the
         // browser's encoder, the recognise is the model. Without the split "screen reading is slow"
         // points at neither.
-        snapCaptureMs = tCap; snapRecogniseMs = Date.now() - t1; snapBytes = dataUri.length;
+        // BYTES, not base64 characters -- dataUri.length overstated every frame by ~33% and the
+        // readout exists precisely to judge whether the encoding change paid off.
+        snapCaptureMs = tCap; snapRecogniseMs = Date.now() - t1;
+        snapBytes = Math.round((dataUri.length - dataUri.indexOf(',') - 1) * 3 / 4);
         sendResponse(res || {error: 'no response from recogniser'});
       } catch (e) {
         sendResponse({error: String(e)});
@@ -698,7 +701,7 @@ async function buildPieces(pieceSet, pieceExt) {
 const attached = new Set();
 const lastPos = new Map(); // tabId -> {x, y}: where the synthetic cursor was left after the last click
 const cdpSleep = (ms) => new Promise(r => setTimeout(r, ms));
-const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
+const cdpDispatch = (target, params, paced = false) => new Promise((resolve, reject) => {
   const t0 = Date.now();
   cdpPending++;
   const hungAt = setTimeout(() => { cdpHung++; }, CDP_HUNG_MS);
@@ -707,6 +710,12 @@ const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
     cdpPending--;
     const dt = Date.now() - t0;
     cdpCalls++; cdpTotalMs += dt; if (dt > cdpWorstMs) cdpWorstMs = dt;
+    // Calibration reads ONLY the serially-awaited path steps. The batched snap dispatches fire
+    // concurrently but the protocol serializes them per session, so their measured durations
+    // OVERLAP (~6t recorded for 3t of wall time) -- feeding those into the average was a positive
+    // feedback loop: snaps inflated the estimate, the estimate shortened paths into snaps, and the
+    // worker ratcheted itself into never drawing a cursor path again.
+    if (paced) { pacedCalls++; pacedTotalMs += dt; }
     return chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve();
   });
 });
@@ -728,14 +737,30 @@ const cdpDispatch = (target, params) => new Promise((resolve, reject) => {
 // trust, and falls back to the old assumption until then. A slow machine therefore draws a shorter
 // path rather than a late one, which is the right trade -- a move that arrives on time with fewer
 // waypoints beats a prettier one that misses its budget.
+// Counters for the calibration below -- PACED dispatches only, see cdpDispatch.
+let pacedCalls = 0, pacedTotalMs = 0;
+
 function stepCostMs() {
-    return (cdpCalls > 20) ? Math.max(8, cdpTotalMs / cdpCalls) : 16;
+  // Clamped [8, 40]: 8 is the fastest paced dispatch observed on the reference machine (an M-series
+  // Mac, idle), and 40 caps how sparse a stalled stretch can make the path -- without the ceiling,
+  // one loaded period inflated the lifetime average and every later move lost its cursor path
+  // entirely, the M2 giveaway the path exists to prevent. 10 calls ~= one pathed move's worth.
+  if (pacedCalls >= 10) return Math.min(40, Math.max(8, pacedTotalMs / pacedCalls));
+  return 16; // no average worth trusting yet -- the old 60fps assumption until one exists
 }
 
 function pathSteps(travelMs) {
-    const budgetSteps = Math.floor(travelMs / stepCostMs()) - 2; // press + release
-    return Math.max(1, Math.min(40, budgetSteps));
+  // Waypoints over the travel only. Press and release are NOT deducted any more: subtracting them
+  // collapsed every budget under ~4x the step cost to a single waypoint, which silently deleted the
+  // path from the 50-75ms approach slice of perfectly ordinary 200-300ms moves. The two extra
+  // dispatches cost ~2 steps of overrun on a pathed click; the page-side deadline absorbs it.
+  return Math.max(1, Math.min(40, Math.round(travelMs / stepCostMs())));
 }
+
+// The batch-vs-path decision is the CALLER'S travel budget, not a derived step count: the content
+// script sends 8ms for a snap and 0 for a hidden tab, and everything above that wants its path.
+// Deriving it from pathSteps meant the calibration decided detection-relevant behaviour.
+const CDP_SNAP_MS = 10;
 
 async function cdpMove(target, fromX, fromY, x, y, travelMs, held = false) {
   // `held` = the left button is already down and this is the middle of a DRAG. Chrome only treats a
@@ -773,7 +798,7 @@ async function cdpMove(target, fromX, fromY, x, y, travelMs, held = false) {
     const mx = fromX + (x - fromX) * ease + px * arc + (Math.random() - 0.5) * 1.5;
     const my = fromY + (y - fromY) * ease + py * arc + (Math.random() - 0.5) * 1.5;
     await cdpDispatch(target, held ? {type: 'mouseMoved', x: mx, y: my, button: 'left', buttons: 1}
-                                   : {type: 'mouseMoved', x: mx, y: my, button: 'none'});
+                                   : {type: 'mouseMoved', x: mx, y: my, button: 'none'}, true);
     const behind = (startedAt + travelMs * t) - Date.now();
     if (behind > 0) await cdpSleep(behind);
   }
@@ -801,7 +826,7 @@ function cdpClick(tabId, x, y, travelMs = 0) {
         // The DevTools protocol keeps command order per session, so a snap click's events can be
         // issued in ONE task and awaited together instead of one at a time. Only when the path is a
         // single step: a real path has to be PACED, and pacing is what the awaits are for.
-        if (pathSteps(Math.max(0, travelMs)) <= 1) {
+        if (travelMs <= CDP_SNAP_MS) {
           const evts = travelMs > 0 ? [{type: 'mouseMoved', x, y, button: 'none'}] : [];
           evts.push({...opts, type: 'mousePressed'}, {...opts, type: 'mouseReleased'});
           lastPos.set(tabId, {x, y});

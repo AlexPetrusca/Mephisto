@@ -2275,9 +2275,16 @@ function maybe_premove_forced_reply(line) {
 // An arrow is still only ever drawn for a ply with ONE legal move. That is a fact given the moves
 // before it -- conditional on the line, not on the engine's judgement about it -- which is why the
 // unforced plies are walked through but never drawn.
+let forced_chain_key = null, forced_chain_memo = [];
+
 function forced_chain(fen, pv, maxPlies) {
     const out = [];
     if (!Number.isFinite(maxPlies) || maxPlies <= 0) return out;
+    // STANDARD CHESS ONLY, like forced_second_premove and for a harder reason: in drop variants the
+    // bundled chess.js never generates pocket drops in moves(), so "one legal move" there is a fact
+    // about an incomplete move list, not about the rules -- and this function's whole contract is
+    // that a forced ply is a rules fact. Chess960 shares variant 'chess' and is fine.
+    if (config.variant && config.variant !== 'chess') return out;
     try {
         const c = new Chess(config.variant, fen);
         const line = pv_moves(pv).filter(Boolean);
@@ -2293,8 +2300,12 @@ function forced_chain(fen, pv, maxPlies) {
             } else {
                 break;                                            // nothing forced and no line left
             }
-            const rec = c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
-            if (!rec) break;                                      // pv disagrees with the board -- stop
+            // chess.js THROWS on a move the position does not allow -- it never returns null -- so
+            // a bare null check here was dead code and a disagreeing pv only stopped the walk by
+            // luck of the outer catch. Caught per ply, the plies already walked stay valid.
+            let rec = null;
+            try { rec = c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]}); } catch (e) { /* pv/board disagree */ }
+            if (!rec) break;
             out.push({uci, forced: legal.length === 1, ply: i});
         }
     } catch (e) {
@@ -3147,7 +3158,6 @@ function snap_follow_start() {
         if (snap_follow_timer === null) return;
         const t0 = Date.now();
         await snap_follow_tick();
-        snap_last_read_ms = Date.now() - t0;
         if (snap_follow_timer === null) return;
         // STRAIGHT BACK IN, BUT NOT FASTER THAN CHROME ALLOWS. The chain already guarantees one read
         // at a time, so a gap on top of that only adds latency -- except that captureVisibleTab is
@@ -3200,10 +3210,9 @@ function follow_infer_ply(prevFen, placement) {
     return from_side(prevFen) || from_side(flip_fen_turn(prevFen));
 }
 
-let snap_last_read_ms = 0;     // how long the last capture+recognise round trip actually took
 let snap_last_error = null;    // dedupe the read-failure warning
 let snap_unexplained = 0;      // consecutive reads no single legal move explains
-const SNAP_RESEED_AFTER = 8;   // ~2s at 250ms: long enough to ride out an animation, short enough to recover
+const SNAP_RESEED_AFTER = 4;   // ~2s at the 500ms quota cadence -- the 8 it used to be was calibrated for a 250ms loop, so the real delay had silently doubled to 4s
 
 async function snap_follow_tick() {
     if (snap_follow_busy || !snap_crop) return;   // a slow read must not stack up behind itself
@@ -4175,10 +4184,17 @@ function move_reason(fen, uci) {
         // "why this move" is what would have happened otherwise. Asked the only way that cannot be
         // wrong: play the opponent's best capture in the position we came FROM, and see whether this
         // move took it off the board. No search, no judgement -- one legal-move comparison.
-        const threat = biggest_hanging(fen, mover.color);
-        if (threat && !captured) {
-            const still = biggest_hanging(before.fen(), mover.color);
-            if (!still || still.cp < threat.cp) reasons.push(`saves the ${threat.name}`);
+        // Never claimed off a CHECKING move: while the opponent is in check, capturing the hanging
+        // piece is not legal THIS ply, so the after-position comparison goes blind and a move that
+        // merely delays the capture by one tempo read as saving it (reproduced: an unrelated rook
+        // check labelled "saves the queen"). Silence over a false claim; a check that genuinely
+        // saves loses its caption, which is the cheaper error.
+        if (!captured && !givesCheck) {
+            const threat = biggest_hanging(fen, mover.color);
+            if (threat) {
+                const still = biggest_hanging(before.fen(), mover.color);
+                if (!still || still.cp < threat.cp) reasons.push(`saves the ${threat.name}`);
+            }
         }
 
         // WHAT IT THREATENS, when it does not already win something outright. Same method, the other
@@ -4195,10 +4211,20 @@ function move_reason(fen, uci) {
     }
 }
 
+let move_reason_key = null, move_reason_memo = '';
+
 function render_move_reason(uci) {
     const el = PANEL_ROOT.getElementById('move-reason');
     if (!el) return;
-    const text = move_reason(last_eval.fen, uci);
+    // Memoized: this runs on every info frame (on_engine_best_move fires per depth line), and
+    // biggest_hanging inside move_reason builds a probe board per candidate capture -- identical
+    // work for an identical answer, dozens of times a second, on the click-servicing thread.
+    const key = `${last_eval.fen}|${uci || ''}|${config.move_reason}`;
+    if (key !== move_reason_key) {
+        move_reason_key = key;
+        move_reason_memo = move_reason(last_eval.fen, uci);
+    }
+    const text = move_reason_memo;
     el.textContent = text ? `Why: ${text}` : '';
     el.hidden = !text;
 }
@@ -5887,6 +5913,9 @@ function watch_config_changes() {
                 if (value === undefined || value === config[key]) continue;
                 config[key] = value;
                 touched = true;
+                // The boot path clamps this; without the same clamp HERE, a typed 50 on the
+                // options page ran an open panel at maxPlies 51 while a reloaded one ran at 5.
+                if (key === 'forced_lines') config.forced_lines = Math.max(0, Math.min(5, parseInt(value) || 0));
                 if (key === 'help_mode' && !value) request_clear_hint();
                 if (key === 'eval_bar' && !value) request_clear_eval_bar();
                 if (key === 'eval_history') request_clear_eval_bar(); // redrawn by the next eval
@@ -6022,9 +6051,20 @@ function draw_moves() {
     // move nobody has a choice about, so it can be shown as fact rather than as a suggestion -- and
     // seeing it is the difference between playing a move and knowing why it is safe. Drawn FIRST so
     // the engine's live arrows sit on top of it.
-    const chain = config.forced_lines
-        ? forced_chain(last_eval.fen, last_eval.lines[0]?.pv, config.forced_lines + 1)
-        : [];
+    // MEMOIZED on its inputs, same reason as last_draw_trace two lines up: draw_moves runs on every
+    // engine info frame, and the chain's inputs change at most a few times a second -- recomputing a
+    // FEN parse plus six legal-move generations dozens of times a second on the thread that also
+    // services clicks is the exact cost class that once produced 3s click timeouts here.
+    let chain = [];
+    if (config.forced_lines) {
+        const pvKey = pv_moves(last_eval.lines[0]?.pv).slice(0, config.forced_lines + 1).join(' ');
+        const key = `${last_eval.fen}|${pvKey}|${config.forced_lines}`;
+        if (key !== forced_chain_key) {
+            forced_chain_key = key;
+            forced_chain_memo = forced_chain(last_eval.fen, last_eval.lines[0]?.pv, config.forced_lines + 1);
+        }
+        chain = forced_chain_memo;
+    }
     for (let i = chain.length - 1; i >= 1; i--) {   // skip ply 0: that is the move the panel already draws
         const step = chain[i];
         if (!step.forced) continue;                 // only the certain part of the line

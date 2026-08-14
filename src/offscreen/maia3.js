@@ -6,9 +6,9 @@
 // global self.Chess (repo chess.js) for legal moves.
 import * as ort from '/lib/ort/ort.wasm.bundle.min.mjs';
 
-ort.env.wasm.wasmPaths = '/lib/ort/';
-ort.env.wasm.numThreads = 1;
-ort.env.wasm.proxy = false;
+// ort env (threads, wasm paths) is configured ONCE in ort-env.js, shared by every session
+// creator so the thread count cannot depend on which module happened to load first.
+import '/src/offscreen/ort-env.js';
 
 // ---- encoding (replicates maia3/dataset.py + utils.py) -----------------------------------------
 const PIECE = { p: 0, n: 1, b: 2, r: 3, q: 4, k: 5 };

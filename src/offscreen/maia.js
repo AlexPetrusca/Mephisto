@@ -6,11 +6,9 @@
 // moves + history replay.
 import * as ort from '/lib/ort/ort.wasm.bundle.min.mjs';
 
-// Single-threaded wasm on the offscreen thread: no worker (the CSP has no blob:/worker-src), and a
-// Maia forward pass is a few ms anyway. Point ort at the locally-vendored wasm binary (no CDN).
-ort.env.wasm.wasmPaths = '/lib/ort/';
-ort.env.wasm.numThreads = 1;
-ort.env.wasm.proxy = false;
+// ort env (threads, wasm paths) is configured ONCE in ort-env.js, shared by every session
+// creator so the thread count cannot depend on which module happened to load first.
+import '/src/offscreen/ort-env.js';
 
 // ---- lc0 canonical 1858 policy index (harvested from lc0; ships as JSON) -----------------------
 let moveToIdx = null;

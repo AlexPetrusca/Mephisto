@@ -9,20 +9,9 @@
 // A caller-supplied crop skips step 1 (that's the drag-to-select fallback).
 import * as ort from '/lib/ort/ort.wasm.bundle.min.mjs';
 
-ort.env.wasm.wasmPaths = '/lib/ort/';
-// THREADS. Measured on a live read: capture 24ms, inference 1109ms -- the model is the whole cost of
-// following the screen, and it was running on ONE core of a ten-core machine. This document is
-// cross-origin isolated by the manifest (COEP require-corp / COOP same-origin) precisely so the WASM
-// engines can use SharedArrayBuffer, so threads are available here and were simply never asked for.
-//
-// Capped rather than given every core: a read is a short burst that competes with whatever engine is
-// analysing, and handing the recogniser the whole machine would slow the thing it exists to serve.
-// Guarded on crossOriginIsolated -- without SharedArrayBuffer a thread count above 1 fails to
-// initialise, and a recogniser that will not start is far worse than a slow one.
-ort.env.wasm.numThreads = (typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated)
-    ? Math.max(1, Math.min(4, Math.floor((navigator.hardwareConcurrency || 2) / 2)))
-    : 1;
-ort.env.wasm.proxy = false;
+// ort env (threads, wasm paths) is configured ONCE in ort-env.js, shared by every session
+// creator so the thread count cannot depend on which module happened to load first.
+import '/src/offscreen/ort-env.js';
 
 const SYMS = ['P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k']; // upstream src/games.py order
 const EMPTY = 12;      // the 13th channel is "empty"
