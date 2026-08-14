@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.248-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.249-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -897,8 +897,12 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>36 features, newest first</summary>
+<summary>37 features, newest first</summary>
 
+- [x] **Every setting says what it does** (v3.1.249) - hover any control on either settings page and a one-line
+  description explains it. 59 controls, none mute; the ladder proves its own check discriminates before it scans,
+  so a new row cannot ship silent. The Game Review section nav also stopped overlapping: Materialize hard-codes a
+  fixed height on those links, so any entry that wrapped to a second line drew on top of the next one.
 - [x] **The test rail clicks on its own** (v3.1.248) - the second half of v3.1.238: chess.com joined the
   fixtures (a real bot game mid-play), a lichess live-game fixture carries the player boxes so Hide Opponent
   Name is finally testable (the harness counts the real selector's matches, exactly like the extension does),
