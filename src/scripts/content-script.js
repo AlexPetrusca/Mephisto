@@ -1531,7 +1531,13 @@ function scrapePosition() {
             // lichess's scrape order/turn but NOT chess.com's (h8-first, turn 'b' at load), so
             // on chess.com a normal game's standard start reads as "custom" and corrupts every
             // scrape (ships startpos + moves that don't apply -> "Invalid move: e3"). Gate to lichess.
-            const customStart = (site === 'lichess') ? readStartPos(location.href)?.position : null;
+            // lichess: the cached From-Position start (see onPositionLoad). chess.com: the
+            // /practice/custom page carries its starting FEN in the URL itself, which sidesteps
+            // the piece-scrape turn/order problem this gate exists for -- without it the panel
+            // analyzed startpos + the session's SANs, i.e. a different game (found 2026-08-14
+            // driving an engineered mate position vs a bot).
+            const customStart = (site === 'lichess') ? readStartPos(location.href)?.position
+                : (site === 'chesscom') ? ccPracticeCustomStart() : null;
             if (customStart && customStart !== DEFAULT_POSITION) {
                 // "From Position" game (custom start, e.g. endgame practice vs the AI): the SANs
                 // only make sense from THAT position, so ship it along like the chess960 path does
@@ -3214,15 +3220,42 @@ function fenToPuzString(fen) {
 function readInitialFenFromPage() {
     if (site !== 'lichess') return null;
     try {
-        const m = document.documentElement.innerHTML.match(/"initialFen"\s*:\s*"([^"]+)"/);
+        let m = document.documentElement.innerHTML.match(/"initialFen"\s*:\s*"([^"]+)"/);
+        // vs-AI From-Position pages ship no round JSON at all; their one copy of the start is the
+        // variant-link's editor href, underscores for spaces, TURN INCLUDED -- which matters,
+        // because the piece-scrape fallback cannot see the turn (found 2026-08-14 when a
+        // black-to-move custom start was captured as white-to-move and every scrape failed the
+        // en-prise validator).
+        if (!m) m = document.documentElement.innerHTML.match(/\/editor\?fen=([^"&#]+)/);
         if (!m) return null;
-        const fen = m[1].replace(/\\\//g, '/').trim();
+        const fen = decodeURIComponent(m[1]).replace(/\\\//g, '/').replace(/_/g, ' ').trim();
         if (fen === 'startpos' || !FEN_RE.test(fen)) return null;
         new Chess('chess', fen); // throws on anything chess.js can't read
         return fenToPuzString(fen);
     } catch (e) {
         return null;
     }
+}
+
+// chess.com /practice/custom ships the game's starting FEN as a URL parameter. Validate as hard
+// as the lichess paths do -- a wrong start corrupts every scrape that follows -- and memoize on
+// the query string, because this runs on every scrape.
+let cc_practice_memo; // page-load scoped: the page CONSUMES its own query params (see below)
+function ccPracticeCustomStart() {
+    if (!/\/practice\/custom/.test(location.pathname)) return null;
+    if (cc_practice_memo !== undefined) return cc_practice_memo;
+    cc_practice_memo = null;
+    try {
+        let search = location.search;
+        // the practice page strips its query with history.replaceState right after load, so by
+        // scrape time location.search is EMPTY -- but the original URL survives in the
+        // navigation timing entry (found 2026-08-14: the first version read location.search and
+        // silently got nothing)
+        if (!/[?&]fen=/.test(search)) search = new URL(performance.getEntriesByType('navigation')[0].name).search;
+        const fen = (new URLSearchParams(search).get('fen') || '').trim();
+        if (FEN_RE.test(fen)) { new Chess('chess', fen); cc_practice_memo = fenToPuzString(fen); }
+    } catch (e) { /* no fen anywhere -> fall back to the normal scrape */ }
+    return cc_practice_memo;
 }
 
 function onPositionLoad(retries = 10) {
@@ -3239,6 +3272,17 @@ function onPositionLoad(retries = 10) {
     }
     // cache position, if it's a non-standard starting position
     if (!getMoveRecords()?.length) { // is stating position?
+        // The page's initialFen carries the TURN, which a piece scrape cannot see: a From-Position
+        // game where BLACK moves first was captured as white-to-move, and the off-by-a-tempo
+        // reconstruction then failed the en-prise validator on every scrape -- the panel just said
+        // "not detected" (found 2026-08-14 driving an engineered black-to-move start vs the AI).
+        // So at move 0 the embedded FEN wins; the piece scrape stays the fallback for pages
+        // without the data.
+        const atStart = readInitialFenFromPage();
+        if (site === 'lichess' && atStart && atStart !== DEFAULT_POSITION) {
+            writeStartPos(location.href, {position: atStart, timestamp: Date.now()});
+            return;
+        }
         let position;
         try {
             position = scrapePositionPuz();
