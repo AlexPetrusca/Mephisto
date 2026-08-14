@@ -1232,10 +1232,82 @@ const offscreen_engine = {
 };
 // engine output -> existing handlers (filtered to THIS panel's engine)
 chrome.runtime.onMessage.addListener((msg) => {
-    if (!PANEL_BOOTED || !msg || !msg.fromOffscreen || msg.clientId !== ENGINE_CLIENT) return;
+    if (!PANEL_BOOTED || !msg || !msg.fromOffscreen) return;
+    if (msg.clientId === maia2_client()) { if (msg.kind === 'line') maia2_on_line(msg.line); return; }
+    if (msg.clientId !== ENGINE_CLIENT) return;
     if (msg.kind === 'line') on_engine_response(msg.line);
     else if (msg.kind === 'error') on_engine_error(msg.error);
 });
+// ---- MAIA SECOND INFERENCE (premoves for human-predicted replies) ----
+// Maia is one forward pass: its line is a PREDICTION of the opponent's move with nothing after
+// it, so the premove rail (which plays line.reply) never had anything to play. The second
+// inference asks the SAME net, on an ISOLATED offscreen client, what we would answer after that
+// prediction; the answer becomes line.reply and rides the existing rails. Isolation matters: a
+// separate client id keeps this inference out of the main parser, so it can never contaminate
+// last_eval or the tracker. Safety is NOT relaxed: premove_certified accepts a maia2 line, but
+// maybe_premove_forced_reply still requires premove_is_safe -- the premove queues only when the
+// reply is bound to the predicted move (recapture / forced reply / mate patterns), meaning it
+// cannot fire in a position it was not meant for.
+let maia2 = null; // {level, doneFen, pending: {fen, line, timer}} -- lazily created per panel
+
+function maia2_client() { return ENGINE_CLIENT + ':m2'; }
+
+function maia2_dispose() {
+    if (maia2 && maia2.pending) clearTimeout(maia2.pending.timer);
+    maia2 = null;
+    try { chrome.runtime.sendMessage({toOffscreen: true, clientId: maia2_client(), cmd: 'dispose'}); } catch (e) { /* gone */ }
+}
+
+// Fire the second inference for a reply-less Maia line, at most once per position. Called from
+// the parser right after the tracker records line 0 during the opponent's turn.
+function maia2_kick(line) {
+    if (config.engine !== 'maia' && config.engine !== 'maia3') return;
+    if (!config.premove || !config.autoplay || premove_tracker.premoved) return;
+    if (config.help_mode || config.puzzle_mode || config.simon_says_mode) return;
+    if (config.variant && config.variant !== 'chess') return;
+    const fen = premove_tracker.fen;
+    if (!fen || !line || !line.pred || line.reply) return;
+    const level = (config.engine === 'maia3') ? config.maia3_elo : config.maia_level;
+    if (maia2 && maia2.level !== level) maia2_dispose(); // band switched -> the old client runs a stale net
+    if (maia2 && maia2.doneFen === fen) return;          // one inference per position
+    let fen2;
+    try {
+        const c = new Chess(config.variant, fen);
+        c.move({from: line.pred.slice(0, 2), to: line.pred.slice(2, 4), promotion: line.pred[4]});
+        fen2 = c.fen();
+    } catch (e) { return; } // prediction not legal by chess.js -> nothing to ask
+    if (!maia2) {
+        maia2 = {level};
+        // no ensureOffscreen needed: the MAIN engine is Maia right now, so the document exists
+        try { chrome.runtime.sendMessage({toOffscreen: true, clientId: maia2_client(), cmd: 'init',
+                                          engine: config.engine, variant: config.variant, maiaLevel: level}); } catch (e) { maia2 = null; return; }
+    }
+    if (maia2.pending) clearTimeout(maia2.pending.timer);
+    maia2.doneFen = fen;
+    // timeout: a lost offscreen answer must not wedge the pending slot for the rest of the game
+    maia2.pending = {fen, line, timer: setTimeout(() => { if (maia2) maia2.pending = null; }, 5000)};
+    try {
+        chrome.runtime.sendMessage({toOffscreen: true, clientId: maia2_client(), cmd: 'uci', line: `position fen ${fen2}`});
+        chrome.runtime.sendMessage({toOffscreen: true, clientId: maia2_client(), cmd: 'uci', line: 'go'});
+    } catch (e) { maia2.pending = null; }
+}
+
+function maia2_on_line(text) {
+    if (!maia2 || !maia2.pending) return; // late or duplicate answer, or already timed out
+    const m = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)$/.exec(text || '');
+    if (!m) return;                       // the second client's info lines are noise here
+    const p = maia2.pending;
+    clearTimeout(p.timer);
+    maia2.pending = null;
+    // the game moved on while the net was thinking -> the answer belongs to a dead position
+    if (premove_tracker.fen !== p.fen || premove_tracker.premoved) return;
+    p.line.reply = m[1];
+    p.line.maia2 = true;                  // premove_certified's acceptance path
+    p.line.pvFull = [p.line.pred, m[1]];
+    maybe_premove_forced_reply(p.line);
+}
+
+
 // Create/replace this panel's offscreen engine and load its NNUE; resolves when it reports 'ready'.
 // The setoption/ucinewgame/isready lines that follow in initialize_engine are then forwarded in order.
 async function ensure_offscreen_engine(engineName) {
@@ -2041,6 +2113,7 @@ function on_engine_response(message) {
             line.reply = reply;
             line.depth = lineInfo.depth;
             if (pvIdx === 0) maybe_premove_forced_reply(line);
+            if (pvIdx === 0) maia2_kick(line); // Maia lines have no reply; ask the net for ours
         }
         last_eval.activeLines = Math.max(last_eval.activeLines, lineInfo.multipv);
         if (pvIdx === 0) {
@@ -2197,6 +2270,12 @@ function premove_certified(line) {
     // thing standing between a reply-less certified line and a click was one downstream regex.
     // Executed check (2026-08-14): a {pred, depth:1, pv:[pred]} Maia-shaped line certified true.
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(line.reply ?? '')) return false;
+    // MAIA SECOND INFERENCE: this reply came from asking the same net what we play after its
+    // predicted move (maia2_on_line sets the flag). One node has no depth window to stabilize,
+    // so this path certifies unconditionally and delegates ALL safety to premove_is_safe in
+    // maybe_premove_forced_reply: the premove queues only when the reply is bound to the
+    // predicted move and therefore cannot fire in a wrong position.
+    if (line.maia2) return true;
     // A reply that is the opponent's ONLY legal move is a fact about the rules -- no depth window
     // can add or subtract confidence from it. NOTE what this does NOT do: it does not let a
     // single-move engine premove (an earlier revision of this comment claimed it did, and was
@@ -6765,6 +6844,7 @@ function stop_current_engine() {
     try {
         chrome.runtime.sendMessage({toOffscreen: true, clientId: ENGINE_CLIENT, cmd: 'dispose'});
     } catch (e) { /* SW/offscreen already gone */ }
+    maia2_dispose(); // the second-inference client shares the main engine's lifetime
     if (native_bg_port) {
         try { native_bg_port.disconnect(); } catch (e) { /* */ }
         native_bg_port = null;
