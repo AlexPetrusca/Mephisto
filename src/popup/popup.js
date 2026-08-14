@@ -335,6 +335,12 @@ async function initPanel(root, tabId) {
         // How many plies of a FORCED continuation to draw ahead. 0 is off; the ceiling is 5 because
         // past that the arrows stop being readable on an 8x8 board rather than because the walk stops.
         forced_lines: Math.max(0, Math.min(5, JSON.parse(MephistoConfig.get('forced_lines')) || 0)),
+        // THE WHOLE PV drawn ahead, opt-in. Grey and numbered: unlike the forced chain these are
+        // the engine's current SUGGESTION, revisable at the next depth, and speculation must never
+        // look like certainty. The limit is plies drawn; 50 is the ceiling because past that the
+        // board is ink, not information.
+        pv_walk: JSON.parse(MephistoConfig.get('pv_walk')) || false,
+        pv_walk_limit: Math.max(1, Math.min(50, JSON.parse(MephistoConfig.get('pv_walk_limit')) || 5)),
         // The premove framework's two dials. Confidence is the certification depth (see
         // premove_cert_last); plies is how deep a forced chain may queue (1 = single premoves).
         premove_confidence: JSON.parse(MephistoConfig.get('premove_confidence')) || 14,
@@ -1910,8 +1916,15 @@ const LINE_COLORS = ['#0a5bd3', '#0f9d58', '#e0a400', '#e8710a', '#9333ea'];
 // drawn in one colour reads as one player's plan, when half of it is the reply being forced OUT of
 // the opponent. Ours cool through blue, theirs through violet, and each ramp still darkens with
 // depth so the order inside a side is readable without a legend.
-const FORCED_COLORS_OURS   = ['#1e88a8', '#2f7fb8', '#3f66c0'];
-const FORCED_COLORS_THEIRS = ['#9a5cc4', '#8348b4', '#6d36a4'];
+// Magenta for ours, teal for theirs (user call 2026-08-14): the old blue/violet ramps sat next to
+// line #1's blue and line #5's purple in LINE_COLORS and read as engine lines on a busy board.
+// Neither magenta nor teal appears anywhere in LINE_COLORS or the red threat arrow.
+const FORCED_COLORS_OURS   = ['#d81b8c', '#c01578', '#a81064'];
+const FORCED_COLORS_THEIRS = ['#00a693', '#00907f', '#007a6b'];
+// The whole-PV walk is GREY, one hue for both sides: nothing in it is certain -- it is the
+// engine's current line, revisable at the next depth -- so it must not wear either the certainty
+// ramps above or a LINE_COLORS hue. Thin and numbered, drawn under everything else.
+const PV_WALK_COLOR = '#8f8f8f';
 
 function line_color(i) { return LINE_COLORS[Math.min(i, LINE_COLORS.length - 1)]; }
 
@@ -2430,6 +2443,7 @@ function maybe_premove_forced_reply(line) {
 // it would be conditional on a guess. Everything drawn is therefore certain given only our own
 // choices: our moves are ours to make, and their replies are the rules' to make.
 let forced_chain_key = null, forced_chain_memo = [];
+let pv_walk_key = null, pv_walk_memo = [];
 
 function forced_chain(fen, pv, maxPlies) {
     const out = [];
@@ -2505,6 +2519,26 @@ function forced_premove_moves(fen, pv, maxOurs) {
         return ours; // variant chess.js cannot play -- whatever is collected is still certain
     }
     return ours;
+}
+
+// THE WHOLE LINE, validated ply by ply. Where forced_chain walks only while the RULES force each
+// reply, this walks the engine's pv as-is -- every ply is a suggestion, which is why the drawing
+// side renders it grey. chess.js replays the line so a truncated or garbled pv can never draw an
+// arrow from a square nothing stands on; the walk stops at the first ply that does not parse.
+function pv_walk_moves(fen, pv, maxPlies) {
+    const out = [];
+    if (!Number.isFinite(maxPlies) || maxPlies <= 0) return out;
+    const moves = pv_moves(pv);
+    try {
+        const c = new Chess(config.variant, fen);
+        for (let i = 0; i < moves.length && i < maxPlies; i++) {
+            const uci = moves[i];
+            if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci)) break;
+            c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]}); // throws where the line breaks
+            out.push({uci, ply: i});
+        }
+    } catch (e) { /* first illegal ply ends the walk */ }
+    return out;
 }
 
 function premove_instant_reply(new_fen, new_moves) {
@@ -6070,7 +6104,7 @@ const LIVE_CONFIG_KEYS = [
     'explorer', 'book_play', 'explorer_db', 'help_mode', 'humanize', 'clock_mode', 'mirror_mode',
     'manual_mode', 'eval_bar', 'eval_history', 'live_stats', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
     'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode',
-    'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'forced_lines',
+    'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'forced_lines', 'pv_walk', 'pv_walk_limit',
     'premove_confidence', 'premove_plies', 'move_time', 'move_variance', 'move_reason',
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
@@ -6093,6 +6127,7 @@ function watch_config_changes() {
                 // The boot path clamps this; without the same clamp HERE, a typed 50 on the
                 // options page ran an open panel at maxPlies 51 while a reloaded one ran at 5.
                 if (key === 'forced_lines') config.forced_lines = Math.max(0, Math.min(5, parseInt(value) || 0));
+                if (key === 'pv_walk_limit') config.pv_walk_limit = Math.max(1, Math.min(50, parseInt(value) || 5));
                 if (key === 'help_mode' && !value) request_clear_hint();
                 if (key === 'eval_bar' && !value) request_clear_eval_bar();
                 if (key === 'eval_history') request_clear_eval_bar(); // redrawn by the next eval
@@ -6241,6 +6276,26 @@ function draw_moves() {
             forced_chain_memo = forced_chain(last_eval.fen, last_eval.lines[0]?.pv, config.forced_lines + 1);
         }
         chain = forced_chain_memo;
+    }
+    // THE WHOLE PV, drawn ahead (opt-in pv_walk). Grey, thin, numbered by ply, drawn FIRST so both
+    // the forced chain's certainty colours and the live engine arrows sit on top. Plies the forced
+    // chain draws are skipped -- they keep their certainty colours -- and ply 0 is always skipped:
+    // that is the move the panel already draws in its line colour. Memoized like the chain above
+    // and for the same reason: this runs on every engine info frame.
+    if (config.pv_walk && last_eval.lines[0]) {
+        const limit = Math.max(1, Math.min(50, config.pv_walk_limit || 5));
+        const wpv = pv_moves(last_eval.lines[0].pv).slice(0, limit).join(' ');
+        const wkey = `${last_eval.fen}|${wpv}|${limit}`;
+        if (wkey !== pv_walk_key) {
+            pv_walk_key = wkey;
+            pv_walk_memo = pv_walk_moves(last_eval.fen, last_eval.lines[0].pv, limit);
+        }
+        const skip = Math.max(1, chain.length); // forced plies keep their colours; ply 0 its line colour
+        for (const step of pv_walk_memo) {
+            if (step.ply < skip) continue;
+            draw_move(step.uci, PV_WALK_COLOR, PANEL_ROOT.getElementById('move-annotations'), 0.10, step.ply + 1, '');
+            if (config.help_mode) hint_arrows.push({move: step.uci, width: 0.10, color: PV_WALK_COLOR, rank: step.ply + 1, label: ''});
+        }
     }
     for (let i = chain.length - 1; i >= 1; i--) {   // skip ply 0: that is the move the panel already draws
         const step = chain[i];

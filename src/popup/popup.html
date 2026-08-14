@@ -120,7 +120,7 @@
     <div class="qs-row qs-toggle">
         <input id="qs_premove" type="checkbox" class="qs-cb">
         <label for="qs_premove" data-i18n="panel.premove" data-i18n-tip="panel.tip.while_the_opponent_thinks_certify" class="qs-label tooltipped" data-position="left"
-              data-tooltip="While the opponent thinks, certify a reply to their predicted move (stable across depths 13/14/latest, max 2 candidates). If they play exactly that move, answer instantly; anything else searches normally. If the reply could never be legal after any other opponent move (forced moves, recaptures), it's queued as a real premove immediately -- an illegal premove gets auto-cancelled. Never fires in a wrong position. Needs Autoplay.">Premove</label>
+              data-tooltip="While the opponent thinks, certify a reply to their predicted move -- stable across the Premove Confidence window, or, on a Maia engine, produced by a second inference of the same net on the predicted position. If they play exactly that move, answer instantly; anything else searches normally. If the reply could never be legal after any other opponent move (forced moves, recaptures), it's queued as a real premove immediately -- an illegal premove gets auto-cancelled. Never fires in a wrong position. Needs Autoplay.">Premove</label>
     </div>
     <div class="qs-row qs-toggle">
         <input id="qs_manual" type="checkbox" class="qs-cb">

@@ -42,6 +42,8 @@ class GeneralSettings extends SettingsPage {
         const arrow_opacity_range = this.registerFormElement('arrow_opacity', 'Arrow Opacity:', 'range', 75);
         this.registerFormElement('arrow_rank', 'Number Arrows:', 'checkbox', true);
         this.registerFormElement('forced_lines', 'Forced Lines Ahead:', 'input', 0);
+        this.registerFormElement('pv_walk', 'PV Arrows:', 'checkbox', false);
+        this.registerFormElement('pv_walk_limit', 'PV Arrows Length:', 'input', 5);
         this.registerFormElement('premove_confidence', 'Premove Confidence:', 'input', 14);
         this.registerFormElement('premove_plies', 'Premove Plies:', 'input', 2);
         this.registerFormElement('board_animation', 'Board Animation:', 'checkbox', true);

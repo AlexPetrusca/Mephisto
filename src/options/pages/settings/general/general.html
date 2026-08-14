@@ -224,6 +224,33 @@
 
                 <div class="set-row">
                     <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.pv_walk" class="tooltipped" data-position="right"
+                              data-tooltip="Draw the engine's whole line ahead on the board: every ply as a thin grey numbered arrow, so you see where the line is going, not just its first move. Grey because it is the engine's current suggestion, not a certainty -- forced continuations keep their own colours on top."><span data-i18n="set.pv_walk">PV Arrows</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="pv_walk_checkbox" type="checkbox" class="set-cb">
+                        <label for="pv_walk_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.pv_walk_limit" class="tooltipped" data-position="right"
+                              data-tooltip="How many plies of the line PV Arrows draws, 1-50 (default 5). Past a dozen the board gets crowded fast; the ceiling exists for the rare deep endgame line."><span data-i18n="set.pv_walk_limit">PV Arrows Length</span></span>
+                    </div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="pv_walk_limit_input" type="number" min="1" max="50" step="1">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
                         <span data-i18n-tip="set.tip.arrow_rank" class="tooltipped" data-position="right"
                               data-tooltip="Number each arrow with where its line ranks: 1 for the engine's best, 2 upwards for the rest. On by default -- with more than a couple of lines the colours alone stop being enough to tell them apart."><span data-i18n="set.arrow_rank">Number Arrows</span></span>
                     </div>
