@@ -23,6 +23,30 @@ class AppearanceSettings extends SettingsPage {
         // right language is the one thing a language picker must not do.
         const lang = this.registerFormElement('language', 'Language:', 'select', MephistoI18n.DEFAULT_LANG);
         lang.registerChangeListener(() => window.mephistoApplyLanguage?.(lang.getValue()));
+        // Arrow colours: the hex field is the SETTING (registered like any input); the native
+        // colour picker beside it is a second face of the same value, synced both ways. An empty
+        // field means "the shipped default" -- the panel validates at use, so junk cannot break
+        // drawing. FormElement saves on 'input' events, which is exactly what the picker fires.
+        const ARROW_COLORS = [
+            ['arrow_color_line1', '#0a5bd3'], ['arrow_color_line2', '#0f9d58'],
+            ['arrow_color_line3', '#e0a400'], ['arrow_color_line4', '#e8710a'],
+            ['arrow_color_line5', '#9333ea'], ['arrow_color_forced_ours', '#d81b8c'],
+            ['arrow_color_forced_theirs', '#00a693'], ['arrow_color_pv_walk', '#8f8f8f'],
+            ['arrow_color_threat', '#bf0000'], ['arrow_color_book', '#14b8a6'],
+        ];
+        for (const [key, dflt] of ARROW_COLORS) {
+            const el = this.registerFormElement(key, key + ':', 'input', '');
+            const picker = document.getElementById(key + '_picker');
+            const text = document.getElementById(key + '_input');
+            if (!picker || !text || el.missing) continue;
+            const sync = () => { picker.value = /^#[0-9a-fA-F]{6}$/.test(text.value) ? text.value : dflt; };
+            sync();
+            el.registerChangeListener(sync);
+            picker.addEventListener('input', () => {
+                text.value = picker.value;
+                text.dispatchEvent(new Event('input', {bubbles: true})); // the event FormElement saves on
+            });
+        }
     }
 }
 

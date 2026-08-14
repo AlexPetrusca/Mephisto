@@ -352,5 +352,15 @@
   "set.pv_walk": "PV Arrows",
   "set.tip.pv_walk": "Draw the engine's whole line ahead on the board: every ply as a thin grey numbered arrow, so you see where the line is going, not just its first move. Grey because it is the engine's current suggestion, not a certainty -- forced continuations keep their own colours on top.",
   "set.pv_walk_limit": "PV Arrows Length",
-  "set.tip.pv_walk_limit": "How many plies of the line PV Arrows draws, 1-50 (default 5). Past a dozen the board gets crowded fast; the ceiling exists for the rare deep endgame line."
+  "set.tip.pv_walk_limit": "How many plies of the line PV Arrows draws, 1-50 (default 5). Past a dozen the board gets crowded fast; the ceiling exists for the rare deep endgame line.",
+  "set.arrow_color_line1": "Line 1 Arrow",
+  "set.arrow_color_line2": "Line 2 Arrow",
+  "set.arrow_color_line3": "Line 3 Arrow",
+  "set.arrow_color_line4": "Line 4 Arrow",
+  "set.arrow_color_line5": "Line 5 Arrow",
+  "set.arrow_color_forced_ours": "Forced Line (Yours)",
+  "set.arrow_color_forced_theirs": "Forced Line (Theirs)",
+  "set.arrow_color_pv_walk": "PV Arrows",
+  "set.arrow_color_threat": "Threat Arrow",
+  "set.arrow_color_book": "Book Arrows"
 }

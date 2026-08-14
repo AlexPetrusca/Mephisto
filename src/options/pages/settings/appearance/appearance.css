@@ -6,3 +6,8 @@
 .offset-right-m1 {
     margin-right: 8.3333333333%;
 }
+
+/* arrow colour rows: native picker swatch + hex text, kept in sync by appearance.js */
+.set-color { display: inline-flex; align-items: center; gap: 8px; }
+.set-color-swatch { width: 36px; height: 26px; padding: 0; border: none; background: none; cursor: pointer; }
+.set-color-hex { width: 92px; }

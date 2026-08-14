@@ -341,6 +341,15 @@ async function initPanel(root, tabId) {
         // board is ink, not information.
         pv_walk: JSON.parse(MephistoConfig.get('pv_walk')) || false,
         pv_walk_limit: Math.max(1, Math.min(50, JSON.parse(MephistoConfig.get('pv_walk_limit')) || 5)),
+        // user arrow colours (Appearance page): raw '#rrggbb' strings, validated at USE
+        // (user_color) so a bad stored value falls back to its default instead of breaking boot
+        ...Object.fromEntries(['arrow_color_line1', 'arrow_color_line2', 'arrow_color_line3',
+            'arrow_color_line4', 'arrow_color_line5', 'arrow_color_forced_ours',
+            'arrow_color_forced_theirs', 'arrow_color_pv_walk', 'arrow_color_threat',
+            'arrow_color_book'].map(k => {
+            let v = ''; try { v = JSON.parse(MephistoConfig.get(k)) || ''; } catch (e) { /* junk -> default */ }
+            return [k, v];
+        })),
         // The premove framework's two dials. Confidence is the certification depth (see
         // premove_cert_last); plies is how deep a forced chain may queue (1 = single premoves).
         premove_confidence: JSON.parse(MephistoConfig.get('premove_confidence')) || 14,
@@ -1926,7 +1935,27 @@ const FORCED_COLORS_THEIRS = ['#00a693', '#00907f', '#007a6b'];
 // ramps above or a LINE_COLORS hue. Thin and numbered, drawn under everything else.
 const PV_WALK_COLOR = '#8f8f8f';
 
-function line_color(i) { return LINE_COLORS[Math.min(i, LINE_COLORS.length - 1)]; }
+// USER ARROW COLOURS (Appearance page): every arrow family can be re-coloured -- a '#rrggbb'
+// string in config; anything else (empty field, junk) falls back to the shipped default above,
+// so a cleared setting can never draw an invisible arrow. The forced ramps derive their darker
+// shades from the base, so one picker recolours a whole family and the depth-read survives.
+const ARROW_COLOR_KEYS = ['arrow_color_line1', 'arrow_color_line2', 'arrow_color_line3',
+    'arrow_color_line4', 'arrow_color_line5', 'arrow_color_forced_ours',
+    'arrow_color_forced_theirs', 'arrow_color_pv_walk', 'arrow_color_threat', 'arrow_color_book'];
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+function user_color(key, dflt) { const v = config && config[key]; return HEX_COLOR_RE.test(v || '') ? v : dflt; }
+function shade_hex(hex, f) {
+    const n = parseInt(hex.slice(1), 16);
+    const d = (c) => Math.max(0, Math.round(c * (1 - f)));
+    return '#' + [d((n >> 16) & 255), d((n >> 8) & 255), d(n & 255)].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+function forced_ramp(ours) {
+    const base = config && config[ours ? 'arrow_color_forced_ours' : 'arrow_color_forced_theirs'];
+    if (!HEX_COLOR_RE.test(base || '')) return ours ? FORCED_COLORS_OURS : FORCED_COLORS_THEIRS;
+    return [base, shade_hex(base, 0.14), shade_hex(base, 0.28)];
+}
+
+function line_color(i) { const idx = Math.min(i, LINE_COLORS.length - 1); return user_color('arrow_color_line' + (idx + 1), LINE_COLORS[idx]); }
 
 // Is this search budgeted by DEPTH rather than by the clock? Open-ended searches (Help Mode, Manual
 // Mode, pondering) are neither -- they run until the position changes -- so this only ever decides
@@ -6106,6 +6135,7 @@ const LIVE_CONFIG_KEYS = [
     'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode',
     'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'forced_lines', 'pv_walk', 'pv_walk_limit',
     'premove_confidence', 'premove_plies', 'move_time', 'move_variance', 'move_reason',
+    ...ARROW_COLOR_KEYS, // repaint on the next frame, no reload
     'think_time', 'think_variance', 'elo', 'opp_alert', 'dark_mode',
     // toggling the trace has to take effect on the session you are already debugging
     'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay', 'puzzle_auto_next', 'puzzle_next_delay',
@@ -6291,10 +6321,11 @@ function draw_moves() {
             pv_walk_memo = pv_walk_moves(last_eval.fen, last_eval.lines[0].pv, limit);
         }
         const skip = Math.max(1, chain.length); // forced plies keep their colours; ply 0 its line colour
+        const wcol = user_color('arrow_color_pv_walk', PV_WALK_COLOR);
         for (const step of pv_walk_memo) {
             if (step.ply < skip) continue;
-            draw_move(step.uci, PV_WALK_COLOR, PANEL_ROOT.getElementById('move-annotations'), 0.10, step.ply + 1, '');
-            if (config.help_mode) hint_arrows.push({move: step.uci, width: 0.10, color: PV_WALK_COLOR, rank: step.ply + 1, label: ''});
+            draw_move(step.uci, wcol, PANEL_ROOT.getElementById('move-annotations'), 0.10, step.ply + 1, '');
+            if (config.help_mode) hint_arrows.push({move: step.uci, width: 0.10, color: wcol, rank: step.ply + 1, label: ''});
         }
     }
     for (let i = chain.length - 1; i >= 1; i--) {   // skip ply 0: that is the move the panel already draws
@@ -6306,7 +6337,7 @@ function draw_moves() {
         // Each side's ramp advances on its OWN moves, not on the shared depth, or one side would
         // skip every other shade and the two would stop looking like sequences.
         const ours = (step.ply % 2) === 0;
-        const ramp = ours ? FORCED_COLORS_OURS : FORCED_COLORS_THEIRS;
+        const ramp = forced_ramp(ours);
         const color = ramp[Math.min(Math.floor((step.ply - 1) / 2), ramp.length - 1)];
         draw_move(step.uci, color, PANEL_ROOT.getElementById('move-annotations'), 0.12, 0, '');
         if (config.help_mode) hint_arrows.push({move: step.uci, width: 0.12, color, rank: 0, label: ''});
@@ -6329,7 +6360,7 @@ function draw_moves() {
     }
     if (config.help_mode) {
         if (config.threat_analysis && last_eval.threat && last_eval.threat !== '(none)') {
-            hint_arrows.push({move: last_eval.threat, width: 0.2, color: '#bf0000'});
+            hint_arrows.push({move: last_eval.threat, width: 0.2, color: user_color('arrow_color_threat', '#bf0000')});
         }
         engine_hint_arrows = hint_arrows;
         push_hint_arrows(); // engine arrows + the book, in one replace
@@ -6358,7 +6389,7 @@ function book_arrow_specs(fen) {
         move: m.uci,
         // the least-played stays a real arrow; the main line matches the engine's best-move stroke
         width: 0.13 + 0.13 * (((m.white || 0) + (m.draws || 0) + (m.black || 0)) / most),
-        color: BOOK_COLORS[Math.min(i, BOOK_COLORS.length - 1)],
+        color: user_color('arrow_color_book', BOOK_COLORS[Math.min(i, BOOK_COLORS.length - 1)]),
     }));
 }
 
@@ -6391,7 +6422,7 @@ function draw_book_moves(fen) {
 
 function draw_threat() {
     if (last_eval.threat) {
-        draw_move(last_eval.threat, '#bf0000', PANEL_ROOT.getElementById('response-annotations'));
+        draw_move(last_eval.threat, user_color('arrow_color_threat', '#bf0000'), PANEL_ROOT.getElementById('response-annotations'));
     }
 }
 
