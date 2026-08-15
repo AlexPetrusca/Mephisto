@@ -1192,8 +1192,9 @@ function gameText(game) {
 }
 
 // The budget is a SLIDER (user call 2026-08-15). In time mode it runs 1..60 seconds and then one
-// notch further, which is UNBOUNDED: the engine is given `go infinite` and searches until the line
-// settles rather than until a clock runs out. In depth mode the same slider is 1..40 plies.
+// notch further, which is UNBOUNDED: the engine is given `go infinite` and that is all it is given.
+// Nothing here decides it has thought long enough -- the search on the current position ends when
+// Stop is pressed. In depth mode the same slider is 1..40 plies.
 const INFINITE_SECONDS = 61;   // the notch past 60 -- see LIMIT_INFINITE in engines.js
 
 function sliderToValue(kind, slider) {
@@ -1223,7 +1224,7 @@ function syncLimitUi(fromSlider) {
     $('rv_limit_unit').textContent = kind === 'depth'
         ? `${slider.value} plies per position`
         : (value >= LIMIT_INFINITE
-            ? 'until the line settles'
+            ? 'no limit -- until you press Stop'
             : `${slider.value}s per position`);
     setCfg('rv_limit_value', value);
     updateEngineOptions();
@@ -1356,7 +1357,14 @@ class ReviewPage {
         }
 
         $('rv_run').addEventListener('click', onRun);
-        $('rv_stop').addEventListener('click', () => { cancel = true; note('Stopping after this position...'); });
+        $('rv_stop').addEventListener('click', () => {
+            cancel = true;
+            // An unbounded search never returns on its own, so asking the loop to stop "after this
+            // position" would wait for ever. Interrupt the search itself; the engine answers with
+            // bestmove, this position is scored with what it found, and the loop then sees `cancel`.
+            activeEngine?.stopSearch?.();
+            note('Stopping after this position...');
+        });
         $('rv_export').addEventListener('click', () => exportHtml($('rv_export')));
         $('rv_first').addEventListener('click', () => showPly(0));
         $('rv_prev').addEventListener('click', () => showPly(cursor - 1));

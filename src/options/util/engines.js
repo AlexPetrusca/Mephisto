@@ -7,14 +7,10 @@
 // the second init silently disposes the first) was learned once and must not be re-learned.
 const Core = self.MephistoReviewCore;
 
-// The budget slider's last notch. A review still has to FINISH, so "infinite" here means the search
-// is not given a clock: it runs until the line SETTLES -- the same best move at the same score for
-// three consecutive depths -- and a hard ceiling stops a position that never settles from holding
-// up a forty-move game. Both numbers are visible constants rather than hidden behaviour.
+// The budget slider's last notch: the sentinel that means `go infinite`. Nothing in this file ever
+// decides such a search has run long enough -- no settle rule, no ceiling, no backstop timeout.
+// It runs until stopSearch() is called, which is what the Stop button does.
 const LIMIT_INFINITE = 1e9;
-const SETTLE_DEPTHS = 3;          // consecutive depths that must agree before a search is stopped
-const SETTLE_SCORE_CP = 10;       // ...and how far the score may still wander while agreeing
-const INFINITE_CEILING_MS = 120000; // never spend more than two minutes on one position
 
 // The engines a review can judge a game with. WASM entries need nothing installed; native entries
 // are probed for a live host before they are offered, since picking one that is not installed
@@ -157,13 +153,15 @@ class WasmEngine {
     // progress bar and no explanation -- the exact failure the floating panel had.
     once(pred, timeoutMs) {
         return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
+            // Infinity = wait for ever. setTimeout would fire IMMEDIATELY on a non-finite delay
+            // (it coerces to 0), so an unbounded search would end the instant it began.
+            const timer = Number.isFinite(timeoutMs) ? setTimeout(() => {
                 off();
                 reject(new Error(`the engine stopped answering after ${Math.round(timeoutMs / 1000)}s`));
-            }, timeoutMs);
+            }, timeoutMs) : null;
             const fn = (msg) => { if (pred(msg)) { off(); resolve(msg); } };
             const off = () => {
-                clearTimeout(timer);
+                if (timer) clearTimeout(timer);
                 const i = this.listeners.indexOf(fn);
                 if (i >= 0) this.listeners.splice(i, 1);
             };
@@ -193,43 +191,18 @@ class WasmEngine {
             const prev = slots.get(info.multipv);
             if (!prev || info.depth >= prev.depth) slots.set(info.multipv, info);
         };
-        // UNBOUNDED SEARCH: no clock is given, and the search is stopped when the answer stops
-        // changing. Without this, the slider's last notch would mean "never return", which is not a
-        // thing a review can do.
-        const unbounded = !this.isMaia() && this.opts.limitKind !== 'depth'
-                          && this.opts.limitValue >= LIMIT_INFINITE;
-        let settleMove = null, settleScore = null, settleCount = 0, settled = false, ceiling = null;
-        const watchSettle = (msg) => {
-            if (settled || msg.kind !== 'line') return;
-            const info = Core.parseInfo(msg.line);
-            if (!info || info.bound || info.multipv !== 1 || !info.pv?.[0]) return;
-            const score = info.score != null ? info.score : (info.mate != null ? info.mate * 1000 : null);
-            if (info.pv[0] === settleMove && score != null && settleScore != null
-                && Math.abs(score - settleScore) <= SETTLE_SCORE_CP) {
-                settleCount++;
-            } else {
-                settleCount = 0;
-            }
-            settleMove = info.pv[0];
-            settleScore = score;
-            if (settleCount >= SETTLE_DEPTHS) { settled = true; this.send('stop'); }
-        };
+        // UNBOUNDED SEARCH means exactly `go infinite` (user call 2026-08-15): nothing here decides
+        // it has thought long enough. It ends when something ASKS it to -- stopSearch(), which the
+        // Stop button calls -- and until then the position keeps getting deeper.
         this.listeners.push(collect);
-        if (unbounded) {
-            this.listeners.push(watchSettle);
-            ceiling = setTimeout(() => { if (!settled) { settled = true; this.send('stop'); } }, INFINITE_CEILING_MS);
-        }
         const done = this.once(m => m.kind === 'line' && /^bestmove\b/.test(m.line), this.searchTimeout());
         this.send(`position fen ${fen}`);
         this.send(this.goCommand());
         try {
             await done;
         } finally {
-            if (ceiling) clearTimeout(ceiling);
-            for (const fn of [collect, watchSettle]) {
-                const i = this.listeners.indexOf(fn);
-                if (i >= 0) this.listeners.splice(i, 1);
-            }
+            const i = this.listeners.indexOf(collect);
+            if (i >= 0) this.listeners.splice(i, 1);
         }
         return this.toResult(slots, turn, depth, nodes);
     }
@@ -294,8 +267,9 @@ class WasmEngine {
     searchTimeout() {
         const {limitKind, limitValue} = this.opts;
         if (limitKind === 'depth') return 180000;
-        // the unbounded search stops itself; the backstop only has to outlive its own ceiling
-        if (limitValue >= LIMIT_INFINITE) return INFINITE_CEILING_MS + 30000;
+        // NO backstop for an unbounded search. A timeout here would be a time limit wearing another
+        // name, and the whole point of this setting is that there is no time limit.
+        if (limitValue >= LIMIT_INFINITE) return Infinity;
         return Math.max(30000, limitValue * 20);
     }
 
@@ -308,6 +282,13 @@ class WasmEngine {
             depth: info.depth,
         }));
         return {lines, depth, nodes};
+    }
+
+    // Interrupt the search in progress WITHOUT tearing the engine down. The stopped search still
+    // emits until its `bestmove`, so analyse() resolves normally with whatever depth it reached --
+    // which is the only way an unbounded search can ever end.
+    stopSearch() {
+        try { this.send('stop'); } catch (e) { /* the worker is already gone */ }
     }
 
     dispose() {
@@ -400,6 +381,12 @@ class NativeEngine {
         return {lines, depth: lines.length ? lines[0].depth : 0, nodes: 0};
     }
 
+    // The native host answers a whole analyse in one reply, so there is no partial result to keep:
+    // stopping means dropping the port, and start() reconnects for the next position.
+    stopSearch() {
+        try { this.port?.postMessage({cmd: 'stop'}); } catch (e) { /* already gone */ }
+    }
+
     dispose() {
         try { this.port?.disconnect(); } catch (e) { /* already gone */ }
         this.port = null;
@@ -430,5 +417,5 @@ function nativeHostAvailable(portName) {
 
 self.MephistoEngines = {
     ENGINES, MAIA_BANDS, WasmEngine, NativeEngine, makeEngine, nativeHostAvailable,
-    NATIVE_DEPTH_CAP_MS, LIMIT_INFINITE, SETTLE_DEPTHS, INFINITE_CEILING_MS,
+    NATIVE_DEPTH_CAP_MS, LIMIT_INFINITE,
 };
