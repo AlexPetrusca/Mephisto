@@ -766,12 +766,40 @@ No schedule - added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>26 items, sorted by upside and effort</summary>
+<summary>27 items, sorted by upside and effort</summary>
 
-**Quick wins.** Small changes with an obvious payoff. Empty at the moment - everything that was here has
-shipped, which is a good sign and also why the next item is a bigger one.
+**Quick wins.** Small changes with an obvious payoff, and mostly plumbing that already exists.
+
+- [ ] **Show Maia's probability in the panel as well** - since v3.1.270 every Maia line carries the net's own
+  chance of a human at that rating playing it (`maiaprob`, read by `parseInfo`, carried onto each line by
+  `toResult`), and the Analysis page prints it. The live panel still lists Maia's Multi Lines by rank alone,
+  so the one number that says *how likely* rather than *which is best* is computed, delivered and dropped on
+  the floor. It is a column in a list that already exists.
+
+- [ ] **Export the position, not just the picture** - the moves-by-rating chart is the most shareable thing
+  here and can currently only be screenshotted. One button that writes a single self-contained file: the
+  **board** as it stands, the FEN and the PGN under it, the chart itself, and the numbers behind it - which
+  move, at which rating, how often - so the thing you send someone can be read *and* loaded back rather than
+  only looked at. The review page already exports itself this way (markup, stylesheets inlined, pieces
+  embedded, no scripts, nothing to fetch), so the shape is settled; this is that shape applied to a position.
 
 **Worth real work.** The ones that would change how this feels to use, and cost accordingly.
+
+- [ ] **"You played like 1650"** - the review already runs a second pass with Maia, and since v3.1.270 that
+  pass returns a real probability per move rather than a rank. That is exactly the ingredient a strength
+  estimate needs: for each rating band, how likely is the whole game as played, and which band explains it
+  best. It is a far more interesting number than an engine-match rate, and unlike a match rate it does not
+  quietly assume that playing well means playing like a machine. Two things to be honest about before it
+  ships: one game is a small sample and the answer has to carry its own uncertainty, and a player using an
+  engine will read as *higher* than they are, which makes this a strength estimate and not a fair-play
+  measurement - it belongs beside the indicators, not among them.
+
+- [ ] **Sweep the ratings in the background, and keep it** - moves-by-rating is computed for the position on
+  the board and thrown away the moment you step off it, so walking a game re-sweeps every ply from scratch;
+  with Maia 3 that is twenty-one forward passes each time. Sweep the next ply while you are looking at this
+  one, keep the results per game rather than per position, and stepping through a game becomes instant
+  instead of a wait per move. The cache already exists and is keyed by position, model and line count - what
+  is missing is filling it ahead of the cursor and not dropping it on every move.
 
 - [ ] **A faster board recogniser** - partly answered in v3.1.255, and again in v3.1.269 by giving the model
   more threads: the cap of 4 was measured against 5, 6 and 8 on a 10-core Mac (754/635/610/589/704ms at
