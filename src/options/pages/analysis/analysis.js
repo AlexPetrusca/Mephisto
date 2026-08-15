@@ -800,9 +800,11 @@ function wireBandsHover(host, steps, series) {
         cursor.style.display = '';
         cursor.querySelector('line').setAttribute('x1', xOf(i));
         cursor.querySelector('line').setAttribute('x2', xOf(i));
+        // the colour is a DOT, not the text: the pale end of the palette is legible as a 2px line on
+        // the plot and unreadable as 10px type on the readout's own background
         tip.innerHTML = `<h6>${esc(steps[i])}</h6>` + series.map(s =>
-            `<div><span style="color:${s.colour}">${esc(s.san)}</span>`
-          + `<b style="color:${s.colour}">${(s.ys[i] * 100).toFixed(1)}%</b></div>`).join('');
+            `<div><span><i style="background:${s.colour}"></i>${esc(s.san)}</span>`
+          + `<b>${(s.ys[i] * 100).toFixed(1)}%</b></div>`).join('');
         tip.classList.add('on');
         // kept inside the chart: past the middle it flips to the other side of the cursor
         const px = (xOf(i) - X0) / (X1 - X0);
