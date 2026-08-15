@@ -9,6 +9,7 @@
 // and the board from panel-board.js.
 import {define} from "../../framework/require.js";
 import {SettingsPage} from "../../util/SettingsPage.js";
+import {readBook as readPolyglot, lookup as lookupPolyglot} from "../../util/polyglot.js";
 
 const Core = self.MephistoReviewCore;
 const {ENGINES, MAIA_BANDS, makeEngine, nativeHostAvailable} = self.MephistoEngines;
@@ -660,7 +661,14 @@ async function onBookFile(e) {
     e.target.value = '';
     try {
         if (/\.bin$/i.test(file.name)) {
-            status('Polyglot .bin needs its Zobrist key table, which is not bundled here. Use a PGN or JSON book.', 'err');
+            // A Polyglot book keys positions by its own Zobrist hash (lib/polyglot-random.js), so
+            // this branch is not a text format at all: the bytes are read as 16-byte entries and
+            // kept as a key -> moves map.
+            const entries = readPolyglot(await file.arrayBuffer());
+            if (!entries.size) throw new Error('that .bin has no readable entries');
+            bookMoves = {name: file.name, polyglot: entries};
+            status(`Book loaded: ${file.name}, ${entries.size} positions.`);
+            renderBook();
             return;
         }
         const text = await file.text();
@@ -705,8 +713,10 @@ function renderBook() {
     const on = !!(cfg('an_book') && bookMoves && pos);
     wrap.classList.toggle('hidden', !on);
     if (!on) return;
-    const list = (bookMoves.entries.get(keyOf(pos.fen)) || []).slice()
-        .sort((a, b) => b.weight - a.weight).slice(0, 5);
+    // a .bin is keyed by the format's own hash; a PGN/JSON book is keyed by the position text
+    const raw = bookMoves.polyglot ? lookupPolyglot(bookMoves.polyglot, pos.fen)
+                                   : (bookMoves.entries?.get(keyOf(pos.fen)) || []);
+    const list = raw.slice().sort((a, b) => b.weight - a.weight).slice(0, 5);
     if (meta) meta.textContent = bookMoves.name;
     const total = list.reduce((a, b) => a + b.weight, 0) || 1;
     host.innerHTML = list.length ? list.map((m, i) =>

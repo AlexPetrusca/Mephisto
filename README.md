@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.255-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.256-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -742,9 +742,10 @@ shipped, which is a good sign and also why the next item is a bigger one.
 - [ ] **A faster board recogniser** - partly answered in v3.1.255. Measured per read: decode 25ms, board
   detection 84ms, position model 645ms. The position model is **already int8-quantised** (MatMulInteger /
   ConvInteger), so quantisation is spent; caching took repeat reads to 26ms, but a board that genuinely changed
-  still pays ~700ms. What is left is a smaller model or a GPU execution provider - the bundled onnxruntime here is
-  the WASM build, so WebGPU would mean vendoring another runtime, and a smaller model means retraining rather than
-  converting.
+  still pays ~700ms. **WebGPU was tried and measured (v3.1.256): 774ms against the WASM build's 631ms on the same
+  machine and model - 23% slower**, because the int8 operators have no WebGPU implementation and fall back to the
+  CPU with transfer costs on top. It was not vendored (27MB of runtime for a loss). What is left is a genuinely
+  smaller model, which means retraining rather than converting.
 - [ ] **Talking Mode** - the engine as a voice. Not a number and an arrow but a running commentary in plain
   language: what the position wants, what it is worried about, why the move it likes actually wins something.
   The pieces exist (eval, lines, the explanation work below); the hard part is saying it like a person and
@@ -882,8 +883,14 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>46 features, newest first</summary>
+<summary>47 features, newest first</summary>
 
+- [x] **Polyglot books** (v3.1.256) - Analysis reads real `.bin` opening books. The format keys positions by its
+  own Zobrist hash, so the 781-constant table is vendored (it is the format's published data, from Polyglot via
+  python-chess, both GPL - 20KB, credited in the file) and the implementation is verified against the **format's
+  own published test keys**, including the en-passant cases that only count when a pawn can actually take. A real
+  1.5MB book reads in 44ms; loading one lists its moves with weights, and clicking one plays it. PGN and JSON books
+  still work as before.
 - [x] **The Analysis page, as asked for** (v3.1.255) - the board is bigger and **you can play on it** (click or
   drag; a move continues from wherever you are). Clicking any engine or human line plays that move. The eval bar
   is wider with the **number inside it**, win/draw/loss sits beside the board, and hash, thread count, line count,
