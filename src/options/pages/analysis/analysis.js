@@ -104,6 +104,7 @@ class AnalysisPage extends SettingsPage {
         $('an_flip')?.addEventListener('click', () => { flipped = !flipped; buildBoard(); render(); });
         $('an_copy_fen')?.addEventListener('click', () => copyOut(positions[cursor]?.fen || '', 'FEN'));
         $('an_copy_pgn')?.addEventListener('click', () => copyOut(pgnText(), 'PGN'));
+        $('an_export')?.addEventListener('click', (e) => exportPosition(e.currentTarget));
         document.addEventListener('keydown', onKey);
         // The page loader has no onLeave hook, so the route is the teardown signal: the moment the
         // hash is not ours, stop searching and free both engines.
@@ -261,6 +262,120 @@ async function copyOut(text, what) {
         await navigator.clipboard.writeText(text);
         status(`${what} copied.`);
     } catch (e) { status(`Could not copy the ${what}: ${e.message || e}`, 'err'); }
+}
+
+// ---- export ---------------------------------------------------------------------------------
+// THE POSITION, NOT A PICTURE OF IT. A screenshot of the chart is the thing people actually send,
+// and it cannot be read back: no FEN, no PGN, no numbers. This writes one self-contained file --
+// the board as it stands, the line that got here, the chart, and the table behind the chart --
+// with the stylesheets inlined and the pieces embedded, the same shape the review page exports in.
+// No scripts, nothing to fetch, opens anywhere.
+
+const AN_EXPORT_CSS = ['/src/options/options.css', '/src/options/pages/analysis/analysis.css',
+                       '/lib/chessboard/chessboard.min.css'];
+
+const AN_EXPORT_RESET = `
+  html, body { margin: 0; padding: 0; }
+  body { padding: 28px 22px 40px; }
+  header, main, footer { padding-left: 0 !important; }
+  main > .container { width: 100%; max-width: 1100px; margin: 0 auto; }
+  .an-board-wrap { width: max-content; aspect-ratio: auto; }
+  .an-board { width: auto; height: auto; }
+  .an-export-grid { display: grid; grid-template-columns: max-content 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 820px) { .an-export-grid { grid-template-columns: 1fr; } }
+  .an-export-fen { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+                   word-break: break-all; color: var(--mp-dim); }
+  .an-export-t { border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+  .an-export-t th, .an-export-t td { border: 1px solid var(--mp-line); padding: 3px 8px; text-align: right;
+                                     font-variant-numeric: tabular-nums; }
+  .an-export-t th:first-child, .an-export-t td:first-child { text-align: left;
+                                     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .an-band-tip { display: none; }
+`;
+
+async function inlineText(path) {
+    try {
+        const r = await fetch(chrome.runtime.getURL(path.replace(/^\//, '')));
+        return r.ok ? await r.text() : '';
+    } catch (e) { return ''; }
+}
+
+async function inlineImage(url) {
+    try {
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        const buf = new Uint8Array(await r.arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+        return `data:${r.headers.get('content-type') || 'image/png'};base64,${btoa(bin)}`;
+    } catch (e) { return null; }
+}
+
+// The chart's numbers as a table: a reader with the picture can see the shape, and a reader with
+// this can check it, quote it, or paste it somewhere else.
+function exportBandTable() {
+    if (!lastBands?.series?.length) return '';
+    const {steps, series} = lastBands;
+    const head = `<tr><th>Rating</th>${series.map(s => `<th>${esc(s.san)}</th>`).join('')}</tr>`;
+    const rows = steps.map((b, i) =>
+        `<tr><td>${esc(b)}</td>${series.map(s => `<td>${(s.ys[i] * 100).toFixed(1)}%</td>`).join('')}</tr>`).join('');
+    return `<table class="an-export-t">${head}${rows}</table>`;
+}
+
+async function exportPosition(btn) {
+    const pos = positions[cursor];
+    if (!pos) return;
+    const label = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = 'Building…'; }
+    try {
+        const css = (await Promise.all(AN_EXPORT_CSS.map(inlineText))).join('\n') + AN_EXPORT_RESET;
+        const wrap = document.createElement('div');
+        wrap.innerHTML = `<div class="an-export-grid">`
+            + `<div>${document.querySelector('.an-boardrow')?.outerHTML || ''}</div>`
+            + `<div>${$('an_bands_wrap')?.outerHTML || ''}</div></div>`;
+        wrap.querySelectorAll('.an-hit, .an-band-cursor, .tooltipped .info-tooltip').forEach(el => el.remove());
+
+        // the pieces are extension URLs, which mean nothing outside this browser
+        const seen = new Map();
+        for (const img of [...wrap.querySelectorAll('img[src]')]) {
+            if (!seen.has(img.src)) seen.set(img.src, await inlineImage(img.src));
+            const data = seen.get(img.src);
+            if (data) img.src = data; else img.remove();
+        }
+
+        const human = cfg('an_human') ? `${cfg('an_human') === 'maia3' ? 'Maia 3' : 'Maia 1'}` : 'off';
+        const pgn = pgnText();
+        const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Position — ${esc(pos.fen.split(' ')[0].slice(0, 24))}</title>
+<style>${css}</style>
+</head><body><main><div class="container">
+<h3 class="set-h">Position</h3>
+${wrap.innerHTML}
+<h3 class="set-h">FEN</h3>
+<p class="an-export-fen">${esc(pos.fen)}</p>
+${pgn ? `<h3 class="set-h">Moves</h3><p class="an-export-fen">${esc(pgn)}</p>` : ''}
+${lastBands ? `<h3 class="set-h">How often each move is played, by rating</h3>
+<p class="an-status">Human model: ${esc(human)}. Each figure is that move's share of ALL legal moves at
+ that rating, so a row summing to under 100% is the rest of the moves, not a rounding error.</p>
+${exportBandTable()}` : ''}
+<p class="an-status">Written by the Mephisto Chess Extension. Everything in this file was computed on the
+ machine that wrote it; nothing was uploaded.</p>
+</div></main></body></html>`;
+
+        const url = URL.createObjectURL(new Blob([html], {type: 'text/html'}));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `position-${pos.fen.split(' ')[0].replace(/\W+/g, '').slice(0, 24)}.html`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        status('Position exported.');
+    } catch (e) {
+        status('Could not build the export: ' + (e.message || e), 'err');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = label; }
+    }
 }
 
 async function pasteFromClipboard() {

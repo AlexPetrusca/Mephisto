@@ -394,6 +394,8 @@
   "an.start_btn": "Start position",
   "an.copy_fen": "Copy FEN",
   "an.copy_pgn": "Copy PGN",
+  "an.export": "Export…",
+  "an.tip.export": "Write the position, the moves, the chart and the numbers behind it to one self-contained file.",
   "an.sample_btn": "Sample game",
   "an.engine": "Engine",
   "an.human": "Human model",
