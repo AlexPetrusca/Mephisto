@@ -133,9 +133,11 @@
                 <div class="set-row">
                     <div class="set-lbl">
                         <span data-i18n="rv.budget" data-i18n-tip="rv.tip.budget" class="tooltipped" data-position="right"
-                              data-tooltip="How hard the engine works on EACH position. Depth is reproducible -- the
-                                            same depth is the same answer on any machine -- and is the better choice
-                                            when you want to compare two reviews. Time runs from 1 to 60 seconds per
+                              data-tooltip="How hard the engine works on EACH position. Depth is the better choice
+                                            when you want to compare two reviews, and with Threads set to 1 it is
+                                            reproducible: measured on this build, three depth-14 searches of the same
+                                            position agreed exactly on one thread and disagreed (27/25/24cp) on four,
+                                            because a multi-threaded search explores in a different order every time. Time runs from 1 to 60 seconds per
                                             position, and one notch past 60 removes the clock entirely: the engine
                                             is told `go infinite` and keeps thinking about the position until you
                                             press Stop, which scores it with whatever depth it reached and ends the
