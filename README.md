@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.256-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.257-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -741,8 +741,8 @@ shipped, which is a good sign and also why the next item is a bigger one.
 
 - [ ] **A faster board recogniser** - partly answered in v3.1.255. Measured per read: decode 25ms, board
   detection 84ms, position model 645ms. The position model is **already int8-quantised** (MatMulInteger /
-  ConvInteger), so quantisation is spent; caching took repeat reads to 26ms, but a board that genuinely changed
-  still pays ~700ms. **WebGPU was tried and measured (v3.1.256): 774ms against the WASM build's 631ms on the same
+  ConvInteger), so quantisation is spent; caching (frame, board box, crop) took repeat reads to **2-3ms**, but a
+  board that genuinely changed still pays ~700ms. **WebGPU was tried and measured (v3.1.256): 774ms against the WASM build's 631ms on the same
   machine and model - 23% slower**, because the int8 operators have no WebGPU implementation and fall back to the
   CPU with transfer costs on top. It was not vendored (27MB of runtime for a loss). What is left is a genuinely
   smaller model, which means retraining rather than converting.
@@ -883,8 +883,12 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>47 features, newest first</summary>
+<summary>48 features, newest first</summary>
 
+- [x] **Screen reading, three layers of not-asking** (v3.1.257) - a read used to cost ~670ms every time. Now the
+  captured frame is hashed **before it is decoded**, so an unchanged screen answers without decoding, detecting or
+  running the model: **repeat reads are 2-3ms**. A board that genuinely changed still pays the full read, and each
+  layer was verified to notice a real change rather than serve a stale position.
 - [x] **Polyglot books** (v3.1.256) - Analysis reads real `.bin` opening books. The format keys positions by its
   own Zobrist hash, so the 781-constant table is vendored (it is the format's published data, from Polyglot via
   python-chess, both GPL - 20KB, credited in the file) and the implementation is verified against the **format's
@@ -1120,4 +1124,5 @@ Built on the work of others, with thanks:
 - **[Maia](https://github.com/CSSLab/maia-chess) / [Maia-3](https://github.com/CSSLab/maia3)** (CSSLab, University of Toronto; GPL-3.0 / AGPL-3.0) and the **[Maia 2200](https://github.com/CallOn84/LeelaNets)** net (CallOn84; GPL-3.0); **[Leela Chess Zero](https://github.com/LeelaChessZero/lc0)** (GPL-3.0) for the input/policy encoding.
 - **Board recognition** - two models from [Chess_diagram_to_FEN](https://github.com/tsoj/Chess_diagram_to_FEN) by Jost Triller (MIT), converted to ONNX; see `lib/engine/vision/`.
 - **[ONNX Runtime Web](https://github.com/microsoft/onnxruntime)** (Microsoft; MIT) - in-browser inference.
+- **Polyglot book format** - the 781 Zobrist constants a `.bin` book is keyed by (`lib/polyglot-random.js`), from Polyglot via **[python-chess](https://github.com/niklasf/python-chess)** (Niklas Fiekas; **GPL-3.0**). They are the format's published data: a book cannot be read without exactly those values. The reader itself is this project's code.
 - **[chess.js](https://github.com/jhlywa/chess.js)** (BSD-2), **[chessboard.js](https://github.com/oakmac/chessboardjs)**, **[jQuery](https://jquery.com)**, **[Materialize](https://materializecss.com)** and `lru` (all MIT).

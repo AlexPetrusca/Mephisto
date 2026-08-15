@@ -10,7 +10,8 @@ file before redistributing.
 - The **original Mephisto source code** (by Alexandru Petrusca) and this fork's own source-code
   changes are made available under the **MIT License** — see [`LICENSE`](LICENSE).
 - However, the project **bundles and distributes** components licensed under **GPL-3.0**
-  (Stockfish, Fairy-Stockfish, and their NNUE nets; the Maia-1 nets and the Maia 2200 net) and
+  (Stockfish, Fairy-Stockfish, and their NNUE nets; the Maia-1 nets and the Maia 2200 net; and the
+  Polyglot book-format key table in `lib/polyglot-random.js`, transcribed from python-chess) and
   under **AGPL-3.0** (the Maia-3 model, and this project's Maia-3 encoder which is derived from
   the Maia-3 source).
 - Because AGPL-3.0 is the strongest copyleft here and it is one-way compatible with GPL-3.0, the

@@ -166,9 +166,33 @@ let boxMisses = 0;
 
 export function resetBoardBox() { boxCache = null; }   // the caller can force a fresh detection
 
+// The frame that arrives is usually the frame that arrived last time: while the opponent thinks,
+// the follow loop captures a screen that has not changed. The crop hash below already skips the
+// MODEL for those, but the image still had to be decoded first (~23ms of a ~26ms cached read, which
+// makes decoding the dominant cost once the model is skipped). A JPEG encoder given identical
+// pixels and identical settings emits identical bytes, so identical bytes mean an identical screen
+// -- and the whole read can be answered without decoding anything at all.
+//
+// Sampled rather than compared whole: a 300KB base64 string costs real time to hash byte by byte,
+// and a screen change that leaves every 64th character identical is not something a rendered board
+// does. The crop hash still runs underneath, so a false match here would have to survive that too.
+let lastUriHash = null, lastResult = null, uriHits = 0;
+
+function uriHash(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i += 64) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return ((h >>> 0) + ':' + s.length);
+}
+
 export async function recognize({dataUri, crop}) {
     await ready();
     const t0 = performance.now();
+    if (!crop && lastResult && uriHash(dataUri) === lastUriHash) {
+        uriHits++;
+        return {...lastResult, timing: {decodeMs: 0, detectMs: 0, readMs: 0, cachedBox: true,
+                                        cachedRead: true, cachedFrame: true, uriHits,
+                                        totalMs: Math.round(performance.now() - t0)}};
+    }
     const blob = await (await fetch(dataUri)).blob();
     const bitmap = await createImageBitmap(blob);
     const tDecode = performance.now();
@@ -199,7 +223,7 @@ export async function recognize({dataUri, crop}) {
         }
         tRead = performance.now();
     }
-    return {
+    const answer = {
         placement: read.placement, low: read.low, box,
         imageW: bitmap.width, imageH: bitmap.height,
         // what each stage cost, so "screen reading is slow" can be answered with numbers rather
@@ -211,7 +235,11 @@ export async function recognize({dataUri, crop}) {
             cachedBox: cached,
             cachedRead: !!read.cached,
             readHits,
+            uriHits,
             boxMisses,
         },
     };
+    // remembered for the next frame: only a full read is worth repeating from cache
+    if (!crop) { lastUriHash = uriHash(dataUri); lastResult = {...answer}; delete lastResult.timing; }
+    return answer;
 }

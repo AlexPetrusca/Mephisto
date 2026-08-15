@@ -77,6 +77,15 @@ For each entry: **Component — License — Copyright/authors — Source (corres
   [`lib/ort/LICENSE`](lib/ort/LICENSE), and ONNX Runtime's own notices for the components it bundles
   are included at [`lib/ort/ThirdPartyNotices.txt`](lib/ort/ThirdPartyNotices.txt).
 
+- **Polyglot opening-book key table** (`lib/polyglot-random.js`) — **GPL-3.0** — the 781 fixed
+  Zobrist constants the Polyglot `.bin` book format keys positions with. Originally from
+  **Polyglot** (Fabien Letouzey and contributors); this copy transcribed from **python-chess**'s
+  `POLYGLOT_RANDOM_ARRAY` (Copyright (c) Niklas Fiekas, GPL-3.0-or-later) —
+  <https://github.com/niklasf/python-chess>. The values are the format's own published constants:
+  a book cannot be read without exactly these numbers, which is why they are vendored as data
+  rather than reimplemented. The reader built on them (`src/options/util/polyglot.js`) is this
+  project's own code.
+
 - **chess.js** (`lib/chess.js`) — **BSD-2-Clause** — Copyright (c) 2023 Jeff Hlywa
   (jhlywa@gmail.com) — <https://github.com/jhlywa/chess.js>. (License header retained in the file.)
 
