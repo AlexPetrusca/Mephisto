@@ -144,6 +144,13 @@ export class SettingsPage {
         try { all = await chrome.storage.local.get(null); } catch (e) { all = {}; }
         delete all.__cfg_migrated; // internal marker: exporting it would suppress the one-time
                                    // localStorage migration on a fresh install that imports this
+        // EVERY SETTING IN THIS STORE IS A JSON STRING. The service worker also keeps bookkeeping
+        // beside them that is not: startup timings as an array, the last update check as an object,
+        // a couple of boolean flags. Exporting those produced a file that our own import then
+        // refused as "not a Mephisto settings file" -- so the round trip was broken on every
+        // install whose worker had ever run, which is all of them. They are not settings either:
+        // none of them should follow anyone to another machine.
+        for (const [k, v] of Object.entries(all)) if (typeof v !== 'string') delete all[k];
         // A CREDENTIAL never goes in the file. This export exists to be moved between machines and
         // pasted into issues, and a lichess token in one is a token in someone else's hands. The
         // field is one paste to refill on the other machine.
