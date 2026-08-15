@@ -9,17 +9,17 @@
                 <h3 data-i18n="an.setup" class="set-h">Setup</h3>
 
                 <div class="an-grid">
-                    <label class="an-f"><span data-i18n-tip="an.tip.engine" class="tooltipped" data-position="top" data-tooltip="Which engine analyses the position. It runs until you move on -- there is no depth to set."><span data-i18n="an.engine">Engine</span></span>
+                    <label class="an-f an-f-engine"><span data-i18n-tip="an.tip.engine" class="tooltipped" data-position="top" data-tooltip="Which engine analyses the position. It runs until you move on -- there is no depth to set."><span data-i18n="an.engine">Engine</span></span>
                         <select id="an_engine_select" class="browser-default"></select></label>
-                    <label class="an-f"><span data-i18n-tip="an.tip.human" class="tooltipped" data-position="top" data-tooltip="The human model shown beside the engine: what a player of this rating would most likely play here."><span data-i18n="an.human">Human model</span></span>
+                    <label class="an-f an-f-human"><span data-i18n-tip="an.tip.human" class="tooltipped" data-position="top" data-tooltip="The human model shown beside the engine: what a player of this rating would most likely play here."><span data-i18n="an.human">Human model</span></span>
                         <select id="an_human_select" class="browser-default"></select></label>
-                    <label class="an-f" id="an_band_row"><span data-i18n-tip="an.tip.band" class="tooltipped" data-position="top" data-tooltip="Which rating the human model plays at. Maia 1 has a net per band; Maia 3 is one net with a dial."><span data-i18n="an.band">Rating</span></span>
+                    <label class="an-f an-f-band" id="an_band_row"><span data-i18n-tip="an.tip.band" class="tooltipped" data-position="top" data-tooltip="Which rating the human model plays at. Maia 1 has a net per band; Maia 3 is one net with a dial."><span data-i18n="an.band">Rating</span></span>
                         <select id="an_band_select" class="browser-default"></select></label>
-                    <label class="an-f"><span data-i18n-tip="an.tip.lines" class="tooltipped" data-position="top" data-tooltip="How many engine lines to list and draw on the board."><span data-i18n="an.lines">Lines</span></span>
+                    <label class="an-f an-f-num"><span data-i18n-tip="an.tip.lines" class="tooltipped" data-position="top" data-tooltip="How many engine lines to list and draw on the board."><span data-i18n="an.lines">Lines</span></span>
                         <input id="an_lines_input" type="number" min="1" max="5" step="1"></label>
-                    <label class="an-f"><span data-i18n-tip="an.tip.threads" class="tooltipped" data-position="top" data-tooltip="CPU threads the analysis engine may use."><span data-i18n="an.threads">Threads</span></span>
+                    <label class="an-f an-f-num"><span data-i18n-tip="an.tip.threads" class="tooltipped" data-position="top" data-tooltip="CPU threads the analysis engine may use."><span data-i18n="an.threads">Threads</span></span>
                         <input id="an_threads_input" type="number" min="1" max="16" step="1"></label>
-                    <label class="an-f"><span data-i18n-tip="an.tip.hash" class="tooltipped" data-position="top" data-tooltip="Hash memory for the analysis engine. More helps a long search on one position."><span data-i18n="an.hash">Hash (MB)</span></span>
+                    <label class="an-f an-f-num"><span data-i18n-tip="an.tip.hash" class="tooltipped" data-position="top" data-tooltip="Hash memory for the analysis engine. More helps a long search on one position."><span data-i18n="an.hash">Hash (MB)</span></span>
                         <input id="an_hash_input" type="number" min="16" max="1024" step="16"></label>
                     <label class="an-f an-f-check"><span data-i18n-tip="an.tip.wdl" class="tooltipped" data-position="top" data-tooltip="Show the engine's win, draw and loss percentages beside the board."><span data-i18n="an.wdl">Win / draw / loss</span></span>
                         <input id="an_wdl_check" type="checkbox" class="set-cb">

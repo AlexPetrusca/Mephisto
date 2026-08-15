@@ -4,18 +4,51 @@
 .an-status { margin: 10px 0 0; font-size: 13px; color: var(--mp-dim); min-height: 18px; }
 .an-status.an-err { color: #c34141; }
 
-/* the setup strip: a wrapping grid of labelled controls, not a column of settings rows */
-.an-grid { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: end; }
-.an-grid-load { margin-top: 14px; align-items: start; }
-.an-f { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--mp-dim); }
-.an-f > span { white-space: nowrap; }
-.an-f input[type=number] { width: 84px; }
-.an-f select { width: 190px; }
+/* THE SETUP STRIP IS ONE LINE (user call 2026-08-15). It used to wrap wherever it ran out of room,
+   which put three controls on a second row at a different height from the first -- and a number
+   input, whose frame is a bottom border, next to a toggle, whose frame is a box, reads as broken
+   rather than as wrapped. Every control now shrinks instead of wrapping, and each one is only as
+   wide as what it has to show; the row folds only on a genuinely narrow window. */
+.an-grid { display: flex; flex-wrap: nowrap; gap: 14px 14px; align-items: start; }
+.an-grid-load, .an-grid-budget { flex-wrap: wrap; margin-top: 14px; align-items: start; }
+.an-f { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--mp-dim); min-width: 0; }
+.an-f > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* EVERY CONTROL IN THE STRIP IS THE SAME 30px FRAME. The number fields and the selects were plain
+   Materialize controls -- an underline and a tall grey box -- sitting next to the extension's own
+   framed toggles, so the row read as broken even when it did fit: three different heights meant
+   three different label baselines. Same frame as .set-ctl uses everywhere else, and !important for
+   the same reason it does: Materialize's own rules are more specific. */
+.an-f input[type=number],
+.an-f select {
+    box-sizing: border-box !important;
+    height: 30px !important;
+    width: 100% !important;
+    min-width: 0;
+    margin: 0 !important;
+    padding: 0 8px !important;
+    border: 1px solid var(--mp-line) !important;
+    border-radius: 4px !important;
+    background: var(--mp-bg) !important;
+    color: var(--mp-text) !important;
+    font-size: 13px !important;
+}
+.an-f input[type=number] { min-width: 46px; }
+.an-f input[type=number]:focus,
+.an-f select:focus { border-color: var(--mp-on) !important; outline: none; box-shadow: none !important; }
+.an-f-engine { flex: 2 1 150px; }
+.an-f-human { flex: 1.4 1 110px; }
+.an-f-band { flex: 1 1 80px; }
+.an-f-num { flex: 0 1 62px; }
+.an-f-check { flex: 0 0 auto; flex-direction: column; }
+/* no nudge: the toggle is the same 30px as its neighbours, and 2px of margin was enough to put its
+   bottom edge off the line every other control sits on */
+.an-f-check .set-tgl { margin-top: 0; }
+@media (max-width: 900px) { .an-grid { flex-wrap: wrap; } }
+
 .an-f-wide { flex: 1 1 420px; }
 .an-f-wide .set-ta { min-height: 52px; }
 .an-f-btns { flex-direction: row; align-items: center; gap: 8px; padding-bottom: 1px; }
-.an-f-check { flex-direction: column; }
-.an-f-check .set-tgl { margin-top: 2px; }
 
 .an-main {
     display: grid;

@@ -564,11 +564,16 @@ function renderEval(pos, ev) {
     const wdlEl = $('an_wdl_line');
     if (wdlEl) {
         const wdl = top?.wdl;
-        if (!cfg('an_wdl') || !wdl) wdlEl.textContent = '';
+        if (!cfg('an_wdl') || !wdl) wdlEl.innerHTML = '';
         else {
-            // permille and side-to-move relative -> shown white-first, which is how it is read
+            // permille and side-to-move relative -> shown white-first, which is how it is read. Three
+            // bare percentages in a row read as one number soup, so each one is named and coloured
+            // the way the board is: white wins, draw, black wins.
             const [w, d, l] = pos.turn === 'w' ? wdl : [wdl[2], wdl[1], wdl[0]];
-            wdlEl.textContent = `W ${(w / 10).toFixed(1)}%  D ${(d / 10).toFixed(1)}%  L ${(l / 10).toFixed(1)}%`;
+            wdlEl.innerHTML =
+                `<span class="an-wdl-seg an-wdl-w">White ${(w / 10).toFixed(1)}%</span>`
+              + `<span class="an-wdl-seg an-wdl-d">Draw ${(d / 10).toFixed(1)}%</span>`
+              + `<span class="an-wdl-seg an-wdl-b">Black ${(l / 10).toFixed(1)}%</span>`;
         }
     }
 }
