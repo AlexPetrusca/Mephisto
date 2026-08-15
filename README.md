@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.257-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.258-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -883,8 +883,13 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>48 features, newest first</summary>
+<summary>49 features, newest first</summary>
 
+- [x] **A search-time slider for Game Review** (v3.1.258) - how long the engine may think about each
+  position is now one slider: 1 to 60 seconds, or the notch past 60, which is unbounded. Unbounded means
+  `go infinite`, stopped when the line settles - three consecutive depths agreeing on the same best move
+  within 10 centipawns - with a two-minute-per-position ceiling so a whole game still finishes. Depth mode
+  keeps the same slider, 1 to 40 plies.
 - [x] **Screen reading, three layers of not-asking** (v3.1.257) - a read used to cost ~670ms every time. Now the
   captured frame is hashed **before it is decoded**, so an unchanged screen answers without decoding, detecting or
   running the model: **repeat reads are 2-3ms**. A board that genuinely changed still pays the full read, and each

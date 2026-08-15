@@ -135,9 +135,12 @@
                         <span data-i18n="rv.budget" data-i18n-tip="rv.tip.budget" class="tooltipped" data-position="right"
                               data-tooltip="How hard the engine works on EACH position. Depth is reproducible -- the
                                             same depth is the same answer on any machine -- and is the better choice
-                                            when you want to compare two reviews. Time is the only budget a native
-                                            host accepts. A game is roughly 2 positions per move, so 80 positions at
-                                            300ms is about 25 seconds.">
+                                            when you want to compare two reviews. Time runs from 1 to 60 seconds per
+                                            position, and one notch past 60 removes the clock entirely: the engine
+                                            then searches until the line settles (the same best move at the same
+                                            score for three depths), with a two-minute ceiling so one stubborn
+                                            position cannot hold up the whole game. A game is roughly 2 positions per
+                                            move, so 80 positions at 1s is about a minute and a half.">
                             Budget <i class="material-icons info-tooltip">info</i>
                         </span>
                     </div>
@@ -146,12 +149,11 @@
                             <option value="depth" data-i18n="rv.depth">Depth</option>
                             <option value="time" data-i18n="rv.time_per_move">Time per move</option>
                         </select>
-                        <span class="set-step">
-                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
-                            <input id="rv_limit_value" type="number" min="1" max="60000" step="1">
-                            <button type="button" class="set-step-btn" data-step="1">+</button>
-                        </span>
+                        <input id="rv_limit_slider" class="rv-slider" type="range" min="1" max="61" step="1">
                         <span id="rv_limit_unit" class="rv-unit"></span>
+                        <!-- the number the slider is really setting: kept because a review is a
+                             long job and "16 plies" or "8s" is worth reading back exactly -->
+                        <input id="rv_limit_value" type="hidden">
                     </div>
                 </div>
 

@@ -7,6 +7,15 @@
 // the second init silently disposes the first) was learned once and must not be re-learned.
 const Core = self.MephistoReviewCore;
 
+// The budget slider's last notch. A review still has to FINISH, so "infinite" here means the search
+// is not given a clock: it runs until the line SETTLES -- the same best move at the same score for
+// three consecutive depths -- and a hard ceiling stops a position that never settles from holding
+// up a forty-move game. Both numbers are visible constants rather than hidden behaviour.
+const LIMIT_INFINITE = 1e9;
+const SETTLE_DEPTHS = 3;          // consecutive depths that must agree before a search is stopped
+const SETTLE_SCORE_CP = 10;       // ...and how far the score may still wander while agreeing
+const INFINITE_CEILING_MS = 120000; // never spend more than two minutes on one position
+
 // The engines a review can judge a game with. WASM entries need nothing installed; native entries
 // are probed for a live host before they are offered, since picking one that is not installed
 // produces a page that sits at 0% forever.
@@ -184,15 +193,43 @@ class WasmEngine {
             const prev = slots.get(info.multipv);
             if (!prev || info.depth >= prev.depth) slots.set(info.multipv, info);
         };
+        // UNBOUNDED SEARCH: no clock is given, and the search is stopped when the answer stops
+        // changing. Without this, the slider's last notch would mean "never return", which is not a
+        // thing a review can do.
+        const unbounded = !this.isMaia() && this.opts.limitKind !== 'depth'
+                          && this.opts.limitValue >= LIMIT_INFINITE;
+        let settleMove = null, settleScore = null, settleCount = 0, settled = false, ceiling = null;
+        const watchSettle = (msg) => {
+            if (settled || msg.kind !== 'line') return;
+            const info = Core.parseInfo(msg.line);
+            if (!info || info.bound || info.multipv !== 1 || !info.pv?.[0]) return;
+            const score = info.score != null ? info.score : (info.mate != null ? info.mate * 1000 : null);
+            if (info.pv[0] === settleMove && score != null && settleScore != null
+                && Math.abs(score - settleScore) <= SETTLE_SCORE_CP) {
+                settleCount++;
+            } else {
+                settleCount = 0;
+            }
+            settleMove = info.pv[0];
+            settleScore = score;
+            if (settleCount >= SETTLE_DEPTHS) { settled = true; this.send('stop'); }
+        };
         this.listeners.push(collect);
+        if (unbounded) {
+            this.listeners.push(watchSettle);
+            ceiling = setTimeout(() => { if (!settled) { settled = true; this.send('stop'); } }, INFINITE_CEILING_MS);
+        }
         const done = this.once(m => m.kind === 'line' && /^bestmove\b/.test(m.line), this.searchTimeout());
         this.send(`position fen ${fen}`);
         this.send(this.goCommand());
         try {
             await done;
         } finally {
-            const i = this.listeners.indexOf(collect);
-            if (i >= 0) this.listeners.splice(i, 1);
+            if (ceiling) clearTimeout(ceiling);
+            for (const fn of [collect, watchSettle]) {
+                const i = this.listeners.indexOf(fn);
+                if (i >= 0) this.listeners.splice(i, 1);
+            }
         }
         return this.toResult(slots, turn, depth, nodes);
     }
@@ -248,14 +285,18 @@ class WasmEngine {
     goCommand() {
         if (this.isMaia()) return 'go';                       // one forward pass; no budget to give
         const {limitKind, limitValue} = this.opts;
-        return limitKind === 'depth' ? `go depth ${limitValue}` : `go movetime ${limitValue}`;
+        if (limitKind === 'depth') return `go depth ${limitValue}`;
+        return limitValue >= LIMIT_INFINITE ? 'go infinite' : `go movetime ${limitValue}`;
     }
 
     // Generous, because it is a backstop and not a budget: a 4-thread WASM search at depth 20 in a
     // sharp position can take a while, and cutting it short would silently corrupt the review.
     searchTimeout() {
         const {limitKind, limitValue} = this.opts;
-        return limitKind === 'depth' ? 180000 : Math.max(30000, limitValue * 20);
+        if (limitKind === 'depth') return 180000;
+        // the unbounded search stops itself; the backstop only has to outlive its own ceiling
+        if (limitValue >= LIMIT_INFINITE) return INFINITE_CEILING_MS + 30000;
+        return Math.max(30000, limitValue * 20);
     }
 
     toResult(slots, turn, depth, nodes) {
@@ -389,5 +430,5 @@ function nativeHostAvailable(portName) {
 
 self.MephistoEngines = {
     ENGINES, MAIA_BANDS, WasmEngine, NativeEngine, makeEngine, nativeHostAvailable,
-    NATIVE_DEPTH_CAP_MS,
+    NATIVE_DEPTH_CAP_MS, LIMIT_INFINITE, SETTLE_DEPTHS, INFINITE_CEILING_MS,
 };

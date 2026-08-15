@@ -19,7 +19,8 @@ const Core = self.MephistoReviewCore;
 // The engines, the human-model bands and both drivers now live in src/options/util/engines.js,
 // because the Analysis page needs the same ones. Pulled onto locals here so the rest of this file
 // reads exactly as it did.
-const {ENGINES, MAIA_BANDS, WasmEngine, NativeEngine, makeEngine, nativeHostAvailable} = self.MephistoEngines;
+const {ENGINES, MAIA_BANDS, WasmEngine, NativeEngine, makeEngine, nativeHostAvailable,
+       LIMIT_INFINITE} = self.MephistoEngines;
 
 // ---- config -----------------------------------------------------------------------------------
 // Its own keys rather than the panel's: a review runs at a depth and a thread count that would be
@@ -1190,22 +1191,41 @@ function gameText(game) {
     return `${tags}\n\n${body.join(' ')}`;
 }
 
-function syncLimitUi() {
+// The budget is a SLIDER (user call 2026-08-15). In time mode it runs 1..60 seconds and then one
+// notch further, which is UNBOUNDED: the engine is given `go infinite` and searches until the line
+// settles rather than until a clock runs out. In depth mode the same slider is 1..40 plies.
+const INFINITE_SECONDS = 61;   // the notch past 60 -- see LIMIT_INFINITE in engines.js
+
+function sliderToValue(kind, slider) {
+    if (kind === 'depth') return Math.max(1, Math.min(40, slider));
+    return slider >= INFINITE_SECONDS ? LIMIT_INFINITE : slider * 1000;   // ms
+}
+
+function valueToSlider(kind, value) {
+    if (kind === 'depth') return Math.max(1, Math.min(40, value || DEPTH_DEFAULT));
+    if (value >= LIMIT_INFINITE) return INFINITE_SECONDS;
+    return Math.max(1, Math.min(60, Math.round((value || TIME_DEFAULT_MS) / 1000)));
+}
+
+// `fromSlider` says which side is the truth this time. Dragging the slider must NOT be answered by
+// writing the stored value back over it -- that was the first version, and the readout sat at "1s"
+// no matter where the handle went, because every input event reset the handle from storage.
+function syncLimitUi(fromSlider) {
     const kind = $('rv_limit_kind').value;
+    const slider = $('rv_limit_slider');
     const v = $('rv_limit_value');
-    if (kind === 'depth') {
-        v.min = 1; v.max = 40; v.step = 1;
-        $('rv_limit_unit').textContent = 'plies';
-    } else {
-        v.min = 50; v.max = 60000; v.step = 50;
-        $('rv_limit_unit').textContent = 'ms per position';
-    }
-    // A depth of 16 is sensible and 16ms is not, so switching the KIND has to move the value into
-    // that kind's range rather than leaving a number that means something else entirely.
-    const n = +v.value;
-    if (kind === 'depth' && n > 40) v.value = DEPTH_DEFAULT;
-    if (kind === 'time' && n < 50) v.value = TIME_DEFAULT_MS;
-    setCfg('rv_limit_value', +v.value);
+    slider.min = 1;
+    slider.max = kind === 'depth' ? 40 : INFINITE_SECONDS;
+    if (!fromSlider) slider.value = valueToSlider(kind, +v.value);
+    else slider.value = Math.min(+slider.value, +slider.max);
+    const value = sliderToValue(kind, +slider.value);
+    v.value = value;
+    $('rv_limit_unit').textContent = kind === 'depth'
+        ? `${slider.value} plies per position`
+        : (value >= LIMIT_INFINITE
+            ? 'until the line settles'
+            : `${slider.value}s per position`);
+    setCfg('rv_limit_value', value);
     updateEngineOptions();
 }
 
@@ -1297,6 +1317,7 @@ class ReviewPage {
             finally { btn.disabled = false; }
         });
 
+        $('rv_limit_slider')?.addEventListener('input', () => syncLimitUi(true));
         $('rv_limit_kind').value = cfg('rv_limit_kind');
         $('rv_limit_kind').addEventListener('change', () => {
             setCfg('rv_limit_kind', $('rv_limit_kind').value);

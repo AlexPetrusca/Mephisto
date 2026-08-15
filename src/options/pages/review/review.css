@@ -341,3 +341,7 @@ html.dark .rv-ev-strong  { color: #d15050; }
 }
 .rv-table td.n { text-align: right; font-variant-numeric: tabular-nums; }
 .rv-table td b { color: var(--rv-c, var(--mp-text)); }
+
+/* the budget slider: 1..60 seconds, and one notch past 60 for an unbounded search */
+.rv-slider { width: 200px; accent-color: var(--mp-on); vertical-align: middle; }
+.rv-unit { min-width: 130px; display: inline-block; font-size: 12px; color: var(--mp-dim); }
