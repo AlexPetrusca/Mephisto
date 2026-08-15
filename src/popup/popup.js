@@ -1097,6 +1097,13 @@ function init_quick_settings() {
             }
             if (key === 'engine') stop_current_engine(); // free the old process before switching
             save(key, parse(elem.value));
+            if (key === 'engine') {
+                // stockfish.online only understands a depth, so picking it moves the budget to
+                // Depth and picking anything else puts back what was there. One rule, in the config
+                // layer, so this and the options page cannot disagree about it.
+                config.search_mode = MephistoConfig.applyEngineBudgetRule(parse(elem.value));
+                apply_search_mode_ui();
+            }
             panel_reload();
         });
     }
@@ -7117,8 +7124,11 @@ async function request_remote_analysis(fen, time, moves = null, depth = null) {
         // Depth, not time: both providers are depth-limited, and chess-api caps thinking time at a
         // tenth of a second anyway. When the panel is searching by time there is no depth to pass,
         // so the provider's own default stands (12) -- the worker clamps to each provider's ceiling.
+        // Searching by TIME: hand the provider the milliseconds instead of a depth, where it has
+        // somewhere to put them. chess-api.com does (maxThinkingTime); stockfish.online does not,
+        // which is why choosing it moves the budget to Depth rather than quietly ignoring the time.
         const res = await chrome.runtime.sendMessage({cloudAnalyse: {
-            engine: config.engine, fen, depth: depth || null,
+            engine: config.engine, fen, depth: depth || null, thinkMs: depth ? null : (time || null),
         }});
         if (!res) throw new Error('the cloud engine did not answer (is the extension still loaded?)');
         if (res.error) throw new Error(res.error);

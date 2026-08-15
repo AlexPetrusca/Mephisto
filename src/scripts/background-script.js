@@ -181,10 +181,15 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       label: 'chess-api.com',
       maxDepth: 18,        // their documented ceiling; asking for more is silently capped anyway
       defaultDepth: 12,
-      request: (fen, depth) => ['https://chess-api.com/v1', {
+      // The ONE thing this provider takes beyond fen+depth, and it is the real limiter: measured
+      // 50ms -> depth 12, 500ms -> 14, 1000ms -> 17, 3000ms -> 17 (it plateaus). Depth stays the
+      // ceiling. Capped at 10s so a request cannot outlive CLOUD_TIMEOUT_MS.
+      takesThinkingTime: true,
+      request: (fen, depth, thinkMs) => ['https://chess-api.com/v1', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({fen, depth}),
+        body: JSON.stringify({fen, depth,
+          ...(thinkMs ? {maxThinkingTime: Math.max(1, Math.min(10000, Math.round(thinkMs)))} : {})}),
       }],
       parse: (j, turn) => {
         if (!j || j.type === 'error' || j.error) return {error: j?.text || j?.error || 'chess-api.com rejected that position'};
@@ -198,8 +203,11 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     },
     'cloud-stockfish-online': {
       label: 'stockfish.online',
-      maxDepth: 15,        // their documented ceiling: above it the request is refused, not capped
+      maxDepth: 15,        // measured: depth 16 is REFUSED ("Depth must be less than 16"), not capped
       defaultDepth: 12,
+      // fen and depth are the whole API here -- there is no time control to give it, which is why
+      // selecting this engine switches the search budget to Depth (see config-store.js).
+      takesThinkingTime: false,
       request: (fen, depth) => [
         `https://stockfish.online/api/s/v2.php?fen=${encodeURIComponent(fen)}&depth=${depth}`, {method: 'GET'}],
       parse: (j, turn, depth) => {
@@ -232,7 +240,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
 
   if (msg.cloudAnalyse) {
     (async () => {
-      const {engine, fen, depth} = msg.cloudAnalyse;
+      const {engine, fen, depth, thinkMs} = msg.cloudAnalyse;
       const p = CLOUD_PROVIDERS[engine];
       if (!p) return sendResponse({error: `unknown cloud engine ${engine}`});
       const turn = String(fen || '').split(/\s+/)[1] === 'b' ? 'b' : 'w';
@@ -241,7 +249,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), CLOUD_TIMEOUT_MS);
       try {
-        const [url, init] = p.request(fen, want);
+        const [url, init] = p.request(fen, want, p.takesThinkingTime ? thinkMs : null);
         const res = await fetch(url, {...init, signal: ctl.signal, cache: 'no-store'});
         if (!res.ok) return sendResponse({error: `${p.label} answered HTTP ${res.status}`});
         const text = await res.text();
