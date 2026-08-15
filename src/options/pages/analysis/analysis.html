@@ -33,10 +33,18 @@
                         </label></label>
                 </div>
 
+                <div class="an-grid an-grid-budget">
+                    <label class="an-f an-f-budget"><span data-i18n-tip="an.tip.time" class="tooltipped" data-position="top" data-tooltip="How long the engine thinks about each position. The last notch is no limit at all: it keeps thinking until you move on."><span data-i18n="an.time">Search time</span></span>
+                        <div class="an-budget-row">
+                            <input id="an_time_range" class="an-slider" type="range" min="1" max="61" step="1">
+                            <span id="an_time_unit" class="an-unit"></span>
+                        </div></label>
+                </div>
+
                 <div class="an-grid an-grid-load">
                     <label class="an-f an-f-wide"><span data-i18n="an.pgn">PGN or FEN</span>
                         <textarea id="an_pgn" class="set-ta" rows="2" spellcheck="false"
-                                  placeholder="1. e4 e5 2. Nf3 ...   or   rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"></textarea></label>
+                                  placeholder="Paste a game (1. e4 e5 2. Nf3) or a position (rnbq… w KQkq - 0 1)"></textarea></label>
                     <div class="an-f an-f-btns">
                         <button id="an_load" class="set-btn" type="button" data-i18n="an.load_btn">Load</button>
                         <button id="an_paste" class="set-btn" type="button" data-i18n="an.paste_btn">Paste</button>

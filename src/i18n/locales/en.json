@@ -398,6 +398,8 @@
   "an.lines": "Lines",
   "an.threads": "Threads",
   "an.flip": "Flip",
+  "an.time": "Search time",
+  "an.tip.time": "How long the engine thinks about each position. The last notch is no limit at all: it keeps thinking until you move on.",
   "an.prob": "Probability",
   "an.eval": "Eval",
   "an.by_rating": "Moves by rating",

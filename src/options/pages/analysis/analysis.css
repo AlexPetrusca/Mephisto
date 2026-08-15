@@ -134,3 +134,25 @@
 }
 .an-mcell:hover { background: var(--mp-hover); }
 .an-mcell.an-sel { background: var(--mp-sel); font-weight: 600; }
+
+/* the search budget: the slider is the control, the sentence under it is the readout */
+.an-f-budget { flex: 1 1 100%; }
+.an-budget-row { display: flex; align-items: center; gap: 12px; }
+.an-slider {
+    flex: 1 1 auto;
+    max-width: 420px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 3px;
+    background: linear-gradient(to right, var(--mp-accent, #3fa45b) var(--fill, 100%), var(--mp-hair) var(--fill, 100%));
+    outline: none;
+}
+.an-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--mp-accent, #3fa45b);
+    cursor: pointer;
+}
+.an-unit { font-size: 11.5px; color: var(--mp-dim); white-space: nowrap; }

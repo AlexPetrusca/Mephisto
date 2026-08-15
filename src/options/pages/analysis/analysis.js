@@ -17,8 +17,8 @@ const {ENGINES, MAIA_BANDS, makeEngine, nativeHostAvailable} = self.MephistoEngi
 const $ = (id) => document.getElementById(id);
 
 // Its own settings: an analysis runs on different numbers from live play, and sharing one set would
-// silently make the other wrong. There is no DEPTH here on purpose -- the engine runs until the
-// position changes, the way an analysis board does.
+// silently make the other wrong. There is no DEPTH here on purpose -- the budget is a time, and its
+// last notch is no budget at all.
 const CFG = {
     an_engine: 'stockfish-18-nnue',
     an_human: 'maia',
@@ -28,7 +28,12 @@ const CFG = {
     an_hash: 128,
     an_wdl: true,
     an_book: true,
+    an_time: 61,          // AN_INFINITE: the page's old behaviour is still the default
 };
+
+// The search-time slider: 1..60 seconds, and one notch past 60 that means `go infinite` -- the same
+// shape as Game Review's budget, because it is the same question.
+const AN_INFINITE = 61;
 
 function cfg(key) {
     const raw = MephistoConfig.get(key);
@@ -54,6 +59,7 @@ let humanCache = new Map();
 let bandCache = new Map();
 let bookMoves = null;    // {name, entries: Map(positionKey -> [{uci, weight}])}
 let boardResizeObs = null;
+let searchTimer = null;  // the budget's stopwatch; null whenever the budget is the infinite notch
 
 // ---- page ---------------------------------------------------------------------------------------
 
@@ -68,6 +74,7 @@ class AnalysisPage extends SettingsPage {
         this.registerFormElement('an_hash', 'Hash:', 'input', CFG.an_hash);
         this.registerFormElement('an_wdl', 'Win / draw / loss:', 'checkbox', CFG.an_wdl);
         this.registerFormElement('an_book', 'Opening book:', 'checkbox', CFG.an_book);
+        this.registerFormElement('an_time', 'Search time:', 'range', CFG.an_time);
 
         // THE TWO ENGINES ARE INDEPENDENT (user report 2026-08-15): switching the human model used
         // to drop the whole rig, which threw away the analysis you were looking at and started it
@@ -79,6 +86,10 @@ class AnalysisPage extends SettingsPage {
             $(id)?.addEventListener('change', () => reloadEngine());
         $('an_wdl_check')?.addEventListener('change', () => reloadEngine());
         $('an_book_check')?.addEventListener('change', () => renderBook());
+        // The budget needs no engine reload -- it is spent by THIS page, not sent as a UCI option.
+        // Dragging only re-reads the number; letting go restarts the search on the new budget.
+        $('an_time_range')?.addEventListener('input', () => syncTimeUi());
+        $('an_time_range')?.addEventListener('change', () => { syncTimeUi(); go(cursor); });
 
         $('an_load')?.addEventListener('click', () => loadFromInput());
         $('an_start')?.addEventListener('click', () => { $('an_pgn').value = ''; loadStart(); });
@@ -101,6 +112,7 @@ class AnalysisPage extends SettingsPage {
         };
         window.addEventListener('hashchange', onRoute);
         syncBandRow();
+        syncTimeUi();
         loadStart();
         watchBoardSize();
         requestAnimationFrame(() => { buildBoard(); render(); });
@@ -139,6 +151,16 @@ function bandChoices() {
     return cfg('an_human') === 'maia3'
         ? Array.from({length: 21}, (_, i) => String(600 + i * 100))
         : MAIA_BANDS.slice();
+}
+
+// The readout under the slider says what the notch MEANS, not what number it is. The last one is
+// the honest sentence for it: the search has no budget and ends when the position does.
+function syncTimeUi() {
+    const slider = $('an_time_range'), out = $('an_time_unit');
+    if (!slider) return;
+    const secs = Math.max(1, Math.min(AN_INFINITE, +slider.value || AN_INFINITE));
+    if (out) out.textContent = secs >= AN_INFINITE ? 'no limit — until you move on' : `${secs}s per position`;
+    slider.style.setProperty('--fill', `${((secs - 1) / (AN_INFINITE - 1)) * 100}%`);
 }
 
 function syncBandRow() {
@@ -238,7 +260,19 @@ function engineOpts() {
     };
 }
 
-async function ensureEngine() {
+// ONE ENGINE, EVEN WHEN TWO CALLERS ASK AT ONCE (user report 2026-08-15: "it breaks and cannot
+// search after a single move, sometimes"). The check-then-await here was re-entrant: loading the
+// first engine takes seconds, and a move played inside that window ran the whole function a second
+// time, so TWO engines were built. Whichever finished last became `engine`; the other one was left
+// searching with nothing pointing at it -- unstoppable, undisposable, and still feeding the old
+// position's lines into the live callback, which is why the page showed a depth but never a move.
+// Serialising the builder is the whole fix: the second caller waits and gets the first one's engine.
+let engineChain = Promise.resolve();
+function ensureEngine() {
+    engineChain = engineChain.then(buildEngine, buildEngine);
+    return engineChain;
+}
+async function buildEngine() {
     if (engine) return engine;
     const e = makeEngine(cfg('an_engine'), engineOpts(), 'analysis');
     await e.start();
@@ -247,7 +281,13 @@ async function ensureEngine() {
     return engine;
 }
 
-async function ensureHuman() {
+// Same shape, same reason: humanFor() is called without being awaited, so two of them overlap freely.
+let humanChain = Promise.resolve();
+function ensureHuman() {
+    humanChain = humanChain.then(buildHuman, buildHuman);
+    return humanChain;
+}
+async function buildHuman() {
     const kind = cfg('an_human');
     if (!kind) return null;
     const band = String(cfg('an_band') || CFG.an_band);
@@ -261,11 +301,17 @@ async function ensureHuman() {
     return human;
 }
 
-// Reload ONLY the analysis engine; the human model and its answers survive.
+// Reload ONLY the analysis engine; the human model and its answers survive. The stop and the dispose
+// go through the SAME queue as the searches: dropping an engine out of band could land between an
+// analysis stopping the old search and starting the new one, which is the same wedge from the other
+// side. (This runs more often than it looks: populating the form dispatches a change event per
+// control, and four of those controls reload the engine.)
 function reloadEngine() {
-    stopSearch();
-    if (engine) { try { engine.dispose?.(); } catch (e) { /* */ } engine = null; }
     evalCache.clear();
+    analyseChain = analyseChain.then(async () => {
+        await stopSearch();
+        if (engine) { try { engine.dispose?.(); } catch (e) { /* */ } engine = null; }
+    }, () => {});
     go(cursor);
 }
 
@@ -298,6 +344,7 @@ function teardown() {
 // Returns a promise: the next search must not start until this one has really finished, or its
 // trailing info lines are read as the new position's (see startInfinite).
 function stopSearch() {
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
     if (!liveSearch) return Promise.resolve();
     const s = liveSearch;
     liveSearch = null;
@@ -313,7 +360,23 @@ function go(ply) {
     analyseCurrent();
 }
 
-async function analyseCurrent() {
+// ONE ANALYSIS AT A TIME. This is the whole of the "it cannot search after a move, sometimes" bug
+// (user report 2026-08-15), and it is not about engines: it is about SEARCHES on one engine.
+// analyseCurrent awaits before it starts anything, so two calls could both get past `await
+// stopSearch()` -- the second sees liveSearch still null, because the first has not assigned it yet
+// -- and both then call startInfinite on the same engine. The engine is already searching, so it
+// IGNORES the second `position fen` (UCI: you must stop first), keeps thinking about the old
+// position, and streams those lines into the new callback. Every one of them is illegal on the board
+// in front of you, so the column filters them all out and says "thinking..." while the depth counter
+// climbs happily -- 24, 27, 29, never restarting from 1, which is what gave it away.
+// Serialising them means the second call really does stop the first search before starting its own.
+let analyseChain = Promise.resolve();
+function analyseCurrent() {
+    analyseChain = analyseChain.then(analyseNow, analyseNow);
+    return analyseChain;
+}
+
+async function analyseNow() {
     const at = cursor;
     const pos = positions[at];
     if (!pos) return;
@@ -322,10 +385,13 @@ async function analyseCurrent() {
     await stopSearch();                 // the previous search must be finished, not merely told to stop
     let e;
     try { e = await ensureEngine(); } catch (err) { return status(String(err.message || err), 'err'); }
-    if (cursor !== at) return;
-    // THE SEARCH HAS NO BUDGET: it runs until the position changes, like any analysis board.
-    liveSearch = e.startInfinite(pos.fen, pos.turn, (res) => {
-        if (cursor !== at) return;
+    // The POSITION, not just the index: playing a move truncates the line, so the same cursor value
+    // can mean a different board a moment later and an index check would let the old search's lines
+    // through as if they described this one.
+    if (cursor !== at || positions[at]?.fen !== pos.fen) return;
+    const secs = +cfg('an_time');
+    const search = e.startInfinite(pos.fen, pos.turn, (res) => {
+        if (cursor !== at || positions[at]?.fen !== pos.fen) return;
         evalCache.set(pos.fen, res);
         renderEval(pos, res);
         renderEngineLines(pos, res);
@@ -333,6 +399,22 @@ async function analyseCurrent() {
         const m = $('an_engine_meta');
         if (m) m.textContent = `depth ${res.depth}${res.nodes ? ` · ${(res.nodes / 1000).toFixed(0)}k` : ''}`;
     });
+    liveSearch = search;
+    // THE BUDGET IS A CHOICE (user call 2026-08-15). The last notch means the search runs until the
+    // position changes, the way an analysis board always did; every other notch stops it after that
+    // many seconds. `stop` rather than `go movetime` on purpose: it is the one search path, so the
+    // streaming and the drain-before-the-next-position both stay exactly as they are.
+    if (secs < AN_INFINITE) {
+        searchTimer = setTimeout(() => {
+            searchTimer = null;
+            if (liveSearch !== search) return;
+            stopSearch().then(() => {
+                if (cursor !== at || positions[at]?.fen !== pos.fen) return;
+                const m = $('an_engine_meta');
+                if (m && !/done/.test(m.textContent)) m.textContent += ` · done (${secs}s)`;
+            });
+        }, secs * 1000);
+    }
     humanFor(pos).then(() => { if (cursor === at) render(); }).catch(() => {});
     renderBands(pos);
     renderBook();
