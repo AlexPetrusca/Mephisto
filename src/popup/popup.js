@@ -2116,8 +2116,25 @@ function render_alt_lines() {
     panel.innerHTML = rows.join('');
 }
 
+// The engine saying, in its own handshake, that it does not have the variant we asked for. Fairy
+// ignores an unknown UCI_Variant and keeps playing the one it had, which turns "analyse this Duck
+// Chess game" into a confident standard-chess answer with nothing to show it is wrong. Naming it in
+// the status line is the whole fix: the analysis is not made correct, it is made honest.
+let unsupported_variant = null;
+function note_unsupported_variant(name) {
+    unsupported_variant = name;
+    const el = PANEL_ROOT.getElementById('game-detection');
+    if (el) {
+        el.classList.add('unsupported');
+        el.innerText = `${name} is not a variant this engine has — the analysis below is standard chess`;
+    }
+}
+
 function on_engine_response(message) {
     console.log('on_engine_response', message);
+    if (typeof message === 'string' && message.startsWith('info string mephisto-unsupported-variant')) {
+        return note_unsupported_variant(message.split(' ').pop());
+    }
     if (is_remote()) {
         last_eval = Object.assign(last_eval, message);
         on_engine_evaluation(last_eval);
@@ -3561,6 +3578,87 @@ function update_snap_follow_button() {
     btn.classList.toggle('following', snap_following());
 }
 
+// THE PANEL GETS OUT OF THE WAY for a capture that has to FIND the board. Mephisto's panel carries
+// a chessboard of its own, and the detector cannot know which one was meant -- it has picked the
+// panel's. Blanking its rectangle in the captured frame was the first idea and is wrong: the panel
+// overlaps the board it is being asked about, so blanking takes a strip of the real board with it.
+//
+// Only for a DETECTION snap. A follow read passes the box it already knows, so nothing is being
+// searched for and the panel can stay where it is -- hiding it on every tick would flicker.
+async function with_panel_hidden(fn) {
+    const wrap = PANEL_ROOT.getElementById && PANEL_ROOT.getElementById('mephisto-overlay');
+    if (!wrap) return fn();                       // toolbar popup: not part of the captured tab
+    const before = wrap.style.opacity;
+    wrap.style.opacity = '0';
+    // two frames: one for the style to apply, one for the compositor to have painted without it
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    try {
+        return await fn();
+    } finally {
+        wrap.style.opacity = before || '';
+    }
+}
+
+// The "least sure" line, as buttons. Clicking one swaps that square to the model's runner-up and
+// re-analyses -- the whole point being that a single wrong square no longer means reading again.
+function render_unsure(low) {
+    const el = PANEL_ROOT.getElementById('setup_fen_msg');
+    if (!el) return;
+    const unsure = (low || []).filter(sq => sq.prob < 0.9);
+    el.textContent = 'Read from screen — turn with the king switch, orientation with Flip board';
+    if (!unsure.length) return;
+    el.appendChild(document.createTextNode(' · least sure: '));
+    unsure.forEach((sq, i) => {
+        if (i) el.appendChild(document.createTextNode(', '));
+        const name = (p) => (p ? p : 'empty');
+        const chip = document.createElement('span');
+        chip.className = 'mephisto-fix-chip';
+        chip.textContent = `${sq.square} ${name(sq.piece)} ${Math.round(sq.prob * 100)}%`;
+        if (sq.alt !== undefined && sq.alt !== null && sq.alt !== sq.piece) {
+            chip.title = `Click to make ${sq.square} ${name(sq.alt)} (${Math.round((sq.altProb || 0) * 100)}%)`;
+            chip.dataset.square = sq.square;
+            chip.dataset.alt = sq.alt;
+            chip.addEventListener('click', () => apply_square_fix(sq.square, sq.alt));
+        } else {
+            chip.classList.add('mephisto-fix-chip-dead');   // nothing to offer: still worth naming
+        }
+        el.appendChild(chip);
+    });
+}
+
+// Put one piece on one square of the position that was read, and start again from there.
+function apply_square_fix(square, piece) {
+    const fen = (PANEL_ROOT.getElementById('setup_fen_input')?.value || setup_fen || '').trim();
+    if (!fen) return;
+    let next = null;
+    try {
+        const c = new Chess(config.variant, fen);
+        if (piece) {
+            const type = piece.toLowerCase();
+            const color = (piece === piece.toUpperCase()) ? 'w' : 'b';
+            c.remove(square);
+            if (!c.put({type, color}, square)) return;      // chess.js refuses e.g. a second king
+        } else {
+            c.remove(square);
+        }
+        next = c.fen();
+    } catch (e) {
+        return;                                             // an edit that does not make a position
+    }
+    if (!next || !is_legal_position(next)) {
+        setup_fen_msg(`Making ${square} ${piece || 'empty'} would not be a legal position.`);
+        return;
+    }
+    setup_fen = next;
+    const input = PANEL_ROOT.getElementById('setup_fen_input');
+    if (input) input.value = next;
+    stash_setup_state();
+    panel_line_reset(next);
+    abandon_search();
+    setup_fen_msg(`${square} is ${piece || 'empty'} now.`);
+    on_new_pos(next, next, '');
+}
+
 async function snap_position(crop) {
     setup_fen_msg('');
     const row = PANEL_ROOT.getElementById('setup-fen-row');
@@ -3568,7 +3666,9 @@ async function snap_position(crop) {
     setup_fen_msg(i18n('panel.fen.reading', 'Reading the board from the screen…'));
     let res;
     try {
-        res = await chrome.runtime.sendMessage({captureAndRecognize: {crop}});
+        res = crop
+            ? await chrome.runtime.sendMessage({captureAndRecognize: {crop}})
+            : await with_panel_hidden(() => chrome.runtime.sendMessage({captureAndRecognize: {}}));
     } catch (e) {
         setup_fen_msg(i18n('panel.fen.capture_failed', 'Capture failed ({detail})', {detail: e}));
         return;
@@ -3596,12 +3696,11 @@ async function snap_position(crop) {
     panel_line_reset(fen); // a freshly read position starts its own line
     const input = PANEL_ROOT.getElementById('setup_fen_input');
     if (input) input.value = fen;
-    // Name the squares the model was least sure of. A misread square usually still yields a legal
-    // position, so this is the only warning anyone gets that a piece may be in the wrong place.
-    const unsure = (res.low || []).filter(sq => sq.prob < 0.9)
-        .map(sq => `${sq.square} ${sq.piece ? sq.piece : 'empty'} ${Math.round(sq.prob * 100)}%`);
-    setup_fen_msg('Read from screen — turn with the king switch, orientation with Flip board'
-        + (unsure.length ? ` · least sure: ${unsure.join(', ')}` : ''));
+    // Name the squares the model was least sure of -- and make each one a FIX. A misread square
+    // usually still yields a legal position, so this used to be the only warning anyone got, with
+    // no way to act on it short of reading the whole board again. Each chip now applies the
+    // model's second choice for that square, which is what a misread almost always is.
+    render_unsure(res.low || []);
     last_eval.fen = ''; prev_ply_count = 0;
     opp_spend = opp_clock_mark = last_our_eval = null;
     explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
@@ -3809,6 +3908,10 @@ function on_new_pos(fen, startFen, moves) {
     clear_next_move_eta(); // the countdown belonged to the position that just changed
     humanize_roll = null;  // and so did any pre-rolled humanize outcome
     if (config.help_mode) request_clear_hint(); // position changed; last hint is stale
+    // WHERE THEY JUST CAPTURED, which is what makes our next move a recapture -- and a recapture is
+    // the one move a human plays without thinking. Replaying the list is the only honest way to know
+    // (a move list carries no capture flag), and it is a handful of moves on a chess.js board.
+    last_capture_square = last_capture_from(startFen || fen, moves || '');
     premove_tracker = {fen: fen, startFen: startFen || fen, moves: moves || '', lines: {}}; // certifications belong to exactly one position
     // NEW-GAME RESET. On sites that swap games WITHOUT a page reload (taketaketake rematch, SPA
     // rematches), per-game pacing state would otherwise carry over -- Mirror Time mirroring the LAST
@@ -5190,7 +5293,112 @@ function estimated_move_total_ms(fen) {
 // The four think/move timing values, read fresh from localStorage (options page + quick settings
 // both write here). Falls back to the loaded config value when a key is unset. JSON.parse(null)
 // is null, so `!= null` keeps a legitimate 0.
-function fresh_timing() {
+// The square the last move captured on, or null if it took nothing. Replays the move list on a
+// chess.js board because that is the only place the answer exists -- the list is just squares.
+function last_capture_from(startFen, movesStr) {
+    const list = String(movesStr || '').trim().split(/\s+/).filter(Boolean);
+    if (!list.length) return null;
+    try {
+        const c = new Chess(config.variant, startFen);
+        let last = null;
+        for (const uci of list) {
+            last = c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+            if (!last) return null;                 // a list we cannot replay tells us nothing
+        }
+        return (last && last.captured) ? last.to : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// ---- WHAT THE MOVE IS, not just how many have been played -----------------------------------
+// Pacing used to be one distribution for every move, which is the tell: a human is not evenly slow.
+// They are instant on a recapture, slower with the queen than with the king, slower again when they
+// can see a mate, and they stop deliberating at all when the flag is near. These are multipliers on
+// the THINK part -- the pause before the move -- because that is the part a watcher can see.
+//
+// All of it is a pure function of the position, the move and the clock, which is what lets it be
+// executed in the tests against real positions rather than argued about.
+const SITUATION = {
+    recapture:  0.25,   // taking back on the square they just took on: nobody thinks about this
+    forced:     0.30,   // only one legal move: there is nothing to weigh
+    mateSeen:   1.35,   // a mate on the board is checked twice before it is played
+    queen:      1.25,   // the piece you least want to hang
+    rook:       1.10,
+    minor:      1.00,
+    pawn:       0.90,
+    king:       0.80,   // usually forced or obvious
+};
+// Clock pressure. Nobody spends twelve seconds on move forty with thirty left on the clock.
+const CLOCK_STEPS = [
+    {under: 10, k: 0.15},
+    {under: 30, k: 0.35},
+    {under: 60, k: 0.60},
+    {under: 120, k: 0.85},
+];
+
+// `info` is {fen, uci, mate, legalCount, lastCapture}. Anything missing simply does not apply, so a
+// caller that knows nothing still gets the user's own settings back unchanged.
+function situational_k(info) {
+    if (!info || !info.uci) return 1;
+    let k = 1;
+    const to = info.uci.slice(2, 4);
+    // A RECAPTURE: they captured on a square, and this move captures back on that same square.
+    if (info.lastCapture && info.lastCapture === to) return SITUATION.recapture;
+    if (info.legalCount === 1) return SITUATION.forced;
+    if (info.mate != null && Math.abs(info.mate) > 0) k *= SITUATION.mateSeen;
+    const piece = (info.piece || '').toLowerCase();
+    if (piece === 'q') k *= SITUATION.queen;
+    else if (piece === 'r') k *= SITUATION.rook;
+    else if (piece === 'n' || piece === 'b') k *= SITUATION.minor;
+    else if (piece === 'p') k *= SITUATION.pawn;
+    else if (piece === 'k') k *= SITUATION.king;
+    return k;
+}
+
+function clock_k(secondsLeft) {
+    if (secondsLeft == null || !isFinite(secondsLeft)) return 1;
+    for (const step of CLOCK_STEPS) if (secondsLeft < step.under) return step.k;
+    return 1;
+}
+
+// The think part is scaled; the MOVE part (the click itself) is left alone -- a human's hand does
+// not speed up because the position is simple, and the existing floor exists for the same reason.
+function situational_timing(t, info) {
+    const k = situational_k(info) * clock_k(info && info.secondsLeft);
+    if (k === 1) return t;
+    return {
+        ...t,
+        think_time: Math.max(0, Math.round(t.think_time * k)),
+        think_variance: Math.max(0, Math.round(t.think_variance * k)),
+    };
+}
+
+// What the panel knows about the move it is about to play, in the shape situational_timing wants.
+function move_situation(fen, uci) {
+    const out = {uci, secondsLeft: null, mate: null, legalCount: null, piece: '', lastCapture: null};
+    try {
+        if (last_clocks && last_clocks.mine != null) {
+            out.secondsLeft = last_clocks.mine - (Date.now() - last_clocks.at) / 1000;
+        }
+        const line = last_eval.lines && last_eval.lines[0];
+        if (line && line.mate != null) out.mate = line.mate;
+        if (fen && uci) {
+            const c = new Chess(config.variant, fen);
+            out.legalCount = c.moves().length;
+            const from = c.get(uci.slice(0, 2));
+            if (from) out.piece = from.type;
+        }
+        out.lastCapture = last_capture_square;
+    } catch (e) { /* an unparseable position tells us nothing, which is fine */ }
+    return out;
+}
+
+// The square the OPPONENT last captured on, which is what makes the next move a recapture. Set from
+// the move list as positions arrive; null when their last move took nothing.
+let last_capture_square = null;
+
+function fresh_timing(situation) {
     const num = (key, fallback) => {
         const v = JSON.parse(MephistoConfig.get(key));
         return (v != null) ? v : fallback;
@@ -5198,12 +5406,15 @@ function fresh_timing() {
     // Read fresh from storage, THEN paced to the clock if that is switched on -- so editing the
     // sliders mid-game still applies to the very next move, and the pacing works from what you
     // actually set rather than from a snapshot.
-    return clock_pace_timing({
+    // Situation first (what the move IS), then the clock cap (what the clock allows). In that
+    // order, because the cap is a ceiling: scaling a move up for a visible mate must not be able to
+    // spend time the clock does not have.
+    return clock_pace_timing(situational_timing({
         think_time: num('think_time', config.think_time),
         think_variance: num('think_variance', config.think_variance),
         move_time: num('move_time', config.move_time),
         move_variance: num('move_variance', config.move_variance),
-    });
+    }, situation));
 }
 
 // ---- Self-test: a one-tap health check shown in the status line for a few seconds. Scrape = a
@@ -5868,7 +6079,7 @@ function request_automove(move, think = null, manual = false, opts = {}) {
     // Read the think/move timing FRESH from storage on every move (the options page shares this
     // localStorage), so editing the sliders mid-game applies to the next move -- not the snapshot
     // taken when the panel/config first loaded. `?? config.x` keeps the loaded value if unset.
-    const timing = fresh_timing();
+    const timing = fresh_timing(move_situation(last_eval.fen, move));
     const message = (config.puzzle_mode)
         // Puzzle Mode ships the move as a one-element `pv` purely because the content-script's
         // puzzle branch takes that shape. It is ONE move: Puzzle Mode used to auto-play the engine's

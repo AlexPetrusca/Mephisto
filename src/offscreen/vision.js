@@ -132,10 +132,20 @@ async function readBoard(bitmap, box) {
             let best = 0;
             for (let k = 1; k < 13; k++) if (logits[base + k] > logits[base + best]) best = k;
             const probs = squareProbs(logits, base);
+            // The RUNNER-UP, for the squares the model is unsure about. "e4 empty 18%" tells you
+            // something is wrong and nothing about what to do; "or a black knight" is a correction
+            // you can take in one click, which is the difference between a warning and a fix.
+            let second = -1;
+            for (let k = 0; k < 13; k++) {
+                if (k === best) continue;
+                if (second < 0 || logits[base + k] > logits[base + second]) second = k;
+            }
             squares.push({
                 square: String.fromCharCode(97 + f) + (8 - r), // r=0 is rank 8, f=0 is file a
                 piece: best === EMPTY ? '' : SYMS[best],
                 prob: probs[best],
+                alt: second < 0 ? null : (second === EMPTY ? '' : SYMS[second]),
+                altProb: second < 0 ? 0 : probs[second],
             });
             if (best === EMPTY) gap++;
             else { if (gap) { row += gap; gap = 0; } row += SYMS[best]; }
@@ -184,6 +194,14 @@ function uriHash(s) {
     return ((h >>> 0) + ':' + s.length);
 }
 
+// TWO BOARDS ON SCREEN. Mephisto's panel carries a chessboard of its own, and the detector cannot
+// know which one was meant -- picking the panel's is a failure that looks exactly like a misread.
+// Painting the panel's rectangle out of the captured frame was tried first and is WRONG: the panel
+// OVERLAPS the board it is being asked about (measured: panel from x1880, board 840-1960), so
+// blanking it takes a strip of the real board with it and the read gets worse, not better. The
+// panel is ours, so it steps out of the way for the one frame a detection capture needs -- see
+// with_panel_hidden() in popup.js. A follow read passes the box it already knows and needs none of
+// this.
 export async function recognize({dataUri, crop}) {
     await ready();
     const t0 = performance.now();

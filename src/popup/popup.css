@@ -943,6 +943,25 @@ body.mephisto-dark #alt-lines::-webkit-scrollbar-thumb { background: #34353d; bo
    resizes the box + wrapper to COMPACT_H to match -- hiding these alone would leave a tall panel
    full of empty space. `body.mephisto-*` is rehomed onto #mephisto-panel-body for the in-page
    panel, which also lifts specificity to (1,1,0) so it beats the (1,0,0) base height rule. */
+/* THE PANEL IS A FIXED-HEIGHT BOX, and its height only grows for the opening-explorer overlay
+   (panelH() in content-script.js adds BOOK_H and nothing else). Turn on five lines, the eval
+   history, live stats and the FEN row and the body is taller than the frame -- measured 646px of
+   content in a 540px box -- so the bottom rows, `next-move` among them, were simply unreachable
+   with overflow hidden. They scroll now. Growing the frame instead would mean teaching panelH()
+   about every combination of rows; a scrollbar is one line and cannot get the arithmetic wrong.
+   The scrollbar is themed so it does not reintroduce a bright strip down a dark panel. */
+#mephisto-panel-body {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--mp-line) transparent;
+}
+#mephisto-panel-body::-webkit-scrollbar { width: 8px; }
+#mephisto-panel-body::-webkit-scrollbar-track { background: transparent; }
+#mephisto-panel-body::-webkit-scrollbar-thumb {
+    background: var(--mp-line);
+    border-radius: 4px;
+}
+
 /* Opening-explorer overlay under the alternative lines. Sized so the heading + 5 book moves all
    fit WITHOUT scrolling (6 x 21px = 126 < 132); the panel grows by BOOK_H to make room, and only
    while the overlay is actually shown. :not(.mephisto-compact) so compact still wins, matching
@@ -977,6 +996,11 @@ body.mephisto-dark #alt-lines::-webkit-scrollbar-thumb { background: #34353d; bo
     white-space: nowrap;
 }
 
+/* The FEN box wore whatever the browser paints a text input: in a dark panel that is a grey
+   (#3b3b3b) with a light border, next to controls that are #16171b with a #34353d hairline. Nothing
+   was "white" by then, but it was still the one control not speaking the panel's palette. Its
+   colours are the same tokens as everything else now, and `color-scheme` stops the UA repainting
+   the caret and the selection back to its own idea of a form field. */
 #setup_fen_input {
     width: 100%;
     height: 26px;
@@ -984,7 +1008,33 @@ body.mephisto-dark #alt-lines::-webkit-scrollbar-thumb { background: #34353d; bo
     line-height: 26px;
     padding: 0 6px;
     box-sizing: border-box;
+    color-scheme: inherit;
+    background: var(--mp-bg);
+    color: var(--mp-text);
+    border: 1px solid var(--mp-line);
+    border-radius: 4px;
 }
+#setup_fen_input:focus {
+    outline: none;
+    border-color: var(--mp-on);
+}
+
+/* Each least-sure square is a button: click it and that square becomes the model's second choice.
+   Styled as a chip rather than a link so it reads as something you can press, and dimmed when the
+   model had no second choice to offer. */
+.mephisto-fix-chip {
+    display: inline-block;
+    margin: 0 2px;
+    padding: 0 5px;
+    border: 1px solid var(--mp-line);
+    border-radius: 3px;
+    background: var(--mp-hair);
+    color: var(--mp-text);
+    cursor: pointer;
+}
+.mephisto-fix-chip:hover { border-color: var(--mp-on); }
+.mephisto-fix-chip-dead { cursor: default; opacity: 0.65; }
+.mephisto-fix-chip-dead:hover { border-color: var(--mp-line); }
 
 #setup_fen_msg {
     /* block, not inline: after a 100%-width input an inline span sits on the SAME line and, with the
