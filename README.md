@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.258-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.259-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -883,13 +883,22 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>49 features, newest first</summary>
+<summary>50 features, newest first</summary>
 
+- [x] **A sweep of the shipped build** (v3.1.259) - every setting driven and read back after a reload,
+  every site route executed, and the edge cases pushed on purpose. Five real faults came out of it and
+  are fixed: the settings export could not be re-imported (the worker keeps bookkeeping in the same
+  store that is not a setting, and import rightly refuses a file holding one); an options-page link
+  with no page behind it left a blank screen instead of falling back; the search-time slider's last
+  notch stopped searches by itself when it had been asked not to; the board hunt gave up for good
+  after ten seconds, so a board that appeared later never had its start position captured; and the
+  budget tooltip promised that depth is reproducible on any machine, which is only true on one thread
+  (measured: three depth-14 searches agreed exactly on one thread and read 27/25/24cp on four).
 - [x] **A search-time slider for Game Review** (v3.1.258) - how long the engine may think about each
   position is now one slider: 1 to 60 seconds, or the notch past 60, which is unbounded. Unbounded means
-  `go infinite`, stopped when the line settles - three consecutive depths agreeing on the same best move
-  within 10 centipawns - with a two-minute-per-position ceiling so a whole game still finishes. Depth mode
-  keeps the same slider, 1 to 40 plies.
+  `go infinite` and nothing else - no settle rule, no ceiling - so the engine keeps thinking about the
+  position until you press Stop, which scores it at whatever depth it reached. Depth mode keeps the same
+  slider, 1 to 40 plies.
 - [x] **Screen reading, three layers of not-asking** (v3.1.257) - a read used to cost ~670ms every time. Now the
   captured frame is hashed **before it is decoded**, so an unchanged screen answers without decoding, detecting or
   running the model: **repeat reads are 2-3ms**. A board that genuinely changed still pays the full read, and each
