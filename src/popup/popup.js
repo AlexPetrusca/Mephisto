@@ -9,6 +9,7 @@
 // sends/receives is scoped to THIS tab, so a background tab's popup can't drive the foreground tab
 // or turn on its modes. Null only if opened before the content-script learned its id (falls back).
 let MY_TAB_ID = parseInt(new URLSearchParams(location.search).get('tab'), 10) || null;
+let engine_init_promise = null; // boot fires engine init without blocking the panel (see boot)
 let PANEL_BOOTED = false; // popup.js also loads on every chess page as a content script --
 // its listeners must stay inert until THIS tab's panel is actually opened.
 
@@ -481,9 +482,16 @@ async function initPanel(root, tabId) {
     // init fen LRU cache
     fen_cache = new LRU(100);
 
-    // init engine webworker -- reuseWarm=true so a reopen reuses the engine left loaded by the last
-    // close (see initialize_engine); a first-ever open has engine_ready=false and does a full init.
-    await initialize_engine(true);
+    // ENGINE INIT DOES NOT BLOCK THE PANEL (v3.1.250). This used to be awaited here, and
+    // PANEL_MSG_HANDLER is assigned right below -- so for the whole engine-load window the panel
+    // was up but could not ANSWER the page: no scrape, no board, no eval. On a cold browser that
+    // window is the service worker waking, creating the offscreen document and loading a 100MB+
+    // net, which is where the "panel does nothing for ten seconds after a restart" report comes
+    // from. Nothing below needs the engine to exist yet: the offscreen host queues any uci sent
+    // while it loads, and the first search is fired by the first scraped position, not from here.
+    // The promise is kept so the few places that genuinely need a configured engine can await it.
+    engine_init_promise = initialize_engine(true);
+    engine_init_promise.catch(e => console.warn('Mephisto: engine init failed', e));
 
     // listen to messages from content-script
     PANEL_MSG_HANDLER = function (response, sender) {
