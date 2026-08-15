@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.263-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.264-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -157,7 +157,7 @@ Everything runs locally via WebAssembly - no server, no account, nothing leaves 
 | **Maia** | The original Maia-1 nets, one per band (**1100–1900**, plus a **2200**). |
 | **Tetrarch (4-player)** | Four-player chess only - see [four-player chess](#four-player-chess). Needs a one-time install. |
 | **Remote / native** | A real engine binary outside the browser - see [full-power engines](#full-power-native-engines-optional). |
-| **Stockfish 18 (online) / Stockfish 17.1 (online)** | A real server-side Stockfish over HTTPS - nothing to install, for a machine that cannot run a strong engine locally. **The position leaves your machine on every move.** One line, no threads or hash to set, so a local engine is both faster and private; this is a fallback, not an upgrade. The version in each name is the engine that provider runs, from its own front page: chess-api.com serves Stockfish 18 NNUE, stockfish.online serves Stockfish 17.1. chess-api.com takes your Search Time as well as a depth ceiling (measured: 50ms reaches depth 14, 2s reaches 16); stockfish.online takes only a depth, so selecting it switches the search budget to Depth and switches it back when you leave. A stall or a rate limit is retried once. |
+| **Stockfish 18 (online) / Stockfish 17.1 (online)** | A real server-side Stockfish over HTTPS - nothing to install, for a machine that cannot run a strong engine locally. **The position leaves your machine on every move.** One line, no threads or hash to set, so a local engine is both faster and private; this is a fallback, not an upgrade. The version in each name is the engine that provider runs, from its own front page: chess-api.com serves Stockfish 18 NNUE, stockfish.online serves Stockfish 17.1. chess-api.com takes your Search Time as well as a depth ceiling (measured: 50ms reaches depth 14, 2s reaches 16); stockfish.online takes only a depth, so selecting it switches the search budget to Depth and switches it back when you leave. A stall or a rate limit is retried once, and a position already asked about inside the last 15 seconds is answered from memory rather than asked again - which is what was drawing the rate limits. chess-api.com refuses any position carrying an en-passant square, so that field is dropped for it; the one cost is that an en passant capture is invisible to that provider, and stockfish.online is the one to use if that matters. |
 
 <img src="docs/maia3.png" alt="Maia-3 with the 600-2600 rating slider" width="49%"> <img src="docs/variants.png" alt="Atomic on Lichess, analysed by Fairy-Stockfish" width="49%">
 
@@ -876,8 +876,16 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>54 features, newest first</summary>
+<summary>55 features, newest first</summary>
 
+- [x] **Two faults in the online engines, both reported from real games** (v3.1.264) - chess-api.com refuses any
+  FEN that carries an en-passant square, which is most positions right after a pawn's double step: "Cannot evaluate
+  given position - wrong FEN" on the ordinary French after 1.e4 e6 2.d4 d5. Measured against the live API in both
+  the capturable and the non-capturable case, so it is not a rule that can be satisfied - the field is dropped for
+  that provider, and the cost is stated: an en passant capture is invisible to it. And stockfish.online began
+  answering HTTP 429 during a normal game, because the same position was being asked about again and again; an
+  answer is now remembered for 15 seconds and two simultaneous asks become one request. Measured: nine repeats of
+  one position cost 13ms instead of 11 seconds of real requests.
 - [x] **The online engines are named for the engine they reach** (v3.1.263) - "Cloud: chess-api.com" said who
   answers, not what answers. They are now **Stockfish 18 (online)** and **Stockfish 17.1 (online)**, the versions
   those services run according to their own front pages, with the provider still named in Settings. The stored
