@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.262-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.263-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -157,7 +157,7 @@ Everything runs locally via WebAssembly - no server, no account, nothing leaves 
 | **Maia** | The original Maia-1 nets, one per band (**1100–1900**, plus a **2200**). |
 | **Tetrarch (4-player)** | Four-player chess only - see [four-player chess](#four-player-chess). Needs a one-time install. |
 | **Remote / native** | A real engine binary outside the browser - see [full-power engines](#full-power-native-engines-optional). |
-| **Cloud: chess-api.com / stockfish.online** | A real server-side Stockfish over HTTPS - nothing to install, for a machine that cannot run a strong engine locally. **The position leaves your machine on every move.** One line, no threads or hash to set, so a local engine is both faster and private; this is a fallback, not an upgrade. chess-api.com takes your Search Time as well as a depth ceiling (measured: 50ms reaches depth 14, 2s reaches 16); stockfish.online takes only a depth, so selecting it switches the search budget to Depth and switches it back when you leave. |
+| **Stockfish 18 (online) / Stockfish 17.1 (online)** | A real server-side Stockfish over HTTPS - nothing to install, for a machine that cannot run a strong engine locally. **The position leaves your machine on every move.** One line, no threads or hash to set, so a local engine is both faster and private; this is a fallback, not an upgrade. The version in each name is the engine that provider runs, from its own front page: chess-api.com serves Stockfish 18 NNUE, stockfish.online serves Stockfish 17.1. chess-api.com takes your Search Time as well as a depth ceiling (measured: 50ms reaches depth 14, 2s reaches 16); stockfish.online takes only a depth, so selecting it switches the search budget to Depth and switches it back when you leave. A stall or a rate limit is retried once. |
 
 <img src="docs/maia3.png" alt="Maia-3 with the 600-2600 rating slider" width="49%"> <img src="docs/variants.png" alt="Atomic on Lichess, analysed by Fairy-Stockfish" width="49%">
 
@@ -876,8 +876,15 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>53 features, newest first</summary>
+<summary>54 features, newest first</summary>
 
+- [x] **The online engines are named for the engine they reach** (v3.1.263) - "Cloud: chess-api.com" said who
+  answers, not what answers. They are now **Stockfish 18 (online)** and **Stockfish 17.1 (online)**, the versions
+  those services run according to their own front pages, with the provider still named in Settings. The stored
+  engine ids did not change, so an existing setting keeps working. A request that stalls or is rate-limited is
+  also retried once now - seen live, one request hung past its timeout while the same endpoint answered a curl in
+  130ms, and losing a move to that is worse than waiting a moment; a refused position is not retried, and a 429
+  says it is a rate limit rather than showing a bare number.
 - [x] **Cloud engines analyse the position in front of you** (v3.1.262) - a bug fix for v3.1.260, reported
   with two screenshots. On a live game the panel asks its engine about the game's START position plus the
   moves played since, which is what the native hosts and remote-engine.py take. A cloud provider has nowhere
