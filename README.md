@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.269-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.270-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -183,7 +183,7 @@ instead of analysing the wrong position.
 
 ## Features
 
-### Analysis
+### Analysis in the panel
 
 <details>
 <summary>Opening Explorer, tablebase, eval bar and history, screen reading</summary>
@@ -218,6 +218,35 @@ squares (`least sure: e4 pawn 62%`).*
 
 </details>
 
+### The Analysis page
+
+<details>
+<summary>a board you play on, both engines at once, and what a human of any rating would play here</summary>
+
+A page of its own - **Settings → Analysis**. The panel is built for a live game: small, out of the way,
+one engine at a time. Studying wants the opposite.
+
+- **A board you play on.** Click or drag, with underpromotion. Playing a move truncates the line and
+  continues from there, because the question a study board answers is *what if*. Arrow keys walk it,
+  the move list jumps to any ply, and **Copy FEN** / **Copy PGN** take the position or the line with you
+  (a line that did not start from the initial position carries its FEN tags, so it reads back as the
+  same game).
+- **Both answers side by side.** The engine's candidate lines, and next to them what a **human of a
+  chosen rating** would actually play, with the net's own probability per move. That contrast is the
+  point of the page, which is why the human model is a column rather than a toggle.
+- **Search time, or none.** A slider from 1 to 60 seconds, and one notch past 60 that means exactly
+  `go infinite`: the engine keeps thinking about the position in front of you until you move on.
+- **Moves by rating.** Every candidate swept across the whole rating range - ten bands for Maia 1, 600
+  to 2600 in hundreds for Maia 3 - drawn as one chart so the lines can be compared, each named at its
+  own end, with a readout that follows the pointer and gives every move's probability at the band under
+  it. This is where you can see e4 fall away and d4 climb as strength rises.
+- **Win / draw / loss** beside the board, each number named rather than three bare percentages, and an
+  **eval bar** down the side.
+- **Opening book** - load a Polyglot `.bin`, a PGN or a JSON table and its moves are listed for the
+  position on the board.
+
+</details>
+
 ### Game review
 
 <details>
@@ -229,8 +258,9 @@ stays in the tab and the search runs in the extension's own engine.
 
 - **Any engine, at your budget** - the bundled WASM Stockfishes, or a native host at full power. A
   **depth** is reproducible (the same depth is the same answer on any machine) and is the default at 16;
-  a **time per move** defaults to 1s. Native hosts take either. 1–10 candidate lines, your own thread and
-  hash counts.
+  a **time per move** runs 0.1s to 15s in tenths, with one notch past the end that means no limit at all.
+  Each mode remembers its own number, so switching between them does not reinterpret one in the other's
+  units. Native hosts take either. 1–10 candidate lines, your own thread and hash counts.
 - **What you actually gave up** - every position is searched once, so the score before a move and the
   score after it come from the same search at the same budget, and the played move's rank in the engine's
   own list is exact.
@@ -244,7 +274,8 @@ stays in the tab and the search runs in the extension's own engine.
 - **Think time** read from the `[%clk ...]` comments Chess.com and Lichess both write, and **titles and
   ratings** from the PGN's own tags: `GM Carlsen (2839)`.
 - **Human model (optional)** - a second pass with Maia, which predicts what a *human* of a chosen rating
-  plays rather than what is best. Maia 1 across its bands (1100–2200) or Maia 3 on a rating dial. It
+  plays rather than what is best. Maia 1 across the ten nets it ships (1100–1900, plus 2200) or Maia 3 on
+  a rating dial. It
   reports where your move sat in Maia's **own ranking**, not a yes/no.
 - **Human likeness (optional, off)** - the whole game read by that second judge instead: how expected each
   move was rather than how good, and the moves the engine ranked first that the human model never saw
@@ -878,7 +909,41 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>61 features, newest first</summary>
+<summary>62 features, newest first</summary>
+
+- [x] **The Analysis page, swept** (v3.1.270)
+  - **Maia's own probability reaches the screen.** Both adapters worked out, for every legal move, how likely a
+    human of the chosen rating is to play it - and then emitted the same position eval on every line, so only the
+    move ORDER survived and everything downstream had to invent percentages from the rank. The Human column printed
+    60.0 / 24.4 / 9.9 for every position at every rating; the moves-by-rating chart drew flat lines, because a decay
+    over the order is identical wherever the order is. The real number is carried through now, and never
+    renormalised over the few lines on screen: it is the chance out of *every* legal move, so four of them summing
+    to 95% is the truth.
+  - **The Maia 3 sweep asked for its rating in a name it does not answer to.** Maia 3 takes `SelfElo` / `OppoElo`;
+    the sweep sent `UCI_Elo`, and `setoption` ignores a name it does not know - so all twenty-one bands ran at one
+    Elo. Measured after the fix, starting position: e4 62.4% at 600, 63.8% at 1600, 45.8% at 2600, while d4 climbs
+    21.4% -> 25.0% -> 35.7%. The test meant to cover this asserted the *wrong* option name as its evidence and so
+    passed throughout; it now checks every option the sweep sends against the ones the model answers to.
+  - **The search stopped answering after a move, sometimes.** Two analyses could both get past `await stopSearch()`
+    - the second sees no live search, because the first has not registered its own yet - and both then started a
+    search on the same engine. An engine already searching IGNORES the next `position fen`, so it kept thinking
+    about the old board and streamed those lines into the new callback, where every one is illegal and is filtered
+    out: "thinking..." forever while the depth counter climbed 24, 27, 29 without ever restarting.
+  - **A search budget**, 1 to 60 seconds with a notch past the end that means no limit at all, and **Copy FEN** /
+    **Copy PGN** under the board.
+  - **The chart rebuilt** - one plot, every move named at its own end, a dot per band, the leader's area shaded, and
+    a readout that follows the pointer. It honours the Lines setting, which it never did: three was pinned in three
+    separate places, one of them a hardcoded table of three probabilities that could not describe a fourth move.
+  - **The setup strip is one line.** The number fields and selects were plain browser controls next to the
+    extension's own framed toggles - three heights, three label baselines, and a row that read as broken. And
+    **both toggles on the page were inert**: the framework binds a control by `<name>_<type>`, the markup called
+    them `_check`, so neither ever received its default (Win / draw / loss showed Off while the code behaved as if
+    it were on) and clicking them saved nothing.
+  - **Two Maia bands that never existed** - 2000 and 2100 were offered everywhere a rating is picked, with no net
+    on disk behind them.
+  - **The board takes the width** the right column was wasting beside the notation, and the chart moved under it.
+  - **Game Review**: time per move in tenths from 0.1s to 15s, each mode keeping its own number; smaller verdict
+    badges and rank tags; an eval bar beside the board.
 
 - [x] **Five roadmap items, in one release** (v3.1.269)
   - **The panel grows to its content.** With five lines, the eval history, live stats and the FEN row up, 648px of
