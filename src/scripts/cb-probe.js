@@ -34,8 +34,34 @@
         } catch (e) { return null; }
     }
 
+    // WHERE THE BOARD IS, from the same model the FEN comes from. ChessBase paints on a canvas, so
+    // there is no element to measure and no class to match -- but boardWin carries the numbers
+    // outright: x0/y0 (the board's origin inside the canvas), nSqPix (a square), and blackIsBottom
+    // (the orientation). Canvas units are converted to page pixels by the canvas's own scale.
+    // Verified against pixels: markers drawn at a1/h8/e4 landed on those squares.
+    function curGeometry() {
+        try {
+            const gk = window.V35s && window.V35s.gameKernel;
+            const bw = gk && gk.boardWin;
+            const cv = gk && gk.boardArea && gk.boardArea.cbcanvas && gk.boardArea.cbcanvas.canvas;
+            if (!bw || !cv || !cv.getBoundingClientRect) return null;
+            const r = cv.getBoundingClientRect();
+            if (!(r.width > 0) || !(cv.width > 0) || !(bw.nSqPix > 0)) return null;
+            const scale = r.width / cv.width;
+            return {
+                x: r.left + bw.x0 * scale,
+                y: r.top + bw.y0 * scale,
+                size: bw.nSqPix * 8 * scale,
+                flipped: !!bw.blackIsBottom,
+            };
+        } catch (e) { return null; }
+    }
+
+    // The payload is {fen, geo} now. It used to be the FEN alone, so a plain string is still
+    // understood on the other side -- an old content script and a new probe must not deadlock.
     const send = (name, fen) =>
-        document.dispatchEvent(new CustomEvent(name, {detail: JSON.stringify(fen)}));
+        document.dispatchEvent(new CustomEvent(name, {
+            detail: JSON.stringify(fen == null ? null : {fen, geo: curGeometry()})}));
 
     // (Re)subscribe to the current game's position-changed event so moves push instantly. The game
     // object is reused across puzzles (reset + assign, not replaced), but re-check identity each

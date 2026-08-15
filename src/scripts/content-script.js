@@ -621,18 +621,67 @@ window.addEventListener('pagehide', () => {
 // we scale -- so the box and its wrapper have to be told the new height. Called by popup.js's
 // apply_compact (see MephistoContent below). No-op in the toolbar popup: no overlay there, and
 // Chrome sizes the bubble around the content anyway.
+// A FIXED height clips whatever the panel happens to be showing. Measured with five lines, the eval
+// history, live stats and the FEN row all up: 648px of content inside a 540px box, `overflow: hidden`
+// on the wrapper -- so the rows at the bottom, `next-move` among them, were not merely crowded, they
+// were unreachable. panelH() only ever grew for the opening-explorer overlay, which is one of the
+// many things that can appear.
+//
+// So the box grows to its CONTENT, with panelH() as the floor (nothing ever gets shorter than it was)
+// and the viewport as the ceiling (a tall panel that runs off the screen is not an improvement). When
+// the ceiling bites, popup.css lets the body scroll, so nothing is ever out of reach.
+function panelContentH(frame) {
+    const body = frame.querySelector('#mephisto-panel-body');
+    return body ? body.scrollHeight : 0;
+}
+
 function resizePanelBox() {
     const wrap = overlayEl(PANEL_OVERLAY_ID);
     const frame = wrap?.querySelector('.mephisto-panel-box');
     if (!wrap || !frame) return;
     const scale = wrap.offsetWidth / POPUP_W; // the live scale: the user may have resized the panel
-    frame.style.height = `${panelH()}px`;
-    wrap.style.height = `${Math.round(24 + panelH() * scale)}px`;
+    let h = panelH();
+    if (!panelCompact) {                       // compact is a deliberate fixed shape; leave it alone
+        const content = panelContentH(frame);
+        const ceiling = Math.floor(Math.max(240, (window.innerHeight - 60) / (scale || 1)));
+        if (content > h) h = Math.min(content, Math.max(h, ceiling));
+    }
+    frame.style.height = `${h}px`;
+    wrap.style.height = `${Math.round(24 + h * scale)}px`;
+}
+
+// The panel re-renders constantly (every engine update rewrites the lines), so this watches for the
+// content CHANGING SHAPE and re-sizes then -- debounced, and only when the height it would set is
+// actually different, so a depth update does not touch the DOM at all.
+let panelGrowTimer = null;
+function watchPanelContent(frame) {
+    const body = frame.querySelector('#mephisto-panel-body');
+    if (!body || body.dataset.mephistoGrowWatched) return;
+    body.dataset.mephistoGrowWatched = '1';
+    const obs = new MutationObserver(() => {
+        if (panelGrowTimer) return;
+        panelGrowTimer = setTimeout(() => {
+            panelGrowTimer = null;
+            const wrap = overlayEl(PANEL_OVERLAY_ID);
+            const f = wrap?.querySelector('.mephisto-panel-box');
+            if (!f) return;
+            const want = Math.max(panelH(), panelCompact ? 0 : panelContentH(f));
+            if (Math.abs(parseFloat(f.style.height) - want) > 1) resizePanelBox();
+        }, 150);
+    });
+    obs.observe(body, {childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class']});
 }
 
 function setPanelCompact(on) {
     panelCompact = !!on;
     resizePanelBox();
+}
+
+// Called once the panel's markup is in place: from then on the box follows its content.
+function startPanelGrowth() {
+    const wrap = overlayEl(PANEL_OVERLAY_ID);
+    const frame = wrap?.querySelector('.mephisto-panel-box');
+    if (frame) { watchPanelContent(frame); resizePanelBox(); }
 }
 
 // Same story as compact, the other direction: the opening-explorer overlay adds a block under the
@@ -835,6 +884,7 @@ async function toggleOverlay() {
     // It looks its elements up through the shadow root we hand it, and talks to our tab by id.
     try {
         self.MephistoPanel.initPanel(overlayRoot, mephistoTabId);
+        startPanelGrowth();   // from here the box follows its content instead of clipping it
     } catch (e) {
         console.warn('Mephisto: panel failed to start', e);
     }
@@ -957,6 +1007,19 @@ function drawHintArrows(arrows, region) {
         squareCenter = (sq) => {
             const pt = fourPCSquareXY(sq);
             return pt ? [pt.x - bounds.left, pt.y - bounds.top] : [0, 0];
+        };
+    } else if (site === 'chessbase' && cbGeometry()) {
+        // CHESSBASE PAINTS ON A CANVAS: no board element to measure, no class to match, which is
+        // exactly why arrows never worked here. Its own model carries the rectangle (see
+        // cbGeometry), so the ordinary arrow arithmetic applies to it unchanged.
+        const g = cbGeometry();
+        bounds = {left: g.x, top: g.y, width: g.size, height: g.size};
+        square = g.size / 8;
+        squareCenter = (coords) => {
+            const [xIdx, yIdx] = !g.flipped
+                ? [coords.charCodeAt(0) - 'a'.charCodeAt(0), 8 - parseInt(coords[1])]
+                : ['h'.charCodeAt(0) - coords.charCodeAt(0), parseInt(coords[1]) - 1];
+            return [(xIdx + 0.5) * square, (yIdx + 0.5) * square];
         };
     } else if (region) {
         const dpr = window.devicePixelRatio || 1;
@@ -1798,7 +1861,11 @@ function getOrientation() {
     if (site === 'chessbase') {
         // no site board to overlay; orient the popup's own board to the side to move so the solver
         // sees the puzzle from the moving side's perspective
-        return (cbState && cbState.split(' ')[1] === 'b') ? 'black' : 'white';
+        // orientation from the model when it says so, otherwise from the side to move
+        const geo = cbGeometry();
+        if (geo) return geo.flipped ? 'black' : 'white';
+        const fen = cbFen();
+        return (fen && fen.split(' ')[1] === 'b') ? 'black' : 'white';
     }
     if (isChesscomVariants()) {
         return getChesscomVariantsOrientation();
@@ -2403,7 +2470,37 @@ function scrapePositionTT() {
 // (same mechanism as tt); cbQuery just fires a query on the captured random channel.
 function cbQuery() {
     if (cbSid) { try { document.dispatchEvent(new CustomEvent(cbSid + 'q')); } catch (e) { /* stale */ } }
-    return cbState;
+    return cbFen();
+}
+
+// The probe sends {fen, geo} now and used to send the FEN as a bare string. Both are accepted: a
+// stale probe against a fresh content script is a real combination during an update.
+function cbFen() {
+    if (cbState && typeof cbState === 'object') return cbState.fen || null;
+    return cbState || null;
+}
+
+// The board's rectangle on the page, in CSS pixels, straight from ChessBase's own model -- there is
+// no element to measure and no class to match, which is why this was the blocker for arrows and
+// clicks. {x, y, size, flipped} or null when no board is up.
+function cbGeometry() {
+    if (!cbState || typeof cbState !== 'object') return null;
+    const g = cbState.geo;
+    if (!g || !(g.size > 0)) return null;
+    return g;
+}
+
+// Square -> page pixels on the ChessBase board. The same arithmetic every other board uses, over a
+// rectangle that came from the model rather than from the DOM.
+function cbSquareXY(square) {
+    const g = cbGeometry();
+    if (!g || !/^[a-h][1-8]$/.test(square || '')) return null;
+    const file = square.charCodeAt(0) - 97;
+    const rank = parseInt(square[1], 10) - 1;
+    const f = g.flipped ? 7 - file : file;
+    const r = g.flipped ? rank : 7 - rank;
+    const sq = g.size / 8;
+    return {x: g.x + (f + 0.5) * sq, y: g.y + (r + 0.5) * sq};
 }
 
 // scrape = the current FEN straight from the model, shipped WHOLE (spaces/slashes intact, no
@@ -3597,12 +3694,28 @@ function simulateClickSquare(bounds, range = 0.8, travelMs = 0) {
     return dispatchSimulateClick(x, y, travelMs);
 }
 
+// The rectangle a move is clicked into. Every site but one has a board ELEMENT to measure; ChessBase
+// paints on a canvas and has none, which is why clicking never worked there -- the same blocker as
+// the arrows, and the same answer: its own model says where the board is (see cbGeometry).
+function clickableBoardBounds() {
+    if (site === 'chessbase') {
+        const g = cbGeometry();
+        return g ? new DOMRect(g.x, g.y, g.size, g.size) : null;
+    }
+    const board = getBoard();
+    return board ? board.getBoundingClientRect() : null;
+}
+
 function simulateMove(move, deselect, think = null) {
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move ?? '')) {
         console.warn(`Mephisto: refusing to play invalid move '${move}'`); // e.g. '(none)' or a crazyhouse drop
         return Promise.resolve();
     }
-    const boardBounds = getBoard().getBoundingClientRect();
+    const boardBounds = clickableBoardBounds();
+    if (!boardBounds) {
+        console.warn('Mephisto: no board to click on');
+        return Promise.resolve();
+    }
     const orientation = getOrientation();
 
     function getBoundsFromCoords(coords) {
