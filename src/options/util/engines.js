@@ -197,6 +197,42 @@ class WasmEngine {
         return this.toResult(slots, turn, depth, nodes);
     }
 
+    // INFINITE ANALYSIS, the way an analysis board works everywhere: the engine keeps thinking about
+    // the position in front of you and the lines deepen while you look at them, until you move on.
+    // `onUpdate(lines, depth, nodes)` fires as results improve; `stop()` ends it. Maia has nothing to
+    // deepen (one forward pass), so it answers once and reports done.
+    startInfinite(fen, turn, onUpdate) {
+        const slots = new Map();
+        let nodes = 0, depth = 0, stopped = false, timer = null;
+        const emit = () => { if (!stopped) onUpdate(this.toResult(slots, turn, depth, nodes)); };
+        const collect = (msg) => {
+            if (msg.kind !== 'line') return;
+            if (/^bestmove\b/.test(msg.line)) { emit(); return; }
+            const info = Core.parseInfo(msg.line);
+            if (!info || info.bound) return;
+            nodes = Math.max(nodes, info.nodes || 0);
+            depth = Math.max(depth, info.depth);
+            const prev = slots.get(info.multipv);
+            if (!prev || info.depth >= prev.depth) slots.set(info.multipv, info);
+            // coalesced: an engine emits info far faster than a screen can show it, and rendering
+            // every line is how an analysis page becomes unusable at high depth
+            if (!timer) timer = setTimeout(() => { timer = null; emit(); }, 180);
+        };
+        this.listeners.push(collect);
+        this.send(`position fen ${fen}`);
+        this.send(this.isMaia() ? 'go' : 'go infinite');
+        return {
+            stop: () => {
+                if (stopped) return;
+                stopped = true;
+                if (timer) { clearTimeout(timer); timer = null; }
+                if (!this.isMaia()) this.send('stop');
+                const i = this.listeners.indexOf(collect);
+                if (i >= 0) this.listeners.splice(i, 1);
+            },
+        };
+    }
+
     goCommand() {
         if (this.isMaia()) return 'go';                       // one forward pass; no budget to give
         const {limitKind, limitValue} = this.opts;

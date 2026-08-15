@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.253-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.254-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -884,8 +884,17 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>42 features, newest first</summary>
+<summary>44 features, newest first</summary>
 
+- [x] **Analysis thinks until you move on** (v3.1.254) - no depth to choose: the engine keeps working on the
+  position in front of you and the lines deepen while you look at them, exactly like an analysis board should,
+  and moving to the next move stops that search and starts the next. The running depth shows beside the engine's
+  lines rather than overwriting the page's messages. **Moves by rating** now sweeps every band in 100-Elo steps -
+  Maia 1 across its twelve nets, Maia 3 across its whole 600-2600 dial from a single net.
+- [x] **One control look everywhere** (v3.1.254) - inputs, selects and text boxes are declared once, in the shared
+  stylesheet, so a field on Game Review or Analysis is the same height, frame and focus ring as the same field in
+  Settings. They had drifted apart page by page (the Analysis toolbar was 45px next to 30px elsewhere, because
+  Materialize's own rule was winning).
 - [x] **A flat menu, and Analysis leads with the board** (v3.1.253) - the sidebar no longer hides Settings and
   Appearance behind a dropdown: every page is one click, listed plainly. The Analysis page now opens on the
   board rather than on a form, with a compact strip above it for the things you change while looking at a

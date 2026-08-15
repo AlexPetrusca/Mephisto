@@ -40,34 +40,13 @@ html.dark .rv-c-blunder    { --rv-c: #d15050; }
 .rv-stack { align-items: flex-start; }
 .rv-wide { flex: 1 1 auto; min-width: 0; }
 
-.rv-pgn {
-    width: 100%;
-    min-height: 120px;
-    max-height: 320px;
-    padding: 8px 10px;
-    border: 1px solid var(--mp-line);
-    border-radius: 4px;
-    background: var(--mp-raised);
-    color: var(--mp-text);
-    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-    resize: vertical;
-}
-.rv-pgn:focus { outline: none; border-color: var(--mp-on); }
-
-.rv-input, .rv-select {
-    height: 30px;
-    padding: 0 8px;
-    border: 1px solid var(--mp-line);
-    border-radius: 4px;
-    background: var(--mp-raised);
-    color: var(--mp-text);
-    font-size: 13px;
-}
+/* the frame, the font and the focus ring live in options.css so every page's controls match;
+   what stays here is only how wide THIS page wants them */
+.rv-pgn { min-height: 120px; }
 .rv-select { max-width: 100%; }
 .rv-wide .rv-select { width: 100%; }
 .rv-narrow { max-width: 130px; }
 .rv-input { width: 160px; }
-.rv-input:focus, .rv-select:focus { outline: none; border-color: var(--mp-on); }
 
 .rv-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .rv-unit { color: var(--mp-mute); font-size: 12px; }

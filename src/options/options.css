@@ -567,3 +567,46 @@ input[type=range]::-moz-range-thumb {
     background: var(--mp-on);
     cursor: pointer;
 }
+
+/* ---- ONE CONTROL LOOK ACROSS THE WHOLE EXTENSION (3.1.254, user call) ---------------------------
+   Game Review and Analysis used to bring their own input and select rules, so the same control was
+   a slightly different height, font and background depending on which page you were on. The rules
+   live HERE now, once, and cover the plain (browser-default) controls those pages use as well as
+   the settings rows. Page stylesheets keep only their own widths and layout. */
+/* !important and the type selectors are not decoration: Materialize ships a bare
+   `input[type=number] { height: 3rem }` that loads after this file and wins otherwise -- which is
+   exactly how the Analysis toolbar ended up 45px tall next to 30px fields on the other pages. */
+.rv-input, .rv-select,
+.an-tb input, .an-tb input[type=number], .an-tb select, .an-tb select.browser-default,
+.set-ctl input[type=text], .set-ctl select.browser-default {
+    height: 30px !important;
+    margin: 0 !important;
+    padding: 0 8px !important;
+    border: 1px solid var(--mp-line) !important;
+    border-radius: 4px !important;
+    background: var(--mp-bg);
+    color: var(--mp-text);
+    font-size: 13px;
+    box-shadow: none !important;
+}
+.rv-select, .an-tb select, .set-ctl select.browser-default { padding-right: 22px; }
+.rv-input:focus, .rv-select:focus, .an-tb input:focus, .an-tb select:focus,
+.set-ctl input[type=text]:focus, .set-ctl select.browser-default:focus {
+    outline: none;
+    border-color: var(--mp-on);
+}
+/* the multi-line inputs (a PGN box, a FEN box) follow the same frame, monospace because they hold
+   notation rather than prose */
+.rv-pgn, .set-ta, textarea.set-ta {
+    width: 100%;
+    min-height: 96px;
+    max-height: 320px;
+    padding: 8px 10px;
+    border: 1px solid var(--mp-line);
+    border-radius: 4px;
+    background: var(--mp-bg);
+    color: var(--mp-text);
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    resize: vertical;
+}
+.rv-pgn:focus, .set-ta:focus { outline: none; border-color: var(--mp-on); }

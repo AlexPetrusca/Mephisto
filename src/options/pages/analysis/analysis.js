@@ -23,7 +23,6 @@ const CFG = {
     an_human: 'maia',
     an_maia_band: '1500',
     an_maia3_elo: 1500,
-    an_depth: 12,
     an_multipv: 4,
     an_threads: 1,
     an_hash: 128,
@@ -61,7 +60,6 @@ class AnalysisPage extends SettingsPage {
         this.registerFormElement('an_engine', 'Engine:', 'select', CFG.an_engine);
         const human = this.registerFormElement('an_human', 'Human model:', 'select', CFG.an_human);
         this.registerFormElement('an_maia3_elo', 'Maia 3 rating:', 'input', CFG.an_maia3_elo);
-        this.registerFormElement('an_depth', 'Depth:', 'input', CFG.an_depth);
         this.registerFormElement('an_multipv', 'Lines:', 'input', CFG.an_multipv);
         this.registerFormElement('an_threads', 'Threads:', 'input', CFG.an_threads);
         const syncMaia3 = () => {
@@ -71,7 +69,7 @@ class AnalysisPage extends SettingsPage {
         human.registerChangeListener(() => { syncMaia3(); dropRig(); });
         syncMaia3();
         // any engine-shaping setting invalidates the running engine and the cached numbers
-        for (const k of ['an_engine', 'an_depth', 'an_multipv', 'an_threads', 'an_maia3_elo']) {
+        for (const k of ['an_engine', 'an_multipv', 'an_threads', 'an_maia3_elo']) {
             const el = document.getElementById(`${k}_${k === 'an_engine' ? 'select' : 'input'}`);
             el?.addEventListener('change', () => { dropRig(); evalCache.clear(); humanCache.clear(); bandCache.clear(); });
         }
@@ -82,7 +80,7 @@ class AnalysisPage extends SettingsPage {
             band.innerHTML = MAIA_BANDS.map(b => `<option value="${b}">Maia ${b}</option>`).join('')
                 + '<option value="">Human model off</option>';
         }
-        const tb = [['an_tb_depth', 'an_depth'], ['an_tb_lines', 'an_multipv']];
+        const tb = [['an_tb_lines', 'an_multipv']];
         for (const [tbId, key] of tb) {
             const el = $(tbId);
             if (!el) continue;
@@ -201,7 +199,16 @@ function loadFromInputs() {
     const pgn = ($('an_pgn')?.value || '').trim();
     try {
         if (fen) {
-            const c = new Chess('chess', fen);        // throws on anything chess.js cannot read
+            // chess.js does NOT reliably throw on junk (found 2026-08-15: 'not a fen at all' was
+            // accepted and the page happily analysed the start position instead of saying no), so
+            // the shape is checked here first: six fields, eight ranks, a side to move.
+            const parts = fen.split(/\s+/);
+            const ranks = (parts[0] || '').split('/');
+            if (parts.length < 4 || ranks.length !== 8 || !/^[wb]$/.test(parts[1] || '')
+                || !/^[rnbqkpRNBQKP1-8]+$/.test(parts[0])) {
+                throw new Error('that does not look like a FEN');
+            }
+            const c = new Chess('chess', fen);
             positions = [{fen: c.fen(), turn: c.turn(), san: null, uci: null}];
         } else if (pgn) {
             const game = Core.parsePgn(pgn)[0];
@@ -230,6 +237,16 @@ function loadFromInputs() {
     evalCache.clear(); humanCache.clear(); bandCache.clear();
     ensureBoard(true);
     renderMoves();
+    // SAY WHAT WAS UNDERSTOOD. The PGN parser is lenient by design -- it keeps the move tokens it
+    // recognises and drops the rest -- so a mistyped or half-copied game loads as a SHORTER game
+    // rather than as an error. Silently analysing three moves of a forty-move paste is the worst
+    // of both, so the count is reported every time and a suspiciously short game says so.
+    const n = positions.length - 1;
+    if (!fen) {
+        status(n === 0 ? 'No moves were understood in that text.'
+             : n < 3 ? `Only ${n} move${n === 1 ? '' : 's'} understood -- check the text.`
+             : `Loaded ${n} moves.`, n === 0 ? 'err' : undefined);
+    }
     go(0);
 }
 
@@ -239,8 +256,10 @@ async function ensureRig() {
     if (rig) return rig;
     const opts = {
         variant: 'chess',
+        // the fallback budget for a NATIVE host, which answers a whole search rather than
+        // streaming one; the WASM path ignores this and runs `go infinite` (see startInfinite)
         limitKind: 'depth',
-        limitValue: Math.max(6, +cfg('an_depth')),
+        limitValue: 22,
         multipv: Math.max(1, +cfg('an_multipv')),
         threads: Math.max(1, +cfg('an_threads')),
         hash: Math.max(16, +cfg('an_hash')),
@@ -262,6 +281,7 @@ async function ensureRig() {
 }
 
 function dropRig() {
+    stopSearch();
     if (!rig) return;
     try { rig.engine.dispose?.(); } catch (e) { /* */ }
     try { rig.human?.dispose?.(); } catch (e) { /* */ }
@@ -273,45 +293,56 @@ function dropRig() {
 function go(ply) {
     if (!positions.length) return;
     cursor = Core.clamp(ply, 0, positions.length - 1);
-    render();                     // instant: board, move list, whatever is cached
-    if (busy) { queued = cursor; return; }
-    analyseCurrent();
+    render();                     // instant: board, move list, whatever is already known
+    analyseCurrent();             // stops the running search and starts this position's
 }
+
+// THE ENGINE NEVER STOPS ON ITS OWN (3.1.254, user call): an analysis board thinks about the
+// position in front of you until you move on, the way every analysis board does. There is no depth
+// setting here for the same reason -- the answer is "as deep as you leave it". Moving to another
+// position stops the search and starts the next one; the numbers reached so far are kept, so
+// stepping back to a position you have already looked at shows what it had found.
+let liveSearch = null;
 
 async function analyseCurrent() {
     const at = cursor;
     const pos = positions[at];
     if (!pos) return;
-    if (evalCache.has(pos.fen) && humanCacheKey(pos.fen)) { render(); return runQueued(); }
-    busy = true;
-    status('Thinking…', 'busy');
+    stopSearch();
+    let r;
     try {
-        const r = await ensureRig();
-        const [lines, human] = await Promise.all([
-            evalCache.has(pos.fen) ? Promise.resolve(evalCache.get(pos.fen))
-                                   : r.engine.analyse(pos.fen, pos.turn).then(res => {
-                                         evalCache.set(pos.fen, res);
-                                         return res;
-                                     }),
-            r.human ? humanFor(r, pos) : Promise.resolve(null),
-        ]);
-        void lines; void human;
-        if (cursor === at) { updateTallies(at); status(''); }
+        r = await ensureRig();
     } catch (e) {
-        status(String(e.message || e), 'err');
-    } finally {
-        busy = false;
-        render();
-        runQueued();
+        return status(String(e.message || e), 'err');
     }
+    if (cursor !== at) return;                       // the user moved on while the engine loaded
+    const meta0 = $('an_engine_meta');
+    if (meta0) meta0.textContent = 'thinking…';
+    liveSearch = r.engine.startInfinite(pos.fen, pos.turn, (res) => {
+        if (cursor !== at) return;
+        evalCache.set(pos.fen, res);
+        updateTallies(at);
+        renderBars(pos, res);
+        renderLines(pos, res, humanCache.get(`${pos.fen}|${bandKey()}`));
+        renderArrows(pos, res, humanCache.get(`${pos.fen}|${bandKey()}`));
+        renderTallies();
+        // the running depth belongs WITH the engine's lines, not in the page's notice line: it
+        // used to overwrite whatever the page had just told you (a refused FEN, how many moves
+        // loaded), which made those messages last about a second
+        const meta = $('an_engine_meta');
+        if (meta) meta.textContent = `depth ${res.depth}${res.nodes ? ` · ${(res.nodes / 1000).toFixed(0)}k` : ''}`;
+    });
+    // the human model answers once -- it is a single forward pass, there is nothing to deepen
+    if (r.human) {
+        humanFor(r, pos).then(() => { if (cursor === at) render(); }).catch(() => {});
+    }
+    renderBands(pos);
 }
 
-function runQueued() {
-    if (queued == null) return;
-    const next = queued;
-    queued = null;
-    if (next !== cursor) cursor = next;
-    analyseCurrent();
+function stopSearch() {
+    if (!liveSearch) return;
+    try { liveSearch.stop(); } catch (e) { /* engine already gone */ }
+    liveSearch = null;
 }
 
 function humanCacheKey(fen) { return humanCache.has(`${fen}|${bandKey()}`); }
@@ -506,42 +537,72 @@ function arrow(uci, colour, width, opacity, rank) {
 
 // How the choice changes with strength: the same position asked of several Maia bands. Computed
 // lazily and only for Maia 1 (Maia 3 is one net with a dial, so there are no bands to compare).
-const SHOWN_BANDS = ['1100', '1300', '1500', '1700', '1900', '2100'];
+// EVERY band, in 100-Elo steps (user call 2026-08-15). Maia 1 ships one net per band from 1100 to
+// 2200; Maia 3 is a single net with a rating input, so its dial is swept from 600 to 2600 -- far
+// cheaper, since it loads once and is asked twenty-one times.
+const MAIA1_STEPS = MAIA_BANDS.slice();
+const MAIA3_STEPS = Array.from({length: 21}, (_, i) => String(600 + i * 100));
+
+let bandRun = 0;   // cancels a sweep whose position is no longer on the board
 
 async function renderBands(pos) {
     const wrap = $('an_bands_wrap'), host = $('an_bands');
     if (!wrap || !host) return;
-    if (cfg('an_human') !== 'maia') { wrap.style.display = 'none'; return; }
+    const kind = cfg('an_human');
+    if (!kind) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
-    const cached = bandCache.get(pos.fen);
-    if (!cached) {
-        host.innerHTML = '<div class="an-lrow"><span></span><span class="an-lval">reading the bands…</span><span></span></div>';
-        // one net per band, one after the other: they are small, and this only runs once per position
+    const steps = kind === 'maia3' ? MAIA3_STEPS : MAIA1_STEPS;
+    const key = `${pos.fen}|${kind}`;
+    const run = ++bandRun;
+    if (!bandCache.has(key)) {
         const acc = {};
-        for (const band of SHOWN_BANDS) {
-            try {
-                const e = makeEngine('maia', {variant: 'chess', multipv: 3, maiaLevel: band,
+        // Maia 3 is ONE net asked at many ratings: load it once and sweep the dial. Maia 1 is one
+        // net PER band, so each step pays a load -- which is why its sweep is the slower of the two.
+        let shared = null;
+        try {
+            if (kind === 'maia3') {
+                shared = makeEngine('maia3', {variant: 'chess', multipv: 3, maiaLevel: steps[0],
                                               limitKind: 'depth', limitValue: 1, threads: 1, hash: 16},
-                                     `analysis-band-${band}`);
-                await e.start();
-                const r = await e.analyse(pos.fen, pos.turn);
-                acc[band] = (r.lines || []).filter(l => l.pv?.[0]).slice(0, 3)
-                    .map((l, i) => ({uci: l.pv[0], prob: [0.6, 0.28, 0.12][i]}));
-                e.dispose?.();
-            } catch (e) { acc[band] = []; }
-            if (positions[cursor]?.fen !== pos.fen) return;   // the user moved on: drop the work
-        }
-        bandCache.set(pos.fen, acc);
+                                    'analysis-band');
+                await shared.start();
+            }
+            for (let i = 0; i < steps.length; i++) {
+                const band = steps[i];
+                if (run !== bandRun || positions[cursor]?.fen !== pos.fen) { shared?.dispose?.(); return; }
+                host.innerHTML = `<div class="an-lrow"><span></span><span class="an-lval">reading the bands… ${i + 1}/${steps.length}</span><span></span></div>`;
+                try {
+                    let e = shared;
+                    if (!e) {
+                        e = makeEngine('maia', {variant: 'chess', multipv: 3, maiaLevel: band,
+                                                limitKind: 'depth', limitValue: 1, threads: 1, hash: 16},
+                                       `analysis-band-${band}`);
+                        await e.start();
+                    } else {
+                        e.send(`setoption name UCI_Elo value ${band}`);   // Maia 3's rating dial
+                    }
+                    const r = await e.analyse(pos.fen, pos.turn);
+                    acc[band] = (r.lines || []).filter(l => l.pv?.[0]).slice(0, 3)
+                        .map((l, idx) => ({uci: l.pv[0], prob: [0.6, 0.28, 0.12][idx]}));
+                    if (!shared) e.dispose?.();
+                } catch (err) { acc[band] = []; }
+            }
+        } finally { shared?.dispose?.(); }
+        if (run !== bandRun) return;
+        bandCache.set(key, acc);
     }
-    const acc = bandCache.get(pos.fen) || {};
-    // one row per move that any band likes, one cell per band
-    const moves = [...new Set(SHOWN_BANDS.flatMap(b => (acc[b] || []).map(x => x.uci)))].slice(0, 5);
-    const cols = `grid-template-columns: repeat(${SHOWN_BANDS.length}, 1fr)`;
+    const acc = bandCache.get(key) || {};
+    // one row per move any band likes, one cell per band, ordered by how often it is chosen
+    const counts = new Map();
+    for (const b of steps) for (const x of (acc[b] || [])) counts.set(x.uci, (counts.get(x.uci) || 0) + x.prob);
+    const moves = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, 6);
+    const cols = `grid-template-columns: repeat(${steps.length}, 1fr)`;
+    // only every other label when the sweep is long, or the axis becomes a smear
+    const labelEvery = steps.length > 12 ? 2 : 1;
     host.innerHTML = moves.map(uci => `
         <div class="an-band-row">
             <span class="an-band-move">${esc(sanOf(pos.fen, uci))}</span>
             <div class="an-band-cells" style="${cols}">
-                ${SHOWN_BANDS.map(b => {
+                ${steps.map(b => {
                     const hit = (acc[b] || []).find(x => x.uci === uci);
                     const pct = hit ? Math.round(hit.prob * 100) : 0;
                     return `<div class="an-band-cell" title="${b}: ${pct}%"><i style="width:${pct}%"></i></div>`;
@@ -549,7 +610,7 @@ async function renderBands(pos) {
             </div>
         </div>`).join('')
         + `<div class="an-band-row"><span></span><div class="an-band-axis" style="${cols}">`
-        + SHOWN_BANDS.map(b => `<span>${b}</span>`).join('') + '</div></div>';
+        + steps.map((b, i) => `<span>${i % labelEvery ? '' : b}</span>`).join('') + '</div></div>';
 }
 
 function renderTallies() {
