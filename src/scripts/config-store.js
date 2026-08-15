@@ -83,6 +83,43 @@
             try { saved = JSON.parse(this.get('hotkeys')) || {}; } catch (e) { /* unset/corrupt */ }
             return {...this.HOTKEY_DEFAULTS, ...saved};
         },
+        // --- ENGINES THAT ONLY UNDERSTAND A DEPTH -------------------------------------------------
+        // stockfish.online's whole API is a fen and a depth: there is nowhere to put a search TIME,
+        // so a panel set to "300 ms" would silently get whatever depth 12 costs. Selecting it moves
+        // the search budget to Depth and REMEMBERS what was there; selecting anything else puts that
+        // back. Visible state, not a hidden special case -- the Budget select really does change,
+        // and the value it restores is the user's own.
+        //
+        // It lives here rather than in either UI because BOTH can change the engine (the panel's
+        // quick-settings and the options page), and one rule in two places is one rule that drifts.
+        DEPTH_ONLY_ENGINES: ['cloud-stockfish-online'],
+        BUDGET_MEMO_KEY: 'search_mode_before_depth_only',
+
+        // Returns the search mode that should now be in force, having written it. Callers refresh
+        // their own control from the return value.
+        applyEngineBudgetRule(engine) {
+            const depthOnly = this.DEPTH_ONLY_ENGINES.includes(engine);
+            const current = (() => {
+                try { return JSON.parse(this.get('search_mode')); } catch (e) { return 'time'; }
+            })();
+            if (depthOnly) {
+                // remember only the FIRST time, so switching between two depth-only engines cannot
+                // overwrite the memo with 'depth' and lose what the user actually had
+                if (current !== 'depth' && !this.get(this.BUDGET_MEMO_KEY)) {
+                    this.set(this.BUDGET_MEMO_KEY, JSON.stringify(current));
+                }
+                this.set('search_mode', JSON.stringify('depth'));
+                return 'depth';
+            }
+            const memo = this.get(this.BUDGET_MEMO_KEY);
+            if (!memo) return current;               // we never changed it; leave the user's choice alone
+            let restored = 'time';
+            try { restored = JSON.parse(memo) || 'time'; } catch (e) { /* corrupt memo -> time */ }
+            this.remove(this.BUDGET_MEMO_KEY);
+            this.set('search_mode', JSON.stringify(restored));
+            return restored;
+        },
+
         // load chrome.storage into the cache once; one-time migrate the old localStorage config in.
         async init() {
             if (ready) return;

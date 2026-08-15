@@ -135,6 +135,14 @@ class GeneralSettings extends SettingsPage {
             });
         }
         engine_select.registerChangeListener(() => {
+            // stockfish.online takes a depth and nothing else, so choosing it moves the budget to
+            // Depth (and choosing anything else puts back whatever was there). The select has to
+            // MOVE, not just the stored value, or the page would show a budget that is not in force.
+            const budget = MephistoConfig.applyEngineBudgetRule(engine_select.getValue());
+            if (search_mode_select.getValue() !== budget) {
+                search_mode_select.setValue(budget);
+                sync_budget_rows();
+            }
             let section = variant_select.elem;
             while (!section.classList.contains('section')) {
                 section = section.parentElement
