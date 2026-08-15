@@ -574,9 +574,17 @@ function assemble(game, positions, moves, book, opts) {
             ? Math.abs(before.lines[0].cp - before.lines[1].cp) : null;
         m.onlyMove = before.lines.length === 1;
         m.isBook = m.ply < book.plies;
+        // The engine's SECOND choice, mover-relative: what the position was worth if this move had
+        // not been found. That gap is what makes a move Great rather than merely best.
+        m.secondWin = before.lines.length > 1 ? Core.winPercent(before.lines[1].cp * sign) : null;
+        // Only ask the sacrifice question when the answer can matter -- it replays an exchange on
+        // the board, and most moves cannot be brilliant anyway.
+        m.sacrifice = (!m.isBook && !m.onlyMove && m.winAfter >= 50 && m.winBefore < 90
+                       && Math.max(0, m.winBefore - m.winAfter) < 2)
+            ? Core.sacrificesMaterial(Chess, opts.variant, before.fen, m.uci) : false;
         m.klass = Core.classify({
             winBefore: m.winBefore, winAfter: m.winAfter, rank: m.rank,
-            onlyMove: m.onlyMove, isBook: m.isBook,
+            onlyMove: m.onlyMove, isBook: m.isBook, secondWin: m.secondWin, sacrifice: m.sacrifice,
         });
     }
     const phases = Core.gamePhases(positions.map(p => p.fen));
@@ -639,8 +647,9 @@ const CLASS_COLOUR = {
 };
 
 const CLASS_LABEL = {
-    best: 'Best', excellent: 'Excellent', good: 'Good', book: 'Book', forced: 'Forced',
-    inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder',
+    brilliant: 'Brilliant', great: 'Great', best: 'Best', excellent: 'Excellent', good: 'Good',
+    book: 'Book', forced: 'Forced', inaccuracy: 'Inaccuracy', mistake: 'Mistake', miss: 'Miss',
+    blunder: 'Blunder',
 };
 
 function renderReport() {

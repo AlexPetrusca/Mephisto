@@ -7,6 +7,9 @@
    in a list of eighty rows, and green-only cannot carry eight categories. They are declared once,
    here, and used by the move list, the graph markers and the summary cards alike. */
 
+.rv-c-brilliant   { --rv-c: #1aada6; }
+.rv-c-great       { --rv-c: #5c8bb0; }
+.rv-c-miss        { --rv-c: #d06c6c; }
 .rv-c-best        { --rv-c: #2f7d41; }
 .rv-c-excellent   { --rv-c: #4c9a5e; }
 .rv-c-good        { --rv-c: #7d8a91; }
@@ -15,6 +18,9 @@
 .rv-c-inaccuracy  { --rv-c: #b8860b; }
 .rv-c-mistake     { --rv-c: #cc7722; }
 .rv-c-blunder     { --rv-c: #b03030; }
+html.dark .rv-c-brilliant  { --rv-c: #26c2b8; }
+html.dark .rv-c-great      { --rv-c: #7aa9cf; }
+html.dark .rv-c-miss       { --rv-c: #e08585; }
 html.dark .rv-c-best       { --rv-c: #4bb265; }
 html.dark .rv-c-excellent  { --rv-c: #63b478; }
 html.dark .rv-c-good       { --rv-c: #98a3aa; }

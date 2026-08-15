@@ -5288,11 +5288,14 @@ function live_stats(history) {
 function win_percent(cp) {
     return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
 }
-// judgement label from a win% DROP (before - after), matching Lichess's 30/20/10 thresholds.
+// Judgement label from a win% DROP (before - after). 20/10/5, the published chess.com bands the
+// Game Review uses since 3.1.251 -- the panel and the review MUST agree, or the same move gets two
+// verdicts depending on which screen you read it on (they were 30/20/10 here and in the review
+// before that release, so both moved together).
 function win_drop_label(drop) {
-    if (drop >= 30) return 'blunder';
-    if (drop >= 20) return 'mistake';
-    if (drop >= 10) return 'inaccuracy';
+    if (drop >= 20) return 'blunder';
+    if (drop >= 10) return 'mistake';
+    if (drop >= 5) return 'inaccuracy';
     return null;
 }
 
