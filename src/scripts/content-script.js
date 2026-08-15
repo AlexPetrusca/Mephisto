@@ -3205,23 +3205,46 @@ const GRIND_POLL_MS = 1000;
 let grindTimer = null;      // the countdown to the click, so it can be called off
 let grindSeenFollowUp = false;
 
-// The control that starts a NEW game, out of whatever Lichess put in the follow-up box. Text first
-// (it is what the button says in every language Lichess ships), then the pool link as a fallback.
+// The control that starts a NEW game, out of whatever Lichess put in the follow-up box.
+//
+// CAPTURED FROM A REAL GAME AGAINST A PERSON (an engine game never renders it at all):
+//
+//   <div class="follow-up">
+//     <button class="fbt rematch white" disabled><span>Revanche</span></button>
+//     <button class="fbt new-opponent">Neuer Gegner</button>
+//     <a class="fbt" href="/KTJ9Whbm/white#2">Analysebrett</a>
+//   </div>
+//
+// So the button carries its own class, `new-opponent`, and that is the match: Lichess ships in
+// about 130 languages and matching on the WORD only ever worked in the few anyone thought to list.
+// The pool variant of the same button is the one that reads "New 1+1".
+//
+// The structural rule below is the fallback for the day that class changes. It has to be careful:
+// the analysis link is an ANCHOR back into the game just played, and it is not always recognisable
+// as "analysis" -- in the capture above it is a bare `fbt` whose href is the game id. Matching on
+// the word let it be clicked once, in a live test, which is what the game-id rule prevents.
 function grindNewGameButton() {
     const box = document.querySelector('.follow-up');
     if (!box) return null;
-    const controls = [...box.querySelectorAll('button, a')].filter(e => e.offsetParent !== null);
-    const text = (e) => (e.textContent || '').trim();
-    // never the analysis board, and never anything that leaves the game for a different page
-    const notAnalysis = (e) => !/analysis|analyse|analysebrett/i.test(text(e))
-        && !/\/analysis/.test(e.getAttribute?.('href') || '');
-    const newGame = controls.filter(notAnalysis).find(e =>
-        /^(new|neue[rs]?|nouvelle?|nueva|nuova|新|ny|nowa|nova)\b/i.test(text(e))
-        || /opponent|gegner|adversaire|oponente|avversario/i.test(text(e)));
-    if (newGame) return newGame;
-    // a pool re-entry can render as a plain link back to the lobby with the same time control
-    const pool = controls.filter(notAnalysis).find(e => /^\/\?(hook|pool|time)/.test(e.getAttribute?.('href') || ''));
-    return pool || null;
+    const usable = (e) => e && e.offsetParent !== null && !e.disabled;
+    const named = [...box.querySelectorAll('.new-opponent')].find(usable);
+    if (named) return named;
+
+    const cls = (e) => (e.className || '').toString().toLowerCase();
+    const href = (e) => (e.getAttribute?.('href') || '').toLowerCase();
+    const gameId = (location.pathname.split('/')[1] || '').toLowerCase().slice(0, 8);
+    const backIntoThisGame = (e) => {
+        const h = href(e);
+        if (!h) return false;
+        return /\/analysis/.test(h) || (gameId.length >= 8 && h.includes(gameId));
+    };
+    const candidates = [...box.querySelectorAll('button, a')].filter(usable)
+        .filter(e => !/analys/.test(cls(e)) && !backIntoThisGame(e))
+        .filter(e => !/rematch/.test(cls(e)))
+        .filter(e => !/\/study|\/download|\.pgn|\/tv|\/training/.test(href(e)));
+    return candidates.find(e => (e.tagName || '').toUpperCase() === 'BUTTON')
+        || candidates.find(e => /^\/(\?|$)/.test(href(e)))
+        || null;
 }
 
 function grindCancel(why) {

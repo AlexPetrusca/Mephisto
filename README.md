@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.265-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.266-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -878,8 +878,16 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>56 features, newest first</summary>
+<summary>57 features, newest first</summary>
 
+- [x] **Grind Mode picks its button by structure, not by language** (v3.1.266) - the first version matched the
+  word "New", which works in the handful of languages someone thought to list and in none of the other ~120
+  Lichess ships. The markup was captured from a real game against a person instead: the control carries its own
+  class, `new-opponent`, and that is what is matched now. The fallback, for the day that class changes, is
+  structural too - and it had to be, because the analysis link is not always recognisable as one: Lichess renders
+  it as a bare `<a class="fbt" href="/GAMEID/white#2">`, which a live test caught being clicked. It is excluded by
+  the game id in its href, not by the word. Verified end to end against a person: two moves, resign, and it
+  clicked "Neuer Gegner" after the delay.
 - [x] **Grind Mode** (v3.1.265) - Lichess only, opt-in, and only while Autoplay is on: when a game finishes,
   Mephisto clicks the control that starts the next one (the "New 1+1" of a pool game, "New opponent" elsewhere)
   so a session keeps going. **Grind Delay** is the window in which you can stop it - close the tab, navigate away
