@@ -742,7 +742,10 @@ shipped, which is a good sign and also why the next item is a bigger one.
 
 **Worth real work.** The ones that would change how this feels to use, and cost accordingly.
 
-- [ ] **A faster board recogniser** - partly answered in v3.1.255. Measured per read: decode 25ms, board
+- [ ] **A faster board recogniser** - partly answered in v3.1.255, and again in v3.1.269 by giving the model
+  more threads: the cap of 4 was measured against 5, 6 and 8 on a 10-core Mac (754/635/610/589/704ms at
+  2/4/5/6/8), so the rule is now 0.6 x cores capped at 6 - **589ms against 635ms**, and deliberately a no-op
+  below ten cores. Measured per read: decode 25ms, board
   detection 84ms, position model 645ms. The position model is **already int8-quantised** (MatMulInteger /
   ConvInteger), so quantisation is spent; caching (frame, board box, crop) took repeat reads to **2-3ms**, but a
   board that genuinely changed still pays ~700ms. **WebGPU was tried and measured (v3.1.256): 774ms against the WASM build's 631ms on the same
