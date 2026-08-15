@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-3.1.269-3fb950)
-![Engines](https://img.shields.io/badge/engines-8-58a6ff)
+![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
 ![Source](https://img.shields.io/badge/source-MIT-green)
@@ -430,7 +430,7 @@ host otherwise just looks like a panel that never evaluates.
 | **Lichess** | ✅ | ✅ incl. AI & From Position | ✅ | ✅ Storm · Racer · Training | ✅ live & correspondence | All Lichess variants + Chess960 |
 | **TakeTakeTake** | ✅ | ✅ bot games | ✅ | - | ✅ Lichess-backed | - |
 | **BlitzTactics** | ✅ | ✅ | - | ✅ puzzle streams | - | - |
-| **ChessBase Tactics** | ✅ | - | - | ✅ Solve / Sprint | - | - |
+| **ChessBase Tactics** | ✅ arrows on the canvas | ✅ v3.1.269 | - | ✅ Solve / Sprint | - | - |
 
 ---
 
