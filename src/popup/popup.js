@@ -331,6 +331,12 @@ async function initPanel(root, tabId) {
         // must not forget the other number, which is why they are separate keys rather than one
         // value with a unit attached.
         search_mode: (JSON.parse(MephistoConfig.get('search_mode')) === 'depth') ? 'depth' : 'time',
+        // GRIND MODE. The content script is what watches for the end of a game and clicks the
+        // button that starts the next one, and the content script only ever sees the keys listed
+        // here -- a setting absent from this object is a setting that silently does nothing, which
+        // is exactly how the first version of this behaved.
+        grind_mode: JSON.parse(MephistoConfig.get('grind_mode')) || false,
+        grind_delay: Math.max(0, Math.min(600, JSON.parse(MephistoConfig.get('grind_delay') ?? '5') ?? 5)),
         // SAN or UCI, everywhere a move is written. Nf3 and g1f3 are the same move; which one
         // reads faster is a property of the reader, not of the move.
         move_notation: (JSON.parse(MephistoConfig.get('move_notation')) === 'uci') ? 'uci' : 'san',

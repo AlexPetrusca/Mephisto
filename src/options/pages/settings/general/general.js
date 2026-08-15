@@ -73,6 +73,10 @@ class GeneralSettings extends SettingsPage {
         this.registerFormElement('threat_analysis', 'Show Threat Analysis', 'checkbox', false);
         this.registerFormElement('simon_says_mode', '"Hand and Brain" Mode:', 'checkbox', false);
         this.registerFormElement('autoplay', 'Autoplay:', 'checkbox', false);
+        // Grind Mode rides on Autoplay -- it only ever acts while Autoplay is on -- and its delay is
+        // the window in which the next game can still be called off.
+        this.registerFormElement('grind_mode', 'Grind Mode:', 'checkbox', false);
+        this.registerFormElement('grind_delay', 'Grind Delay (s):', 'input', 5);
         this.registerFormElement('premove', 'Premove:', 'checkbox', false);
         this.registerFormElement('ponder', 'Pondering:', 'checkbox', false);
         this.registerFormElement('tablebase', 'Endgame Tablebase:', 'checkbox', false);

@@ -3189,6 +3189,98 @@ function writeStartPos(url, startPos) {
     saveStartPosCache();
 }
 
+// --- GRIND MODE ------------------------------------------------------------------------------
+// When a game ends on Lichess, click the button that starts the next one. Opt-in, and gated on
+// AUTOPLAY being on (user call): grinding games without the engine playing them is not a thing
+// anyone asked for, and it makes the mode impossible to trigger by accident.
+//
+// Lichess renders its end-of-game controls into `.follow-up` -- captured live rather than guessed:
+// a computer game shows `button.fbt.rematch` plus an analysis link; a pool game shows the
+// "New <time control>" button instead ("New 1+1"). The analysis link is excluded by construction,
+// and a rematch is NOT a new opponent, so it is only used when nothing better is offered.
+//
+// EVERY FAILURE HERE IS SILENT. It is a convenience on someone else's markup: if the button is not
+// where it was, the right outcome is that nothing happens and the game simply stays finished.
+const GRIND_POLL_MS = 1000;
+let grindTimer = null;      // the countdown to the click, so it can be called off
+let grindSeenFollowUp = false;
+
+// The control that starts a NEW game, out of whatever Lichess put in the follow-up box. Text first
+// (it is what the button says in every language Lichess ships), then the pool link as a fallback.
+function grindNewGameButton() {
+    const box = document.querySelector('.follow-up');
+    if (!box) return null;
+    const controls = [...box.querySelectorAll('button, a')].filter(e => e.offsetParent !== null);
+    const text = (e) => (e.textContent || '').trim();
+    // never the analysis board, and never anything that leaves the game for a different page
+    const notAnalysis = (e) => !/analysis|analyse|analysebrett/i.test(text(e))
+        && !/\/analysis/.test(e.getAttribute?.('href') || '');
+    const newGame = controls.filter(notAnalysis).find(e =>
+        /^(new|neue[rs]?|nouvelle?|nueva|nuova|新|ny|nowa|nova)\b/i.test(text(e))
+        || /opponent|gegner|adversaire|oponente|avversario/i.test(text(e)));
+    if (newGame) return newGame;
+    // a pool re-entry can render as a plain link back to the lobby with the same time control
+    const pool = controls.filter(notAnalysis).find(e => /^\/\?(hook|pool|time)/.test(e.getAttribute?.('href') || ''));
+    return pool || null;
+}
+
+function grindCancel(why) {
+    if (!grindTimer) return;
+    clearTimeout(grindTimer);
+    grindTimer = null;
+    console.debug('Mephisto: grind cancelled --', why);
+}
+
+// A trusted click first, the same way a move is played. Then CHECK, because a click dispatched at
+// screen coordinates can be taken by whatever happens to be over that point -- our own panel, a
+// toast, a cookie bar -- and the outcome is a click that goes nowhere quietly. If the game is still
+// sitting there a moment later, click the element itself: this is a lichess button with an ordinary
+// listener, not a move on the board, so nothing here depends on the click being trusted.
+const GRIND_VERIFY_MS = 800;
+function grindClick(el) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    try {
+        chrome.runtime.sendMessage({cdpClick: true, x, y, travelMs: 0},
+            () => void chrome.runtime.lastError);
+    } catch (e) { /* silent by design */ }
+    setTimeout(() => {
+        if (!document.querySelector('.follow-up')) return;   // it worked; the game is on its way
+        try { el.click(); } catch (e) { /* silent by design */ }
+    }, GRIND_VERIFY_MS);
+}
+
+function grindTick() {
+    if (site !== 'lichess' || !config || !config.grind_mode || !config.autoplay) {
+        grindCancel('mode off');
+        grindSeenFollowUp = false;
+        return;
+    }
+    const box = document.querySelector('.follow-up');
+    if (!box) {                       // back in a game (or never finished one): reset and wait
+        grindCancel('the game is not over');
+        grindSeenFollowUp = false;
+        return;
+    }
+    if (grindSeenFollowUp) return;    // already counting down for THIS game
+    grindSeenFollowUp = true;
+    // The delay is the whole point of the setting: it is the window in which you can stop the next
+    // game from being searched for, by closing the tab, navigating away, or switching the mode off.
+    const wait = Math.max(0, Math.min(600, Number(config.grind_delay) || 0)) * 1000;
+    console.debug(`Mephisto: grind -- next game in ${wait / 1000}s`);
+    grindTimer = setTimeout(() => {
+        grindTimer = null;
+        if (!config.grind_mode || !config.autoplay) return;   // switched off while we waited
+        const btn = grindNewGameButton();
+        if (!btn) return console.debug('Mephisto: grind found nothing to click');
+        console.debug('Mephisto: grind clicking', (btn.textContent || '').trim().slice(0, 30));
+        grindClick(btn);
+    }, wait);
+}
+
+setInterval(grindTick, GRIND_POLL_MS);
+
 function determineStartPosition() {
     startPosCache = loadStartPosCache();
     // scrape the position when the board and pieces are present

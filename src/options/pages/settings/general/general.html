@@ -467,6 +467,33 @@
 
                 <div class="set-row set-toggle">
                     <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.grind_mode" class="tooltipped" data-position="right"
+                              data-tooltip="Lichess only, and only while Autoplay is on. When a game finishes, Mephisto clicks the button that starts the next one -- the &quot;New 1+1&quot; (or &quot;New opponent&quot;) control Lichess puts under a finished game -- so a session keeps going without you. The delay below is your window to stop it: close the tab, navigate away or switch this off during it and no new game is searched for. If the button is not where it was expected, nothing happens and the game simply stays finished.">Grind Mode <i class="material-icons info-tooltip">info</i></span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="grind_mode_checkbox" type="checkbox" class="set-cb">
+                        <label for="grind_mode_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row" id="grind_delay_row">
+                    <div class="set-lbl">
+                        <span data-i18n-tip="set.tip.grind_delay" class="tooltipped" data-position="right"
+                              data-tooltip="How long to wait after a game ends before the next one is started. This is the window in which you can stop it -- 0 starts immediately, and the maximum is 600 seconds.">Grind Delay (s) <i class="material-icons info-tooltip">info</i></span>
+                    </div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" data-step="-1" data-target="grind_delay_input">-</button>
+                            <input id="grind_delay_input" type="number" min="0" max="600" step="1">
+                            <button type="button" data-step="1" data-target="grind_delay_input">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl">
                         <span data-i18n="panel.premove">Premove</span>
                         <span class="set-tip tooltipped" data-position="left" data-i18n-tip="set.tip.while_the_opponent_thinks_certify"
                               data-tooltip="While the opponent thinks, certify a reply to their predicted move.

@@ -426,5 +426,7 @@
   "an.tip.band": "Which rating the human model plays at. Maia 1 has a net per band; Maia 3 is one net with a dial.",
   "an.tip.hash": "Hash memory for the analysis engine. More helps a long search on one position.",
   "an.tip.wdl": "Show the engine's win, draw and loss percentages beside the board.",
-  "an.tip.book": "Show book moves for the position from a book you load below."
+  "an.tip.book": "Show book moves for the position from a book you load below.",
+  "set.tip.grind_mode": "Lichess only, and only while Autoplay is on. When a game finishes, Mephisto clicks the button that starts the next one -- the \"New 1+1\" (or \"New opponent\") control Lichess puts under a finished game -- so a session keeps going without you. The delay below is your window to stop it: close the tab, navigate away or switch this off during it and no new game is searched for. If the button is not where it was expected, nothing happens and the game simply stays finished.",
+  "set.tip.grind_delay": "How long to wait after a game ends before the next one is started. This is the window in which you can stop it -- 0 starts immediately, and the maximum is 600 seconds."
 }
