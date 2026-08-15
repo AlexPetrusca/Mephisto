@@ -314,7 +314,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
         lastPushKey = lastDisplayKey = null; // config may change how we scrape (variant) -> never dedupe across configs
         schedulePush();
     } else if (response.drawHint) {
-        drawHintArrows(response.arrows);
+        drawHintArrows(response.arrows, response.region);
     } else if (response.clearHint) {
         clearHintArrow();
     } else if (response.drawEvalBar) {
@@ -921,7 +921,12 @@ function arrowAlpha() {
     return Math.max(0.05, Math.min(1, pct / 100)).toFixed(3);
 }
 
-function drawHintArrows(arrows) {
+// `region`, when given, is the board the SCREEN READER is following: {x, y, w, h} in CAPTURED
+// IMAGE pixels (what the recogniser reports), plus whether that board is seen from black's side.
+// The capture is the visible tab at devicePixelRatio, so image pixels / dpr are page pixels --
+// which is what lets the answer be drawn onto the board it was read from, screenshot or video,
+// instead of only in the panel.
+function drawHintArrows(arrows, region) {
     // FOUR-PLAYER. The 8x8 filter below rejects a move like `m8l8` outright, which is why Help Mode
     // drew nothing at all on a 4PC board -- the arrows were requested, then discarded here. The
     // geometry differs on every axis (14 files, 14 ranks, four rotations), so it gets its own
@@ -931,7 +936,7 @@ function drawHintArrows(arrows) {
     const moveRe = fourpc ? new RegExp(`^${SQ4}${SQ4}[qrbnQRBN]?$`) : /^[a-h][1-8][a-h][1-8][qrbn]?$/;
     arrows = (arrows || []).filter(a => a && moveRe.test(a.move ?? ''));
     // help mode redraws on every engine update; skip the DOM churn while the arrows are unchanged
-    const key = JSON.stringify(arrows);
+    const key = JSON.stringify([arrows, region || null]);
     if (key === lastHintKey && overlayEl(HINT_OVERLAY_ID)) return;
     clearHintArrow();
     if (!arrows.length) return;
@@ -952,6 +957,20 @@ function drawHintArrows(arrows) {
         squareCenter = (sq) => {
             const pt = fourPCSquareXY(sq);
             return pt ? [pt.x - bounds.left, pt.y - bounds.top] : [0, 0];
+        };
+    } else if (region) {
+        const dpr = window.devicePixelRatio || 1;
+        // A read board is square by construction (the recogniser crops to it), so one edge would do;
+        // both are used so a slightly non-square box still lands the arrows inside it.
+        bounds = {left: region.x / dpr, top: region.y / dpr,
+                  width: region.w / dpr, height: region.h / dpr};
+        square = bounds.width / 8;
+        const sqH = bounds.height / 8;
+        squareCenter = (coords) => {
+            const [xIdx, yIdx] = !region.flipped
+                ? [coords.charCodeAt(0) - 'a'.charCodeAt(0), 8 - parseInt(coords[1])]
+                : ['h'.charCodeAt(0) - coords.charCodeAt(0), parseInt(coords[1]) - 1];
+            return [(xIdx + 0.5) * square, (yIdx + 0.5) * sqH];
         };
     } else {
         const board = getBoard();
