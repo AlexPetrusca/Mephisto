@@ -878,7 +878,14 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>59 features, newest first</summary>
+<summary>60 features, newest first</summary>
+
+- [x] **Grind Mode confirmed on Chess.com** (v3.1.268) - the click-through v3.1.267 could not verify is
+  confirmed working in a real game by Sam. Chess.com renders that button two ways and both are handled: the
+  labelled variant carries `new-game-buttons-label`, which says what the button is in any language and is matched
+  first; the bare variant carries nothing but utility classes, so it falls through to the time control in the
+  label ("New 1 min", "New 3 | 2"), which is now read from the `aria-label` as well so an icon-only button is
+  still found.
 
 - [x] **The Grind Delay stepper looks and works like every other one** (v3.1.268) - it was written by hand
   without `set-step-btn`, the class that both styles it and makes it work, so it rendered as a raw white browser
@@ -891,9 +898,8 @@ veto for real blunders, and the clock rules above.
   where "New" does not, so that is the match, and Game Review, Rematch and New Bot carry no time control and are
   never taken for it. **Honest about the evidence:** the modal container and the button markup are both from real
   chess.com games (a bot game I played and resigned, and the button HTML from one of Sam's online games), and the
-  chooser is executed against that exact markup in the test suite - but the full click-through has not yet been
-  confirmed in a live online game there, because pairing one unrated took longer than the session allowed. On
-  Lichess it is verified end to end.
+  chooser is executed against that exact markup in the test suite. The click-through was confirmed in a real
+  game shortly afterwards (see v3.1.268). On Lichess it is verified end to end.
 - [x] **Grind Mode picks its button by structure, not by language** (v3.1.266) - the first version matched the
   word "New", which works in the handful of languages someone thought to list and in none of the other ~120
   Lichess ships. The markup was captured from a real game against a person instead: the control carries its own
