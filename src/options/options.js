@@ -65,8 +65,19 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // Every page's nav entry carries its path as its id, so a nav entry is also the test of whether
+    // a page exists. A hash nobody has any more -- a bookmark from before a page was renamed, a typo,
+    // an old link -- used to throw here (getElementById returns null, updateActiveTab reads .hash off
+    // it) and leave a BLANK options page with no way back except editing the URL by hand.
+    const DEFAULT_PAGE = 'settings/general';
+
     async function injectPage(pagePath) {
-        updateActiveTab(document.getElementById(pagePath));
+        const navEntry = document.getElementById(pagePath);
+        if (!navEntry) {
+            if (pagePath === DEFAULT_PAGE) return;   // the default itself is gone: nothing to fall back to
+            return injectPage(DEFAULT_PAGE);
+        }
+        updateActiveTab(navEntry);
         const title = pagePath.substring(pagePath.lastIndexOf('/') + 1);
         const path = pagePath.substring(0, pagePath.lastIndexOf('/') + 1) + title;
         const componentPath = `pages/${path}/${title}`;
@@ -118,5 +129,5 @@ document.addEventListener('DOMContentLoaded', function () {
         elem.addEventListener('click', e => onClick(e));
     });
 
-    injectPage(location.hash.substring(1) || 'settings/general');
+    injectPage(location.hash.substring(1) || DEFAULT_PAGE);
 });
