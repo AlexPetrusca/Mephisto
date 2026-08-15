@@ -30,10 +30,11 @@ const ENGINES = [
 ];
 
 // The human model. Its own list because it answers its own question, and because the bands are the
-// nets that actually ship: Maia 1 is nine 100-point bands from 1100 to 2200, Maia 3 is one net with
-// a rating dial.
-const MAIA_BANDS = ['1100', '1200', '1300', '1400', '1500', '1600', '1700', '1800', '1900',
-                    '2000', '2100', '2200'];
+// nets that ACTUALLY SHIP -- lib/engine/maia holds maia-1100 through maia-1900 and maia-2200,
+// and nothing else. 2000 and 2100 were offered here and have never existed: picking one failed to
+// load, and the Analysis page's moves-by-rating chart drew both as a dive to zero in the middle of
+// every line, which is how they were finally noticed.
+const MAIA_BANDS = ['1100', '1200', '1300', '1400', '1500', '1600', '1700', '1800', '1900', '2200'];
 
 const CFG_DEFAULTS = {
     rv_engine: 'stockfish-18-nnue',
