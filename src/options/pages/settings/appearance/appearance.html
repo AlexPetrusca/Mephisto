@@ -30,6 +30,52 @@
                 </div>
 
                 
+
+                <div class="set-row">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.board" class="tooltipped" data-position="right" data-tooltip="Which board colours the panel's own board uses."><span data-i18n="set.board">Board:</span></span></div>
+                    <div class="set-ctl">
+                        <select name="board" id="board_select">
+                            <option value="brown" data-icon="/res/chessboards/previews/brown.png">Brown</option>
+                            <option value="red" data-icon="/res/chessboards/previews/red.png">Red</option>
+                            <option value="orange" data-icon="/res/chessboards/previews/orange.png">Orange</option>
+                            <option value="tan" data-icon="/res/chessboards/previews/tan.png">Tan</option>
+                            <option value="green" data-icon="/res/chessboards/previews/green.png">Green</option>
+                            <option value="sky" data-icon="/res/chessboards/previews/sky.png">Sky</option>
+                            <option value="blue" data-icon="/res/chessboards/previews/blue.png">Blue</option>
+                            <option value="purple" data-icon="/res/chessboards/previews/purple.png">Purple</option>
+                            <option value="grey" data-icon="/res/chessboards/previews/grey.png">Grey</option>
+                            <option value="wood" data-icon="/res/chessboards/previews/wood.png">Wood</option>
+                            <option value="marble" data-icon="/res/chessboards/previews/marble.png">Marble</option>
+                            <option value="newspaper" data-icon="/res/chessboards/previews/newspaper.png">Newspaper</option>
+                            <option value="_8-bit" data-icon="/res/chessboards/previews/8-bit.png">8-Bit</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.coordinates" class="tooltipped" data-position="right" data-tooltip="Show file letters and rank numbers on the panel's board."><span data-i18n="set.coordinates">Coordinates:</span></span></div>
+                    <div class="set-ctl">
+                        <input id="coordinates_checkbox" type="checkbox" class="set-cb">
+                        <label for="coordinates_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.dark_mode" class="tooltipped" data-position="right" data-tooltip="Dark colours for the settings pages and the panel."><span data-i18n="set.dark_mode">Dark Mode:</span></span></div>
+                    <div class="set-ctl">
+                        <input id="dark_mode_checkbox" type="checkbox" class="set-cb">
+                        <label for="dark_mode_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <section id="arrow_colours" class="set-sec scrollspy">
+                <h3 data-i18n="set.arrow_colours" class="set-h">Arrow colours</h3>
+
                 <div class="set-row">
                     <div class="set-lbl"><span data-i18n-tip="set.tip.board" class="tooltipped" data-position="right" data-tooltip="Which board colours the panel's own board uses."><span data-i18n="set.arrow_color_line1">Line 1 Arrow</span></span></div>
                     <div class="set-ctl">
@@ -130,46 +176,6 @@
                     </div>
                 </div>
 
-                <div class="set-row">
-                    <div class="set-lbl"><span data-i18n-tip="set.tip.board" class="tooltipped" data-position="right" data-tooltip="Which board colours the panel's own board uses."><span data-i18n="set.board">Board:</span></span></div>
-                    <div class="set-ctl">
-                        <select name="board" id="board_select">
-                            <option value="brown" data-icon="/res/chessboards/previews/brown.png">Brown</option>
-                            <option value="red" data-icon="/res/chessboards/previews/red.png">Red</option>
-                            <option value="orange" data-icon="/res/chessboards/previews/orange.png">Orange</option>
-                            <option value="tan" data-icon="/res/chessboards/previews/tan.png">Tan</option>
-                            <option value="green" data-icon="/res/chessboards/previews/green.png">Green</option>
-                            <option value="sky" data-icon="/res/chessboards/previews/sky.png">Sky</option>
-                            <option value="blue" data-icon="/res/chessboards/previews/blue.png">Blue</option>
-                            <option value="purple" data-icon="/res/chessboards/previews/purple.png">Purple</option>
-                            <option value="grey" data-icon="/res/chessboards/previews/grey.png">Grey</option>
-                            <option value="wood" data-icon="/res/chessboards/previews/wood.png">Wood</option>
-                            <option value="marble" data-icon="/res/chessboards/previews/marble.png">Marble</option>
-                            <option value="newspaper" data-icon="/res/chessboards/previews/newspaper.png">Newspaper</option>
-                            <option value="_8-bit" data-icon="/res/chessboards/previews/8-bit.png">8-Bit</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="set-row set-toggle">
-                    <div class="set-lbl"><span data-i18n-tip="set.tip.coordinates" class="tooltipped" data-position="right" data-tooltip="Show file letters and rank numbers on the panel's board."><span data-i18n="set.coordinates">Coordinates:</span></span></div>
-                    <div class="set-ctl">
-                        <input id="coordinates_checkbox" type="checkbox" class="set-cb">
-                        <label for="coordinates_checkbox" class="set-tgl">
-                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="set-row set-toggle">
-                    <div class="set-lbl"><span data-i18n-tip="set.tip.dark_mode" class="tooltipped" data-position="right" data-tooltip="Dark colours for the settings pages and the panel."><span data-i18n="set.dark_mode">Dark Mode:</span></span></div>
-                    <div class="set-ctl">
-                        <input id="dark_mode_checkbox" type="checkbox" class="set-cb">
-                        <label for="dark_mode_checkbox" class="set-tgl">
-                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
-                        </label>
-                    </div>
-                </div>
             </section>
 
             <section id="language" class="set-sec scrollspy">
@@ -196,6 +202,7 @@
         <div class="toc-wrapper pin-top">
             <ul id="toc" class="section table-of-contents">
                 <li><a data-i18n="set.board_and_pieces" href="#board_and_pieces">Board and Pieces</a></li>
+                <li><a data-i18n="set.arrow_colours" href="#arrow_colours">Arrow colours</a></li>
                 <li><a data-i18n="set.language" href="#language">Language</a></li>
             </ul>
         </div>

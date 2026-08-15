@@ -380,5 +380,6 @@
   "set.tip.arrow_color_forced_theirs": "Colour of the opponent's forced replies in a forced continuation.",
   "set.tip.arrow_color_pv_walk": "Colour of the numbered PV Arrows that draw the whole line ahead.",
   "set.tip.arrow_color_threat": "Colour of the arrow showing what the opponent threatens.",
-  "set.tip.arrow_color_book": "Colour of the arrows for opening-book moves."
+  "set.tip.arrow_color_book": "Colour of the arrows for opening-book moves.",
+  "set.arrow_colours": "Arrow colours"
 }

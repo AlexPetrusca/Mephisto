@@ -40,7 +40,26 @@ export class SettingsPage {
         await window.mephistoApplyLanguage?.();
         this.init();
         MephistoI18n.apply(document); // the page's own markup, which only exists after init()
+        this.decorateTooltips();
         this.pullConfigValues();
+    }
+
+    // A DESCRIPTION NOBODY CAN FIND IS NOT A DESCRIPTION. v3.1.249 gave every setting a tooltip and
+    // they were invisible in practice (user report): most rows had no marker to hover, only a
+    // handful of legacy rows carried the info icon, the Appearance page never called M.Tooltip.init
+    // at all, and Materialize waited a full second before showing anything. So: one info icon on
+    // every tooltipped label, initialised HERE for whatever page this is, at a delay that feels
+    // like a hover rather than a wait. Runs after init() and after translation, so the icon is
+    // never re-translated away and the tooltip text Materialize snapshots is the final one.
+    decorateTooltips() {
+        for (const el of document.querySelectorAll('.tooltipped[data-tooltip]')) {
+            if (el.querySelector('.info-tooltip')) continue;      // legacy rows already have one
+            const icon = document.createElement('i');
+            icon.className = 'material-icons info-tooltip';
+            icon.textContent = 'info';
+            el.appendChild(icon);
+        }
+        M.Tooltip.init(document.querySelectorAll('.tooltipped'), {enterDelay: 250});
     }
 
     clearConfigValues() {
