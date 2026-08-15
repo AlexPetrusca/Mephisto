@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.261-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.262-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -876,8 +876,17 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>52 features, newest first</summary>
+<summary>53 features, newest first</summary>
 
+- [x] **Cloud engines analyse the position in front of you** (v3.1.262) - a bug fix for v3.1.260, reported
+  with two screenshots. On a live game the panel asks its engine about the game's START position plus the
+  moves played since, which is what the native hosts and remote-engine.py take. A cloud provider has nowhere
+  to put a move list, and the moves were being dropped - so every cloud answer after the first move was an
+  answer to the starting position ("best move is d2d4" beside a board that had left the opening). The moves
+  are now replayed onto the position before it is sent, and if any move does not fit, nothing is sent at all:
+  an answer to the wrong position is worse than no answer. Measured before and after on lichess with three
+  moves played: the released build asked about the start position five times out of five, the fix asks about
+  the board.
 - [x] **The cloud engines use the budget you set** (v3.1.261) - chess-api.com takes a thinking time, so the
   panel's Search Time is now sent to it and means something (measured: 50ms reaches depth 14, 2s reaches 16),
   with the depth setting as the ceiling. stockfish.online takes a fen and a depth and nothing else, so choosing
