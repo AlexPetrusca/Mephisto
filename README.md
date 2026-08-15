@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.259-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.260-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -145,7 +145,7 @@ Updating by hand still works exactly as before, and is still the whole story if 
 
 ## Engines
 
-Everything runs locally via WebAssembly - no server, no account, nothing leaves your machine.
+Everything runs locally via WebAssembly - no server, no account, nothing leaves your machine. The two **Cloud** entries at the bottom of the table are the one exception, and they are opt-in: choosing one sends the position you are looking at to that provider on every move.
 
 | Engine | Notes |
 | --- | --- |
@@ -157,6 +157,7 @@ Everything runs locally via WebAssembly - no server, no account, nothing leaves 
 | **Maia** | The original Maia-1 nets, one per band (**1100–1900**, plus a **2200**). |
 | **Tetrarch (4-player)** | Four-player chess only - see [four-player chess](#four-player-chess). Needs a one-time install. |
 | **Remote / native** | A real engine binary outside the browser - see [full-power engines](#full-power-native-engines-optional). |
+| **Cloud: chess-api.com / stockfish.online** | A real server-side Stockfish over HTTPS - nothing to install, for a machine that cannot run a strong engine locally. **The position leaves your machine on every move.** Depth-limited (12 by default, capped at 18 and 15 respectively) and one line, so a local engine is both faster and private; this is a fallback, not an upgrade. |
 
 <img src="docs/maia3.png" alt="Maia-3 with the 600-2600 rating slider" width="49%"> <img src="docs/variants.png" alt="Atomic on Lichess, analysed by Fairy-Stockfish" width="49%">
 
@@ -609,7 +610,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 
 | Setting | What it does |
 | --- | --- |
-| **Engine** | Which engine analyses the position. The WASM builds need nothing installed; "(local, full power)" entries talk to a real binary and only appear once the native host is installed. Switching reloads the panel - the net and UCI options have to be rebuilt. The Maia rating band is the exception: it swaps the net live, panel and position untouched. |
+| **Engine** | Which engine analyses the position. The WASM builds need nothing installed; "(local, full power)" entries talk to a real binary and only appear once the native host is installed; the two "Cloud" entries need nothing installed either but send the position to somebody else's server on every move. Switching reloads the panel - the net and UCI options have to be rebuilt. The Maia rating band is the exception: it swaps the net live, panel and position untouched. |
 | **Elo** | Caps strength via `UCI_LimitStrength` + `UCI_Elo`. The range follows the engine; out-of-range values are ignored rather than clamped. `0` means no cap. |
 | **Variant** | How the position is read and analysed. Auto-detected on variant pages. Chess960 is the exception: every mainline Stockfish plays it, so it survives an engine switch. |
 | **Search Budget** | Whether the search is bounded by **time** or by **depth**. A depth is reproducible - the same depth is the same answer on any machine, where a millisecond budget is a different search on every one. Each keeps its own number, so switching back does not lose it. |
@@ -802,13 +803,11 @@ shipped, which is a good sign and also why the next item is a bigger one.
   to what the move *is*, not just to how many have been played - and to what the clock says, because nobody
   spends twelve seconds on move forty with thirty left.
 
-- [ ] **Better board reading from the screen** - screenshot-to-FEN works; its failures are the interesting
-  part. Unusual piece sets, low resolution, boards at an angle, and a quicker way to correct the one square it
-  got wrong instead of starting over.
-
-- [ ] **Arrows on the screen reader** - screen reading currently hands back a position and the panel shows the
-  answer *over there*. The natural end state is the best-move arrow drawn straight onto the region being
-  followed - screenshot or live - so the answer sits on the board it belongs to.
+- [ ] **Better board reading from the screen** - screenshot-to-FEN works, and since v3.1.260 the answer is
+  drawn back onto the board it was read from. What is left is the reading itself: unusual piece sets, low
+  resolution, boards at an angle, a quicker way to correct the one square it got wrong instead of starting
+  over - and telling two boards apart when both are on screen, since the panel's own board is one of them
+  (the drag-a-box path is the answer today).
 
 - [ ] **A speed and polish pass on the panel** - the FEN input still glares white out of a dark panel, and the
   left column crowds once five lines and the screen follower are both up. The settings page's half of this landed
@@ -817,12 +816,6 @@ shipped, which is a good sign and also why the next item is a bigger one.
 - [ ] **Shrink the footprint further** - what's left is hardening the one rendezvous the MAIN-world probes need and
   tightening how scraped positions are sanitised. Being straight about the ceiling: the client side is nearly
   exhausted, and it was never the thing that catches people.
-
-- [ ] **Cloud evaluation** - chess-api.com and stockfish.online run real server-side Stockfish over HTTP or
-  WebSocket, which is a different thing from the Lichess position cache below. The case for it is a machine
-  that cannot run a strong engine locally, which is exactly the case that needs it. The cost, stated plainly:
-  the position leaves your machine, and a native host is both faster and private - so this is a fallback, not
-  an upgrade.
 
 - [ ] **More engines** - the lineup covers *strong* and *human-like* and not much between. Variety of character, not
   more strength. **lc0 (Leela)** in WASM would be for comparing styles, not for strength.
@@ -883,8 +876,19 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>50 features, newest first</summary>
+<summary>51 features, newest first</summary>
 
+- [x] **Cloud evaluation, and arrows on the board you read off the screen** (v3.1.260) - two engines in the
+  dropdown, `Cloud: chess-api.com` and `Cloud: stockfish.online`, are a real server-side Stockfish reached over
+  HTTPS: nothing to install, which is the whole point on a machine that cannot run a strong engine locally.
+  **The position leaves your machine on every move** - that is the cost, it is written where the engine is
+  chosen, and a local engine stays both faster and private, so this is a fallback rather than an upgrade. The
+  request is made by the service worker (a page's own Content-Security-Policy can block a fetch made from the
+  panel), and both providers' conventions were measured rather than assumed: eval and mate are white-relative
+  on both, and both return mate as the string "1" but the number -1. Alongside it, a position read off the
+  screen now gets the engine's arrow drawn **onto the region it was read from** - screenshot, video, another
+  window - instead of only in the panel. Verified live: a board screenshotted from lichess, read at 560px on a
+  plain page, arrow landing on it to the pixel.
 - [x] **A sweep of the shipped build** (v3.1.259) - every setting driven and read back after a reload,
   every site route executed, and the edge cases pushed on purpose. Five real faults came out of it and
   are fixed: the settings export could not be re-imported (the worker keeps bookkeeping in the same
