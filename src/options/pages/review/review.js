@@ -125,6 +125,10 @@ async function runReview(game, rig, onProgress) {
         for (let i = 0; i < positions.length; i++) {
             if (cancel) throw new Error('stopped');
             const p = positions[i];
+            // Say which position is being worked on BEFORE searching it. At a second per position
+            // nobody notices; with the unbounded notch the run would otherwise sit on "starting the
+            // engine" for the entire search, with nothing to say it was alive.
+            onProgress(done / total, `position ${i + 1} of ${positions.length}`);
             const r = await rig.engine.analyse(p.fen, p.turn);
             p.lines = r.lines;
             p.depth = r.depth;
