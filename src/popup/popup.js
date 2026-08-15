@@ -3873,9 +3873,10 @@ function show_puzzle_answer(uci) {
     toggle_calculating(false);
     update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci}));
     // Nothing searched this position, so the number in the readout belongs to a DIFFERENT one --
-    // usually the previous puzzle. Left there it reads as a live evaluation next to the words
-    // "puzzle database". A database answer has no score, and saying so is the honest readout.
-    update_evaluation(i18n('panel.msg.from_database', 'From the puzzle database'));
+    // usually the previous puzzle. Left there it reads as a live evaluation. What this slot has to
+    // say is that there is NO score; where the move came from is the line above it, which already
+    // reads "Puzzle database (Rating N)" -- saying it twice was two lines for one fact.
+    update_evaluation(i18n('panel.msg.no_eval', 'No evaluation - the answer was known'));
     last_eval.lines = [];        // and no stale line for draw_moves or the alt-line list to redraw
     draw_eval_bar_unevaluated(); // ...nor a stale bar, which would claim an eval that was never made
 }
