@@ -173,7 +173,7 @@
   "nav.appearance": "Aspetto",
   "nav.about": "Informazioni",
   "nav.disclaimers": "Avvertenze",
-  "nav.settings": "Impostazioni",
+  "nav.settings": "Settings",
   "set.language": "Lingua",
   "set.tip.language": "La lingua del pannello e di queste impostazioni. I nomi dei motori, i temi della scacchiera e la notazione scacchistica restano invariati.",
   "panel.msg.puzzle_solution": "Soluzione del problema: {move}",
@@ -402,5 +402,9 @@
   "an.tip.human": "The human model: what a player of this rating would most likely play here. Shown beside the engine, not instead of it.",
   "an.tip.depth": "How deep the engine searches each position. 12 is quick and close to what a review shows; deeper costs time on every move you step through.",
   "an.tip.lines": "How many engine lines to show and draw.",
-  "an.tip.threads": "CPU threads the analysis engine may use."
+  "an.tip.threads": "CPU threads the analysis engine may use.",
+  "an.tb_depth": "Depth",
+  "an.tb_lines": "Lines",
+  "an.tb_rating": "Human rating",
+  "an.tb_paste": "Paste PGN/FEN"
 }

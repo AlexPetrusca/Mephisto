@@ -173,7 +173,7 @@
   "nav.appearance": "모양",
   "nav.about": "정보",
   "nav.disclaimers": "고지 사항",
-  "nav.settings": "설정",
+  "nav.settings": "Settings",
   "set.language": "언어",
   "set.tip.language": "패널과 이 설정 화면의 언어입니다. 엔진 이름, 보드 테마, 기보 표기법은 그대로 유지됩니다.",
   "panel.msg.puzzle_solution": "퍼즐 해답: {move}",
@@ -402,5 +402,9 @@
   "an.tip.human": "The human model: what a player of this rating would most likely play here. Shown beside the engine, not instead of it.",
   "an.tip.depth": "How deep the engine searches each position. 12 is quick and close to what a review shows; deeper costs time on every move you step through.",
   "an.tip.lines": "How many engine lines to show and draw.",
-  "an.tip.threads": "CPU threads the analysis engine may use."
+  "an.tip.threads": "CPU threads the analysis engine may use.",
+  "an.tb_depth": "Depth",
+  "an.tb_lines": "Lines",
+  "an.tb_rating": "Human rating",
+  "an.tb_paste": "Paste PGN/FEN"
 }

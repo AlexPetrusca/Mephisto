@@ -76,6 +76,45 @@ class AnalysisPage extends SettingsPage {
             el?.addEventListener('change', () => { dropRig(); evalCache.clear(); humanCache.clear(); bandCache.clear(); });
         }
 
+        // the toolbar mirrors the settings below it: same keys, either place, both directions
+        const band = $('an_tb_band');
+        if (band && !band.options.length) {
+            band.innerHTML = MAIA_BANDS.map(b => `<option value="${b}">Maia ${b}</option>`).join('')
+                + '<option value="">Human model off</option>';
+        }
+        const tb = [['an_tb_depth', 'an_depth'], ['an_tb_lines', 'an_multipv']];
+        for (const [tbId, key] of tb) {
+            const el = $(tbId);
+            if (!el) continue;
+            el.value = cfg(key);
+            el.addEventListener('change', () => {
+                const v = Math.max(1, parseInt(el.value) || cfg(key));
+                setCfg(key, v);
+                const twin = $(`${key}_input`);
+                if (twin) { twin.value = v; }
+                dropRig(); evalCache.clear(); humanCache.clear(); bandCache.clear();
+                go(cursor);
+            });
+        }
+        if (band) {
+            band.value = cfg('an_human') ? String(cfg('an_maia_band')) : '';
+            band.addEventListener('change', () => {
+                if (band.value) { setCfg('an_human', 'maia'); setCfg('an_maia_band', band.value); }
+                else setCfg('an_human', '');
+                dropRig(); humanCache.clear(); bandCache.clear();
+                go(cursor);
+            });
+        }
+        $('an_tb_paste')?.addEventListener('click', async () => {
+            try {
+                const text = (await navigator.clipboard.readText() || '').trim();
+                if (!text) return status('The clipboard is empty.', 'err');
+                // a FEN is one line with slashes; anything else is treated as a game
+                if (/^[rnbqkpRNBQKP1-8\/]+\s+[wb]\s/.test(text)) { $('an_fen').value = text; $('an_pgn').value = ''; }
+                else { $('an_pgn').value = text; $('an_fen').value = ''; }
+                loadFromInputs();
+            } catch (e) { status('Could not read the clipboard: ' + (e.message || e), 'err'); }
+        });
         $('an_load')?.addEventListener('click', () => loadFromInputs());
         $('an_start')?.addEventListener('click', () => { $('an_pgn').value = ''; $('an_fen').value = ''; loadStart(); });
         $('an_sample')?.addEventListener('click', () => {
@@ -96,11 +135,17 @@ class AnalysisPage extends SettingsPage {
         const onRoute = () => {
             if (location.hash.startsWith('#analysis')) return;
             dropRig();
+            boardResizeObs?.disconnect();
+            boardResizeObs = null;
             document.removeEventListener('keydown', onKey);
             window.removeEventListener('hashchange', onRoute);
         };
         window.addEventListener('hashchange', onRoute);
         loadStart();
+        watchBoardSize();
+        // one deferred rebuild for the same reason: the first paint can land before the page's
+        // stylesheet is back on, and the board would keep that first, wrong width
+        requestAnimationFrame(() => { ensureBoard(true); render(); });
     }
 }
 
@@ -307,6 +352,28 @@ function updateTallies(at) {
 }
 
 // ---- rendering ----------------------------------------------------------------------------------
+
+// The board renderer sizes itself ONCE, from the width of its host at build time. Coming back to
+// this page re-injects the markup while the page's stylesheet is still disabled (options.js
+// re-enables the cached sheet around the same tick), so the host is briefly full-width and the
+// board is built that size and stays it -- a board twice as wide as its column, with the move list
+// pushed underneath. Watch the wrapper instead and rebuild whenever its width really changes;
+// that covers the re-entry race and an ordinary window resize with the same three lines.
+let boardResizeObs = null;
+function watchBoardSize() {
+    if (boardResizeObs || typeof ResizeObserver === 'undefined') return;
+    const wrap = document.querySelector('.an-board-wrap');
+    if (!wrap) return;
+    let last = Math.round(wrap.getBoundingClientRect().width);
+    boardResizeObs = new ResizeObserver(() => {
+        const w = Math.round(wrap.getBoundingClientRect().width);
+        if (!w || Math.abs(w - last) < 3) return;
+        last = w;
+        ensureBoard(true);
+        render();
+    });
+    boardResizeObs.observe(wrap);
+}
 
 function ensureBoard(rebuild) {
     const host = $('an_board');

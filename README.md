@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.252-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.253-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -884,8 +884,14 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>41 features, newest first</summary>
+<summary>42 features, newest first</summary>
 
+- [x] **A flat menu, and Analysis leads with the board** (v3.1.253) - the sidebar no longer hides Settings and
+  Appearance behind a dropdown: every page is one click, listed plainly. The Analysis page now opens on the
+  board rather than on a form, with a compact strip above it for the things you change while looking at a
+  position (depth, lines, the human rating band, and paste a PGN or FEN straight from the clipboard); the load
+  and engine sections moved below. Also fixed: coming back to the page rebuilt the board while its stylesheet
+  was still off, so it kept a full-width size and pushed the move list underneath.
 - [x] **A dedicated Analysis page** (v3.1.252) - the panel is the right shape for a live game and the wrong one
   for studying, so studying gets its own page: a large board with the move list beside it, and **both engines at
   once** - what a human of a chosen rating would most likely play, next to what the engine wants, each with its own

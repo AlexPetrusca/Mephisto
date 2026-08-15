@@ -173,7 +173,7 @@
   "nav.appearance": "外观",
   "nav.about": "关于",
   "nav.disclaimers": "免责声明",
-  "nav.settings": "设置",
+  "nav.settings": "Settings",
   "set.language": "语言",
   "set.tip.language": "面板和这些设置的语言。引擎名称、棋盘主题和棋谱记法保持原样。",
   "panel.msg.puzzle_solution": "习题答案：{move}",
@@ -402,5 +402,9 @@
   "an.tip.human": "The human model: what a player of this rating would most likely play here. Shown beside the engine, not instead of it.",
   "an.tip.depth": "How deep the engine searches each position. 12 is quick and close to what a review shows; deeper costs time on every move you step through.",
   "an.tip.lines": "How many engine lines to show and draw.",
-  "an.tip.threads": "CPU threads the analysis engine may use."
+  "an.tip.threads": "CPU threads the analysis engine may use.",
+  "an.tb_depth": "Depth",
+  "an.tb_lines": "Lines",
+  "an.tb_rating": "Human rating",
+  "an.tb_paste": "Paste PGN/FEN"
 }

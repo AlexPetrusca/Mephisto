@@ -29,11 +29,8 @@ document.addEventListener('DOMContentLoaded', function () {
     applyTheme();
     let activeScrollspies;
 
-    // init materialize
-    const mCollapsible = M.Collapsible.init(document.querySelectorAll('.collapsible'), {
-        onOpenStart: elem => elem.classList.add('open'),
-        onCloseStart: elem => elem.classList.remove('open')
-    });
+    // init materialize. The menu is a FLAT list since 3.1.253 -- no accordion to initialise, and
+    // nothing else on these pages uses one.
     const mSidenav = M.Sidenav.init(document.querySelectorAll('.sidenav'), {});
 
     // page injection logic

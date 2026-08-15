@@ -173,7 +173,7 @@
   "nav.appearance": "रूप-रंग",
   "nav.about": "परिचय",
   "nav.disclaimers": "अस्वीकरण",
-  "nav.settings": "सेटिंग्स",
+  "nav.settings": "Settings",
   "set.language": "भाषा",
   "set.tip.language": "पैनल और इन सेटिंग्स की भाषा। इंजन के नाम, बोर्ड थीम और शतरंज संकेतन जैसे हैं वैसे ही रहेंगे।",
   "panel.msg.puzzle_solution": "पहेली का हल: {move}",
@@ -402,5 +402,9 @@
   "an.tip.human": "The human model: what a player of this rating would most likely play here. Shown beside the engine, not instead of it.",
   "an.tip.depth": "How deep the engine searches each position. 12 is quick and close to what a review shows; deeper costs time on every move you step through.",
   "an.tip.lines": "How many engine lines to show and draw.",
-  "an.tip.threads": "CPU threads the analysis engine may use."
+  "an.tip.threads": "CPU threads the analysis engine may use.",
+  "an.tb_depth": "Depth",
+  "an.tb_lines": "Lines",
+  "an.tb_rating": "Human rating",
+  "an.tb_paste": "Paste PGN/FEN"
 }

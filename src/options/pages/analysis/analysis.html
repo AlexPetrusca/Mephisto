@@ -6,6 +6,70 @@
     <div class="col s12 m12 xl9">
         <div id="an-form" class="big-section">
 
+            <section id="an-board" class="set-sec scrollspy">
+                <h3 data-i18n="an.board" class="set-h">Board</h3>
+
+                <!-- The controls you actually touch while looking at a position, right above it: the
+                     rest stay in the sections below. A page for studying should not make you scroll
+                     past a form to reach the board. -->
+                <div class="an-toolbar">
+                    <label class="an-tb"><span data-i18n="an.tb_depth">Depth</span>
+                        <input id="an_tb_depth" type="number" min="6" max="30" step="1"></label>
+                    <label class="an-tb"><span data-i18n="an.tb_lines">Lines</span>
+                        <input id="an_tb_lines" type="number" min="1" max="5" step="1"></label>
+                    <label class="an-tb"><span data-i18n="an.tb_rating">Human rating</span>
+                        <select id="an_tb_band" class="browser-default"></select></label>
+                    <button id="an_tb_paste" class="set-btn" type="button" data-i18n="an.tb_paste">Paste PGN/FEN</button>
+                </div>
+                <div id="an_status" class="an-status" data-i18n="an.idle">Load a game or a position to begin.</div>
+
+                <div class="an-main">
+                    <div class="an-left">
+                        <div class="an-boardrow">
+                            <!-- win% for white, the human-facing number -->
+                            <div class="an-bar an-bar-win" title="White win %">
+                                <div id="an_winfill" class="an-bar-fill"></div>
+                                <span id="an_winlabel" class="an-bar-label">50%</span>
+                            </div>
+                            <div class="an-board-wrap">
+                                <div id="an_board" class="an-board"></div>
+                                <svg id="an_arrows" class="an-arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
+                            </div>
+                            <!-- the engine's own number, on its own scale -->
+                            <div class="an-bar an-bar-eval" title="Engine evaluation">
+                                <div id="an_evalfill" class="an-bar-fill"></div>
+                                <span id="an_evallabel" class="an-bar-label">0.0</span>
+                            </div>
+                        </div>
+                        <div class="an-nav">
+                            <button id="an_first" class="set-btn" type="button" title="Start">&laquo;</button>
+                            <button id="an_prev" class="set-btn" type="button" title="Previous">&lsaquo;</button>
+                            <button id="an_next" class="set-btn" type="button" title="Next">&rsaquo;</button>
+                            <button id="an_last" class="set-btn" type="button" title="End">&raquo;</button>
+                            <button id="an_flip" class="set-btn" type="button" data-i18n="an.flip">Flip</button>
+                        </div>
+                        <div class="an-cols">
+                            <div class="an-col">
+                                <div class="an-col-h"><span id="an_human_title">Human moves</span><span class="an-col-sub" data-i18n="an.prob">Probability</span></div>
+                                <div id="an_human_lines" class="an-lines"></div>
+                            </div>
+                            <div class="an-col">
+                                <div class="an-col-h"><span id="an_engine_title">Engine moves</span><span class="an-col-sub" data-i18n="an.eval">Eval</span></div>
+                                <div id="an_engine_lines" class="an-lines"></div>
+                            </div>
+                        </div>
+                        <div id="an_bands_wrap" class="an-bands">
+                            <div class="an-col-h"><span data-i18n="an.by_rating">Moves by rating</span><span class="an-col-sub" data-i18n="an.band_sub">How the choice changes with strength</span></div>
+                            <div id="an_bands"></div>
+                        </div>
+                    </div>
+                    <div class="an-right">
+                        <div id="an_tallies" class="an-tallies"></div>
+                        <div id="an_moves" class="an-moves"></div>
+                    </div>
+                </div>
+            </section>
+
             <section id="an-game" class="set-sec scrollspy">
                 <h3 data-i18n="an.position" class="set-h">Position</h3>
 
@@ -110,66 +174,16 @@
             </section>
 
             <!-- ============================== THE BOARD =============================== -->
-            <section id="an-board" class="set-sec scrollspy">
-                <h3 data-i18n="an.board" class="set-h">Board</h3>
-
-                <div id="an_status" class="an-status" data-i18n="an.idle">Load a game or a position to begin.</div>
-
-                <div class="an-main">
-                    <div class="an-left">
-                        <div class="an-boardrow">
-                            <!-- win% for white, the human-facing number -->
-                            <div class="an-bar an-bar-win" title="White win %">
-                                <div id="an_winfill" class="an-bar-fill"></div>
-                                <span id="an_winlabel" class="an-bar-label">50%</span>
-                            </div>
-                            <div class="an-board-wrap">
-                                <div id="an_board" class="an-board"></div>
-                                <svg id="an_arrows" class="an-arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
-                            </div>
-                            <!-- the engine's own number, on its own scale -->
-                            <div class="an-bar an-bar-eval" title="Engine evaluation">
-                                <div id="an_evalfill" class="an-bar-fill"></div>
-                                <span id="an_evallabel" class="an-bar-label">0.0</span>
-                            </div>
-                        </div>
-                        <div class="an-nav">
-                            <button id="an_first" class="set-btn" type="button" title="Start">&laquo;</button>
-                            <button id="an_prev" class="set-btn" type="button" title="Previous">&lsaquo;</button>
-                            <button id="an_next" class="set-btn" type="button" title="Next">&rsaquo;</button>
-                            <button id="an_last" class="set-btn" type="button" title="End">&raquo;</button>
-                            <button id="an_flip" class="set-btn" type="button" data-i18n="an.flip">Flip</button>
-                        </div>
-                        <div class="an-cols">
-                            <div class="an-col">
-                                <div class="an-col-h"><span id="an_human_title">Human moves</span><span class="an-col-sub" data-i18n="an.prob">Probability</span></div>
-                                <div id="an_human_lines" class="an-lines"></div>
-                            </div>
-                            <div class="an-col">
-                                <div class="an-col-h"><span id="an_engine_title">Engine moves</span><span class="an-col-sub" data-i18n="an.eval">Eval</span></div>
-                                <div id="an_engine_lines" class="an-lines"></div>
-                            </div>
-                        </div>
-                        <div id="an_bands_wrap" class="an-bands">
-                            <div class="an-col-h"><span data-i18n="an.by_rating">Moves by rating</span><span class="an-col-sub" data-i18n="an.band_sub">How the choice changes with strength</span></div>
-                            <div id="an_bands"></div>
-                        </div>
-                    </div>
-                    <div class="an-right">
-                        <div id="an_tallies" class="an-tallies"></div>
-                        <div id="an_moves" class="an-moves"></div>
-                    </div>
-                </div>
-            </section>
+            
         </div>
     </div>
 
     <div class="col hide-on-small-only m2 xl3 sticky-top">
         <div class="toc-wrapper pin-top">
             <ul id="toc" class="section table-of-contents">
+                <li><a data-i18n="an.board" href="#an-board">Board</a></li>
                 <li><a data-i18n="an.position" href="#an-game">Position</a></li>
                 <li><a data-i18n="an.engines" href="#an-engines">Engines</a></li>
-                <li><a data-i18n="an.board" href="#an-board">Board</a></li>
             </ul>
         </div>
     </div>

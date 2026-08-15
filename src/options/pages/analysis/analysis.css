@@ -137,3 +137,18 @@
 }
 .an-mcell:hover { background: var(--mp-hover); }
 .an-mcell.an-sel { background: var(--mp-sel); font-weight: 600; }
+
+/* the compact strip above the board: depth, lines, the human rating band, and a paste button */
+.an-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 10px; }
+.an-tb { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--mp-dim); }
+.an-tb input, .an-tb select {
+    height: 30px;
+    padding: 0 6px;
+    border: 1px solid var(--mp-line);
+    border-radius: 3px;
+    background: var(--mp-raised);
+    color: var(--mp-text);
+    font-size: 13px;
+    width: 92px;
+}
+.an-tb select { width: 132px; }
