@@ -156,6 +156,28 @@ async function initEngine(clientId, engineName, variant, maiaLevel) {
 
     if (engineName.includes('nnue')) {
         if (engineName === 'fairy-stockfish-14-nnue') {
+            // A VARIANT THE ENGINE DOES NOT HAVE IS IGNORED, SILENTLY. Fairy answers an unknown
+            // UCI_Variant by staying on the one it was already playing -- so asking it for Duck
+            // Chess gets you a full-strength STANDARD CHESS analysis of a duck position, with no
+            // sign that anything is wrong. Measured: this build declares 84 variants and duck is
+            // not among them. The engine lists them in its own `uci` handshake, so the list is
+            // asked for rather than hardcoded, and the panel is told when the answer is no.
+            engine.uci('uci');
+            const declared = await new Promise((resolve) => {
+                const found = [];
+                const done = setTimeout(() => resolve(found), 3000);
+                const prev = engine.listen;
+                engine.listen = (line) => {
+                    prev(line);
+                    const m = /option name UCI_Variant type combo default \S+ (.*)$/.exec(line || '');
+                    if (m) found.push(...m[1].split(/\s+/).filter(w => w && w !== 'var'));
+                    if (/^uciok/.test(line || '')) { clearTimeout(done); engine.listen = prev; resolve(found); }
+                };
+            });
+            if (declared.length && !declared.includes(variant)) {
+                send(clientId, {kind: 'line',
+                    line: `info string mephisto-unsupported-variant ${variant}`});
+            }
             engine.uci(`setoption name UCI_Variant value ${variant}`);
             const net = variantNnueMap[variant] || variantNnueMap['chess'];
             const note = (m) => send(clientId, {kind: 'line', line: `info string ${m}`});
