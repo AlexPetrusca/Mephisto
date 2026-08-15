@@ -7101,6 +7101,26 @@ function on_native_info(info, fen) {
     }
 }
 
+// Replay a UCI move list onto a starting position, because a cloud provider takes a position and
+// nothing else. Returns null rather than a wrong board if any move does not fit -- an answer to the
+// wrong position is worse than no answer, and that is precisely the bug this exists to prevent.
+function cloud_fen_after(startFen, moves) {
+    const list = String(moves || '').trim().split(/\s+/).filter(Boolean);
+    if (!list.length) return startFen;
+    try {
+        const c = new Chess(config.variant, startFen);
+        for (const uci of list) {
+            // not `rec`: the ladder bans a bare `const rec = c.move(` file-wide, because in
+            // forced_chain that shape was a guard that could never run (chess.js throws)
+            const applied = c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+            if (!applied) return null;
+        }
+        return c.fen();
+    } catch (e) {
+        return null;
+    }
+}
+
 async function request_remote_configure(options) {
     if (uses_native()) return native_send('configure', {options});
     // A cloud provider has no options to set: one request in, one line out. Silently doing nothing
@@ -7121,14 +7141,19 @@ async function request_remote_analysis(fen, time, moves = null, depth = null) {
         return native_send('analyse', {fen, time, moves, depth}, info => on_native_info(info, posFen));
     }
     if (uses_cloud()) {
-        // Depth, not time: both providers are depth-limited, and chess-api caps thinking time at a
-        // tenth of a second anyway. When the panel is searching by time there is no depth to pass,
-        // so the provider's own default stands (12) -- the worker clamps to each provider's ceiling.
-        // Searching by TIME: hand the provider the milliseconds instead of a depth, where it has
-        // somewhere to put them. chess-api.com does (maxThinkingTime); stockfish.online does not,
-        // which is why choosing it moves the budget to Depth rather than quietly ignoring the time.
+        // MOVES MODE. On a real game this is called with the game's START position and the moves
+        // played since -- what remote-engine.py and the native hosts take, and what carries the
+        // repetition history a bare FEN cannot. A cloud provider takes ONE fen and has nowhere to
+        // put a move list, so the moves are applied here first. Dropping them is what shipped in
+        // 3.1.260, and it meant every cloud answer after the first move was an answer to the
+        // STARTING position -- "best move is d2d4" beside a game that had left the opening.
+        const target = cloud_fen_after(fen, moves);
+        if (!target) throw new Error('could not work out the current position for the cloud engine');
+        // Time where the provider has somewhere to put it (chess-api's maxThinkingTime), depth
+        // otherwise; the worker clamps depth to each provider's own ceiling.
         const res = await chrome.runtime.sendMessage({cloudAnalyse: {
-            engine: config.engine, fen, depth: depth || null, thinkMs: depth ? null : (time || null),
+            engine: config.engine, fen: target, depth: depth || null,
+            thinkMs: depth ? null : (time || null),
         }});
         if (!res) throw new Error('the cloud engine did not answer (is the extension still loaded?)');
         if (res.error) throw new Error(res.error);
