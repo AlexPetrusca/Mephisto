@@ -158,10 +158,13 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 
 /* ------------------------------------------------------------------- board + moves */
 
+/* THE PAGE LEADS WITH THE BOARD (user call 2026-08-15). It used to split the width evenly with the
+   move list, which made the board the smaller half of a page whose subject is the board. The board
+   column now takes what it can up to 620px and the move list narrows down the side. */
 .rv-main {
     display: grid;
-    grid-template-columns: minmax(280px, 420px) minmax(320px, 1fr);
-    gap: 22px;
+    grid-template-columns: minmax(360px, 620px) minmax(240px, 340px);
+    gap: 24px;
     align-items: start;
 }
 /* 900, not 1100: the exported file renders around 1180 wide and should keep both columns. */
@@ -218,7 +221,8 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 }
 
 .rv-moves {
-    max-height: 620px;
+    /* as tall as the board beside it, so the two columns end together */
+    max-height: 660px;
     overflow-y: auto;
     border: 1px solid var(--mp-line);
     border-radius: 4px;

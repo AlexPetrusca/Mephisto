@@ -16,8 +16,12 @@ export class SettingsPage {
     }
 
     async onInit() {
+        // Guarded, like every other lookup in this class: a page that has no reset button (the
+        // Analysis page is one -- there is nothing on it to reset) would otherwise throw HERE and
+        // take the whole page down before a single control was registered. Same failure shape as
+        // the missing-control bug in FormElement, and the same answer.
         this.resetButton = document.getElementById('reset_btn');
-        this.resetButton.addEventListener('click', () => this.onResetConfigValues());
+        this.resetButton?.addEventListener('click', () => this.onResetConfigValues());
 
         // Export/import live on the General page only (they're global, not per-page), so guard: the
         // Appearance page shares this class and has no such buttons.
