@@ -54,6 +54,8 @@ const CFG_DEFAULTS = {
     rv_maia3_elo: 1500,
     rv_book: true,
     rv_human_report: false,
+    rv_strength: false,      // the maximum-likelihood rating estimate; a pass per rating band
+
     rv_batch: false,
 };
 

@@ -111,7 +111,7 @@ async function runReview(game, rig, onProgress) {
     const {positions, moves} = buildPositions(game);
     fillThinkTime(moves, incrementFromTimeControl(game.tags.TimeControl));
 
-    const total = positions.length + (rig.human ? moves.length : 0);
+    let total = positions.length + (rig.human ? moves.length : 0);
     let done = 0;
     const tick = (what) => { done++; onProgress(done / total, what); };
 
@@ -162,7 +162,107 @@ async function runReview(game, rig, onProgress) {
     await Promise.all([enginePass.catch(e => { throw e; }), humanPass]);
 
     const book = cfg('rv_book') ? await lookupOpening(positions) : {name: null, plies: 0};
-    return assemble(game, positions, moves, book, opts);
+    // AFTER assemble, not before: the estimate skips book and forced moves, and those flags are set
+    // BY assemble. Run earlier and `!m.isBook` reads `!undefined` -- true for everything -- so the
+    // exclusions silently did nothing and every move counted, which is a different measurement than
+    // the one the page describes.
+    const built = assemble(game, positions, moves, book, opts);
+    built.strength = await strengthPass(positions, moves, {
+        plan: (n) => { total += n; },
+        tick: (what) => { done++; onProgress(done / total, what); },
+    });
+    return built;
+}
+
+// ---- strength estimate ------------------------------------------------------------------------
+// WHICH RATING BEST EXPLAINS THIS GAME. The human model gives, for every legal move, the chance a
+// player of a given rating plays it. Run that at each rating over the moves someone actually played
+// and one rating fits better than the others: the one whose predictions were least surprised. That
+// is a maximum-likelihood estimate, and it is cheap for a reason worth writing down -- Maia costs ONE
+// forward pass whatever MultiPV is set to, so asking for the whole distribution costs nothing over
+// asking for five lines. The bill is bands x positions passes, and nothing else.
+//
+// What it is NOT: a fair-play measurement. A player using an engine reads as STRONGER here, which is
+// the opposite of an accusation, and one game is a small sample however it is counted. Both are said
+// on the page rather than left for the reader to work out.
+
+const STRENGTH_MULTIPV = 64;   // every legal move, near enough; one forward pass either way
+
+function strengthBands(kind) {
+    // Maia 3 is one net on a dial, so it can be asked anywhere -- but 21 bands x every position is a
+    // long wait for a curve that is smooth, so it is walked in 200s.
+    return kind === 'maia3' ? Array.from({length: 11}, (_, i) => String(600 + i * 200))
+                            : MAIA_BANDS.slice();
+}
+
+// A move only says something about strength if there was a choice to make. Book moves are memory,
+// forced moves are arithmetic, and both are played the same way by everyone.
+function strengthUsable(m) { return !m.isBook && !m.onlyMove && m.uci; }
+
+async function strengthPass(positions, moves, prog) {
+    const kind = cfg('rv_human');
+    if (!cfg('rv_strength') || !kind) return null;
+    const usable = moves.map((m, i) => ({m, i})).filter(({m}) => strengthUsable(m));
+    if (usable.length < 6) return null;   // too few decisions to say anything at all
+    const bands = strengthBands(kind);
+    prog.plan(bands.length * usable.length);   // so the bar keeps climbing instead of restarting
+    const ll = {};                        // band -> {w, b} summed log-likelihood
+    let shared = null;
+    try {
+        if (kind === 'maia3') {
+            shared = makeEngine('maia3', {variant: 'chess', multipv: STRENGTH_MULTIPV, maiaLevel: bands[0],
+                                          limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'review-strength');
+            await shared.start();
+        }
+        for (let bi = 0; bi < bands.length; bi++) {
+            if (cancel) return null;
+            const band = bands[bi];
+            let e = shared;
+            if (!e) {
+                e = makeEngine('maia', {variant: 'chess', multipv: STRENGTH_MULTIPV, maiaLevel: band,
+                                        limitKind: 'depth', limitValue: 1, threads: 1, hash: 16},
+                               `review-strength-${band}`);
+                await e.start();
+            } else {
+                e.send(`setoption name SelfElo value ${band}`);   // NOT UCI_Elo -- see maia3.js
+                e.send(`setoption name OppoElo value ${band}`);
+            }
+            const acc = {w: 0, b: 0, nw: 0, nb: 0};
+            for (let k = 0; k < usable.length; k++) {
+                if (cancel) { if (!shared) e.dispose?.(); return null; }
+                const {m, i} = usable[k];
+                prog.tick(`rating ${band}: move ${k + 1} of ${usable.length}`);
+                let p = 0;
+                try {
+                    const r = await e.analyse(positions[i].fen, positions[i].turn);
+                    p = (r.lines || []).find(l => l.pv?.[0] === m.uci)?.prob ?? 0;
+                } catch (err) { p = 0; }
+                // A move the model gives no weight at all would be -Infinity and would erase the
+                // band. Floored instead: "this rating essentially never plays that" is information,
+                // not a disqualification.
+                const side = m.color === 'w' ? 'w' : 'b';
+                acc[side] += Math.log(Math.max(p, 1e-6));
+                acc[side === 'w' ? 'nw' : 'nb']++;
+            }
+            if (!shared) e.dispose?.();
+            ll[band] = acc;
+        }
+    } catch (e) {
+        return null;   // the estimate is an extra; it never costs the report
+    } finally { shared?.dispose?.(); }
+
+    const forSide = (side) => {
+        const n = side === 'w' ? 'nw' : 'nb';
+        const rows = bands.map(b => ({band: +b, ll: ll[b][side], n: ll[b][n]})).filter(r => r.n > 0);
+        if (!rows.length) return null;
+        const best = rows.reduce((a, b) => (b.ll > a.ll ? b : a));
+        // Everything within 2 log-likelihood units of the best is a standard support interval: the
+        // ratings this game cannot tell apart. Reporting the peak alone would claim a precision that
+        // twenty-odd moves cannot carry.
+        const near = rows.filter(r => best.ll - r.ll <= 2).map(r => r.band);
+        return {best: best.band, n: best.n, low: Math.min(...near), high: Math.max(...near), curve: rows};
+    };
+    return {kind, bands: bands.map(Number), w: forSide('w'), b: forSide('b')};
 }
 
 // Start whatever the settings ask for, once. The caller owns the teardown, which is what lets a
@@ -362,6 +462,7 @@ function renderReport() {
     renderMoves();
     renderIndicators();
     renderHumanReport();
+    renderStrength();
     ensureBoard();
     showPly(report.moves.length);
 }
@@ -554,6 +655,49 @@ function renderIndicators() {
 // Maia asks "how expected was it from a player of this rating". They disagree constantly, and that
 // is the point -- a move can be excellent and completely out of character, or awful and exactly what
 // you would expect. Off by default: it costs a whole second pass.
+// The rating that best explains what was played, with the range this game cannot see past and the
+// number of decisions it is drawn from. A peak on its own would claim a precision that twenty-odd
+// moves do not carry, so the support interval is shown as the headline's equal, not as a footnote.
+function renderStrength() {
+    const sec = $('rv-strength');
+    if (!sec) return;
+    const st = report?.strength;
+    const on = !!(st && (st.w || st.b));
+    sec.classList.toggle('hidden', !on);
+    if (!on) return;
+
+    const model = st.kind === 'maia3' ? 'Maia 3' : 'Maia 1';
+    $('rv_strength_note').innerHTML =
+        `Each rating the ${esc(model)} model has was asked what it would play in every position where there `
+      + `was a real choice - book moves and forced moves are left out, because everyone plays those the same `
+      + `way. The rating shown is the one that was least surprised by what actually happened. `
+      + `<b>This is a strength estimate, not a fair-play measurement</b>: a player using an engine reads as `
+      + `STRONGER here, not as suspicious, and one game is a small sample however it is counted.`;
+
+    const card = (color, s) => {
+        if (!s) return '';
+        const spread = s.low === s.high ? `${s.low}` : `${s.low}–${s.high}`;
+        // the curve, so the shape behind the number is visible: a sharp peak and a flat line are very
+        // different claims and the headline number looks identical either way
+        const max = Math.max(...s.curve.map(r => r.ll));
+        const min = Math.min(...s.curve.map(r => r.ll));
+        const bars = s.curve.map(r => {
+            const h = max === min ? 100 : Math.round(((r.ll - min) / (max - min)) * 100);
+            return `<span class="rv-str-bar" title="${r.band}: ${r.ll.toFixed(1)}">`
+                 + `<i style="height:${Math.max(3, h)}%"></i></span>`;
+        }).join('');
+        return `<div class="rv-card">
+            <h4>${esc(playerName(color))}</h4>
+            <div class="rv-big">${s.best}</div>
+            <div class="rv-kv"><span>Ratings this game cannot tell apart</span><span>${spread}</span></div>
+            <div class="rv-kv"><span>Decisions it is drawn from</span><span>${s.n}</span></div>
+            <div class="rv-str-curve">${bars}</div>
+            <div class="rv-sub">${st.bands[0]} to ${st.bands[st.bands.length - 1]}, taller is a better fit</div>
+        </div>`;
+    };
+    $('rv_strength_cards').innerHTML = card('w', st.w) + card('b', st.b);
+}
+
 function renderHumanReport() {
     const sec = $('rv-human');
     if (!sec) return;
@@ -1052,7 +1196,7 @@ async function exportHtml(btn) {
 
         const wrap = document.createElement('div');
         wrap.innerHTML = `<div class="row"><div class="col s12"><div class="big-section">`
-            + $('rv-report').outerHTML + $('rv-indicators').outerHTML
+            + $('rv-report').outerHTML + ($('rv-strength')?.outerHTML || '') + $('rv-indicators').outerHTML
             + `</div></div></div>`;
         wrap.querySelectorAll('.hidden').forEach(el => el.classList.remove('hidden'));
         wrap.querySelectorAll('.rv-nav, .tooltipped .info-tooltip').forEach(el => el.remove());
@@ -1383,7 +1527,7 @@ class ReviewPage {
         bindSteppers();
         bindHumanUi();
 
-        for (const key of ['rv_book', 'rv_human_report', 'rv_batch']) {
+        for (const key of ['rv_book', 'rv_human_report', 'rv_strength', 'rv_batch']) {
             const el = $(key);
             if (!el) continue;
             el.checked = !!cfg(key);

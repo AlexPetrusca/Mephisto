@@ -108,6 +108,12 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 }
 .rv-big { font-size: 26px; font-weight: 600; line-height: 1.1; }
 .rv-sub { color: var(--mp-dim); font-size: 12.5px; margin-top: 2px; }
+
+/* the likelihood curve behind the strength estimate: a sharp peak and a flat line are very different
+   claims, and the headline number looks identical either way */
+.rv-str-curve { display: flex; align-items: flex-end; gap: 2px; height: 34px; margin-top: 10px; }
+.rv-str-bar { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; }
+.rv-str-bar i { display: block; width: 100%; background: var(--mp-on, #3fa45b); border-radius: 1px; opacity: .75; }
 .rv-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 1px 0; }
 .rv-kv span:last-child { color: var(--mp-dim); font-variant-numeric: tabular-nums; }
 .rv-kv b { font-weight: 600; color: var(--rv-c, var(--mp-text)); }

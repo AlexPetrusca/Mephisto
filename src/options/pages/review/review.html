@@ -216,6 +216,26 @@
                     </div>
                 </div>
 
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="rv.strength" data-i18n-tip="rv.tip.strength" class="tooltipped" data-position="right"
+                              data-tooltip="Which rating best explains the moves that were actually played. The human
+                                            model is asked at every rating it has, and the one whose predictions were
+                                            least surprised is the estimate. Needs a human model selected above, and
+                                            costs one pass per rating over the whole game. It is a STRENGTH estimate
+                                            and NOT a fair-play measurement: a player using an engine reads as
+                                            stronger, which is the opposite of an accusation.">
+                            Strength estimate <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="rv_strength" type="checkbox" class="set-cb">
+                        <label for="rv_strength" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
                 <div class="set-row set-toggle">
                     <div class="set-lbl">
                         <span data-i18n="rv.batch" data-i18n-tip="rv.tip.batch" class="tooltipped" data-position="right"
@@ -323,6 +343,13 @@
             </section>
 
             <!-- =========================== INDICATORS ============================= -->
+            <!-- ========================= STRENGTH ================================ -->
+            <section id="rv-strength" class="set-sec scrollspy hidden">
+                <h3 data-i18n="rv.strength_h" class="set-h">Strength estimate</h3>
+                <div id="rv_strength_note" class="rv-status"></div>
+                <div id="rv_strength_cards" class="rv-cards"></div>
+            </section>
+
             <section id="rv-indicators" class="set-sec scrollspy hidden">
                 <h3 data-i18n="rv.indicators" class="set-h">Fair-play indicators</h3>
                 <p class="rv-caveat" data-i18n-html="rv.caveat">
@@ -347,6 +374,7 @@
             <li><a href="#rv-report" data-i18n="rv.report">Report</a></li>
             <li><a href="#rv-batch" data-i18n="rv.across_games">Across games</a></li>
             <li><a href="#rv-human" data-i18n="rv.human_likeness">Human likeness</a></li>
+            <li><a href="#rv-strength" data-i18n="rv.strength_h">Strength estimate</a></li>
             <li><a href="#rv-indicators" data-i18n="rv.indicators">Fair-play indicators</a></li>
         </ul>
     </div>
