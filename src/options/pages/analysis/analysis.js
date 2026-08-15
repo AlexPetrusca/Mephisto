@@ -84,8 +84,8 @@ class AnalysisPage extends SettingsPage {
         $('an_engine_select')?.addEventListener('change', () => reloadEngine());
         for (const id of ['an_lines_input', 'an_threads_input', 'an_hash_input'])
             $(id)?.addEventListener('change', () => reloadEngine());
-        $('an_wdl_check')?.addEventListener('change', () => reloadEngine());
-        $('an_book_check')?.addEventListener('change', () => renderBook());
+        $('an_wdl_checkbox')?.addEventListener('change', () => reloadEngine());
+        $('an_book_checkbox')?.addEventListener('change', () => renderBook());
         // The budget needs no engine reload -- it is spent by THIS page, not sent as a UCI option.
         // Dragging only re-reads the number; letting go restarts the search on the new budget.
         $('an_time_range')?.addEventListener('input', () => syncTimeUi());
