@@ -752,6 +752,11 @@ shipped, which is a good sign and also why the next item is a bigger one.
   machine and model - 23% slower**, because the int8 operators have no WebGPU implementation and fall back to the
   CPU with transfer costs on top. It was not vendored (27MB of runtime for a loss). What is left is a genuinely
   smaller model, which means retraining rather than converting.
+- [ ] **Grind Mode, the rest of it** - it starts the next game on Lichess and Chess.com and that is all it does.
+  What it cannot do yet: stop after N games or after a losing streak, respect a daily limit, or pick a different
+  time control than the one that just finished. It also has no idea whether *you* are still at the keyboard,
+  which is the thing that would make an unattended session safe rather than merely possible.
+
 - [ ] **Talking Mode** - the engine as a voice. Not a number and an arrow but a running commentary in plain
   language: what the position wants, what it is worried about, why the move it likes actually wins something.
   The pieces exist (eval, lines, the explanation work below); the hard part is saying it like a person and
@@ -799,9 +804,10 @@ shipped, which is a good sign and also why the next item is a bigger one.
 
 **Smaller improvements.** Worth having, not worth dropping anything else for.
 
-- [ ] **Polyglot books** - bring your own `.bin`. Book play exists and is driven by the Opening Explorer's
-  statistics; a Polyglot file is the other half of that tradition, and the format most published repertoires
-  are actually distributed in.
+- [ ] **Play from your own Polyglot book** - half done. Since v3.1.256 the **Analysis** page reads real `.bin`
+  files (the format's own Zobrist table, verified against its published test keys) and shows their moves. What is
+  left is the other half: the *panel* playing from a book you loaded, rather than from the Opening Explorer's
+  statistics - which means the book has to live somewhere the panel can reach, not just the options page.
 
 - [ ] **Clock rules per situation** - pacing is one distribution for every move today. Real players are slower
   with the queen than the king, instant on a recapture, and slow again when they can see the mate. Rules keyed
@@ -815,7 +821,9 @@ shipped, which is a good sign and also why the next item is a bigger one.
   (the drag-a-box path is the answer today).
 
 - [ ] **A speed and polish pass on the panel** - the FEN input still glares white out of a dark panel, and the
-  left column crowds once five lines and the screen follower are both up. The settings page's half of this landed
+  left column crowds once five lines and the screen follower are both up. A related lesson from v3.1.268: a
+  control written by hand instead of copied from the row above it came out unstyled AND unwired, so the sweep
+  should check every control against the one beside it rather than by eye. The settings page's half of this landed
   in v3.1.229 (rows no longer strand their control at the far edge of the window); the panel's has not.
 
 - [ ] **Shrink the footprint further** - what's left is hardening the one rendezvous the MAIN-world probes need and
