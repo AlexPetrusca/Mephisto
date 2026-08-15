@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.260-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.261-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -157,7 +157,7 @@ Everything runs locally via WebAssembly - no server, no account, nothing leaves 
 | **Maia** | The original Maia-1 nets, one per band (**1100–1900**, plus a **2200**). |
 | **Tetrarch (4-player)** | Four-player chess only - see [four-player chess](#four-player-chess). Needs a one-time install. |
 | **Remote / native** | A real engine binary outside the browser - see [full-power engines](#full-power-native-engines-optional). |
-| **Cloud: chess-api.com / stockfish.online** | A real server-side Stockfish over HTTPS - nothing to install, for a machine that cannot run a strong engine locally. **The position leaves your machine on every move.** Depth-limited (12 by default, capped at 18 and 15 respectively) and one line, so a local engine is both faster and private; this is a fallback, not an upgrade. |
+| **Cloud: chess-api.com / stockfish.online** | A real server-side Stockfish over HTTPS - nothing to install, for a machine that cannot run a strong engine locally. **The position leaves your machine on every move.** One line, no threads or hash to set, so a local engine is both faster and private; this is a fallback, not an upgrade. chess-api.com takes your Search Time as well as a depth ceiling (measured: 50ms reaches depth 14, 2s reaches 16); stockfish.online takes only a depth, so selecting it switches the search budget to Depth and switches it back when you leave. |
 
 <img src="docs/maia3.png" alt="Maia-3 with the 600-2600 rating slider" width="49%"> <img src="docs/variants.png" alt="Atomic on Lichess, analysed by Fairy-Stockfish" width="49%">
 
@@ -876,8 +876,13 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>51 features, newest first</summary>
+<summary>52 features, newest first</summary>
 
+- [x] **The cloud engines use the budget you set** (v3.1.261) - chess-api.com takes a thinking time, so the
+  panel's Search Time is now sent to it and means something (measured: 50ms reaches depth 14, 2s reaches 16),
+  with the depth setting as the ceiling. stockfish.online takes a fen and a depth and nothing else, so choosing
+  it switches the search budget to Depth - remembering what was there and putting it back when you pick another
+  engine. One rule in the config layer, so the panel's dropdown and the settings page cannot disagree about it.
 - [x] **Cloud evaluation, and arrows on the board you read off the screen** (v3.1.260) - two engines in the
   dropdown, `Cloud: chess-api.com` and `Cloud: stockfish.online`, are a real server-side Stockfish reached over
   HTTPS: nothing to install, which is the whole point on a machine that cannot run a strong engine locally.
