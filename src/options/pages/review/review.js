@@ -678,6 +678,7 @@ function showPly(ply) {
     board?.position(pos.fen);
     const played = cursor > 0 ? report.moves[cursor - 1] : null;
     drawArrows(pos, played);
+    renderEvalBar(pos);
     renderDetail(pos, played);
     const line = $('rv_graph_cursor');
     if (line) {
@@ -689,6 +690,20 @@ function showPly(ply) {
     if (sel) {
         sel.classList.add('rv-sel');
         sel.scrollIntoView({block: 'nearest'});
+    }
+}
+
+// The eval beside the board, on the same white-relative centipawns the graph is drawn from and the
+// same logistic squash, so the bar and the graph can never disagree about who is better.
+function renderEvalBar(pos) {
+    const fill = $('rv_evalfill'), label = $('rv_evallabel');
+    if (!fill && !label) return;
+    const cp = pos?.lines?.[0]?.cp;
+    const pct = cp == null ? 50 : Core.clamp(50 + 50 * Math.tanh(cp / 400), 2, 98);
+    if (fill) fill.style.height = `${pct}%`;
+    if (label) {
+        label.textContent = cp == null ? '' : (Core.isMateScore(cp) ? (cp > 0 ? 'M' : '-M') : (cp / 100).toFixed(1));
+        label.classList.toggle('rv-num-top', pct < 50);   // the number rides the filled side
     }
 }
 
@@ -740,7 +755,7 @@ function drawArrows(pos, played) {
         const f = to.charCodeAt(0) - 97, r = +to[1];
         const x = flipped ? 7.5 - f : f + 0.5;
         const y = flipped ? r - 0.5 : 8.5 - r;
-        html += classBadge(played.klass, x + 0.30, y - 0.30, 0.26);
+        html += classBadge(played.klass, x + 0.32, y - 0.32, 0.20);
     }
     svg.innerHTML = html;
 }
@@ -763,8 +778,8 @@ function rankTag(spec) {
     const px = a.x + dx / len * 0.62 - dy / len * 0.20;
     const py = a.y + dy / len * 0.62 + dx / len * 0.20;
     return `<g opacity="${Math.max(0.55, spec.opacity)}">`
-        + `<circle cx="${px}" cy="${py}" r="0.17" fill="${spec.color}" stroke="#00000040" stroke-width="0.015"/>`
-        + `<text x="${px}" y="${py + 0.062}" font-size="0.21" font-weight="700" text-anchor="middle" `
+        + `<circle cx="${px}" cy="${py}" r="0.135" fill="${spec.color}" stroke="#00000040" stroke-width="0.012"/>`
+        + `<text x="${px}" y="${py + 0.050}" font-size="0.17" font-weight="700" text-anchor="middle" `
         + `fill="#fff" font-family="system-ui,sans-serif">${spec.rank}</text></g>`;
 }
 

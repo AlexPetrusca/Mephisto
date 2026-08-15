@@ -149,6 +149,24 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 /* 900, not 1100: the exported file renders around 1180 wide and should keep both columns. */
 @media (max-width: 900px) { .rv-main { grid-template-columns: 1fr; } }
 
+/* board + eval bar. The bar is on the RIGHT (user call 2026-08-15) and is wide enough to read the
+   number inside it; white fills from the bottom, the way every eval bar is read. */
+.rv-boardrow { display: grid; grid-template-columns: 1fr 26px; gap: 10px; align-items: stretch; }
+.rv-bar { position: relative; border: 1px solid var(--mp-line); border-radius: 4px; background: #2b2b2b; overflow: hidden; }
+.rv-bar-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 50%; background: #e8e8e2; transition: height .18s ease; }
+.rv-bar-num {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 4px;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #111;
+    pointer-events: none;
+}
+.rv-bar-num.rv-num-top { bottom: auto; top: 4px; color: #eee; }
+
 .rv-board-wrap { position: relative; width: 100%; aspect-ratio: 1; }
 .rv-board { width: 100%; height: 100%; }
 .rv-arrows {
