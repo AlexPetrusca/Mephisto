@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.251-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.252-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -732,7 +732,7 @@ No schedule - added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>28 items, sorted by upside and effort</summary>
+<summary>26 items, sorted by upside and effort</summary>
 
 **Quick wins.** Small changes with an obvious payoff. Empty at the moment - everything that was here has
 shipped, which is a good sign and also why the next item is a bigger one.
@@ -751,20 +751,6 @@ shipped, which is a good sign and also why the next item is a bigger one.
   language: what the position wants, what it is worried about, why the move it likes actually wins something.
   The pieces exist (eval, lines, the explanation work below); the hard part is saying it like a person and
   knowing when to shut up.
-
-- [ ] **A dedicated analysis page** - the panel is the right shape for a live game and the wrong one for
-  studying. A full page instead: a large board, the move list beside it, both engines shown together - what a
-  human of a chosen rating would play next to what Stockfish wants - win% and eval bars, per-move probability
-  across the rating bands, and the blunder / mistake / best-move tallies. Some of it belongs in Game Review as
-  well, which already computes most of the numbers.
-
-- [ ] **Game Review, built out** - it earns its keep already; this is depth, not rescue. The page should lead
-  with the board: bigger, the move list narrowed down the side, and the engine's candidate lines labelled so it
-  is obvious at a glance which one it actually likes. Then richer alternate-line commentary, phase-by-phase
-  accuracy, and the move explanations above feeding straight into it. On the
-  *"chess.com review without the subscription"* idea: their API route is automated use of a paid feature on an
-  authenticated account - ban territory, and unlike everything else here it is trivially attributable. The
-  built-in review is the answer; it just has to get good enough that the comparison stops mattering.
 
 - [ ] **Playing with a net** - for when the moves are yours. Live feedback you opt into, and underneath it a
   quieter mode that says nothing at all unless you are about to throw the game away: not the best move, just
@@ -898,8 +884,22 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>39 features, newest first</summary>
+<summary>41 features, newest first</summary>
 
+- [x] **A dedicated Analysis page** (v3.1.252) - the panel is the right shape for a live game and the wrong one
+  for studying, so studying gets its own page: a large board with the move list beside it, and **both engines at
+  once** - what a human of a chosen rating would most likely play, next to what the engine wants, each with its own
+  numbered arrows on the board. Win% and evaluation bars flank the board, a per-move probability chart shows how
+  the choice changes across the rating bands, and the best / mistake / blunder tallies sit above the moves. Depth
+  12 by default, which is quick enough to step through a whole game. The engine drivers are now shared with Game
+  Review rather than duplicated.
+- [x] **Verdict badges, and a board that leads the page** (v3.1.252) - every classification now draws its own badge
+  on the move's destination square, the way a review is read everywhere: **!!** for Brilliant, **!** for Great, a
+  star for Best, a check for Excellent, a thumb for Good, a book for theory, **?!** **?** **??** down the other
+  side and a cross for a Miss. The engine's candidate arrows carry their **rank number**, so the line it actually
+  likes is the one marked 1. The Game Review board is larger and the move list narrows down its side. (The badges
+  are our own artwork in the familiar visual language - the well-known set belongs to chess.com and is not
+  redistributed here.)
 - [x] **Every move gets a name** (v3.1.251) - Game Review classifies with the full published scheme:
   **Brilliant, Great, Best, Excellent, Good, Book, Forced, Inaccuracy, Mistake, Miss, Blunder**. The ordinary
   classes are win-probability bands (under 2% lost is Excellent, under 5 Good, under 10 an Inaccuracy, under 20 a
