@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.270-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.271-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -188,7 +188,7 @@ instead of analysing the wrong position.
 <details>
 <summary>Opening Explorer, tablebase, eval bar and history, screen reading</summary>
 
-- **Multiple lines** - top candidates (MultiPV) up to what the engine supports, each drawn with its evaluation, its rank and its own score.
+- **Multiple lines** - top candidates (MultiPV) up to what the engine supports, each drawn with its evaluation, its rank and its own score. With a **human model** selected the column shows how likely each move is instead of the same position eval five times.
 - **Eval bar** - vertical bar beside the board, from your perspective, plus an **eval history graph** shaped like
   Lichess's, marking where the opening, middlegame and endgame begin (ported from scalachess's `Divider`).
 - **Threat analysis** - the opponent's strongest reply, so you see what they're threatening.
@@ -239,7 +239,12 @@ one engine at a time. Studying wants the opposite.
 - **Moves by rating.** Every candidate swept across the whole rating range - ten bands for Maia 1, 600
   to 2600 in hundreds for Maia 3 - drawn as one chart so the lines can be compared, each named at its
   own end, with a readout that follows the pointer and gives every move's probability at the band under
-  it. This is where you can see e4 fall away and d4 climb as strength rises.
+  it. This is where you can see e4 fall away and d4 climb as strength rises. The ply *after* the one you
+  are looking at is swept in the background, so stepping through a game draws from cache (7ms) instead
+  of sweeping again.
+- **Export the position, not a picture of it.** One self-contained file: the board as it stands, the FEN,
+  the line that got there, the chart, and the table of numbers behind the chart. Stylesheets inlined,
+  pieces embedded, no scripts, nothing to fetch - so what you send can be read *and* loaded back.
 - **Win / draw / loss** beside the board, each number named rather than three bare percentages, and an
   **eval bar** down the side.
 - **Opening book** - load a Polyglot `.bin`, a PGN or a JSON table and its moves are listed for the
@@ -277,6 +282,12 @@ stays in the tab and the search runs in the extension's own engine.
   plays rather than what is best. Maia 1 across the ten nets it ships (1100–1900, plus 2200) or Maia 3 on
   a rating dial. It
   reports where your move sat in Maia's **own ranking**, not a yes/no.
+- **Strength estimate (optional, off)** - which rating best explains the moves that were played. The
+  human model is asked at every rating it has, and the one least surprised by what actually happened is
+  the estimate. It reports the ratings the game **cannot tell apart** alongside the peak, the number of
+  decisions it is drawn from, and the likelihood curve - so a flat curve is visible as flat. Book and
+  forced moves are left out: everyone plays those the same way. **A strength estimate, not a fair-play
+  measurement** - a player using an engine reads as *stronger* here, and one game is a small sample.
 - **Human likeness (optional, off)** - the whole game read by that second judge instead: how expected each
   move was rather than how good, and the moves the engine ranked first that the human model never saw
   coming.
@@ -766,40 +777,12 @@ No schedule - added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>27 items, sorted by upside and effort</summary>
+<summary>23 items, sorted by upside and effort</summary>
 
-**Quick wins.** Small changes with an obvious payoff, and mostly plumbing that already exists.
-
-- [ ] **Show Maia's probability in the panel as well** - since v3.1.270 every Maia line carries the net's own
-  chance of a human at that rating playing it (`maiaprob`, read by `parseInfo`, carried onto each line by
-  `toResult`), and the Analysis page prints it. The live panel still lists Maia's Multi Lines by rank alone,
-  so the one number that says *how likely* rather than *which is best* is computed, delivered and dropped on
-  the floor. It is a column in a list that already exists.
-
-- [ ] **Export the position, not just the picture** - the moves-by-rating chart is the most shareable thing
-  here and can currently only be screenshotted. One button that writes a single self-contained file: the
-  **board** as it stands, the FEN and the PGN under it, the chart itself, and the numbers behind it - which
-  move, at which rating, how often - so the thing you send someone can be read *and* loaded back rather than
-  only looked at. The review page already exports itself this way (markup, stylesheets inlined, pieces
-  embedded, no scripts, nothing to fetch), so the shape is settled; this is that shape applied to a position.
+**Quick wins.** Small changes with an obvious payoff. Empty again as of v3.1.271 - both of the ones
+that were here shipped.
 
 **Worth real work.** The ones that would change how this feels to use, and cost accordingly.
-
-- [ ] **"You played like 1650"** - the review already runs a second pass with Maia, and since v3.1.270 that
-  pass returns a real probability per move rather than a rank. That is exactly the ingredient a strength
-  estimate needs: for each rating band, how likely is the whole game as played, and which band explains it
-  best. It is a far more interesting number than an engine-match rate, and unlike a match rate it does not
-  quietly assume that playing well means playing like a machine. Two things to be honest about before it
-  ships: one game is a small sample and the answer has to carry its own uncertainty, and a player using an
-  engine will read as *higher* than they are, which makes this a strength estimate and not a fair-play
-  measurement - it belongs beside the indicators, not among them.
-
-- [ ] **Sweep the ratings in the background, and keep it** - moves-by-rating is computed for the position on
-  the board and thrown away the moment you step off it, so walking a game re-sweeps every ply from scratch;
-  with Maia 3 that is twenty-one forward passes each time. Sweep the next ply while you are looking at this
-  one, keep the results per game rather than per position, and stepping through a game becomes instant
-  instead of a wait per move. The cache already exists and is keyed by position, model and line count - what
-  is missing is filling it ahead of the cursor and not dropping it on every move.
 
 - [ ] **A faster board recogniser** - partly answered in v3.1.255, and again in v3.1.269 by giving the model
   more threads: the cap of 4 was measured against 5, 6 and 8 on a 10-core Mac (754/635/610/589/704ms at
@@ -937,7 +920,32 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>62 features, newest first</summary>
+<summary>63 features, newest first</summary>
+
+- [x] **Four from the roadmap** (v3.1.271)
+  - **Maia's probability in the panel.** It scores the position once and puts that one number on every line, so the
+    panel's line list was five copies of it -- while the thing that actually differs between its lines, how often a
+    human of that rating plays each move, was computed by the net and never shown. Measured at Maia 1500 on the
+    starting position: 65.2% e4, 22.9% d4, 2.8% c4, 2.4% Nf3.
+  - **The rating sweep runs one ply ahead of the cursor.** Moves-by-rating only started working once the position was
+    already on screen, so walking a game paid the whole sweep at every step -- twenty-one forward passes per move with
+    Maia 3. The ply after the cursor is now filled in half a second after the current chart is drawn: **7ms** to a
+    drawn chart when you step onto it, against seconds for a sweep. One ply only; further is work for a position
+    nobody may look at.
+  - **Export the position, not a picture of it.** A screenshot of the chart cannot be read back. Export writes one
+    self-contained file -- the board, the FEN, the line that got there, the chart, and the table of numbers behind
+    the chart -- stylesheets inlined, pieces embedded as data URIs, no scripts, nothing to fetch, nothing pointing
+    back at the extension.
+  - **A strength estimate in Game Review** (opt-in, off by default). The human model gives, for every legal move, the
+    chance a player of a given rating plays it; ask it at each rating over the moves someone actually played and one
+    rating fits better than the rest. It reports the ratings the game **cannot tell apart** alongside the peak,
+    because twenty-odd moves carry no more precision than that, and draws the likelihood curve so a flat one is
+    visible as flat. Book and forced moves are left out -- everyone plays those the same way. Affordable because Maia
+    costs ONE forward pass whatever MultiPV is set to, so the whole distribution costs nothing over five lines.
+    **It is a strength estimate and not a fair-play measurement**: a player using an engine reads as *stronger*, and
+    one game is a small sample. Both are said on the page.
+  - Also: Game Review's own rating dropdown had a hand-written copy of the band list and still offered 2000 and 2100,
+    which have no net on disk; and a puzzle answer said where it came from twice, on two lines.
 
 - [x] **The Analysis page, swept** (v3.1.270)
   - **Maia's own probability reaches the screen.** Both adapters worked out, for every legal move, how likely a
