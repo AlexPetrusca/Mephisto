@@ -58,7 +58,7 @@
   "set.search_time_ms": "搜索时间（毫秒）",
   "ui.off": "关",
   "ui.on": "开",
-  "set.tip.mephisto_communicates_with_a_chess": "Mephisto 与运行在你本机上的国际象棋引擎通信以评估局面。注意：必须运行并正确配置 remote-engine.py（位于 \"src/scripts\"）才能生效。",
+  "set.tip.mephisto_communicates_with_a_chess": "Which engine evaluates positions. WASM engines run inside this browser; the local ones need their native host installed; Remote Engine needs remote-engine.py (in \"src/scripts\") running. The two Cloud entries are a real Stockfish on somebody else's server: they need nothing installed, which is the point on a machine that cannot run a strong engine, but THE POSITION LEAVES YOUR MACHINE on every move. A local engine is both faster and private, so cloud is a fallback, not an upgrade. Cloud searches by depth (12 by default, capped at 18 on chess-api.com and 15 on stockfish.online) and returns one line.",
   "set.tip.cap_the_engine_s_playing": "把引擎的棋力限制到目标 Elo（以 UCI_LimitStrength + UCI_Elo 发送）。有效范围随引擎而定（SF dev/18：1320-3190，SF 11：1350-2850，Fairy：500-2850），超出范围的值会被忽略（而不是被截断）。0 = 全力（不限制）。",
   "set.tip.position_changes_are_detected_inst": "局面变化是即时检测的（事件驱动）。这只是一个缓慢的安全轮询，用于补上被遗漏的更新；1000 毫秒完全够用。",
   "set.tip.how_the_mephisto_panel_is": "Mephisto 面板的显示方式。浮动 = 棋盘上方可拖动的窗口；它存在于页面之中，因此棋类网站更容易检测到。工具栏弹窗 = 浏览器工具栏上的经典气泡；它在页面中不留任何痕迹（更安全的选择）。",

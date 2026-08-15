@@ -6,9 +6,15 @@
                 <div class="section">
                     <label>
                         <span data-i18n-tip="set.tip.mephisto_communicates_with_a_chess" id="engine-label-tooltiped" class="hidden tooltipped" data-position="right"
-                              data-tooltip="Mephisto communicates with a chess engine running locally on your machine
-                                            to evaluate positions. NOTE: remote-engine.py (in &quot;src/scripts&quot;)
-                                            must be running and configured properly for this to work.">
+                              data-tooltip="Which engine evaluates positions. WASM engines run inside this browser;
+                                            the local ones need their native host installed; Remote Engine needs
+                                            remote-engine.py (in &quot;src/scripts&quot;) running. The two Cloud entries
+                                            are a real Stockfish on somebody else's server: they need nothing
+                                            installed, which is the point on a machine that cannot run a strong
+                                            engine, but THE POSITION LEAVES YOUR MACHINE on every move. A local
+                                            engine is both faster and private, so cloud is a fallback, not an
+                                            upgrade. Cloud searches by depth (12 by default, capped at 18 on
+                                            chess-api.com and 15 on stockfish.online) and returns one line.">
                             Engine <i class="material-icons info-tooltip">info</i>
                         </span>
                         <span data-i18n="panel.engine" id="engine-label-untooltiped">
@@ -25,6 +31,8 @@
                             <option value="maia">Maia (human-like)</option>
                             <option value="maia3">Maia-3 (600-2600)</option>
                             <option value="tetrarch-native">Tetrarch (4-player chess — Teams mode only)</option>
+                            <option value="cloud-chessapi">Cloud: chess-api.com (position leaves your machine)</option>
+                            <option value="cloud-stockfish-online">Cloud: stockfish.online (position leaves your machine)</option>
                             <option value="remote">Remote Engine</option>
                         </select>
                     </label>

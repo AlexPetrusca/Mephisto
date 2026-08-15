@@ -58,7 +58,7 @@
   "set.search_time_ms": "探索時間（ミリ秒）",
   "ui.off": "オフ",
   "ui.on": "オン",
-  "set.tip.mephisto_communicates_with_a_chess": "Mephisto は局面を評価するために、あなたのマシン上でローカルに動作するチェスエンジンと通信します。注意：これを機能させるには remote-engine.py（\"src/scripts\" 内）が起動し、正しく設定されている必要があります。",
+  "set.tip.mephisto_communicates_with_a_chess": "Which engine evaluates positions. WASM engines run inside this browser; the local ones need their native host installed; Remote Engine needs remote-engine.py (in \"src/scripts\") running. The two Cloud entries are a real Stockfish on somebody else's server: they need nothing installed, which is the point on a machine that cannot run a strong engine, but THE POSITION LEAVES YOUR MACHINE on every move. A local engine is both faster and private, so cloud is a fallback, not an upgrade. Cloud searches by depth (12 by default, capped at 18 on chess-api.com and 15 on stockfish.online) and returns one line.",
   "set.tip.cap_the_engine_s_playing": "エンジンの棋力を目標 Elo に制限します（UCI_LimitStrength + UCI_Elo として送信）。有効範囲はエンジンによって異なり（SF dev/18：1320-3190、SF 11：1350-2850、Fairy：500-2850）、範囲外の値は無視されます（丸められません）。0 = フルパワー（制限なし）。",
   "set.tip.position_changes_are_detected_inst": "局面の変化は即座に検出されます（イベント駆動）。これは見逃した更新を補うための遅い安全確認にすぎず、1000 ミリ秒で十分です。",
   "set.tip.how_the_mephisto_panel_is": "Mephisto パネルの表示方法。フローティング = 盤面の上に重なるドラッグ可能なウィンドウ。ページ内に存在するため、チェスサイトから検出されやすくなります。ツールバーのポップアップ = ブラウザのツールバーに出る従来型の吹き出し。ページには一切痕跡を残しません（より安全な選択）。",

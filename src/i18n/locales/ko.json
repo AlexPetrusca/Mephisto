@@ -58,7 +58,7 @@
   "set.search_time_ms": "탐색 시간(ms)",
   "ui.off": "끔",
   "ui.on": "켬",
-  "set.tip.mephisto_communicates_with_a_chess": "Mephisto는 국면을 평가하기 위해 사용자의 컴퓨터에서 로컬로 실행 중인 체스 엔진과 통신합니다. 참고: 이것이 동작하려면 remote-engine.py(\"src/scripts\" 안)가 실행 중이고 올바르게 설정되어 있어야 합니다.",
+  "set.tip.mephisto_communicates_with_a_chess": "Which engine evaluates positions. WASM engines run inside this browser; the local ones need their native host installed; Remote Engine needs remote-engine.py (in \"src/scripts\") running. The two Cloud entries are a real Stockfish on somebody else's server: they need nothing installed, which is the point on a machine that cannot run a strong engine, but THE POSITION LEAVES YOUR MACHINE on every move. A local engine is both faster and private, so cloud is a fallback, not an upgrade. Cloud searches by depth (12 by default, capped at 18 on chess-api.com and 15 on stockfish.online) and returns one line.",
   "set.tip.cap_the_engine_s_playing": "엔진의 기력을 목표 Elo로 제한합니다(UCI_LimitStrength + UCI_Elo로 전송). 유효 범위는 엔진에 따라 다르며(SF dev/18: 1320-3190, SF 11: 1350-2850, Fairy: 500-2850), 범위를 벗어난 값은 무시됩니다(경계로 맞추지 않습니다). 0 = 전력(제한 없음).",
   "set.tip.position_changes_are_detected_inst": "국면 변화는 즉시 감지됩니다(이벤트 기반). 이것은 놓친 갱신을 보완하는 느린 안전 확인일 뿐이며, 1000밀리초면 충분합니다.",
   "set.tip.how_the_mephisto_panel_is": "Mephisto 패널을 어떻게 표시할지. 플로팅 = 체스판 위에 뜨는 끌 수 있는 창. 페이지 안에 존재하므로 체스 사이트가 더 쉽게 탐지할 수 있습니다. 툴바 팝업 = 브라우저 툴바의 고전적인 말풍선. 페이지에 아무 흔적도 남기지 않습니다(더 안전한 선택).",

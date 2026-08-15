@@ -160,6 +160,106 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     })();
     return true; // async sendResponse
   }
+  // --- CLOUD EVALUATION -----------------------------------------------------------------------
+  // A real Stockfish on somebody else's machine, over HTTPS. THE POSITION LEAVES THIS MACHINE:
+  // that is the entire cost of this engine and it is not hidden -- the dropdown entries say
+  // "cloud", the settings tooltip says it in words, and this is the only code in the extension
+  // that sends a position anywhere. A native host is faster AND private, so this is the fallback
+  // for a machine that cannot run a strong engine locally, not an upgrade for one that can.
+  //
+  // It lives in the WORKER rather than the panel because the panel runs inside the page, where a
+  // strict Content-Security-Policy (lichess ships one) can block a cross-origin fetch outright.
+  // Both providers answer `access-control-allow-origin: *` (measured), so no host permission is
+  // needed and none is requested.
+  //
+  // Both APIs report WHITE-RELATIVE evals and mate distances -- measured, not assumed: black
+  // winning reads -14.24 / -13.79, and a black mate-in-1 reads mate -1 on both. `rawScore` in the
+  // envelope below is UCI, which is SIDE-TO-MOVE relative, hence the sign flip.
+  const CLOUD_TIMEOUT_MS = 20000;
+  const CLOUD_PROVIDERS = {
+    'cloud-chessapi': {
+      label: 'chess-api.com',
+      maxDepth: 18,        // their documented ceiling; asking for more is silently capped anyway
+      defaultDepth: 12,
+      request: (fen, depth) => ['https://chess-api.com/v1', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({fen, depth}),
+      }],
+      parse: (j, turn) => {
+        if (!j || j.type === 'error' || j.error) return {error: j?.text || j?.error || 'chess-api.com rejected that position'};
+        if (!j.move) return {error: j.text || 'chess-api.com returned no move'};
+        const cont = Array.isArray(j.continuationArr) ? j.continuationArr : [];
+        // `mate` comes back as the string "1" when positive and the number -1 when negative
+        const mate = (j.mate === null || j.mate === undefined || j.mate === '') ? null : Number(j.mate);
+        return cloudEnvelope([j.move, ...cont], mate,
+          mate === null ? Math.round(Number(j.eval) * 100) : null, Number(j.depth) || 0, turn);
+      },
+    },
+    'cloud-stockfish-online': {
+      label: 'stockfish.online',
+      maxDepth: 15,        // their documented ceiling: above it the request is refused, not capped
+      defaultDepth: 12,
+      request: (fen, depth) => [
+        `https://stockfish.online/api/s/v2.php?fen=${encodeURIComponent(fen)}&depth=${depth}`, {method: 'GET'}],
+      parse: (j, turn, depth) => {
+        if (!j || !j.success) return {error: j?.data || j?.error || 'stockfish.online could not evaluate that position'};
+        const best = String(j.bestmove || '').split(/\s+/)[1];
+        if (!best) return {error: 'stockfish.online returned no move'};
+        const cont = String(j.continuation || '').trim().split(/\s+/).filter(Boolean);
+        const mate = (j.mate === null || j.mate === undefined) ? null : Number(j.mate);
+        return cloudEnvelope(cont[0] === best ? cont : [best, ...cont], mate,
+          mate === null ? Math.round(Number(j.evaluation) * 100) : null, depth, turn);
+      },
+    },
+  };
+
+  // The shape remote-engine.py answers with, so the panel's remote path needs no special case:
+  // white-relative `score`/`mate`, side-to-move-relative `rawScore`, pv as UCI strings.
+  function cloudEnvelope(pv, mateWhite, cpWhite, depth, turn) {
+    const sign = turn === 'w' ? 1 : -1;
+    const line = {move: pv[0], pv, depth, multipv: 1};
+    if (mateWhite === null || Number.isNaN(mateWhite)) {
+      const cp = Number.isFinite(cpWhite) ? cpWhite : 0;
+      line.score = cp;
+      line.rawScore = `cp ${cp * sign}`;
+    } else {
+      line.mate = mateWhite;
+      line.rawScore = `mate ${mateWhite * sign}`;
+    }
+    return {bestmove: pv[0], threat: pv[1] || '(none)', lines: [line]};
+  }
+
+  if (msg.cloudAnalyse) {
+    (async () => {
+      const {engine, fen, depth} = msg.cloudAnalyse;
+      const p = CLOUD_PROVIDERS[engine];
+      if (!p) return sendResponse({error: `unknown cloud engine ${engine}`});
+      const turn = String(fen || '').split(/\s+/)[1] === 'b' ? 'b' : 'w';
+      const want = Math.max(1, Math.min(p.maxDepth, Math.round(Number(depth) || p.defaultDepth)));
+      // A hung request must not leave the panel spinning for ever: these are other people's servers.
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), CLOUD_TIMEOUT_MS);
+      try {
+        const [url, init] = p.request(fen, want);
+        const res = await fetch(url, {...init, signal: ctl.signal, cache: 'no-store'});
+        if (!res.ok) return sendResponse({error: `${p.label} answered HTTP ${res.status}`});
+        const text = await res.text();
+        let json = null;
+        try { json = JSON.parse(text); } catch (e) { /* an error page, not JSON */ }
+        if (!json) return sendResponse({error: `${p.label} did not return JSON`});
+        sendResponse(p.parse(json, turn, want));
+      } catch (e) {
+        sendResponse({error: e.name === 'AbortError'
+          ? `${p.label} did not answer within ${CLOUD_TIMEOUT_MS / 1000}s`
+          : `${p.label}: ${e.message}`});
+      } finally {
+        clearTimeout(timer);
+      }
+    })();
+    return true; // async sendResponse
+  }
+
   // Panel asks to read the board off the screen. The SW is the only context that can capture a tab;
   // the offscreen document is the only one with onnxruntime loaded -- so capture here, recognise there.
   if (msg.captureAndRecognize) {

@@ -175,6 +175,12 @@ const NO_ELO_ENGINES = ['maia', 'maia3', 'tetrarch-native'];
 // engines that speak native messaging (Chrome auto-launches the host, no server -- see
 // native-host/install-native.sh). The port name == the engine value (see NATIVE_HOSTS).
 const NATIVE_ENGINES = ['sf-native', 'fairy-native', 'tetrarch-native'];
+// Cloud evaluation: a real Stockfish, on someone else's machine, reached over HTTPS. THE POSITION
+// LEAVES THIS MACHINE -- that is the cost, and it is why these are named "cloud" everywhere they
+// appear. A native host is both faster and private, so this is the fallback for a machine that
+// cannot run a strong engine locally. They ride the REMOTE path (no WASM to load, no host to
+// launch); the fetch itself happens in the service worker (see CLOUD_PROVIDERS there).
+const CLOUD_ENGINES = ['cloud-chessapi', 'cloud-stockfish-online'];
 // FOUR-PLAYER. Tetrarch plays 14x14 4PC, which chess.js cannot represent at all -- so this
 // engine does NOT ride the normal pipeline: no chess.js legality, no premove, no arrows. It is
 // offered only on chess.com's 4PC pages and drives the bypass lane (see FOURPC_SITES).
@@ -3661,6 +3667,9 @@ function clear_setup_fen() {
     setup_view = null;    // the page decides the orientation again
     snap_crop = null;
     snap_follow_stop();
+    // The arrows drawn onto the region go with it. Help Mode redraws its own on the next position;
+    // leaving these would strand an arrow over a board Mephisto is no longer reading.
+    if (!config.help_mode) request_clear_hint();
     stash_setup_state(); // clears the stash: a reload must NOT bring the position back
     const row = PANEL_ROOT.getElementById('setup-fen-row');
     if (row) row.style.display = 'none';
@@ -5870,8 +5879,8 @@ function request_console_log(message) {
     send_to_active_tab({consoleMessage: message});
 }
 
-function request_draw_hint(arrows) {
-    send_to_active_tab({drawHint: true, arrows: arrows});
+function request_draw_hint(arrows, region) {
+    send_to_active_tab({drawHint: true, arrows: arrows, region: region || null});
 }
 
 function request_clear_hint() {
@@ -6300,6 +6309,10 @@ function draw_moves() {
 
     clear_annotations();
     const hint_arrows = []; // help mode mirrors the popup's arrows onto the site's board
+    // ...and so does screen-reading, onto the region it read. A board read off the screen has no
+    // site board to annotate, and the whole point of following one is that the answer belongs on
+    // the board you are looking at -- so entering that mode is the opt-in, no Help Mode needed.
+    const page_arrows = config.help_mode || !!snap_region();
     // THE FORCED CONTINUATION, drawn ahead of itself. Everything after the engine's own move is a
     // move nobody has a choice about, so it can be shown as fact rather than as a suggestion -- and
     // seeing it is the difference between playing a move and knowing why it is safe. Drawn FIRST so
@@ -6351,7 +6364,7 @@ function draw_moves() {
         const ramp = forced_ramp(ours);
         const color = ramp[Math.min(Math.floor((step.ply - 1) / 2), ramp.length - 1)];
         draw_move(step.uci, color, PANEL_ROOT.getElementById('move-annotations'), 0.12, 0, '');
-        if (config.help_mode) hint_arrows.push({move: step.uci, width: 0.12, color, rank: 0, label: ''});
+        if (page_arrows) hint_arrows.push({move: step.uci, width: 0.12, color, rank: 0, label: ''});
     }
     for (let i = 0; i < last_eval.activeLines; i++) {
         if (!last_eval.lines[i]) continue;
@@ -6364,12 +6377,12 @@ function draw_moves() {
         const label = arrow_label(last_eval.lines[i]);
         draw_move(last_eval.lines[i].move, arrow_color, PANEL_ROOT.getElementById('move-annotations'),
                   stroke_width, rank, label);
-        if (config.help_mode && stroke_width > 0 && last_eval.lines[i].move) {
+        if (page_arrows && stroke_width > 0 && last_eval.lines[i].move) {
             hint_arrows.push({move: last_eval.lines[i].move, width: stroke_width, color: arrow_color,
                               rank, label});
         }
     }
-    if (config.help_mode) {
+    if (page_arrows) {
         if (config.threat_analysis && last_eval.threat && last_eval.threat !== '(none)') {
             hint_arrows.push({move: last_eval.threat, width: 0.2, color: user_color('arrow_color_threat', '#bf0000')});
         }
@@ -6408,8 +6421,20 @@ function book_arrow_specs(fen) {
 // arrows and the book's must go in a SINGLE call -- sending them separately would make whichever
 // landed last erase the other, and the book lookup always lands after the first engine depth.
 function push_hint_arrows() {
-    if (!config.help_mode) return;
-    request_draw_hint([...engine_hint_arrows, ...book_arrow_specs()]);
+    const region = snap_region();
+    if (!config.help_mode && !region) return;
+    request_draw_hint([...engine_hint_arrows, ...book_arrow_specs()], region);
+}
+
+// The board the screen reader is following, in CAPTURED IMAGE pixels, or null when the panel is
+// analysing a real board on the page. The content script divides by devicePixelRatio to land it
+// back on the page, and `flipped` is the same flag the follow loop rotates its reads by, so an
+// arrow drawn here always points the way the board on screen is facing.
+function snap_region() {
+    if (!setup_fen || !snap_crop) return null;
+    const {x, y, w, h} = snap_crop;
+    if (![x, y, w, h].every(v => Number.isFinite(v) && v > 0)) return null;
+    return {x, y, w, h, flipped: !!snap_flipped};
 }
 
 function clear_book_annotations() {
@@ -6914,9 +6939,13 @@ function copy_diagnostics(onDone = () => {}) {
 }
 
 function is_remote() {
-    // "remote" = anything that isn't an in-browser WASM engine: HTTP remote-engine.py, or a native
-    // messaging host. The HTTP-vs-native split happens in request_remote_* below.
-    return config.engine === 'remote' || uses_native();
+    // "remote" = anything that isn't an in-browser WASM engine: HTTP remote-engine.py, a native
+    // messaging host, or a cloud provider. The split happens in request_remote_* below.
+    return config.engine === 'remote' || uses_native() || uses_cloud();
+}
+
+function uses_cloud() {
+    return CLOUD_ENGINES.includes(config.engine);
 }
 
 // --- Native messaging over a persistent Port to the BACKGROUND worker (connectNative from a
@@ -7067,6 +7096,9 @@ function on_native_info(info, fen) {
 
 async function request_remote_configure(options) {
     if (uses_native()) return native_send('configure', {options});
+    // A cloud provider has no options to set: one request in, one line out. Silently doing nothing
+    // is right here -- posting these to localhost:9090 would hit whatever else is on that port.
+    if (uses_cloud()) return null;
     return call_backend('http://localhost:9090/configure', options).then(parse_backend_json);
 }
 
@@ -7080,6 +7112,17 @@ async function request_remote_analysis(fen, time, moves = null, depth = null) {
         // slow machine -- and a native search cannot be called back, so an unbounded one is not
         // merely slow, it is unstoppable (see NATIVE_MAX_RT).
         return native_send('analyse', {fen, time, moves, depth}, info => on_native_info(info, posFen));
+    }
+    if (uses_cloud()) {
+        // Depth, not time: both providers are depth-limited, and chess-api caps thinking time at a
+        // tenth of a second anyway. When the panel is searching by time there is no depth to pass,
+        // so the provider's own default stands (12) -- the worker clamps to each provider's ceiling.
+        const res = await chrome.runtime.sendMessage({cloudAnalyse: {
+            engine: config.engine, fen, depth: depth || null,
+        }});
+        if (!res) throw new Error('the cloud engine did not answer (is the extension still loaded?)');
+        if (res.error) throw new Error(res.error);
+        return res;
     }
     return call_backend('http://localhost:9090/analyse', {
         fen: fen,
