@@ -2100,7 +2100,14 @@ function render_alt_lines() {
     for (let i = 0; i < config.multiple_lines; i++) {
         const line = last_eval.lines?.[i];
         if (!line || !line.pv) continue;
-        const evalTxt = ('mate' in line) ? `#${line.mate}` : (line.score / 100).toFixed(2);
+        // A HUMAN MODEL ANSWERS A DIFFERENT QUESTION, so it gets a different number. Maia scores the
+        // position once and puts the same eval on every line, so this column read as five copies of
+        // one number; what actually differs between its lines is how likely each move is, which the
+        // net has always known and now sends (`maiaprob`, in ten-thousandths -- see maia.js). The
+        // percentage is the chance out of EVERY legal move, so a few lines summing to under 100 is
+        // the truth rather than a rounding error.
+        const evalTxt = (line.maiaprob != null) ? `${(line.maiaprob / 100).toFixed(1)}%`
+            : ('mate' in line) ? `#${line.mate}` : (line.score / 100).toFixed(2);
         // colour the eval to match this line's board arrow, so the panel is a legend for the arrows.
         // inline style -- beats the dark-mode `#alt-lines .alt-eval` colour rule (no !important there).
         // The line's OWN move carries the weight; the continuation behind it is context, so it is
