@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.264-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.265-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -610,6 +610,8 @@ is a subset writing to the same storage. Everything applies to the next move wit
 
 | Setting | What it does |
 | --- | --- |
+| **Grind Mode** | Lichess only, and only while Autoplay is on. When a game ends, clicks the control that starts the next one. Fails silently if that control is not where it was expected. |
+| **Grind Delay (s)** | How long to wait after a game ends before starting the next one - your window to stop it. 0 starts immediately, 600 is the maximum. |
 | **Engine** | Which engine analyses the position. The WASM builds need nothing installed; "(local, full power)" entries talk to a real binary and only appear once the native host is installed; the two "Cloud" entries need nothing installed either but send the position to somebody else's server on every move. Switching reloads the panel - the net and UCI options have to be rebuilt. The Maia rating band is the exception: it swaps the net live, panel and position untouched. |
 | **Elo** | Caps strength via `UCI_LimitStrength` + `UCI_Elo`. The range follows the engine; out-of-range values are ignored rather than clamped. `0` means no cap. |
 | **Variant** | How the position is read and analysed. Auto-detected on variant pages. Chess960 is the exception: every mainline Stockfish plays it, so it survives an engine switch. |
@@ -876,8 +878,16 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>55 features, newest first</summary>
+<summary>56 features, newest first</summary>
 
+- [x] **Grind Mode** (v3.1.265) - Lichess only, opt-in, and only while Autoplay is on: when a game finishes,
+  Mephisto clicks the control that starts the next one (the "New 1+1" of a pool game, "New opponent" elsewhere)
+  so a session keeps going. **Grind Delay** is the window in which you can stop it - close the tab, navigate away
+  or switch the mode off during it and no new game is searched for; 0 starts immediately, 600s is the maximum.
+  Everything about it fails silently: the analysis link sitting in the same box is excluded by construction, a
+  rematch is not a new opponent and is never taken for one, and if the button is not where it was expected
+  nothing happens and the game simply stays finished. Verified on real finished games, including one where
+  Lichess offered "Neuer Gegner" and it was clicked after the delay.
 - [x] **Two faults in the online engines, both reported from real games** (v3.1.264) - chess-api.com refuses any
   FEN that carries an en-passant square, which is most positions right after a pawn's double step: "Cannot evaluate
   given position - wrong FEN" on the ordinary French after 1.e4 e6 2.d4 d5. Measured against the live API in both
