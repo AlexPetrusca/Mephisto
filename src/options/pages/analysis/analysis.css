@@ -150,14 +150,32 @@
 .an-book { margin-top: 16px; }
 .an-book.hidden { display: none; }
 
-/* Moves by rating: ONE chart with every move in it, each line named at its own end. A row per move
-   with an unlabelled 22px sparkline and a bare number beside it could not be read at all. */
-.an-bands { margin-top: 18px; }
+/* Moves by rating: ONE chart with every move in it, each line named at its own end, and a readout
+   that follows the pointer. A row per move with an unlabelled 22px sparkline and a bare number
+   beside it could not be read at all. */
+.an-bands { margin-top: 18px; position: relative; }
 .an-band-svg { display: block; width: 100%; height: auto; color: var(--mp-text); }
-.an-band-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 11px; color: var(--mp-dim); }
-.an-band-key { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-.an-band-key i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
-.an-band-key b { color: var(--mp-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.an-band-svg .an-hit { fill: transparent; cursor: crosshair; }
+
+/* the hover readout: what every move is worth at the band under the pointer */
+.an-band-tip {
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    min-width: 104px;
+    padding: 6px 8px;
+    border: 1px solid var(--mp-line);
+    border-radius: 5px;
+    background: var(--mp-bg);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+    font-size: 10.5px;
+    opacity: 0;
+    transition: opacity .1s;
+}
+.an-band-tip.on { opacity: 1; }
+.an-band-tip h6 { margin: 0 0 3px; font-size: 11px; font-weight: 600; color: var(--mp-text); }
+.an-band-tip div { display: flex; justify-content: space-between; gap: 12px; line-height: 1.45; }
+.an-band-tip b { font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .an-moves {
     max-height: 420px;

@@ -706,52 +706,112 @@ function arrow(uci, colour, width, opacity, rank) {
 // cannot be misread as a second rating.
 let bandRun = 0;
 
-const BAND_COLOURS = ['#4c9a5e', '#5c8bb0', '#c08a4a', '#a8657f', '#8f8f8f'];
+// One green per move, darkest first, so the ranking is legible before a single label is read.
+const BAND_COLOURS = ['#4aa563', '#6cbf85', '#93d5a4', '#b9e5c4', '#dcf1e0'];
+const BAND_GEO = {X0: 46, X1: 300, Y0: 26, Y1: 152, W: 340, H: 178};
 
-function bandsChart(pos, steps, acc, moves) {
-    const X0 = 40, X1 = 244, Y0 = 10, Y1 = 116;   // the plot box, in the SVG's own units
-    const xOf = (i) => X0 + (i / Math.max(1, steps.length - 1)) * (X1 - X0);
-    const yOf = (p) => Y1 - Core.clamp(p, 0, 1) * (Y1 - Y0);
-
-    const series = moves.map((uci, mi) => {
+function bandSeries(pos, steps, acc, moves) {
+    return moves.map((uci, mi) => {
         const ys = steps.map(b => ((acc[b] || []).find(x => x.uci === uci)?.prob || 0));
         return {uci, san: sanOf(pos.fen, uci), colour: BAND_COLOURS[mi % BAND_COLOURS.length], ys,
                 peak: ys.indexOf(Math.max(...ys)), top: Math.max(...ys)};
     }).filter(s => s.top > 0);
+}
 
-    // two lines that end at the same height would print their names on top of each other
-    const labels = series.map((s, i) => ({i, y: yOf(s.ys[s.ys.length - 1])}))
-        .sort((a, b) => a.y - b.y);
+function bandsChart(steps, series) {
+    const {X0, X1, Y0, Y1, W, H} = BAND_GEO;
+    const xOf = (i) => X0 + (i / Math.max(1, steps.length - 1)) * (X1 - X0);
+    const yOf = (p) => Y1 - Core.clamp(p, 0, 1) * (Y1 - Y0);
+
+    // two lines ending at the same height would print their names on top of each other
+    const labels = series.map((s, i) => ({i, y: yOf(s.ys[s.ys.length - 1])})).sort((a, b) => a.y - b.y);
     for (let i = 1; i < labels.length; i++) {
         if (labels[i].y - labels[i - 1].y < 9) labels[i].y = labels[i - 1].y + 9;
     }
     const labelY = new Map(labels.map(l => [l.i, l.y]));
 
-    const grid = [0, 0.5, 1].map(p =>
-        `<line x1="${X0}" y1="${yOf(p)}" x2="${X1}" y2="${yOf(p)}" stroke="currentColor" stroke-opacity=".16" stroke-width="1"/>`
-      + `<text x="${X0 - 5}" y="${yOf(p) + 3}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".55">${p * 100}%</text>`).join('');
+    const rows = [0, 0.25, 0.5, 0.75, 1].map(p =>
+        `<line x1="${X0}" y1="${yOf(p)}" x2="${X1}" y2="${yOf(p)}" stroke="currentColor" stroke-opacity=".14"
+               stroke-width="1" stroke-dasharray="3 3"/>`
+      + `<text x="${X0 - 6}" y="${yOf(p) + 3}" font-size="8.5" text-anchor="end" fill="currentColor"
+              fill-opacity=".55">${p * 100}%</text>`).join('');
 
-    const ticks = [0, Math.floor(steps.length / 2), steps.length - 1].map(i =>
-        `<text x="${xOf(i)}" y="${Y1 + 12}" font-size="8" text-anchor="middle" fill="currentColor" fill-opacity=".55">${steps[i]}</text>`).join('');
+    // at most six band labels, whatever the model's step count is (10 for Maia 1, 21 for Maia 3)
+    const every = Math.max(1, Math.round((steps.length - 1) / 5));
+    const cols = steps.map((b, i) => (i % every === 0 || i === steps.length - 1) ? i : -1).filter(i => i >= 0)
+        .map(i => `<line x1="${xOf(i)}" y1="${Y0}" x2="${xOf(i)}" y2="${Y1}" stroke="currentColor"
+                         stroke-opacity=".10" stroke-width="1" stroke-dasharray="3 3"/>`
+                + `<text x="${xOf(i)}" y="${Y1 + 13}" font-size="8.5" text-anchor="middle" fill="currentColor"
+                        fill-opacity=".55">${steps[i]}</text>`).join('');
 
-    const lines = series.map((s, i) => {
-        const pts = s.ys.map((p, xi) => `${xOf(xi)},${yOf(p)}`).join(' ');
-        return `<polyline points="${pts}" fill="none" stroke="${s.colour}" stroke-width="1.8"
-                          stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`
-             + `<circle cx="${xOf(s.peak)}" cy="${yOf(s.ys[s.peak])}" r="2" fill="${s.colour}"/>`
-             + `<text x="${X1 + 4}" y="${labelY.get(i) + 3}" font-size="9" font-weight="600" fill="${s.colour}">${esc(s.san)}</text>`;
-    }).join('');
+    // the leader's area, as a haze rather than a block: it says which move owns the chart without
+    // hiding the lines underneath it
+    const lead = series[0];
+    const area = lead
+        ? `<path d="M ${xOf(0)},${Y1} ` + lead.ys.map((p, i) => `L ${xOf(i)},${yOf(p)}`).join(' ')
+          + ` L ${xOf(lead.ys.length - 1)},${Y1} Z" fill="url(#anBandFade)"/>`
+        : '';
 
-    const legend = series.map(s =>
-        `<span class="an-band-key"><i style="background:${s.colour}"></i>${esc(s.san)}
-            <b>${Math.round(s.top * 100)}%</b> at ${steps[s.peak]}</span>`).join('');
+    const lines = series.map((s, i) =>
+        `<polyline points="${s.ys.map((p, xi) => `${xOf(xi)},${yOf(p)}`).join(' ')}" fill="none"
+                   stroke="${s.colour}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"
+                   vector-effect="non-scaling-stroke"/>`
+      + s.ys.map((p, xi) => `<circle cx="${xOf(xi)}" cy="${yOf(p)}" r="1.9" fill="${s.colour}"/>`).join('')
+      + `<text x="${X1 + 5}" y="${labelY.get(i) + 3}" font-size="9.5" font-weight="600"
+              fill="${s.colour}">${esc(s.san)}</text>`).join('');
 
-    return `<svg class="an-band-svg" viewBox="0 0 300 132" preserveAspectRatio="xMidYMid meet" role="img"
-                 aria-label="How often each move is played, by rating">
-        <text x="4" y="${Y0 + 2}" font-size="8" fill="currentColor" fill-opacity=".55" transform="rotate(-90 4 ${(Y0 + Y1) / 2})"
-              text-anchor="middle">played</text>
-        ${grid}${ticks}${lines}
-    </svg><div class="an-band-legend">${legend}</div>`;
+    // the key sits above the plot, in reading order, so the colours are known before the lines are
+    const key = series.map((s, i) =>
+        `<text x="${X1 - (series.length - 1 - i) * 30}" y="${Y0 - 9}" font-size="9.5" font-weight="600"
+               text-anchor="end" fill="${s.colour}">${esc(s.san)}</text>`).join('');
+
+    return `<svg class="an-band-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img"
+                 aria-label="How likely a human of each rating is to play each move">
+        <defs><linearGradient id="anBandFade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${lead ? lead.colour : '#4aa563'}" stop-opacity=".22"/>
+            <stop offset="100%" stop-color="${lead ? lead.colour : '#4aa563'}" stop-opacity="0"/>
+        </linearGradient></defs>
+        <text x="13" y="${(Y0 + Y1) / 2}" font-size="9.5" font-weight="600" fill="#e08a7a" text-anchor="middle"
+              transform="rotate(-90 13 ${(Y0 + Y1) / 2})">Maia probability</text>
+        ${rows}${cols}${key}${area}${lines}
+        <g class="an-band-cursor" style="display:none">
+            <line y1="${Y0}" y2="${Y1}" stroke="currentColor" stroke-opacity=".45" stroke-width="1"/>
+        </g>
+        <rect class="an-hit" x="${X0}" y="${Y0}" width="${X1 - X0}" height="${Y1 - Y0}"/>
+    </svg><div class="an-band-tip"></div>`;
+}
+
+// The readout follows the pointer: which band it is over, and what every move is worth there. Done
+// after the markup is written rather than inline, because it needs the real pixel box of the SVG.
+function wireBandsHover(host, steps, series) {
+    const svg = host.querySelector('.an-band-svg'), tip = host.querySelector('.an-band-tip');
+    const hit = host.querySelector('.an-hit'), cursor = host.querySelector('.an-band-cursor');
+    if (!svg || !tip || !hit) return;
+    const {X0, X1, Y0, Y1} = BAND_GEO;
+    const xOf = (i) => X0 + (i / Math.max(1, steps.length - 1)) * (X1 - X0);
+    const yOf = (p) => Y1 - Core.clamp(p, 0, 1) * (Y1 - Y0);
+
+    const move = (ev) => {
+        const box = svg.getBoundingClientRect();
+        const scale = box.width / svg.viewBox.baseVal.width;
+        const ux = (ev.clientX - box.left) / scale;                       // pointer in SVG units
+        const i = Core.clamp(Math.round((ux - X0) / ((X1 - X0) / Math.max(1, steps.length - 1))),
+                             0, steps.length - 1);
+        cursor.style.display = '';
+        cursor.querySelector('line').setAttribute('x1', xOf(i));
+        cursor.querySelector('line').setAttribute('x2', xOf(i));
+        tip.innerHTML = `<h6>${esc(steps[i])}</h6>` + series.map(s =>
+            `<div><span style="color:${s.colour}">${esc(s.san)}</span>`
+          + `<b style="color:${s.colour}">${(s.ys[i] * 100).toFixed(1)}%</b></div>`).join('');
+        tip.classList.add('on');
+        // kept inside the chart: past the middle it flips to the other side of the cursor
+        const px = (xOf(i) - X0) / (X1 - X0);
+        tip.style.left = px > 0.55 ? '' : `${(xOf(i) / svg.viewBox.baseVal.width) * 100}%`;
+        tip.style.right = px > 0.55 ? `${100 - (xOf(i) / svg.viewBox.baseVal.width) * 100}%` : '';
+        tip.style.top = `${(yOf(1) / svg.viewBox.baseVal.height) * 100}%`;
+    };
+    hit.addEventListener('mousemove', move);
+    hit.addEventListener('mouseleave', () => { tip.classList.remove('on'); cursor.style.display = 'none'; });
 }
 
 async function renderBands(pos) {
@@ -814,7 +874,9 @@ async function renderBands(pos) {
     const totals = new Map();
     for (const b of steps) for (const x of (acc[b] || [])) totals.set(x.uci, (totals.get(x.uci) || 0) + x.prob);
     const moves = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, nLines);
-    host.innerHTML = bandsChart(pos, steps, acc, moves);
+    const series = bandSeries(pos, steps, acc, moves);
+    host.innerHTML = bandsChart(steps, series);
+    wireBandsHover(host, steps, series);
 }
 
 // ---- opening book -------------------------------------------------------------------------------
