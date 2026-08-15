@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.268-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.269-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -788,9 +788,6 @@ shipped, which is a good sign and also why the next item is a bigger one.
   unresponsive, and then it recovers on its own. Long-standing, instrumented, never explained. The worker's
   cold-start timings are recorded now, which is where to start looking.
 
-- [ ] **ChessBase Tactics arrows + autoplay** - analysis works; drawing and clicking don't. ChessBase renders its own
-  board with no class to match, and finding it by shape was slow and unreliable.
-
 - [ ] **Four-player chess, the rest of it** - Teams mode works, promotions are played and eliminations are
   handled. What is left: free-for-all needs engine support, and no real game has yet been seen past an
   elimination, so that path is pinned by synthetic positions rather than by having happened. Chaturaji,
@@ -799,32 +796,24 @@ shipped, which is a good sign and also why the next item is a bigger one.
 - [ ] **Four-player chess on Windows, confirmed** - built and symbol-checked, never run on a real Windows machine.
   See [Contributing](#contributing) for the four stages worth reporting.
 
-- [ ] **Duck Chess autoplay** - detection and analysis work; the duck-placement step doesn't.
-
-
-**Smaller improvements.** Worth having, not worth dropping anything else for.
+- [ ] **Duck Chess autoplay** - blocked on the ENGINE, not on the clicking, and that was measured: this build's
+  Fairy-Stockfish declares 84 variants and duck is not one of them, so `UCI_Variant duck` is ignored and it plays
+  standard chess. Since v3.1.269 the panel at least says so instead of answering confidently. What it needs is a
+  Fairy build that has the variant - a rebuild, not a wiring job.
 
 - [ ] **Play from your own Polyglot book** - half done. Since v3.1.256 the **Analysis** page reads real `.bin`
   files (the format's own Zobrist table, verified against its published test keys) and shows their moves. What is
   left is the other half: the *panel* playing from a book you loaded, rather than from the Opening Explorer's
   statistics - which means the book has to live somewhere the panel can reach, not just the options page.
 
-- [ ] **Clock rules per situation** - pacing is one distribution for every move today. Real players are slower
-  with the queen than the king, instant on a recapture, and slow again when they can see the mate. Rules keyed
-  to what the move *is*, not just to how many have been played - and to what the clock says, because nobody
-  spends twelve seconds on move forty with thirty left.
+- [ ] **Better board reading from the screen** - two of its parts landed in v3.1.269: two boards on screen are
+  told apart (the panel hides itself for the one frame a detection capture needs), and a misread square is one
+  click from fixed. What is left is the reading itself - unusual piece sets, low resolution, boards at an angle -
+  which is the model, and means retraining rather than tuning.
 
-- [ ] **Better board reading from the screen** - screenshot-to-FEN works, and since v3.1.260 the answer is
-  drawn back onto the board it was read from. What is left is the reading itself: unusual piece sets, low
-  resolution, boards at an angle, a quicker way to correct the one square it got wrong instead of starting
-  over - and telling two boards apart when both are on screen, since the panel's own board is one of them
-  (the drag-a-box path is the answer today).
-
-- [ ] **A speed and polish pass on the panel** - the FEN input still glares white out of a dark panel, and the
-  left column crowds once five lines and the screen follower are both up. A related lesson from v3.1.268: a
-  control written by hand instead of copied from the row above it came out unstyled AND unwired, so the sweep
-  should check every control against the one beside it rather than by eye. The settings page's half of this landed
-  in v3.1.229 (rows no longer strand their control at the far edge of the window); the panel's has not.
+- [ ] **A speed and polish pass on the panel** - the crowding and the FEN box were answered in v3.1.269 (the box
+  grows to its content; the input uses the palette). What is left is the pass itself: every control compared
+  against the one beside it, the way the settings page was swept, rather than by eye.
 
 - [ ] **Shrink the footprint further** - what's left is hardening the one rendezvous the MAIN-world probes need and
   tightening how scraped positions are sanitised. Being straight about the ceiling: the client side is nearly
@@ -889,8 +878,35 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>60 features, newest first</summary>
+<summary>61 features, newest first</summary>
 
+- [x] **Five roadmap items, in one release** (v3.1.269)
+  - **The panel grows to its content.** With five lines, the eval history, live stats and the FEN row up, 648px of
+    panel was being drawn inside a 540px frame with overflow hidden - the bottom rows, `next-move` among them, were
+    not crowded but unreachable. The box follows its content now, floored at the old height and capped by the
+    viewport, with the body scrolling if the cap bites. The FEN box also wore the browser's own form grey; it uses
+    the panel palette.
+  - **The screen reader can tell two boards apart.** Mephisto's own panel carries a chessboard, and with no crop
+    given the detector picked it - measured, a box spanning both boards and an illegal position. Blanking the
+    panel's rectangle was tried and is worse (it overlaps the board it is asked about, so it takes a strip of the
+    real board with it); the panel steps aside for the one frame instead. Verified: with the panel open and no
+    crop, the page's board is found and read exactly right. **And a misread square is one click from fixed** - the
+    model's runner-up for each unsure square is now a button.
+  - **Pacing depends on what the move is.** One distribution for every move is the tell. A recapture is near
+    instant, a forced move almost so, the queen gets more thought than the king, a visible mate slows things down,
+    and under a minute on the clock it stops deliberating. The click itself is never sped up.
+  - **A variant the engine does not have is said out loud.** Duck Chess autoplay was the request; it is blocked one
+    level down. This build's Fairy-Stockfish declares 84 variants and duck is not among them (asked, not assumed),
+    and Fairy answers an unknown UCI_Variant by staying on the one it had - so asking for duck produced a
+    confident STANDARD CHESS analysis of a duck position. That silence is fixed: the engine is asked what it
+    supports and the panel says when the answer is no.
+  - **ChessBase Tactics: arrows and clicking.** The blocker was never the drawing, it was the geometry - a canvas
+    with no element to measure and no class to match. ChessBase's own model carries the numbers (`boardWin.x0/y0`,
+    `nSqPix`, `blackIsBottom`), so arrows are drawn on the board and moves are clicked onto it. Verified live: the
+    overlay covered the reported rectangle exactly, and a move clicked through the extension changed the position
+    ChessBase itself reports.
+  - Also: the recogniser gets more threads (635ms to 589ms, measured 2/4/5/6/8 on a ten-core Mac, and eight is
+    worse than four).
 - [x] **Grind Mode confirmed on Chess.com** (v3.1.268) - the click-through v3.1.267 could not verify is
   confirmed working in a real game by Sam. Chess.com renders that button two ways and both are handled: the
   labelled variant carries `new-game-buttons-label`, which says what the button is in any language and is matched
