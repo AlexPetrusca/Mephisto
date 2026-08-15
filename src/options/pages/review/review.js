@@ -1208,21 +1208,37 @@ function gameText(game) {
     return `${tags}\n\n${body.join(' ')}`;
 }
 
-// The budget is a SLIDER (user call 2026-08-15). In time mode it runs 1..60 seconds and then one
-// notch further, which is UNBOUNDED: the engine is given `go infinite` and that is all it is given.
-// Nothing here decides it has thought long enough -- the search on the current position ends when
-// Stop is pressed. In depth mode the same slider is 1..40 plies.
-const INFINITE_SECONDS = 61;   // the notch past 60 -- see LIMIT_INFINITE in engines.js
+// The budget is a SLIDER (user call 2026-08-15). Time mode steps in TENTHS of a second from 0.1s to
+// 15s (user call 2026-08-15: whole seconds were far too coarse at the short end, where a review
+// actually lives -- 1s to 2s is a doubling), and then one notch further, which is UNBOUNDED: the
+// engine is given `go infinite` and that is all it is given. Nothing here decides it has thought long
+// enough -- the search on the current position ends when Stop is pressed. Depth mode is 1..40 plies.
+const TIME_STEPS = 150;              // notch n = n*100ms, so 1 = 0.1s and 150 = 15.0s
+const INFINITE_NOTCH = TIME_STEPS + 1;
 
 function sliderToValue(kind, slider) {
     if (kind === 'depth') return Math.max(1, Math.min(40, slider));
-    return slider >= INFINITE_SECONDS ? LIMIT_INFINITE : slider * 1000;   // ms
+    return slider >= INFINITE_NOTCH ? LIMIT_INFINITE : slider * 100;   // ms
 }
 
 function valueToSlider(kind, value) {
     if (kind === 'depth') return Math.max(1, Math.min(40, value || DEPTH_DEFAULT));
-    if (value >= LIMIT_INFINITE) return INFINITE_SECONDS;
-    return Math.max(1, Math.min(60, Math.round((value || TIME_DEFAULT_MS) / 1000)));
+    if (value >= LIMIT_INFINITE) return INFINITE_NOTCH;
+    return Math.max(1, Math.min(TIME_STEPS, Math.round((value || TIME_DEFAULT_MS) / 100)));
+}
+
+// EACH MODE REMEMBERS ITS OWN NUMBER (user report 2026-08-15: "budget for time and depth is weird").
+// One stored value served both, so it was read in whatever units the mode was in: switching from
+// depth 12 to time asked for 12ms, which clamped to the minimum, and switching back asked for depth
+// 1000. Both are kept now, and `rv_limit_value` stays what it always was -- the ACTIVE budget the
+// run reads -- so nothing downstream changes.
+const PER_KIND_KEY = {depth: 'rv_limit_depth', time: 'rv_limit_time'};
+
+function storedFor(kind) {
+    const raw = MephistoConfig.get(PER_KIND_KEY[kind]);
+    const v = raw == null || raw === '' ? null : +JSON.parse(raw);
+    if (v && isFinite(v)) return v;
+    return kind === 'depth' ? DEPTH_DEFAULT : TIME_DEFAULT_MS;
 }
 
 // `fromSlider` says which side is the truth this time. Dragging the slider must NOT be answered by
@@ -1233,8 +1249,10 @@ function syncLimitUi(fromSlider) {
     const slider = $('rv_limit_slider');
     const v = $('rv_limit_value');
     slider.min = 1;
-    slider.max = kind === 'depth' ? 40 : INFINITE_SECONDS;
-    if (!fromSlider) slider.value = valueToSlider(kind, +v.value);
+    slider.max = kind === 'depth' ? 40 : INFINITE_NOTCH;
+    // Not from the slider means the MODE decides: read back the number this mode was last left on
+    // rather than reinterpreting the other mode's number in these units.
+    if (!fromSlider) slider.value = valueToSlider(kind, storedFor(kind));
     else slider.value = Math.min(+slider.value, +slider.max);
     const value = sliderToValue(kind, +slider.value);
     v.value = value;
@@ -1242,8 +1260,9 @@ function syncLimitUi(fromSlider) {
         ? `${slider.value} plies per position`
         : (value >= LIMIT_INFINITE
             ? 'no limit -- until you press Stop'
-            : `${slider.value}s per position`);
+            : `${(value / 1000).toFixed(1)}s per position`);
     setCfg('rv_limit_value', value);
+    setCfg(PER_KIND_KEY[kind], value);
     updateEngineOptions();
 }
 

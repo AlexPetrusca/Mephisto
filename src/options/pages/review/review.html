@@ -151,7 +151,7 @@
                             <option value="depth" data-i18n="rv.depth">Depth</option>
                             <option value="time" data-i18n="rv.time_per_move">Time per move</option>
                         </select>
-                        <input id="rv_limit_slider" class="rv-slider" type="range" min="1" max="61" step="1">
+                        <input id="rv_limit_slider" class="rv-slider" type="range" min="1" max="151" step="1">
                         <span id="rv_limit_unit" class="rv-unit"></span>
                         <!-- the number the slider is really setting: kept because a review is a
                              long job and "16 plies" or "8s" is worth reading back exactly -->
@@ -284,9 +284,15 @@
 
                 <div class="rv-main">
                     <div class="rv-left">
-                        <div class="rv-board-wrap">
-                            <div id="rv_board" class="rv-board"></div>
-                            <svg id="rv_arrows" class="rv-arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
+                        <div class="rv-boardrow">
+                            <div class="rv-board-wrap">
+                                <div id="rv_board" class="rv-board"></div>
+                                <svg id="rv_arrows" class="rv-arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
+                            </div>
+                            <div class="rv-bar" title="Evaluation">
+                                <div id="rv_evalfill" class="rv-bar-fill"></div>
+                                <span id="rv_evallabel" class="rv-bar-num">0.0</span>
+                            </div>
                         </div>
                         <div class="rv-nav">
                             <button id="rv_first" class="set-btn" type="button" title="Start">&laquo;</button>

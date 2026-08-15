@@ -38,7 +38,11 @@ const MAIA_BANDS = ['1100', '1200', '1300', '1400', '1500', '1600', '1700', '180
 const CFG_DEFAULTS = {
     rv_engine: 'stockfish-18-nnue',
     rv_limit_kind: 'depth',
-    rv_limit_value: 16,      // plies. The time-mode default is TIME_DEFAULT_MS below.
+    rv_limit_value: 16,      // the ACTIVE budget, in whatever units rv_limit_kind is in
+    // ...and the number each mode was last left on, so switching between them does not reinterpret
+    // one mode's value in the other's units (16 plies read as 16ms, 1000ms read as depth 1000).
+    rv_limit_depth: 16,      // plies
+    rv_limit_time: 1000,     // ms
     rv_multipv: 3,
     // Not a literal: 4 is most of a two-core laptop and a quarter of a workstation. The panel
     // and the settings page already share this, so a review uses the same rule.
