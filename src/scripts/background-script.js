@@ -176,9 +176,13 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // winning reads -14.24 / -13.79, and a black mate-in-1 reads mate -1 on both. `rawScore` in the
   // envelope below is UCI, which is SIDE-TO-MOVE relative, hence the sign flip.
   const CLOUD_TIMEOUT_MS = 20000;
+  const CLOUD_RETRY_PAUSE_MS = 400;   // long enough for a blip, short enough to still make the move
   const CLOUD_PROVIDERS = {
     'cloud-chessapi': {
       label: 'chess-api.com',
+      // "Stockfish 18 NNUE", per chess-api.com's own front page (checked 2026-08-15). The dropdown
+      // says the version because that is what tells you how strong the answer is.
+      engineName: 'Stockfish 18',
       maxDepth: 18,        // their documented ceiling; asking for more is silently capped anyway
       defaultDepth: 12,
       // The ONE thing this provider takes beyond fen+depth, and it is the real limiter: measured
@@ -203,6 +207,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     },
     'cloud-stockfish-online': {
       label: 'stockfish.online',
+      // "Stockfish 17.1 REST API", per stockfish.online's own front page (checked 2026-08-15).
+      engineName: 'Stockfish 17.1',
       maxDepth: 15,        // measured: depth 16 is REFUSED ("Depth must be less than 16"), not capped
       defaultDepth: 12,
       // fen and depth are the whole API here -- there is no time control to give it, which is why
@@ -245,25 +251,46 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       if (!p) return sendResponse({error: `unknown cloud engine ${engine}`});
       const turn = String(fen || '').split(/\s+/)[1] === 'b' ? 'b' : 'w';
       const want = Math.max(1, Math.min(p.maxDepth, Math.round(Number(depth) || p.defaultDepth)));
-      // A hung request must not leave the panel spinning for ever: these are other people's servers.
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), CLOUD_TIMEOUT_MS);
-      try {
-        const [url, init] = p.request(fen, want, p.takesThinkingTime ? thinkMs : null);
-        const res = await fetch(url, {...init, signal: ctl.signal, cache: 'no-store'});
-        if (!res.ok) return sendResponse({error: `${p.label} answered HTTP ${res.status}`});
-        const text = await res.text();
-        let json = null;
-        try { json = JSON.parse(text); } catch (e) { /* an error page, not JSON */ }
-        if (!json) return sendResponse({error: `${p.label} did not return JSON`});
-        sendResponse(p.parse(json, turn, want));
-      } catch (e) {
-        sendResponse({error: e.name === 'AbortError'
-          ? `${p.label} did not answer within ${CLOUD_TIMEOUT_MS / 1000}s`
-          : `${p.label}: ${e.message}`});
-      } finally {
-        clearTimeout(timer);
+
+      // ONE ATTEMPT, THEN ONE RETRY. These are other people's servers: a stall or a throttle happens
+      // (seen live -- one request hung past the timeout while a curl to the same endpoint answered
+      // in 130ms), and losing the move to it is worse than waiting another moment. Retried only for
+      // the failures a retry can fix: a timeout, a rate limit, a gateway. A 400 means the position
+      // was refused and asking again would just be rude.
+      const RETRYABLE = [429, 500, 502, 503, 504];
+      const attempt = async () => {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), CLOUD_TIMEOUT_MS);
+        try {
+          const [url, init] = p.request(fen, want, p.takesThinkingTime ? thinkMs : null);
+          const res = await fetch(url, {...init, signal: ctl.signal, cache: 'no-store'});
+          if (!res.ok) {
+            return {retry: RETRYABLE.includes(res.status),
+                    error: res.status === 429
+                      ? `${p.label} is rate-limiting this machine (HTTP 429)`
+                      : `${p.label} answered HTTP ${res.status}`};
+          }
+          const text = await res.text();
+          let json = null;
+          try { json = JSON.parse(text); } catch (e) { /* an error page, not JSON */ }
+          if (!json) return {retry: false, error: `${p.label} did not return JSON`};
+          return {value: p.parse(json, turn, want)};
+        } catch (e) {
+          return {retry: e.name === 'AbortError',
+                  error: e.name === 'AbortError'
+                    ? `${p.label} did not answer within ${CLOUD_TIMEOUT_MS / 1000}s`
+                    : `${p.label}: ${e.message}`};
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      let out = await attempt();
+      if (!out.value && out.retry) {
+        await new Promise(r => setTimeout(r, CLOUD_RETRY_PAUSE_MS));
+        const second = await attempt();
+        out = second.value ? second : {error: `${out.error} (retried once)`};
       }
+      sendResponse(out.value || {error: out.error});
     })();
     return true; // async sendResponse
   }
