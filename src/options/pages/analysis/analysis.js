@@ -60,6 +60,7 @@ let bandCache = new Map();
 let bookMoves = null;    // {name, entries: Map(positionKey -> [{uci, weight}])}
 let boardResizeObs = null;
 let searchTimer = null;  // the budget's stopwatch; null whenever the budget is the infinite notch
+let lastBands = null;    // the chart as last drawn, so the export can describe what is on screen
 
 // ---- page ---------------------------------------------------------------------------------------
 
@@ -816,66 +817,110 @@ function wireBandsHover(host, steps, series) {
     hit.addEventListener('mouseleave', () => { tip.classList.remove('on'); cursor.style.display = 'none'; });
 }
 
+function bandSteps(kind) {
+    return kind === 'maia3' ? Array.from({length: 21}, (_, i) => String(600 + i * 100))
+                            : MAIA_BANDS.slice();
+}
+
+// THE LINES SETTING DRIVES THIS TOO (user report 2026-08-15: "why are there only 3 lines if i put
+// 4"). It was pinned at three in three separate places -- the multipv asked for, the slice taken,
+// and a hardcoded [0.6, 0.28, 0.12] of probabilities that could not describe a fourth.
+function bandLineCount() { return Core.clamp(Math.round(+cfg('an_lines') || CFG.an_lines), 1, 5); }
+function bandKey(fen, kind, n) { return `${fen}|${kind}|${n}`; }
+
+// ONE SWEEP AT A TIME, whoever asked for it. The visible sweep and the one running ahead of the
+// cursor use the same engines, so overlapping them would mean two Maia 3 nets in memory and two
+// searches interleaved on one adapter -- the same shape as the bug that wedged the analyses.
+let bandChain = Promise.resolve();
+function queueSweep(fn) { bandChain = bandChain.then(fn, fn); return bandChain; }
+
+// Fill the cache for one position. `onStep` is how the visible sweep shows progress; a sweep running
+// ahead of the cursor passes nothing and is silent. Any sweep is abandoned the moment a newer one is
+// asked for, which is what `bandRun` is: stepping through a game must not queue up twenty stale ones.
+async function sweepBands(pos, kind, nLines, run, onStep) {
+    const steps = bandSteps(kind);
+    const acc = {};
+    let shared = null;
+    try {
+        if (kind === 'maia3') {   // one net, swept across its rating dial
+            shared = makeEngine('maia3', {variant: 'chess', multipv: nLines, maiaLevel: steps[0],
+                                          limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'analysis-band');
+            await shared.start();
+        }
+        for (let i = 0; i < steps.length; i++) {
+            if (run !== bandRun) return null;
+            onStep?.(i + 1, steps.length);
+            const band = steps[i];
+            try {
+                let e = shared;
+                if (!e) {
+                    e = makeEngine('maia', {variant: 'chess', multipv: nLines, maiaLevel: band,
+                                            limitKind: 'depth', limitValue: 1, threads: 1, hash: 16},
+                                   `analysis-band-${band}`);
+                    await e.start();
+                } else {
+                    // MAIA 3 TAKES SelfElo/OppoElo, NOT UCI_Elo (see src/offscreen/maia3.js).
+                    // setoption ignores a name it does not know, so the whole sweep silently ran
+                    // at the Elo the engine was built with: 21 identical inputs, 21 identical
+                    // answers, and a chart of perfectly flat lines. Both ends are set, because
+                    // the model is conditioned on who is playing AND who they are playing.
+                    e.send(`setoption name SelfElo value ${band}`);
+                    e.send(`setoption name OppoElo value ${band}`);
+                }
+                const r = await e.analyse(pos.fen, pos.turn);
+                const ls = (r.lines || []).filter(l => l.pv?.[0]).slice(0, nLines);
+                // The net's own probability per move (see humanFor). Deriving it from the rank
+                // instead is what made every band identical: the order rarely changes across a
+                // few hundred rating points, so a decay over the order drew flat lines and said
+                // the same thing at 600 as at 2600. The fallback keeps an older adapter working.
+                const real = ls.every(l => l.prob != null);
+                const w = ls.map((l, idx) => real ? l.prob : Math.exp(-idx * 0.9));
+                const sum = real ? 1 : (w.reduce((a, b) => a + b, 0) || 1);
+                acc[band] = ls.map((l, idx) => ({uci: l.pv[0], prob: w[idx] / sum}));
+                if (!shared) e.dispose?.();
+            } catch (err) { acc[band] = []; }
+        }
+    } finally { shared?.dispose?.(); }
+    if (run !== bandRun) return null;
+    bandCache.set(bandKey(pos.fen, kind, nLines), acc);
+    return acc;
+}
+
+// SWEEP THE NEXT PLY WHILE YOU ARE LOOKING AT THIS ONE. Walking a game used to re-sweep from scratch
+// at every step -- twenty-one forward passes per move with Maia 3 -- because the work only ever
+// started when the position was already on screen. The cache is keyed by position, so a ply swept
+// ahead of time is on screen instantly when you reach it. Only ONE ply ahead: that is the step a
+// reader is about to take, and anything more is work for a position they may never look at.
+let prefetchTimer = null;
+function schedulePrefetch() {
+    if (prefetchTimer) clearTimeout(prefetchTimer);
+    prefetchTimer = setTimeout(() => {
+        prefetchTimer = null;
+        const kind = cfg('an_human');
+        const next = positions[cursor + 1];
+        if (!kind || !next) return;
+        const n = bandLineCount();
+        if (bandCache.has(bandKey(next.fen, kind, n))) return;
+        const run = bandRun;                       // a newer visible sweep supersedes this one
+        queueSweep(() => sweepBands(next, kind, n, run, null).catch(() => null));
+    }, 500);
+}
+
 async function renderBands(pos) {
     const wrap = $('an_bands_wrap'), host = $('an_bands'), meta = $('an_bands_meta');
     if (!wrap || !host) return;
     const kind = cfg('an_human');
     if (!kind) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
-    const steps = kind === 'maia3'
-        ? Array.from({length: 21}, (_, i) => String(600 + i * 100))
-        : MAIA_BANDS.slice();
-    // THE LINES SETTING DRIVES THIS TOO (user report 2026-08-15: "why are there only 3 lines if i
-    // put 4"). It was pinned at three in three separate places -- the multipv asked for, the slice
-    // taken, and a hardcoded [0.6, 0.28, 0.12] of probabilities that could not describe a fourth.
-    const nLines = Core.clamp(Math.round(+cfg('an_lines') || CFG.an_lines), 1, 5);
-    const key = `${pos.fen}|${kind}|${nLines}`;
+    const steps = bandSteps(kind);
+    const nLines = bandLineCount();
+    const key = bandKey(pos.fen, kind, nLines);
     const run = ++bandRun;
     if (!bandCache.has(key)) {
-        const acc = {};
-        let shared = null;
-        try {
-            if (kind === 'maia3') {   // one net, swept across its rating dial
-                shared = makeEngine('maia3', {variant: 'chess', multipv: nLines, maiaLevel: steps[0],
-                                              limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'analysis-band');
-                await shared.start();
-            }
-            for (let i = 0; i < steps.length; i++) {
-                if (run !== bandRun || positions[cursor]?.fen !== pos.fen) { shared?.dispose?.(); return; }
-                if (meta) meta.textContent = `${i + 1}/${steps.length}`;
-                const band = steps[i];
-                try {
-                    let e = shared;
-                    if (!e) {
-                        e = makeEngine('maia', {variant: 'chess', multipv: nLines, maiaLevel: band,
-                                                limitKind: 'depth', limitValue: 1, threads: 1, hash: 16},
-                                       `analysis-band-${band}`);
-                        await e.start();
-                    } else {
-                        // MAIA 3 TAKES SelfElo/OppoElo, NOT UCI_Elo (see src/offscreen/maia3.js).
-                        // setoption ignores a name it does not know, so the whole sweep silently ran
-                        // at the Elo the engine was built with: 21 identical inputs, 21 identical
-                        // answers, and a chart of perfectly flat lines. Both ends are set, because
-                        // the model is conditioned on who is playing AND who they are playing.
-                        e.send(`setoption name SelfElo value ${band}`);
-                        e.send(`setoption name OppoElo value ${band}`);
-                    }
-                    const r = await e.analyse(pos.fen, pos.turn);
-                    const ls = (r.lines || []).filter(l => l.pv?.[0]).slice(0, nLines);
-                    // The net's own probability per move (see humanFor). Deriving it from the rank
-                    // instead is what made every band identical: the order rarely changes across a
-                    // few hundred rating points, so a decay over the order drew flat lines and said
-                    // the same thing at 600 as at 2600. The fallback keeps an older adapter working.
-                    const real = ls.every(l => l.prob != null);
-                    const w = ls.map((l, idx) => real ? l.prob : Math.exp(-idx * 0.9));
-                    const sum = real ? 1 : (w.reduce((a, b) => a + b, 0) || 1);
-                    acc[band] = ls.map((l, idx) => ({uci: l.pv[0], prob: w[idx] / sum}));
-                    if (!shared) e.dispose?.();
-                } catch (err) { acc[band] = []; }
-            }
-        } finally { shared?.dispose?.(); }
-        if (run !== bandRun) return;
-        bandCache.set(key, acc);
+        const got = await queueSweep(() => sweepBands(pos, kind, nLines, run, (i, n) => {
+            if (meta && cursor >= 0 && positions[cursor]?.fen === pos.fen) meta.textContent = `${i}/${n}`;
+        }));
+        if (!got || run !== bandRun || positions[cursor]?.fen !== pos.fen) return;
     }
     if (meta) meta.textContent = `${steps[0]}-${steps[steps.length - 1]}`;
     const acc = bandCache.get(key) || {};
@@ -885,6 +930,8 @@ async function renderBands(pos) {
     const series = bandSeries(pos, steps, acc, moves);
     host.innerHTML = bandsChart(steps, series);
     wireBandsHover(host, steps, series);
+    lastBands = {pos, steps, series, kind, nLines};   // what an export would have to describe
+    schedulePrefetch();                               // ...and get the next ply ready meanwhile
 }
 
 // ---- opening book -------------------------------------------------------------------------------
