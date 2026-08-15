@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.267-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.268-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -878,8 +878,13 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>58 features, newest first</summary>
+<summary>59 features, newest first</summary>
 
+- [x] **The Grind Delay stepper looks and works like every other one** (v3.1.268) - it was written by hand
+  without `set-step-btn`, the class that both styles it and makes it work, so it rendered as a raw white browser
+  button in a dark page and its plus and minus did nothing. Nothing about the theme changed: the row was simply
+  missing the class. The test that checks every stepper has both buttons now checks they carry that class too,
+  which is what would have caught it.
 - [x] **Grind Mode on Chess.com too** (v3.1.267) - the game-over modal there gives its buttons nothing but
   utility classes (`cc-button-component cc-button-secondary cc-button-large`), so there is no name to match on.
   What the new-game button does carry is the TIME CONTROL: "New 1 min", "New 3 | 2". Digits survive translation
