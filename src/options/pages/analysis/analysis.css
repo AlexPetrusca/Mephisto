@@ -56,9 +56,19 @@
 /* when black is ahead the number sits at the top, in white, so it is always on the filled side */
 .an-bar-num.an-num-top { bottom: auto; top: 4px; color: #eee; }
 
-.an-nav { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+.an-nav { display: flex; gap: 6px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
 .an-nav .set-btn { min-width: 42px; }
-.an-wdl { margin-left: 10px; font-size: 12px; color: var(--mp-dim); font-variant-numeric: tabular-nums; }
+.an-nav-gap { flex: 1 1 auto; }
+
+/* WDL on its own line under the board, each number NAMED. Three bare percentages in a row read as
+   one number and told you nothing about which side they belonged to. */
+.an-wdl { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.an-wdl:empty { margin-top: 0; }
+.an-wdl-seg { display: flex; align-items: center; gap: 5px; color: var(--mp-dim); }
+.an-wdl-seg::before { content: ''; width: 8px; height: 8px; border-radius: 2px; border: 1px solid var(--mp-line); }
+.an-wdl-w::before { background: #e8e8e2; }
+.an-wdl-d::before { background: #8f8f8f; }
+.an-wdl-b::before { background: #2b2b2b; }
 
 .an-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 @media (max-width: 620px) { .an-cols { grid-template-columns: 1fr; } }

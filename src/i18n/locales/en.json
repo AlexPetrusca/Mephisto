@@ -391,6 +391,8 @@
   "an.load": "Load",
   "an.load_btn": "Load",
   "an.start_btn": "Start position",
+  "an.copy_fen": "Copy FEN",
+  "an.copy_pgn": "Copy PGN",
   "an.sample_btn": "Sample game",
   "an.engine": "Engine",
   "an.human": "Human model",

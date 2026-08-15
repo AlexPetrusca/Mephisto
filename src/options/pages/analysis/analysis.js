@@ -101,6 +101,8 @@ class AnalysisPage extends SettingsPage {
         $('an_next')?.addEventListener('click', () => go(cursor + 1));
         $('an_last')?.addEventListener('click', () => go(positions.length - 1));
         $('an_flip')?.addEventListener('click', () => { flipped = !flipped; buildBoard(); render(); });
+        $('an_copy_fen')?.addEventListener('click', () => copyOut(positions[cursor]?.fen || '', 'FEN'));
+        $('an_copy_pgn')?.addEventListener('click', () => copyOut(pgnText(), 'PGN'));
         document.addEventListener('keydown', onKey);
         // The page loader has no onLeave hook, so the route is the teardown signal: the moment the
         // hash is not ours, stop searching and free both engines.
@@ -236,6 +238,28 @@ function loadFromInput() {
     buildBoard();
     renderMoves();
     go(0);
+}
+
+// The line as it stands, ready to paste somewhere else. A line that did not start from the initial
+// position carries the FEN tags, or it is not the same game when it is read back.
+function pgnText() {
+    const start = positions[0]?.fen;
+    const body = [];
+    for (let i = 1; i < positions.length; i++) {
+        if (i % 2 === 1) body.push(`${Math.ceil(i / 2)}.`);
+        body.push(positions[i].san || '');
+    }
+    const tags = (start && start !== new Chess('chess').fen())
+        ? `[SetUp "1"]\n[FEN "${start}"]\n\n` : '';
+    return (tags + body.join(' ')).trim();
+}
+
+async function copyOut(text, what) {
+    if (!text) return status(`There is no ${what} to copy yet.`, 'err');
+    try {
+        await navigator.clipboard.writeText(text);
+        status(`${what} copied.`);
+    } catch (e) { status(`Could not copy the ${what}: ${e.message || e}`, 'err'); }
 }
 
 async function pasteFromClipboard() {
