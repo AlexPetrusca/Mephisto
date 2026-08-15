@@ -3174,15 +3174,26 @@ function determineStartPosition() {
     startPosCache = loadStartPosCache();
     // scrape the position when the board and pieces are present
     let retryCount = 0;
-    const intervalId = setInterval(() => {
-        if (getBoard() && getPieces()?.length) { // board and pieces are present?
+    const found = () => {
+        if (!getBoard() || !getPieces()?.length) return false;
+        clearInterval(intervalId);
+        onPositionLoad();
+        return true;
+    };
+    let intervalId = setInterval(() => {
+        if (found()) return;
+        if (++retryCount >= 100) {
+            // THESE SITES ARE SINGLE-PAGE APPS. Starting a game from the lobby is a client-side
+            // navigation: the document never reloads, boot never runs again, and this hunt had
+            // already given up ten seconds earlier -- so the panel sat there saying it could not
+            // find a board until the user reloaded the tab by hand. Reproduced live on lichess:
+            // lobby -> "Gegen den Computer spielen" -> a real game with no panel.
+            // So: stop hunting every 100ms, but keep looking once a second. getBoard() measured
+            // 0.3-1.3us, which makes this watch free, and it also covers a game that is left open
+            // and navigated away from and back.
+            console.debug('Mephisto: no chess board yet -- watching for one');
             clearInterval(intervalId);
-            onPositionLoad();
-            return;
-        }
-        if (++retryCount >= 100) { // give up after 10s: not a game page, or the board never loaded
-            console.debug('Mephisto: no chess board found on this page');
-            clearInterval(intervalId);
+            intervalId = setInterval(found, 1000);
         }
     }, 100); // check every 100ms
 }
