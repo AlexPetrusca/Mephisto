@@ -3205,46 +3205,67 @@ const GRIND_POLL_MS = 1000;
 let grindTimer = null;      // the countdown to the click, so it can be called off
 let grindSeenFollowUp = false;
 
-// The control that starts a NEW game, out of whatever Lichess put in the follow-up box.
+// WHERE A FINISHED GAME PUTS ITS CONTROLS, per site, and which one starts the next game.
 //
-// CAPTURED FROM A REAL GAME AGAINST A PERSON (an engine game never renders it at all):
-//
+// LICHESS -- captured from a real game against a person (an engine game never renders it):
 //   <div class="follow-up">
 //     <button class="fbt rematch white" disabled><span>Revanche</span></button>
 //     <button class="fbt new-opponent">Neuer Gegner</button>
 //     <a class="fbt" href="/KTJ9Whbm/white#2">Analysebrett</a>
 //   </div>
+// The button carries its own class, so that is the match. The analysis link does NOT carry one --
+// its only tell is the game id in its href, and matching on the word "analysis" let it be clicked
+// once in a live test.
 //
-// So the button carries its own class, `new-opponent`, and that is the match: Lichess ships in
-// about 130 languages and matching on the WORD only ever worked in the few anyone thought to list.
-// The pool variant of the same button is the one that reads "New 1+1".
-//
-// The structural rule below is the fallback for the day that class changes. It has to be careful:
-// the analysis link is an ANCHOR back into the game just played, and it is not always recognisable
-// as "analysis" -- in the capture above it is a bare `fbt` whose href is the game id. Matching on
-// the word let it be clicked once, in a live test, which is what the game-id rule prevents.
-function grindNewGameButton() {
-    const box = document.querySelector('.follow-up');
-    if (!box) return null;
-    const usable = (e) => e && e.offsetParent !== null && !e.disabled;
-    const named = [...box.querySelectorAll('.new-opponent')].find(usable);
-    if (named) return named;
+// CHESS.COM -- the modal is `board-modal-container-container` with a `game-over-modal-*` header,
+// and its buttons carry nothing but utility classes:
+//   <button class="cc-button-component cc-button-secondary cc-button-large cc-bg-secondary"
+//           type="button"><span>New 1 min</span></button>
+// There is no semantic hook at all, so the match is the TIME CONTROL in the label: "1 min",
+// "3 | 2", "10 min". Digits and "min" survive translation where "New" does not, and neither
+// Rematch nor Game Review nor New Bot carries a time control.
+const GRIND_SITES = {
+    lichess: {
+        box: () => document.querySelector('.follow-up'),
+        pick: (box) => {
+            const usable = (e) => e && e.offsetParent !== null && !e.disabled;
+            const named = [...box.querySelectorAll('.new-opponent')].find(usable);
+            if (named) return named;
+            const cls = (e) => (e.className || '').toString().toLowerCase();
+            const href = (e) => (e.getAttribute?.('href') || '').toLowerCase();
+            const gameId = (location.pathname.split('/')[1] || '').toLowerCase().slice(0, 8);
+            const backIntoThisGame = (e) => {
+                const h = href(e);
+                if (!h) return false;
+                return /\/analysis/.test(h) || (gameId.length >= 8 && h.includes(gameId));
+            };
+            const candidates = [...box.querySelectorAll('button, a')].filter(usable)
+                .filter(e => !/analys/.test(cls(e)) && !backIntoThisGame(e))
+                .filter(e => !/rematch/.test(cls(e)))
+                .filter(e => !/\/study|\/download|\.pgn|\/tv|\/training/.test(href(e)));
+            return candidates.find(e => (e.tagName || '').toUpperCase() === 'BUTTON')
+                || candidates.find(e => /^\/(\?|$)/.test(href(e)))
+                || null;
+        },
+    },
+    chesscom: {
+        box: () => document.querySelector('[class*="game-over-modal"], [class*="board-modal-container"]'),
+        pick: (box) => {
+            const usable = (e) => e && e.offsetParent !== null && !e.disabled;
+            const label = (e) => (e.textContent || '').trim();
+            // a time control, in any language: "1 min", "3 min", "3 | 2", "5 + 5", "1 Min"
+            const TC = /\b\d+\s*(min|sec|hour|hr|std|min\.)\b|\b\d+\s*[|+]\s*\d+\b/i;
+            return [...box.querySelectorAll('button')].filter(usable).find(b => TC.test(label(b))) || null;
+        },
+    },
+};
 
-    const cls = (e) => (e.className || '').toString().toLowerCase();
-    const href = (e) => (e.getAttribute?.('href') || '').toLowerCase();
-    const gameId = (location.pathname.split('/')[1] || '').toLowerCase().slice(0, 8);
-    const backIntoThisGame = (e) => {
-        const h = href(e);
-        if (!h) return false;
-        return /\/analysis/.test(h) || (gameId.length >= 8 && h.includes(gameId));
-    };
-    const candidates = [...box.querySelectorAll('button, a')].filter(usable)
-        .filter(e => !/analys/.test(cls(e)) && !backIntoThisGame(e))
-        .filter(e => !/rematch/.test(cls(e)))
-        .filter(e => !/\/study|\/download|\.pgn|\/tv|\/training/.test(href(e)));
-    return candidates.find(e => (e.tagName || '').toUpperCase() === 'BUTTON')
-        || candidates.find(e => /^\/(\?|$)/.test(href(e)))
-        || null;
+function grindNewGameButton() {
+    const rules = GRIND_SITES[site];
+    if (!rules) return null;
+    const box = rules.box();
+    if (!box) return null;
+    try { return rules.pick(box); } catch (e) { return null; }   // silent, like everything else here
 }
 
 function grindCancel(why) {
@@ -3269,18 +3290,18 @@ function grindClick(el) {
             () => void chrome.runtime.lastError);
     } catch (e) { /* silent by design */ }
     setTimeout(() => {
-        if (!document.querySelector('.follow-up')) return;   // it worked; the game is on its way
+        if (!GRIND_SITES[site]?.box()) return;   // it worked; the game is on its way
         try { el.click(); } catch (e) { /* silent by design */ }
     }, GRIND_VERIFY_MS);
 }
 
 function grindTick() {
-    if (site !== 'lichess' || !config || !config.grind_mode || !config.autoplay) {
+    if (!GRIND_SITES[site] || !config || !config.grind_mode || !config.autoplay) {
         grindCancel('mode off');
         grindSeenFollowUp = false;
         return;
     }
-    const box = document.querySelector('.follow-up');
+    const box = GRIND_SITES[site].box();
     if (!box) {                       // back in a game (or never finished one): reset and wait
         grindCancel('the game is not over');
         grindSeenFollowUp = false;

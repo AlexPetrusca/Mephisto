@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.266-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.267-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -610,7 +610,7 @@ is a subset writing to the same storage. Everything applies to the next move wit
 
 | Setting | What it does |
 | --- | --- |
-| **Grind Mode** | Lichess only, and only while Autoplay is on. When a game ends, clicks the control that starts the next one. Fails silently if that control is not where it was expected. |
+| **Grind Mode** | Lichess and Chess.com, and only while Autoplay is on. When a game ends, clicks the control that starts the next one. Fails silently if that control is not where it was expected. |
 | **Grind Delay (s)** | How long to wait after a game ends before starting the next one - your window to stop it. 0 starts immediately, 600 is the maximum. |
 | **Engine** | Which engine analyses the position. The WASM builds need nothing installed; "(local, full power)" entries talk to a real binary and only appear once the native host is installed; the two "Cloud" entries need nothing installed either but send the position to somebody else's server on every move. Switching reloads the panel - the net and UCI options have to be rebuilt. The Maia rating band is the exception: it swaps the net live, panel and position untouched. |
 | **Elo** | Caps strength via `UCI_LimitStrength` + `UCI_Elo`. The range follows the engine; out-of-range values are ignored rather than clamped. `0` means no cap. |
@@ -878,8 +878,17 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>57 features, newest first</summary>
+<summary>58 features, newest first</summary>
 
+- [x] **Grind Mode on Chess.com too** (v3.1.267) - the game-over modal there gives its buttons nothing but
+  utility classes (`cc-button-component cc-button-secondary cc-button-large`), so there is no name to match on.
+  What the new-game button does carry is the TIME CONTROL: "New 1 min", "New 3 | 2". Digits survive translation
+  where "New" does not, so that is the match, and Game Review, Rematch and New Bot carry no time control and are
+  never taken for it. **Honest about the evidence:** the modal container and the button markup are both from real
+  chess.com games (a bot game I played and resigned, and the button HTML from one of Sam's online games), and the
+  chooser is executed against that exact markup in the test suite - but the full click-through has not yet been
+  confirmed in a live online game there, because pairing one unrated took longer than the session allowed. On
+  Lichess it is verified end to end.
 - [x] **Grind Mode picks its button by structure, not by language** (v3.1.266) - the first version matched the
   word "New", which works in the handful of languages someone thought to list and in none of the other ~120
   Lichess ships. The markup was captured from a real game against a person instead: the control carries its own
