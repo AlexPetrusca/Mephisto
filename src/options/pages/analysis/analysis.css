@@ -150,15 +150,14 @@
 .an-book { margin-top: 16px; }
 .an-book.hidden { display: none; }
 
-/* Moves by rating: a line per move across the bands, with the band it peaks in called out. Bars
-   were a wall of green blocks that said nothing at a glance. */
+/* Moves by rating: ONE chart with every move in it, each line named at its own end. A row per move
+   with an unlabelled 22px sparkline and a bare number beside it could not be read at all. */
 .an-bands { margin-top: 18px; }
-.an-band-row { display: grid; grid-template-columns: 52px 1fr 46px; gap: 8px; align-items: center; padding: 4px 0; }
-.an-band-move { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.an-band-plot { position: relative; height: 22px; }
-.an-band-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.an-band-peak { font-size: 10.5px; color: var(--mp-dim); text-align: right; font-variant-numeric: tabular-nums; }
-.an-band-axis { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--mp-dim); padding-left: 60px; }
+.an-band-svg { display: block; width: 100%; height: auto; color: var(--mp-text); }
+.an-band-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 11px; color: var(--mp-dim); }
+.an-band-key { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.an-band-key i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.an-band-key b { color: var(--mp-text); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .an-moves {
     max-height: 420px;

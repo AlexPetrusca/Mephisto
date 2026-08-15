@@ -692,9 +692,60 @@ function arrow(uci, colour, width, opacity, rank) {
 }
 
 // ---- moves by rating ----------------------------------------------------------------------------
-// A LINE per move across the bands rather than a wall of blocks: the shape is the point -- which
-// move rises as strength rises, and where each one peaks.
+// ONE chart, not a row per move (user report 2026-08-15: "i cant tell what is what"). Every move is
+// a line in the same axes, so they can actually be compared; each line is NAMED at its own right-hand
+// end in its own colour, the y axis is labelled as what it is (how often the move is played), and the
+// number that used to sit at the right -- the band a move peaks in -- moved into the legend, where it
+// cannot be misread as a second rating.
 let bandRun = 0;
+
+const BAND_COLOURS = ['#4c9a5e', '#5c8bb0', '#c08a4a', '#a8657f', '#8f8f8f'];
+
+function bandsChart(pos, steps, acc, moves) {
+    const X0 = 40, X1 = 244, Y0 = 10, Y1 = 116;   // the plot box, in the SVG's own units
+    const xOf = (i) => X0 + (i / Math.max(1, steps.length - 1)) * (X1 - X0);
+    const yOf = (p) => Y1 - Core.clamp(p, 0, 1) * (Y1 - Y0);
+
+    const series = moves.map((uci, mi) => {
+        const ys = steps.map(b => ((acc[b] || []).find(x => x.uci === uci)?.prob || 0));
+        return {uci, san: sanOf(pos.fen, uci), colour: BAND_COLOURS[mi % BAND_COLOURS.length], ys,
+                peak: ys.indexOf(Math.max(...ys)), top: Math.max(...ys)};
+    }).filter(s => s.top > 0);
+
+    // two lines that end at the same height would print their names on top of each other
+    const labels = series.map((s, i) => ({i, y: yOf(s.ys[s.ys.length - 1])}))
+        .sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) {
+        if (labels[i].y - labels[i - 1].y < 9) labels[i].y = labels[i - 1].y + 9;
+    }
+    const labelY = new Map(labels.map(l => [l.i, l.y]));
+
+    const grid = [0, 0.5, 1].map(p =>
+        `<line x1="${X0}" y1="${yOf(p)}" x2="${X1}" y2="${yOf(p)}" stroke="currentColor" stroke-opacity=".16" stroke-width="1"/>`
+      + `<text x="${X0 - 5}" y="${yOf(p) + 3}" font-size="8" text-anchor="end" fill="currentColor" fill-opacity=".55">${p * 100}%</text>`).join('');
+
+    const ticks = [0, Math.floor(steps.length / 2), steps.length - 1].map(i =>
+        `<text x="${xOf(i)}" y="${Y1 + 12}" font-size="8" text-anchor="middle" fill="currentColor" fill-opacity=".55">${steps[i]}</text>`).join('');
+
+    const lines = series.map((s, i) => {
+        const pts = s.ys.map((p, xi) => `${xOf(xi)},${yOf(p)}`).join(' ');
+        return `<polyline points="${pts}" fill="none" stroke="${s.colour}" stroke-width="1.8"
+                          stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`
+             + `<circle cx="${xOf(s.peak)}" cy="${yOf(s.ys[s.peak])}" r="2" fill="${s.colour}"/>`
+             + `<text x="${X1 + 4}" y="${labelY.get(i) + 3}" font-size="9" font-weight="600" fill="${s.colour}">${esc(s.san)}</text>`;
+    }).join('');
+
+    const legend = series.map(s =>
+        `<span class="an-band-key"><i style="background:${s.colour}"></i>${esc(s.san)}
+            <b>${Math.round(s.top * 100)}%</b> at ${steps[s.peak]}</span>`).join('');
+
+    return `<svg class="an-band-svg" viewBox="0 0 300 132" preserveAspectRatio="xMidYMid meet" role="img"
+                 aria-label="How often each move is played, by rating">
+        <text x="4" y="${Y0 + 2}" font-size="8" fill="currentColor" fill-opacity=".55" transform="rotate(-90 4 ${(Y0 + Y1) / 2})"
+              text-anchor="middle">played</text>
+        ${grid}${ticks}${lines}
+    </svg><div class="an-band-legend">${legend}</div>`;
+}
 
 async function renderBands(pos) {
     const wrap = $('an_bands_wrap'), host = $('an_bands'), meta = $('an_bands_meta');
@@ -705,14 +756,18 @@ async function renderBands(pos) {
     const steps = kind === 'maia3'
         ? Array.from({length: 21}, (_, i) => String(600 + i * 100))
         : MAIA_BANDS.slice();
-    const key = `${pos.fen}|${kind}`;
+    // THE LINES SETTING DRIVES THIS TOO (user report 2026-08-15: "why are there only 3 lines if i
+    // put 4"). It was pinned at three in three separate places -- the multipv asked for, the slice
+    // taken, and a hardcoded [0.6, 0.28, 0.12] of probabilities that could not describe a fourth.
+    const nLines = Core.clamp(Math.round(+cfg('an_lines') || CFG.an_lines), 1, 5);
+    const key = `${pos.fen}|${kind}|${nLines}`;
     const run = ++bandRun;
     if (!bandCache.has(key)) {
         const acc = {};
         let shared = null;
         try {
             if (kind === 'maia3') {   // one net, swept across its rating dial
-                shared = makeEngine('maia3', {variant: 'chess', multipv: 3, maiaLevel: steps[0],
+                shared = makeEngine('maia3', {variant: 'chess', multipv: nLines, maiaLevel: steps[0],
                                               limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'analysis-band');
                 await shared.start();
             }
@@ -723,7 +778,7 @@ async function renderBands(pos) {
                 try {
                     let e = shared;
                     if (!e) {
-                        e = makeEngine('maia', {variant: 'chess', multipv: 3, maiaLevel: band,
+                        e = makeEngine('maia', {variant: 'chess', multipv: nLines, maiaLevel: band,
                                                 limitKind: 'depth', limitValue: 1, threads: 1, hash: 16},
                                        `analysis-band-${band}`);
                         await e.start();
@@ -731,8 +786,12 @@ async function renderBands(pos) {
                         e.send(`setoption name UCI_Elo value ${band}`);
                     }
                     const r = await e.analyse(pos.fen, pos.turn);
-                    acc[band] = (r.lines || []).filter(l => l.pv?.[0]).slice(0, 3)
-                        .map((l, idx) => ({uci: l.pv[0], prob: [0.6, 0.28, 0.12][idx]}));
+                    const ls = (r.lines || []).filter(l => l.pv?.[0]).slice(0, nLines);
+                    // Maia ranks rather than scores, so the share is a decay over the ORDER -- the
+                    // same curve humanFor() uses for the column, so the two never disagree.
+                    const w = ls.map((_, idx) => Math.exp(-idx * 0.9));
+                    const sum = w.reduce((a, b) => a + b, 0) || 1;
+                    acc[band] = ls.map((l, idx) => ({uci: l.pv[0], prob: w[idx] / sum}));
                     if (!shared) e.dispose?.();
                 } catch (err) { acc[band] = []; }
             }
@@ -744,21 +803,8 @@ async function renderBands(pos) {
     const acc = bandCache.get(key) || {};
     const totals = new Map();
     for (const b of steps) for (const x of (acc[b] || [])) totals.set(x.uci, (totals.get(x.uci) || 0) + x.prob);
-    const moves = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, 5);
-    const colour = ['#4c9a5e', '#5c8bb0', '#a88865', '#a8657f', '#8f8f8f'];
-    host.innerHTML = moves.map((uci, mi) => {
-        const ys = steps.map(b => ((acc[b] || []).find(x => x.uci === uci)?.prob || 0));
-        const peak = ys.indexOf(Math.max(...ys));
-        const pts = ys.map((y, i) => `${(i / Math.max(1, steps.length - 1)) * 100},${22 - y * 20}`).join(' ');
-        return `<div class="an-band-row">
-            <span class="an-band-move">${esc(sanOf(pos.fen, uci))}</span>
-            <div class="an-band-plot"><svg viewBox="0 0 100 22" preserveAspectRatio="none">
-                <polyline points="${pts}" fill="none" stroke="${colour[mi]}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
-            </svg></div>
-            <span class="an-band-peak">${Math.max(...ys) > 0 ? steps[peak] : ''}</span>
-        </div>`;
-    }).join('')
-    + `<div class="an-band-axis"><span>${steps[0]}</span><span>${steps[Math.floor(steps.length / 2)]}</span><span>${steps[steps.length - 1]}</span></div>`;
+    const moves = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, nLines);
+    host.innerHTML = bandsChart(pos, steps, acc, moves);
 }
 
 // ---- opening book -------------------------------------------------------------------------------
