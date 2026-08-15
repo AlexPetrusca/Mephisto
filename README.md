@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.249-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.250-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -781,12 +781,13 @@ shipped, which is a good sign and also why the next item is a bigger one.
 
 **Known problems.** Named faults rather than ideas: blocked on a diagnosis or on a site, not on wanting to.
 
-- [ ] **Playing while the machine is busy** - with an unrelated CPU-heavy job running, a native engine's moves
-  stall while a WASM engine's do not. The cause is understood: the extension's process is not scheduled as
-  user-interactive, and a WASM engine happens to keep that same process on CPU while a native one leaves it
-  idle. A click is down from twelve round trips to four; what remains is finding a route that does not depend
-  on that process being scheduled at all.
-
+- [ ] **Playing while the machine is busy** - measured 2026-08-15 on a 10-core Mac with every core saturated by
+  other work: the panel's response to a position change went from a 323ms median to 1239ms, with one sample never
+  arriving inside 12 seconds. The obvious fix was tried and REJECTED by its own measurement: handing the engine
+  fewer threads under load made it worse, not better (interleaved A/B under sustained saturation, 14 samples each,
+  999ms median on the full budget vs 1712ms on one thread). So the cost is not engine thread contention, and the
+  next candidate is the page thread itself - the scrape, parse and draw path - which is where the measurement
+  should go before any more code does.
 - [ ] **The pause after a browser restart** - for several seconds after Chrome starts, the extension is
   unresponsive, and then it recovers on its own. Long-standing, instrumented, never explained. The worker's
   cold-start timings are recorded now, which is where to start looking.
@@ -897,8 +898,14 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>37 features, newest first</summary>
+<summary>38 features, newest first</summary>
 
+- [x] **The panel answers while the engine is still loading** (v3.1.250) - opening the panel used to wait for the
+  engine before it registered its message handler, so on a cold browser it was up but deaf for the whole
+  service-worker-wake plus net-load window: no board, no scrape, no eval. Engine init now runs alongside the rest
+  of the boot (the engine host already queues anything sent while it loads). Honest limit: a clean rig profile
+  starts in well under a second, so the long stall could not be reproduced there and the size of the win on a
+  loaded profile is unmeasured.
 - [x] **Every setting says what it does** (v3.1.249) - hover any control on either settings page and a one-line
   description explains it. 59 controls, none mute; the ladder proves its own check discriminates before it scans,
   so a new row cannot ship silent. The Game Review section nav also stopped overlapping: Materialize hard-codes a
