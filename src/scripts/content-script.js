@@ -3252,10 +3252,23 @@ const GRIND_SITES = {
         box: () => document.querySelector('[class*="game-over-modal"], [class*="board-modal-container"]'),
         pick: (box) => {
             const usable = (e) => e && e.offsetParent !== null && !e.disabled;
-            const label = (e) => (e.textContent || '').trim();
-            // a time control, in any language: "1 min", "3 min", "3 | 2", "5 + 5", "1 Min"
+            // THE REAL BUTTON (Sam's markup, from a finished online game):
+            //   <button class="cc-button-component cc-button-secondary cc-button-medium cc-bg-secondary"
+            //           aria-label="New 1 min">
+            //     <span class="cc-icon-glyph ..."><svg data-glyph="mark-plus"></svg></span>
+            //     <span class="cc-button-one-line new-game-buttons-label">New 1 min</span>
+            //   </button>
+            // The button's own classes are utility soup, but the LABEL SPAN carries
+            // `new-game-buttons-label` -- a real hook, and language-independent. Match that first.
+            const labelled = [...box.querySelectorAll('.new-game-buttons-label')]
+                .map(s => s.closest('button')).find(usable);
+            if (labelled) return labelled;
+            // Fallback if that class ever moves: the time control in the label or the aria-label.
+            // Digits and "min" survive translation where "New" does not, and Game Review, Rematch
+            // and New Bot carry no time control at all.
+            const text = (e) => `${e.getAttribute?.('aria-label') || ''} ${e.textContent || ''}`.trim();
             const TC = /\b\d+\s*(min|sec|hour|hr|std|min\.)\b|\b\d+\s*[|+]\s*\d+\b/i;
-            return [...box.querySelectorAll('button')].filter(usable).find(b => TC.test(label(b))) || null;
+            return [...box.querySelectorAll('button')].filter(usable).find(b => TC.test(text(b))) || null;
         },
     },
 };
