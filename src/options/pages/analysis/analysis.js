@@ -850,7 +850,13 @@ async function renderBands(pos) {
                                        `analysis-band-${band}`);
                         await e.start();
                     } else {
-                        e.send(`setoption name UCI_Elo value ${band}`);
+                        // MAIA 3 TAKES SelfElo/OppoElo, NOT UCI_Elo (see src/offscreen/maia3.js).
+                        // setoption ignores a name it does not know, so the whole sweep silently ran
+                        // at the Elo the engine was built with: 21 identical inputs, 21 identical
+                        // answers, and a chart of perfectly flat lines. Both ends are set, because
+                        // the model is conditioned on who is playing AND who they are playing.
+                        e.send(`setoption name SelfElo value ${band}`);
+                        e.send(`setoption name OppoElo value ${band}`);
                     }
                     const r = await e.analyse(pos.fen, pos.turn);
                     const ls = (r.lines || []).filter(l => l.pv?.[0]).slice(0, nLines);
