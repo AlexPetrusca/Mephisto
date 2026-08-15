@@ -196,6 +196,9 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
         // BYTES, not base64 characters -- dataUri.length overstated every frame by ~33% and the
         // readout exists precisely to judge whether the encoding change paid off.
         snapCaptureMs = tCap; snapRecogniseMs = Date.now() - t1;
+        // the recogniser's own split: which model actually costs the time, and whether the board
+        // box came from the cache (see vision.js). "Screen reading is slow" is answerable now.
+        snapStages = res?.timing || null;
         snapBytes = Math.round((dataUri.length - dataUri.indexOf(',') - 1) * 3 / 4);
         sendResponse(res || {error: 'no response from recogniser'});
       } catch (e) {
@@ -1020,7 +1023,7 @@ let cdpWorstMs = 0, cdpCalls = 0, cdpTotalMs = 0;
 // input -- nothing in this worker can be the cause OR the fix. Counted separately so it stops
 // hiding behind a healthy average.
 // Screen reading, split into the browser's encode and the model's inference (see captureAndRecognize)
-let snapCaptureMs = 0, snapRecogniseMs = 0, snapBytes = 0;
+let snapCaptureMs = 0, snapRecogniseMs = 0, snapBytes = 0, snapStages = null;
 // Quality for the capture. Verified reading exact FENs down at q20 when the model was integrated,
 // so this is not near the edge; lower would shrink the frame further for no measured gain in accuracy.
 const SNAP_JPEG_QUALITY = 80;
@@ -1047,6 +1050,9 @@ function workerLoadLine() {
     `cdpHung=${cdpHung}`,        // dispatches that took over a second -- the renderer stalling
     `cdpPending=${cdpPending}`,  // ...and any still outstanding right now
     `snap=${snapCaptureMs}+${snapRecogniseMs}ms/${Math.round(snapBytes / 1024)}KB`, // capture + recognise
+    snapStages ? `stages=decode${snapStages.decodeMs}/detect${snapStages.detectMs}/read${snapStages.readMs}`
+               + `${snapStages.cachedBox ? '(box cached)' : ''}${snapStages.boxMisses ? ` misses=${snapStages.boxMisses}` : ''}`
+               : 'stages=none',
     `up=${Math.round((now - workerStarted) / 1000)}s`,
   ].join('  ');
 }

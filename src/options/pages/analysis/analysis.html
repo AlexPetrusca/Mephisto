@@ -1,42 +1,66 @@
-<!-- The Analysis page: the panel is the right shape for a live game and the wrong one for studying,
-     so this is the studying shape. A large board with the move list beside it, both engines shown
-     at once (what a human of a chosen rating would play, next to what Stockfish wants), the win%
-     and eval bars either side of the board, and the tallies underneath. -->
+<!-- The Analysis page: a board you can play on, with both engines beside it. The controls that
+     shape the analysis sit ABOVE the board (user call 2026-08-15) so nothing has to be scrolled
+     past to reach them, and the board itself is the largest thing on the page. -->
 <div class="row">
     <div class="col s12 m12 xl9">
         <div id="an-form" class="big-section">
 
+            <section id="an-setup" class="set-sec scrollspy">
+                <h3 data-i18n="an.setup" class="set-h">Setup</h3>
+
+                <div class="an-grid">
+                    <label class="an-f"><span data-i18n-tip="an.tip.engine" class="tooltipped" data-position="top" data-tooltip="Which engine analyses the position. It runs until you move on -- there is no depth to set."><span data-i18n="an.engine">Engine</span></span>
+                        <select id="an_engine_select" class="browser-default"></select></label>
+                    <label class="an-f"><span data-i18n-tip="an.tip.human" class="tooltipped" data-position="top" data-tooltip="The human model shown beside the engine: what a player of this rating would most likely play here."><span data-i18n="an.human">Human model</span></span>
+                        <select id="an_human_select" class="browser-default"></select></label>
+                    <label class="an-f" id="an_band_row"><span data-i18n-tip="an.tip.band" class="tooltipped" data-position="top" data-tooltip="Which rating the human model plays at. Maia 1 has a net per band; Maia 3 is one net with a dial."><span data-i18n="an.band">Rating</span></span>
+                        <select id="an_band_select" class="browser-default"></select></label>
+                    <label class="an-f"><span data-i18n-tip="an.tip.lines" class="tooltipped" data-position="top" data-tooltip="How many engine lines to list and draw on the board."><span data-i18n="an.lines">Lines</span></span>
+                        <input id="an_lines_input" type="number" min="1" max="5" step="1"></label>
+                    <label class="an-f"><span data-i18n-tip="an.tip.threads" class="tooltipped" data-position="top" data-tooltip="CPU threads the analysis engine may use."><span data-i18n="an.threads">Threads</span></span>
+                        <input id="an_threads_input" type="number" min="1" max="16" step="1"></label>
+                    <label class="an-f"><span data-i18n-tip="an.tip.hash" class="tooltipped" data-position="top" data-tooltip="Hash memory for the analysis engine. More helps a long search on one position."><span data-i18n="an.hash">Hash (MB)</span></span>
+                        <input id="an_hash_input" type="number" min="16" max="1024" step="16"></label>
+                    <label class="an-f an-f-check"><span data-i18n-tip="an.tip.wdl" class="tooltipped" data-position="top" data-tooltip="Show the engine's win, draw and loss percentages beside the board."><span data-i18n="an.wdl">Win / draw / loss</span></span>
+                        <input id="an_wdl_check" type="checkbox" class="set-cb">
+                        <label for="an_wdl_check" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label></label>
+                    <label class="an-f an-f-check"><span data-i18n-tip="an.tip.book" class="tooltipped" data-position="top" data-tooltip="Show book moves for the position from a book you load below."><span data-i18n="an.book">Opening book</span></span>
+                        <input id="an_book_check" type="checkbox" class="set-cb">
+                        <label for="an_book_check" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label></label>
+                </div>
+
+                <div class="an-grid an-grid-load">
+                    <label class="an-f an-f-wide"><span data-i18n="an.pgn">PGN or FEN</span>
+                        <textarea id="an_pgn" class="set-ta" rows="2" spellcheck="false"
+                                  placeholder="1. e4 e5 2. Nf3 ...   or   rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"></textarea></label>
+                    <div class="an-f an-f-btns">
+                        <button id="an_load" class="set-btn" type="button" data-i18n="an.load_btn">Load</button>
+                        <button id="an_paste" class="set-btn" type="button" data-i18n="an.paste_btn">Paste</button>
+                        <button id="an_start" class="set-btn" type="button" data-i18n="an.start_btn">Start position</button>
+                        <button id="an_book_btn" class="set-btn" type="button" data-i18n="an.book_btn">Load book…</button>
+                        <input id="an_book_file" type="file" accept=".bin,.json,.pgn" hidden>
+                    </div>
+                </div>
+                <div id="an_status" class="an-status" data-i18n="an.idle">Set up a position, or just start playing on the board.</div>
+            </section>
+
             <section id="an-board" class="set-sec scrollspy">
                 <h3 data-i18n="an.board" class="set-h">Board</h3>
-
-                <!-- The controls you actually touch while looking at a position, right above it: the
-                     rest stay in the sections below. A page for studying should not make you scroll
-                     past a form to reach the board. -->
-                <div class="an-toolbar">
-                    <label class="an-tb"><span data-i18n="an.tb_lines">Lines</span>
-                        <input id="an_tb_lines" type="number" min="1" max="5" step="1"></label>
-                    <label class="an-tb"><span data-i18n="an.tb_rating">Human rating</span>
-                        <select id="an_tb_band" class="browser-default"></select></label>
-                    <button id="an_tb_paste" class="set-btn" type="button" data-i18n="an.tb_paste">Paste PGN/FEN</button>
-                </div>
-                <div id="an_status" class="an-status" data-i18n="an.idle">Load a game or a position to begin.</div>
 
                 <div class="an-main">
                     <div class="an-left">
                         <div class="an-boardrow">
-                            <!-- win% for white, the human-facing number -->
-                            <div class="an-bar an-bar-win" title="White win %">
-                                <div id="an_winfill" class="an-bar-fill"></div>
-                                <span id="an_winlabel" class="an-bar-label">50%</span>
+                            <div class="an-bar an-bar-eval" title="Evaluation">
+                                <div id="an_evalfill" class="an-bar-fill"></div>
+                                <span id="an_evallabel" class="an-bar-num">0.0</span>
                             </div>
                             <div class="an-board-wrap">
                                 <div id="an_board" class="an-board"></div>
                                 <svg id="an_arrows" class="an-arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
-                            </div>
-                            <!-- the engine's own number, on its own scale -->
-                            <div class="an-bar an-bar-eval" title="Engine evaluation">
-                                <div id="an_evalfill" class="an-bar-fill"></div>
-                                <span id="an_evallabel" class="an-bar-label">0.0</span>
                             </div>
                         </div>
                         <div class="an-nav">
@@ -45,6 +69,7 @@
                             <button id="an_next" class="set-btn" type="button" title="Next">&rsaquo;</button>
                             <button id="an_last" class="set-btn" type="button" title="End">&raquo;</button>
                             <button id="an_flip" class="set-btn" type="button" data-i18n="an.flip">Flip</button>
+                            <span id="an_wdl_line" class="an-wdl"></span>
                         </div>
                         <div class="an-cols">
                             <div class="an-col">
@@ -52,122 +77,32 @@
                                 <div id="an_human_lines" class="an-lines"></div>
                             </div>
                             <div class="an-col">
-                                <div class="an-col-h"><span id="an_engine_title">Engine moves</span><span id="an_engine_meta" class="an-col-sub"></span></div>
+                                <div class="an-col-h"><span data-i18n="an.engine_moves">Engine moves</span><span id="an_engine_meta" class="an-col-sub"></span></div>
                                 <div id="an_engine_lines" class="an-lines"></div>
                             </div>
                         </div>
-                        <div id="an_bands_wrap" class="an-bands">
-                            <div class="an-col-h"><span data-i18n="an.by_rating">Moves by rating</span><span class="an-col-sub" data-i18n="an.band_sub">How the choice changes with strength</span></div>
-                            <div id="an_bands"></div>
+                        <div id="an_book_wrap" class="an-book hidden">
+                            <div class="an-col-h"><span data-i18n="an.book_moves">Book moves</span><span id="an_book_meta" class="an-col-sub"></span></div>
+                            <div id="an_book_lines" class="an-lines"></div>
                         </div>
                     </div>
                     <div class="an-right">
-                        <div id="an_tallies" class="an-tallies"></div>
                         <div id="an_moves" class="an-moves"></div>
+                        <div id="an_bands_wrap" class="an-bands">
+                            <div class="an-col-h"><span data-i18n="an.by_rating">Moves by rating</span><span id="an_bands_meta" class="an-col-sub"></span></div>
+                            <div id="an_bands"></div>
+                        </div>
                     </div>
                 </div>
             </section>
-
-            <section id="an-game" class="set-sec scrollspy">
-                <h3 data-i18n="an.position" class="set-h">Position</h3>
-
-                <div class="set-row">
-                    <div class="set-lbl">
-                        <span data-i18n-tip="an.tip.pgn" class="tooltipped" data-position="right"
-                              data-tooltip="Paste a game to step through, or leave it empty and set up a position with the FEN box below."><span data-i18n="an.pgn">PGN</span></span>
-                    </div>
-                    <div class="set-ctl">
-                        <textarea id="an_pgn" class="set-ta" rows="3" spellcheck="false"
-                                  placeholder="[Event &quot;...&quot;] ... 1. e4 e5 2. Nf3 ..."></textarea>
-                    </div>
-                </div>
-
-                <div class="set-row">
-                    <div class="set-lbl">
-                        <span data-i18n-tip="an.tip.fen" class="tooltipped" data-position="right"
-                              data-tooltip="Analyse a single position. Overrides the PGN above while it is filled in."><span data-i18n="an.fen">FEN</span></span>
-                    </div>
-                    <div class="set-ctl">
-                        <input id="an_fen" type="text" spellcheck="false" placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1">
-                    </div>
-                </div>
-
-                <div class="set-row">
-                    <div class="set-lbl"><span data-i18n="an.load">Load</span></div>
-                    <div class="set-ctl">
-                        <button id="an_load" class="set-btn" type="button" data-i18n="an.load_btn">Load</button>
-                        <button id="an_start" class="set-btn" type="button" data-i18n="an.start_btn">Start position</button>
-                        <button id="an_sample" class="set-btn" type="button" data-i18n="an.sample_btn">Sample game</button>
-                    </div>
-                </div>
-            </section>
-
-            <section id="an-engines" class="set-sec scrollspy">
-                <h3 data-i18n="an.engines" class="set-h">Engines</h3>
-
-                <div class="set-row">
-                    <div class="set-lbl">
-                        <span data-i18n-tip="an.tip.engine" class="tooltipped" data-position="right"
-                              data-tooltip="The analysis engine: what the best move actually is."><span data-i18n="an.engine">Engine</span></span>
-                    </div>
-                    <div class="set-ctl"><select id="an_engine_select"></select></div>
-                </div>
-
-                <div class="set-row">
-                    <div class="set-lbl">
-                        <span data-i18n-tip="an.tip.human" class="tooltipped" data-position="right"
-                              data-tooltip="The human model: what a player of this rating would most likely play here. Shown beside the engine, not instead of it."><span data-i18n="an.human">Human model</span></span>
-                    </div>
-                    <div class="set-ctl">
-                        <select id="an_human_select"></select>
-                        <span class="set-step" id="an_maia3_row">
-                            <button type="button" class="set-step-btn" data-step="-100">&minus;</button>
-                            <input id="an_maia3_elo_input" type="number" min="600" max="2600" step="100">
-                            <button type="button" class="set-step-btn" data-step="100">+</button>
-                        </span>
-                    </div>
-                </div>
-
-                <div class="set-row">
-                    <div class="set-lbl">
-                        <span data-i18n-tip="an.tip.lines" class="tooltipped" data-position="right"
-                              data-tooltip="How many engine lines to show and draw."><span data-i18n="an.lines">Lines</span></span>
-                    </div>
-                    <div class="set-ctl">
-                        <span class="set-step">
-                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
-                            <input id="an_multipv_input" type="number" min="1" max="5" step="1">
-                            <button type="button" class="set-step-btn" data-step="1">+</button>
-                        </span>
-                    </div>
-                </div>
-
-                <div class="set-row">
-                    <div class="set-lbl">
-                        <span data-i18n-tip="an.tip.threads" class="tooltipped" data-position="right"
-                              data-tooltip="CPU threads the analysis engine may use."><span data-i18n="an.threads">Threads</span></span>
-                    </div>
-                    <div class="set-ctl">
-                        <span class="set-step">
-                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
-                            <input id="an_threads_input" type="number" min="1" max="16" step="1">
-                            <button type="button" class="set-step-btn" data-step="1">+</button>
-                        </span>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ============================== THE BOARD =============================== -->
-            
         </div>
     </div>
 
     <div class="col hide-on-small-only m2 xl3 sticky-top">
         <div class="toc-wrapper pin-top">
             <ul id="toc" class="section table-of-contents">
+                <li><a data-i18n="an.setup" href="#an-setup">Setup</a></li>
                 <li><a data-i18n="an.board" href="#an-board">Board</a></li>
-                <li><a data-i18n="an.position" href="#an-game">Position</a></li>
-                <li><a data-i18n="an.engines" href="#an-engines">Engines</a></li>
             </ul>
         </div>
     </div>

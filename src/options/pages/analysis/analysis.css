@@ -1,25 +1,32 @@
-/* The Analysis page. The board is the subject, so it gets the width; everything else arranges
-   itself around it. Shares the settings-page tokens (--mp-*) and the review's class colours. */
+/* The Analysis page. The board is the subject and gets the width; the controls that shape the
+   analysis sit above it. Control frames come from options.css so every page matches. */
 
-.an-status {
-    margin: 0 0 14px;
-    font-size: 13px;
-    color: var(--mp-dim);
-    min-height: 20px;
-}
-.an-status.an-busy { color: var(--mp-text); }
+.an-status { margin: 10px 0 0; font-size: 13px; color: var(--mp-dim); min-height: 18px; }
 .an-status.an-err { color: #c34141; }
+
+/* the setup strip: a wrapping grid of labelled controls, not a column of settings rows */
+.an-grid { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: end; }
+.an-grid-load { margin-top: 14px; align-items: start; }
+.an-f { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--mp-dim); }
+.an-f > span { white-space: nowrap; }
+.an-f input[type=number] { width: 84px; }
+.an-f select { width: 190px; }
+.an-f-wide { flex: 1 1 420px; }
+.an-f-wide .set-ta { min-height: 52px; }
+.an-f-btns { flex-direction: row; align-items: center; gap: 8px; padding-bottom: 1px; }
+.an-f-check { flex-direction: column; }
+.an-f-check .set-tgl { margin-top: 2px; }
 
 .an-main {
     display: grid;
-    grid-template-columns: minmax(360px, 660px) minmax(230px, 330px);
+    grid-template-columns: minmax(420px, 760px) minmax(240px, 330px);
     gap: 24px;
     align-items: start;
 }
-@media (max-width: 900px) { .an-main { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .an-main { grid-template-columns: 1fr; } }
 
-/* board flanked by its two bars: win% on the left (the human number), engine eval on the right */
-.an-boardrow { display: grid; grid-template-columns: 16px 1fr 16px; gap: 10px; align-items: stretch; }
+/* eval bar + board. The bar is wide enough to read the number inside it. */
+.an-boardrow { display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: stretch; }
 .an-board-wrap { position: relative; width: 100%; aspect-ratio: 1; }
 .an-board { width: 100%; height: 100%; }
 .an-board .notation-322f9 { font-size: 11px; opacity: .8; }
@@ -29,31 +36,30 @@
 .an-bar {
     position: relative;
     border: 1px solid var(--mp-line);
-    border-radius: 3px;
-    background: var(--mp-raised);
+    border-radius: 4px;
+    background: #2b2b2b;
     overflow: hidden;
 }
-/* both bars fill from the BOTTOM: white below, black above, the way every eval bar is read */
-.an-bar-fill { position: absolute; left: 0; right: 0; bottom: 0; transition: height .18s ease; }
-.an-bar-win .an-bar-fill { background: #d8d8d2; }
-.an-bar-eval .an-bar-fill { background: #6d8fa8; }
-.an-bar-label {
+/* white fills from the bottom, the way every eval bar is read */
+.an-bar-fill { position: absolute; left: 0; right: 0; bottom: 0; background: #e8e8e2; transition: height .18s ease; }
+.an-bar-num {
     position: absolute;
-    left: 50%;
+    left: 0; right: 0;
     bottom: 4px;
-    transform: translateX(-50%) rotate(-90deg);
-    transform-origin: center;
-    font-size: 9px;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
-    color: var(--mp-dim);
-    white-space: nowrap;
+    color: #111;
     pointer-events: none;
 }
+/* when black is ahead the number sits at the top, in white, so it is always on the filled side */
+.an-bar-num.an-num-top { bottom: auto; top: 4px; color: #eee; }
 
-.an-nav { display: flex; gap: 6px; margin-top: 10px; }
+.an-nav { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
 .an-nav .set-btn { min-width: 42px; }
+.an-wdl { margin-left: 10px; font-size: 12px; color: var(--mp-dim); font-variant-numeric: tabular-nums; }
 
-/* the two engine columns, side by side: what a human plays next to what the engine wants */
 .an-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 @media (max-width: 620px) { .an-cols { grid-template-columns: 1fr; } }
 .an-col-h {
@@ -69,16 +75,19 @@
 .an-col-sub { font-weight: 400; font-size: 11px; color: var(--mp-dim); }
 
 .an-lines { font-size: 12.5px; }
+/* a line is CLICKABLE: clicking it plays that move on the board */
 .an-lrow {
     display: grid;
     grid-template-columns: 20px 1fr auto;
     gap: 8px;
     align-items: baseline;
-    padding: 5px 2px;
+    padding: 5px 4px;
     border-top: 1px solid var(--mp-hair);
-    cursor: default;
+    cursor: pointer;
+    border-radius: 3px;
 }
 .an-lrow:first-child { border-top: none; }
+.an-lrow:hover { background: var(--mp-hover); }
 .an-lrow.an-top { font-weight: 600; }
 .an-lrank {
     font-size: 10px;
@@ -90,38 +99,26 @@
     text-align: center;
 }
 .an-lmove { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.an-lpv { color: var(--mp-dim); font-size: 11.5px; }
 .an-lval { font-variant-numeric: tabular-nums; color: var(--mp-dim); }
-.an-lbar {
-    grid-column: 1 / -1;
-    height: 3px;
-    border-radius: 2px;
-    background: var(--mp-hair);
-    overflow: hidden;
-}
+.an-lbar { grid-column: 1 / -1; height: 3px; border-radius: 2px; background: var(--mp-hair); overflow: hidden; }
 .an-lbar i { display: block; height: 100%; background: var(--an-rank, #7f8b95); }
 
-/* per-move probability across the rating bands: one row per move, one cell per band */
-.an-bands { margin-top: 18px; }
-.an-band-row { display: grid; grid-template-columns: 54px 1fr; gap: 8px; align-items: center; padding: 3px 0; }
-.an-band-move { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.an-band-cells { display: grid; gap: 2px; }
-.an-band-cell { height: 14px; border-radius: 2px; background: var(--mp-hair); position: relative; }
-.an-band-cell i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: #4c9a5e; }
-.an-band-axis { display: grid; gap: 2px; font-size: 9.5px; color: var(--mp-dim); text-align: center; margin-top: 2px; }
+.an-book { margin-top: 16px; }
+.an-book.hidden { display: none; }
 
-.an-tallies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
-.an-tally {
-    border: 1px solid var(--mp-line);
-    border-radius: 4px;
-    padding: 8px 6px;
-    text-align: center;
-    background: var(--mp-raised);
-}
-.an-tally b { display: block; font-size: 17px; color: var(--rv-c, var(--mp-text)); }
-.an-tally span { font-size: 10.5px; color: var(--mp-dim); }
+/* Moves by rating: a line per move across the bands, with the band it peaks in called out. Bars
+   were a wall of green blocks that said nothing at a glance. */
+.an-bands { margin-top: 18px; }
+.an-band-row { display: grid; grid-template-columns: 52px 1fr 46px; gap: 8px; align-items: center; padding: 4px 0; }
+.an-band-move { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.an-band-plot { position: relative; height: 22px; }
+.an-band-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.an-band-peak { font-size: 10.5px; color: var(--mp-dim); text-align: right; font-variant-numeric: tabular-nums; }
+.an-band-axis { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--mp-dim); padding-left: 60px; }
 
 .an-moves {
-    max-height: 640px;
+    max-height: 420px;
     overflow-y: auto;
     border: 1px solid var(--mp-line);
     border-radius: 4px;
@@ -137,10 +134,3 @@
 }
 .an-mcell:hover { background: var(--mp-hover); }
 .an-mcell.an-sel { background: var(--mp-sel); font-weight: 600; }
-
-/* the compact strip above the board: depth, lines, the human rating band, and a paste button */
-.an-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 10px; }
-.an-tb { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--mp-dim); }
-/* frame and font come from options.css (one look across the extension); only widths here */
-.an-tb input { width: 92px; }
-.an-tb select { width: 152px; }

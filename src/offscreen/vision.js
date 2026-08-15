@@ -93,8 +93,30 @@ function squareProbs(logits, base) {
     return p;
 }
 
+// THE MODEL IS THE COST, AND MOST READS ASK IT THE SAME QUESTION. Measured on this machine: the
+// detector is 84ms and the position model 645ms of a ~670ms read, and the shipped model is ALREADY
+// int8-quantised (MatMulInteger/ConvInteger), so there is no quantisation left to win. What is left
+// is not asking: while the opponent thinks, the follow loop re-reads a board that has not changed a
+// pixel. The 256x256 crop IS the board, so an identical crop means an identical position -- hash it
+// and reuse the answer.
+//
+// The hash is a cheap rolling one over every 16th byte: enough to notice a piece moving (thousands
+// of pixels change) and far cheaper than the inference it avoids. A collision would have to leave
+// every sampled byte identical across a real move, which is not a thing a rendered board does.
+let lastCropHash = null, lastRead = null, readHits = 0;
+
+function cropHash(canvas) {
+    const d = canvas.getContext('2d', {willReadFrequently: true})
+        .getImageData(0, 0, canvas.width, canvas.height).data;
+    let h = 2166136261;
+    for (let i = 0; i < d.length; i += 16) { h ^= d[i]; h = Math.imul(h, 16777619); }
+    return h >>> 0;
+}
+
 async function readBoard(bitmap, box) {
     const c = draw(bitmap, BOARD_SIZE, BOARD_SIZE, box.x, box.y, box.w, box.h);
+    const hash = cropHash(c);
+    if (lastRead && hash === lastCropHash) { readHits++; return {...lastRead, cached: true}; }
     const out = await posSession.run({[posSession.inputNames[0]]: toTensor(c)});
     const logits = out[posSession.outputNames[0]].data; // [1,64,13], rank 8 first, file a first
     const rows = [];
@@ -124,17 +146,72 @@ async function readBoard(bitmap, box) {
     const low = squares.filter(sq => sq.prob < LOW_CONFIDENCE_MAX)
                        .sort((a, b) => a.prob - b.prob)
                        .slice(0, LOW_CONFIDENCE_REPORT);
-    return {placement: rows.join('/'), low};
+    const result = {placement: rows.join('/'), low};
+    lastCropHash = hash;
+    lastRead = result;
+    return result;
 }
 
 // dataUri: the captured tab. crop (optional): a drag-selected rect in image pixels.
+// THE BOARD DOES NOT MOVE WHILE YOU PLAY. The detector is a 12MB model run on a 512x512 image, and
+// on a live page it answers the same box read after read -- the tab is the same size and the board
+// is where it was. So the last box is kept and REUSED while the image is the same shape, and the
+// detector only runs again when that stops being true or when the position model reports a read it
+// is not confident about (which is what a wrong box looks like from here).
+//
+// The cache is per image geometry rather than per tab: a resized window, a different monitor or a
+// zoom change all alter it, and all three genuinely move the board.
+let boxCache = null;   // {w, h, box}
+let boxMisses = 0;
+
+export function resetBoardBox() { boxCache = null; }   // the caller can force a fresh detection
+
 export async function recognize({dataUri, crop}) {
     await ready();
+    const t0 = performance.now();
     const blob = await (await fetch(dataUri)).blob();
     const bitmap = await createImageBitmap(blob);
-    const box = crop || await detectBoard(bitmap);
+    const tDecode = performance.now();
+    let box = crop, cached = false, tDetect = tDecode;
+    if (!box) {
+        if (boxCache && boxCache.w === bitmap.width && boxCache.h === bitmap.height) {
+            box = boxCache.box;
+            cached = true;
+        } else {
+            box = await detectBoard(bitmap);
+            tDetect = performance.now();
+            if (box) boxCache = {w: bitmap.width, h: bitmap.height, box};
+        }
+    }
     if (!box) return {error: 'no board found'};
-    const read = await readBoard(bitmap, box);
-    return {placement: read.placement, low: read.low, box,
-            imageW: bitmap.width, imageH: bitmap.height};
+    const tBefore = performance.now();
+    let read = await readBoard(bitmap, box);
+    let tRead = performance.now();
+    // A cached box that has gone stale reads as a board full of nothing: re-detect ONCE and keep
+    // the better answer, so a moved board costs one extra read rather than a wrong position.
+    if (cached && read.low > 8) {
+        boxMisses++;
+        const fresh = await detectBoard(bitmap);
+        if (fresh) {
+            boxCache = {w: bitmap.width, h: bitmap.height, box: fresh};
+            const second = await readBoard(bitmap, fresh);
+            if (second.low <= read.low) { read = second; box = fresh; }
+        }
+        tRead = performance.now();
+    }
+    return {
+        placement: read.placement, low: read.low, box,
+        imageW: bitmap.width, imageH: bitmap.height,
+        // what each stage cost, so "screen reading is slow" can be answered with numbers rather
+        // than with a guess about which model is the expensive one
+        timing: {
+            decodeMs: Math.round(tDecode - t0),
+            detectMs: cached ? 0 : Math.round(tDetect - tDecode),
+            readMs: Math.round(tRead - tBefore),
+            cachedBox: cached,
+            cachedRead: !!read.cached,
+            readHits,
+            boxMisses,
+        },
+    };
 }

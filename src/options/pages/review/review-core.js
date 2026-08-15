@@ -697,6 +697,10 @@ function parseInfo(line) {
     // A `lowerbound`/`upperbound` score is a partial result of an aspiration re-search: the real
     // score is only known to be beyond it. Reading one as a score makes an eval graph jump.
     out.bound = /\b(lowerbound|upperbound)\b/.test(line);
+    // `wdl W D L` in permille, side-to-move relative, when UCI_ShowWDL is on. Kept raw here; the
+    // caller decides whose side it is looking from.
+    const wdl = /\bwdl (\d+) (\d+) (\d+)/.exec(line);
+    if (wdl) out.wdl = [+wdl[1], +wdl[2], +wdl[3]];
     if (out.depth == null || (!cp && !mate) || !out.pv.length) return null;
     return out;
 }

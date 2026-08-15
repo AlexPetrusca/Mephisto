@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.254-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.255-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -739,14 +739,12 @@ shipped, which is a good sign and also why the next item is a bigger one.
 
 **Worth real work.** The ones that would change how this feels to use, and cost accordingly.
 
-- [ ] **A faster board recogniser** - the model is essentially the whole cost of following the screen. Measured
-  on the same machine: `snap=24+1109ms` single-threaded, `snap=28+620ms` on four threads (v3.1.233) - a real 1.8×,
-  well short of the 4× the thread count suggests, which says the model is partly memory-bound rather than purely
-  compute-bound. Past that it means a smaller or quantised position model, or a GPU execution provider; more
-  threads will not do it. Note for anyone tempted by the capture side: `captureVisibleTab` is quota'd at ~2/s, but
-  at half a second per read that ceiling is not close, and a tab-capture MediaStream would buy almost nothing.
-
-
+- [ ] **A faster board recogniser** - partly answered in v3.1.255. Measured per read: decode 25ms, board
+  detection 84ms, position model 645ms. The position model is **already int8-quantised** (MatMulInteger /
+  ConvInteger), so quantisation is spent; caching took repeat reads to 26ms, but a board that genuinely changed
+  still pays ~700ms. What is left is a smaller model or a GPU execution provider - the bundled onnxruntime here is
+  the WASM build, so WebGPU would mean vendoring another runtime, and a smaller model means retraining rather than
+  converting.
 - [ ] **Talking Mode** - the engine as a voice. Not a number and an arrow but a running commentary in plain
   language: what the position wants, what it is worried about, why the move it likes actually wins something.
   The pieces exist (eval, lines, the explanation work below); the hard part is saying it like a person and
@@ -884,8 +882,23 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>44 features, newest first</summary>
+<summary>46 features, newest first</summary>
 
+- [x] **The Analysis page, as asked for** (v3.1.255) - the board is bigger and **you can play on it** (click or
+  drag; a move continues from wherever you are). Clicking any engine or human line plays that move. The eval bar
+  is wider with the **number inside it**, win/draw/loss sits beside the board, and hash, thread count, line count,
+  the rating band and an opening-book toggle all live in one strip **above** the board. Every engine can be picked,
+  the way Game Review does it. Switching the human model no longer resets the analysis - the two engines are
+  independent now. The move-by-rating chart draws a **line per move across the bands** instead of a wall of blocks,
+  the useless tallies counter is gone, and arrow rank numbers sit at the **head** of the arrow where they can be
+  read. Opening books load from PGN or JSON (Polyglot `.bin` is recognised and refused with the reason: decoding
+  one needs Zobrist constants this repo does not vendor).
+- [x] **The screen reader stops asking twice** (v3.1.255) - measured on one machine: a read is decode 25ms +
+  board detection 84ms + position model 645ms, and the shipped position model is **already int8-quantised**, so
+  there was no quantisation left to win. What was left was not asking: the board box is cached while the image
+  geometry holds (and re-detected if a read comes back unsure), and the 256x256 crop is hashed so an unchanged
+  board skips the model entirely. Repeat reads went **670ms to 26ms**; a real board change was verified to
+  invalidate both caches. Every stage is now timed in Copy Diagnostics.
 - [x] **Analysis thinks until you move on** (v3.1.254) - no depth to choose: the engine keeps working on the
   position in front of you and the lines deepen while you look at them, exactly like an analysis board should,
   and moving to the next move stops that search and starts the next. The running depth shows beside the engine's

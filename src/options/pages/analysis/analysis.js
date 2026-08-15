@@ -1,12 +1,12 @@
 // The Analysis page. The floating panel is built for a live game -- small, out of the way, one
-// engine at a time. Studying wants the opposite: a big board, the moves beside it, and BOTH
-// answers at once -- what a human of a chosen rating would play, next to what the engine wants.
-// That contrast is the whole point of the page, and it is why the human model is not a toggle
-// here but a permanent second column.
+// engine at a time. Studying wants the opposite: a big board you can PLAY on, the moves beside it,
+// and both answers at once -- what a human of a chosen rating would play, next to what the engine
+// wants. That contrast is the point of the page, which is why the human model is a permanent second
+// column rather than a toggle.
 //
 // Everything expensive is shared rather than rebuilt: the engine drivers come from
 // src/options/util/engines.js (the same ones Game Review uses), the arithmetic from review-core.js,
-// and the board from panel-board.js. This file is layout, wiring and the per-position render.
+// and the board from panel-board.js.
 import {define} from "../../framework/require.js";
 import {SettingsPage} from "../../util/SettingsPage.js";
 
@@ -15,17 +15,18 @@ const {ENGINES, MAIA_BANDS, makeEngine, nativeHostAvailable} = self.MephistoEngi
 
 const $ = (id) => document.getElementById(id);
 
-// Its own settings, like the review's: an analysis depth is a different number from a live-play
-// budget, and sharing one would silently make the other wrong. Depth 12 by default -- quick enough
-// to step through a game move by move, which is what this page is for.
+// Its own settings: an analysis runs on different numbers from live play, and sharing one set would
+// silently make the other wrong. There is no DEPTH here on purpose -- the engine runs until the
+// position changes, the way an analysis board does.
 const CFG = {
     an_engine: 'stockfish-18-nnue',
     an_human: 'maia',
-    an_maia_band: '1500',
-    an_maia3_elo: 1500,
-    an_multipv: 4,
+    an_band: '1500',
+    an_lines: 4,
     an_threads: 1,
     an_hash: 128,
+    an_wdl: true,
+    an_book: true,
 };
 
 function cfg(key) {
@@ -43,111 +44,67 @@ function setCfg(key, value) { MephistoConfig.set(key, JSON.stringify(value)); }
 let board = null, flipped = false;
 let positions = [];      // [{fen, turn, san, uci}] -- index 0 is the start position
 let cursor = 0;
-let rig = null;          // {engine, human, opts}
-let busy = false;        // one analysis at a time; a fast clicker must not stack searches
-let queued = null;       // the ply asked for while busy, so the last click always wins
-let evalCache = new Map();   // fen -> {lines, depth}
-let humanCache = new Map();  // fen|band -> [{uci, prob}]
-let bandCache = new Map();   // fen -> {band: [{uci, prob}]}
-let tallies = {best: 0, mistake: 0, blunder: 0};
+let engine = null;       // the analysis engine
+let human = null;        // the human model, started and stopped INDEPENDENTLY of the engine
+let humanKey = null;     // which model+band is loaded, so a switch only reloads that one
+let liveSearch = null;
+let evalCache = new Map();
+let humanCache = new Map();
+let bandCache = new Map();
+let bookMoves = null;    // {name, entries: Map(positionKey -> [{uci, weight}])}
+let boardResizeObs = null;
 
 // ---- page ---------------------------------------------------------------------------------------
 
 class AnalysisPage extends SettingsPage {
     init() {
-        M.FormSelect.init(document.querySelectorAll('select'), {});
-        fillEngineSelects();
+        fillSelects();
         this.registerFormElement('an_engine', 'Engine:', 'select', CFG.an_engine);
-        const human = this.registerFormElement('an_human', 'Human model:', 'select', CFG.an_human);
-        this.registerFormElement('an_maia3_elo', 'Maia 3 rating:', 'input', CFG.an_maia3_elo);
-        this.registerFormElement('an_multipv', 'Lines:', 'input', CFG.an_multipv);
+        this.registerFormElement('an_human', 'Human model:', 'select', CFG.an_human);
+        this.registerFormElement('an_band', 'Rating:', 'select', CFG.an_band);
+        this.registerFormElement('an_lines', 'Lines:', 'input', CFG.an_lines);
         this.registerFormElement('an_threads', 'Threads:', 'input', CFG.an_threads);
-        const syncMaia3 = () => {
-            const row = $('an_maia3_row');
-            if (row) row.style.display = human.getValue() === 'maia3' ? '' : 'none';
-        };
-        human.registerChangeListener(() => { syncMaia3(); dropRig(); });
-        syncMaia3();
-        // any engine-shaping setting invalidates the running engine and the cached numbers
-        for (const k of ['an_engine', 'an_multipv', 'an_threads', 'an_maia3_elo']) {
-            const el = document.getElementById(`${k}_${k === 'an_engine' ? 'select' : 'input'}`);
-            el?.addEventListener('change', () => { dropRig(); evalCache.clear(); humanCache.clear(); bandCache.clear(); });
-        }
+        this.registerFormElement('an_hash', 'Hash:', 'input', CFG.an_hash);
+        this.registerFormElement('an_wdl', 'Win / draw / loss:', 'checkbox', CFG.an_wdl);
+        this.registerFormElement('an_book', 'Opening book:', 'checkbox', CFG.an_book);
 
-        // the toolbar mirrors the settings below it: same keys, either place, both directions
-        const band = $('an_tb_band');
-        if (band && !band.options.length) {
-            band.innerHTML = MAIA_BANDS.map(b => `<option value="${b}">Maia ${b}</option>`).join('')
-                + '<option value="">Human model off</option>';
-        }
-        const tb = [['an_tb_lines', 'an_multipv']];
-        for (const [tbId, key] of tb) {
-            const el = $(tbId);
-            if (!el) continue;
-            el.value = cfg(key);
-            el.addEventListener('change', () => {
-                const v = Math.max(1, parseInt(el.value) || cfg(key));
-                setCfg(key, v);
-                const twin = $(`${key}_input`);
-                if (twin) { twin.value = v; }
-                dropRig(); evalCache.clear(); humanCache.clear(); bandCache.clear();
-                go(cursor);
-            });
-        }
-        if (band) {
-            band.value = cfg('an_human') ? String(cfg('an_maia_band')) : '';
-            band.addEventListener('change', () => {
-                if (band.value) { setCfg('an_human', 'maia'); setCfg('an_maia_band', band.value); }
-                else setCfg('an_human', '');
-                dropRig(); humanCache.clear(); bandCache.clear();
-                go(cursor);
-            });
-        }
-        $('an_tb_paste')?.addEventListener('click', async () => {
-            try {
-                const text = (await navigator.clipboard.readText() || '').trim();
-                if (!text) return status('The clipboard is empty.', 'err');
-                // a FEN is one line with slashes; anything else is treated as a game
-                if (/^[rnbqkpRNBQKP1-8\/]+\s+[wb]\s/.test(text)) { $('an_fen').value = text; $('an_pgn').value = ''; }
-                else { $('an_pgn').value = text; $('an_fen').value = ''; }
-                loadFromInputs();
-            } catch (e) { status('Could not read the clipboard: ' + (e.message || e), 'err'); }
-        });
-        $('an_load')?.addEventListener('click', () => loadFromInputs());
-        $('an_start')?.addEventListener('click', () => { $('an_pgn').value = ''; $('an_fen').value = ''; loadStart(); });
-        $('an_sample')?.addEventListener('click', () => {
-            $('an_pgn').value = SAMPLE;
-            $('an_fen').value = '';
-            loadFromInputs();
-        });
+        // THE TWO ENGINES ARE INDEPENDENT (user report 2026-08-15): switching the human model used
+        // to drop the whole rig, which threw away the analysis you were looking at and started it
+        // again from depth 1. Only the model that changed is reloaded now.
+        $('an_human_select')?.addEventListener('change', () => { syncBandRow(); reloadHuman(); });
+        $('an_band_select')?.addEventListener('change', () => reloadHuman());
+        $('an_engine_select')?.addEventListener('change', () => reloadEngine());
+        for (const id of ['an_lines_input', 'an_threads_input', 'an_hash_input'])
+            $(id)?.addEventListener('change', () => reloadEngine());
+        $('an_wdl_check')?.addEventListener('change', () => reloadEngine());
+        $('an_book_check')?.addEventListener('change', () => renderBook());
+
+        $('an_load')?.addEventListener('click', () => loadFromInput());
+        $('an_start')?.addEventListener('click', () => { $('an_pgn').value = ''; loadStart(); });
+        $('an_paste')?.addEventListener('click', pasteFromClipboard);
+        $('an_book_btn')?.addEventListener('click', () => $('an_book_file')?.click());
+        $('an_book_file')?.addEventListener('change', onBookFile);
         $('an_first')?.addEventListener('click', () => go(0));
         $('an_prev')?.addEventListener('click', () => go(cursor - 1));
         $('an_next')?.addEventListener('click', () => go(cursor + 1));
         $('an_last')?.addEventListener('click', () => go(positions.length - 1));
-        $('an_flip')?.addEventListener('click', () => { flipped = !flipped; ensureBoard(true); render(); });
+        $('an_flip')?.addEventListener('click', () => { flipped = !flipped; buildBoard(); render(); });
         document.addEventListener('keydown', onKey);
-        // THE PAGE LOADER HAS NO onLeave HOOK (options.js injects a page and forgets the last one),
-        // so the engines this page starts would keep their offscreen clients and their threads
-        // after you navigated away. Watch the route instead: the moment the hash is not ours, drop
-        // the rig and unhook. Cheap, and it cannot leak an engine into the rest of the session.
+        // The page loader has no onLeave hook, so the route is the teardown signal: the moment the
+        // hash is not ours, stop searching and free both engines.
         const onRoute = () => {
             if (location.hash.startsWith('#analysis')) return;
-            dropRig();
-            boardResizeObs?.disconnect();
-            boardResizeObs = null;
+            teardown();
             document.removeEventListener('keydown', onKey);
             window.removeEventListener('hashchange', onRoute);
         };
         window.addEventListener('hashchange', onRoute);
+        syncBandRow();
         loadStart();
         watchBoardSize();
-        // one deferred rebuild for the same reason: the first paint can land before the page's
-        // stylesheet is back on, and the board would keep that first, wrong width
-        requestAnimationFrame(() => { ensureBoard(true); render(); });
+        requestAnimationFrame(() => { buildBoard(); render(); });
     }
 }
-
-const SAMPLE = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O';
 
 function onKey(e) {
     if (!$('an_board') || /input|textarea|select/i.test(e.target?.tagName || '')) return;
@@ -155,11 +112,10 @@ function onKey(e) {
     else if (e.key === 'ArrowRight') { go(cursor + 1); e.preventDefault(); }
 }
 
-function fillEngineSelects() {
+function fillSelects() {
     const es = $('an_engine_select');
     if (es && !es.options.length) {
         es.innerHTML = ENGINES.map(e => `<option value="${e.id}">${e.label}</option>`).join('');
-        // a native engine that is not installed would sit at "thinking" forever; disable what is absent
         for (const e of ENGINES.filter(x => x.kind === 'native')) {
             nativeHostAvailable(e.id).then(ok => {
                 const opt = [...es.options].find(o => o.value === e.id);
@@ -169,9 +125,31 @@ function fillEngineSelects() {
     }
     const hs = $('an_human_select');
     if (hs && !hs.options.length) {
-        hs.innerHTML = '<option value="maia">Maia 1 (rating band)</option>'
-            + '<option value="maia3">Maia 3 (rating dial)</option>'
-            + '<option value="">None</option>';
+        hs.innerHTML = '<option value="maia">Maia 1</option><option value="maia3">Maia 3</option>'
+                     + '<option value="">Off</option>';
+    }
+    const bs = $('an_band_select');
+    if (bs && !bs.options.length) bs.innerHTML = bandChoices().map(b => `<option value="${b}">${b}</option>`).join('');
+}
+
+// Maia 3 is one net with a rating dial, so it offers the whole range in 100s; Maia 1 offers the
+// bands it actually ships as nets.
+function bandChoices() {
+    return cfg('an_human') === 'maia3'
+        ? Array.from({length: 21}, (_, i) => String(600 + i * 100))
+        : MAIA_BANDS.slice();
+}
+
+function syncBandRow() {
+    const row = $('an_band_row'), bs = $('an_band_select');
+    if (!row || !bs) return;
+    row.style.display = cfg('an_human') ? '' : 'none';
+    const want = bandChoices();
+    if ([...bs.options].map(o => o.value).join() !== want.join()) {
+        const keep = bs.value;
+        bs.innerHTML = want.map(b => `<option value="${b}">${b}</option>`).join('');
+        bs.value = want.includes(keep) ? keep : '1500';
+        setCfg('an_band', bs.value);
     }
 }
 
@@ -187,210 +165,233 @@ function status(text, kind) {
 function loadStart() {
     positions = [{fen: new Chess('chess').fen(), turn: 'w', san: null, uci: null}];
     cursor = 0;
-    tallies = {best: 0, mistake: 0, blunder: 0};
-    ensureBoard(true);
+    evalCache.clear(); humanCache.clear(); bandCache.clear();
+    buildBoard();
     renderMoves();
-    render();
+    status('');
     go(0);
 }
 
-function loadFromInputs() {
-    const fen = ($('an_fen')?.value || '').trim();
-    const pgn = ($('an_pgn')?.value || '').trim();
+// One box takes either: a FEN is placement data followed by a side to move, anything else is a game.
+function loadFromInput() {
+    const text = ($('an_pgn')?.value || '').trim();
+    if (!text) return loadStart();
     try {
-        if (fen) {
-            // chess.js does NOT reliably throw on junk (found 2026-08-15: 'not a fen at all' was
-            // accepted and the page happily analysed the start position instead of saying no), so
-            // the shape is checked here first: six fields, eight ranks, a side to move.
-            const parts = fen.split(/\s+/);
-            const ranks = (parts[0] || '').split('/');
-            if (parts.length < 4 || ranks.length !== 8 || !/^[wb]$/.test(parts[1] || '')
-                || !/^[rnbqkpRNBQKP1-8]+$/.test(parts[0])) {
+        if (/^[rnbqkpRNBQKP1-8/]+\s+[wb]\s/.test(text)) {
+            const parts = text.split(/\s+/);
+            // chess.js does NOT reliably throw on junk, so the shape is checked before it is handed over
+            if ((parts[0] || '').split('/').length !== 8 || parts.length < 4) {
                 throw new Error('that does not look like a FEN');
             }
-            const c = new Chess('chess', fen);
+            const c = new Chess('chess', text);
             positions = [{fen: c.fen(), turn: c.turn(), san: null, uci: null}];
-        } else if (pgn) {
-            const game = Core.parsePgn(pgn)[0];
-            if (!game) throw new Error('no game found in that PGN');
+            status('Position loaded.');
+        } else {
+            const game = Core.parsePgn(text)[0];
+            if (!game) throw new Error('no game found in that text');
             const c = new Chess('chess', game.startFen || undefined);
             positions = [{fen: c.fen(), turn: c.turn(), san: null, uci: null}];
             for (const rec of game.moves) {
-                // parsePgn yields RECORDS ({san, clk, eval, comment}), not bare strings -- passing
-                // the record to chess.js fails with "Invalid move: {...}", which is exactly how this
-                // was found (the sample game refused to load while the start position analysed fine).
                 const san = typeof rec === 'string' ? rec : rec.san;
                 const mv = c.move(san);
                 if (!mv) throw new Error(`illegal move in the PGN: ${san}`);
                 positions.push({fen: c.fen(), turn: c.turn(), san: mv.san,
                                 uci: mv.from + mv.to + (mv.promotion || '')});
             }
-        } else {
-            return loadStart();
+            // the parser is lenient by design, so say what it understood rather than loading a
+            // half-copied game silently
+            const n = positions.length - 1;
+            status(n === 0 ? 'No moves were understood in that text.'
+                 : n < 3 ? `Only ${n} move${n === 1 ? '' : 's'} understood -- check the text.`
+                 : `Loaded ${n} moves.`, n === 0 ? 'err' : undefined);
         }
     } catch (e) {
-        status(String(e.message || e), 'err');
-        return;
+        return status(String(e.message || e), 'err');
     }
     cursor = 0;
-    tallies = {best: 0, mistake: 0, blunder: 0};
     evalCache.clear(); humanCache.clear(); bandCache.clear();
-    ensureBoard(true);
+    buildBoard();
     renderMoves();
-    // SAY WHAT WAS UNDERSTOOD. The PGN parser is lenient by design -- it keeps the move tokens it
-    // recognises and drops the rest -- so a mistyped or half-copied game loads as a SHORTER game
-    // rather than as an error. Silently analysing three moves of a forty-move paste is the worst
-    // of both, so the count is reported every time and a suspiciously short game says so.
-    const n = positions.length - 1;
-    if (!fen) {
-        status(n === 0 ? 'No moves were understood in that text.'
-             : n < 3 ? `Only ${n} move${n === 1 ? '' : 's'} understood -- check the text.`
-             : `Loaded ${n} moves.`, n === 0 ? 'err' : undefined);
-    }
     go(0);
+}
+
+async function pasteFromClipboard() {
+    try {
+        const text = (await navigator.clipboard.readText() || '').trim();
+        if (!text) return status('The clipboard is empty.', 'err');
+        $('an_pgn').value = text;
+        loadFromInput();
+    } catch (e) { status('Could not read the clipboard: ' + (e.message || e), 'err'); }
 }
 
 // ---- the engines --------------------------------------------------------------------------------
 
-async function ensureRig() {
-    if (rig) return rig;
-    const opts = {
+function engineOpts() {
+    return {
         variant: 'chess',
-        // the fallback budget for a NATIVE host, which answers a whole search rather than
-        // streaming one; the WASM path ignores this and runs `go infinite` (see startInfinite)
-        limitKind: 'depth',
+        limitKind: 'depth',      // only the NATIVE path uses this; WASM runs `go infinite`
         limitValue: 22,
-        multipv: Math.max(1, +cfg('an_multipv')),
+        multipv: Math.max(1, +cfg('an_lines')),
         threads: Math.max(1, +cfg('an_threads')),
         hash: Math.max(16, +cfg('an_hash')),
     };
-    const engine = makeEngine(cfg('an_engine'), opts, 'analysis');
-    await engine.start();
-    let human = null;
+}
+
+async function ensureEngine() {
+    if (engine) return engine;
+    const e = makeEngine(cfg('an_engine'), engineOpts(), 'analysis');
+    await e.start();
+    if (cfg('an_wdl')) e.send?.('setoption name UCI_ShowWDL value true');
+    engine = e;
+    return engine;
+}
+
+async function ensureHuman() {
     const kind = cfg('an_human');
-    if (kind) {
-        const level = kind === 'maia3' ? String(cfg('an_maia3_elo')) : String(cfg('an_maia_band'));
-        // Its own client id: it runs ALONGSIDE the analysis engine, and the offscreen host disposes
-        // whatever shares an id (the trap the review found the hard way).
-        human = makeEngine(kind, {...opts, multipv: 5, maiaLevel: level}, 'analysis-human');
-        try { await human.start(); }
-        catch (e) { human = null; status(`Human model unavailable (${e.message})`, 'err'); }
-    }
-    rig = {engine, human, opts};
-    return rig;
+    if (!kind) return null;
+    const band = String(cfg('an_band') || CFG.an_band);
+    const key = `${kind}|${band}`;
+    if (human && humanKey === key) return human;
+    if (human) { try { human.dispose?.(); } catch (e) { /* */ } human = null; }
+    const h = makeEngine(kind, {...engineOpts(), multipv: 5, maiaLevel: band}, 'analysis-human');
+    await h.start();
+    human = h;
+    humanKey = key;
+    return human;
 }
 
-function dropRig() {
+// Reload ONLY the analysis engine; the human model and its answers survive.
+function reloadEngine() {
     stopSearch();
-    if (!rig) return;
-    try { rig.engine.dispose?.(); } catch (e) { /* */ }
-    try { rig.human?.dispose?.(); } catch (e) { /* */ }
-    rig = null;
+    if (engine) { try { engine.dispose?.(); } catch (e) { /* */ } engine = null; }
+    evalCache.clear();
+    go(cursor);
 }
 
-// ---- stepping -----------------------------------------------------------------------------------
+// Reload ONLY the human model; the engine keeps thinking about the position it is on.
+async function reloadHuman() {
+    syncBandRow();
+    humanCache.clear();
+    bandCache.clear();
+    if (human) { try { human.dispose?.(); } catch (e) { /* */ } human = null; humanKey = null; }
+    const pos = positions[cursor];
+    if (!pos) return;
+    renderHumanLines(pos, null);
+    try {
+        const h = await ensureHuman();
+        if (!h) return renderHumanLines(pos, null);
+        await humanFor(pos);
+        render();
+        renderBands(pos);
+    } catch (e) { status(`Human model unavailable (${e.message || e})`, 'err'); }
+}
+
+function teardown() {
+    stopSearch();
+    if (engine) { try { engine.dispose?.(); } catch (e) { /* */ } engine = null; }
+    if (human) { try { human.dispose?.(); } catch (e) { /* */ } human = null; humanKey = null; }
+    boardResizeObs?.disconnect();
+    boardResizeObs = null;
+}
+
+// Returns a promise: the next search must not start until this one has really finished, or its
+// trailing info lines are read as the new position's (see startInfinite).
+function stopSearch() {
+    if (!liveSearch) return Promise.resolve();
+    const s = liveSearch;
+    liveSearch = null;
+    try { return Promise.resolve(s.stop()); } catch (e) { return Promise.resolve(); }
+}
+
+// ---- stepping and analysing ---------------------------------------------------------------------
 
 function go(ply) {
     if (!positions.length) return;
     cursor = Core.clamp(ply, 0, positions.length - 1);
-    render();                     // instant: board, move list, whatever is already known
-    analyseCurrent();             // stops the running search and starts this position's
+    render();
+    analyseCurrent();
 }
-
-// THE ENGINE NEVER STOPS ON ITS OWN (3.1.254, user call): an analysis board thinks about the
-// position in front of you until you move on, the way every analysis board does. There is no depth
-// setting here for the same reason -- the answer is "as deep as you leave it". Moving to another
-// position stops the search and starts the next one; the numbers reached so far are kept, so
-// stepping back to a position you have already looked at shows what it had found.
-let liveSearch = null;
 
 async function analyseCurrent() {
     const at = cursor;
     const pos = positions[at];
     if (!pos) return;
-    stopSearch();
-    let r;
-    try {
-        r = await ensureRig();
-    } catch (e) {
-        return status(String(e.message || e), 'err');
-    }
-    if (cursor !== at) return;                       // the user moved on while the engine loaded
-    const meta0 = $('an_engine_meta');
-    if (meta0) meta0.textContent = 'thinking…';
-    liveSearch = r.engine.startInfinite(pos.fen, pos.turn, (res) => {
+    const meta = $('an_engine_meta');
+    if (meta) meta.textContent = 'thinking…';
+    await stopSearch();                 // the previous search must be finished, not merely told to stop
+    let e;
+    try { e = await ensureEngine(); } catch (err) { return status(String(err.message || err), 'err'); }
+    if (cursor !== at) return;
+    // THE SEARCH HAS NO BUDGET: it runs until the position changes, like any analysis board.
+    liveSearch = e.startInfinite(pos.fen, pos.turn, (res) => {
         if (cursor !== at) return;
         evalCache.set(pos.fen, res);
-        updateTallies(at);
-        renderBars(pos, res);
-        renderLines(pos, res, humanCache.get(`${pos.fen}|${bandKey()}`));
-        renderArrows(pos, res, humanCache.get(`${pos.fen}|${bandKey()}`));
-        renderTallies();
-        // the running depth belongs WITH the engine's lines, not in the page's notice line: it
-        // used to overwrite whatever the page had just told you (a refused FEN, how many moves
-        // loaded), which made those messages last about a second
-        const meta = $('an_engine_meta');
-        if (meta) meta.textContent = `depth ${res.depth}${res.nodes ? ` · ${(res.nodes / 1000).toFixed(0)}k` : ''}`;
+        renderEval(pos, res);
+        renderEngineLines(pos, res);
+        renderArrows(pos, res, humanCache.get(humanCacheKey(pos.fen)));
+        const m = $('an_engine_meta');
+        if (m) m.textContent = `depth ${res.depth}${res.nodes ? ` · ${(res.nodes / 1000).toFixed(0)}k` : ''}`;
     });
-    // the human model answers once -- it is a single forward pass, there is nothing to deepen
-    if (r.human) {
-        humanFor(r, pos).then(() => { if (cursor === at) render(); }).catch(() => {});
-    }
+    humanFor(pos).then(() => { if (cursor === at) render(); }).catch(() => {});
     renderBands(pos);
+    renderBook();
 }
 
-function stopSearch() {
-    if (!liveSearch) return;
-    try { liveSearch.stop(); } catch (e) { /* engine already gone */ }
-    liveSearch = null;
-}
+function humanCacheKey(fen) { return `${fen}|${cfg('an_human')}|${cfg('an_band')}`; }
 
-function humanCacheKey(fen) { return humanCache.has(`${fen}|${bandKey()}`); }
-function bandKey() { return cfg('an_human') === 'maia3' ? `m3-${cfg('an_maia3_elo')}` : `m1-${cfg('an_maia_band')}`; }
-
-async function humanFor(r, pos) {
-    const key = `${pos.fen}|${bandKey()}`;
+async function humanFor(pos) {
+    const key = humanCacheKey(pos.fen);
     if (humanCache.has(key)) return humanCache.get(key);
-    const res = await r.human.analyse(pos.fen, pos.turn);
-    // Maia scores every line at depth 1; its ORDER is the human likelihood, and the cp values are
-    // its own confidence. Normalised here so the column reads as probabilities, which is what the
-    // number means to a person looking at it.
+    const h = await ensureHuman();
+    if (!h) return null;
+    const res = await h.analyse(pos.fen, pos.turn);
+    // Maia scores every legal move at depth 1; its ORDER is the human likelihood. Normalised so the
+    // column reads as probabilities, which is what the number means to a person looking at it.
     const raw = (res.lines || []).filter(l => l.pv?.[0]);
-    const weights = raw.map((l, i) => Math.max(0.0001, Math.exp(-i * 0.9)));
-    const total = weights.reduce((a, b) => a + b, 0) || 1;
-    const out = raw.map((l, i) => ({uci: l.pv[0], prob: weights[i] / total}));
+    const w = raw.map((l, i) => Math.max(0.0001, Math.exp(-i * 0.9)));
+    const total = w.reduce((a, b) => a + b, 0) || 1;
+    const out = raw.map((l, i) => ({uci: l.pv[0], prob: w[i] / total}));
     humanCache.set(key, out);
     return out;
 }
 
-// The played move's verdict, for the tallies beside the move list. Only counts a ply once, and only
-// when both positions have been analysed -- a tally built on half the data is worse than none.
-function updateTallies(at) {
-    if (at < 1) return;
-    const before = positions[at - 1], after = positions[at];
-    const b = evalCache.get(before.fen), a = evalCache.get(after.fen);
-    if (!b || !a || !b.lines?.length || !a.lines?.length) return;
-    const sign = before.turn === 'w' ? 1 : -1;
-    const winBefore = Core.winPercent(b.lines[0].cp * sign);
-    const winAfter = Core.winPercent(a.lines[0].cp * sign);
-    const lost = Math.max(0, winBefore - winAfter);
-    const key = `t${at}`;
-    if (updateTallies[key]) return;
-    updateTallies[key] = true;
-    if (b.lines[0].pv?.[0] === after.uci) tallies.best++;
-    else if (lost >= 20) tallies.blunder++;
-    else if (lost >= 10) tallies.mistake++;
+// ---- playing on the board -----------------------------------------------------------------------
+
+// A move played on the board (click or drag) TRUNCATES the line and continues from here: an
+// analysis board is for asking "what if", so the answer is a new continuation, not a refusal.
+function playMove(from, to, promotion) {
+    const pos = positions[cursor];
+    if (!pos) return false;
+    try {
+        const c = new Chess('chess', pos.fen);
+        const mv = c.move({from, to, promotion: promotion || 'q'});
+        if (!mv) return false;
+        positions = positions.slice(0, cursor + 1);
+        positions.push({fen: c.fen(), turn: c.turn(), san: mv.san,
+                        uci: mv.from + mv.to + (mv.promotion || '')});
+    } catch (e) { return false; }
+    renderMoves();
+    go(cursor + 1);
+    return true;
+}
+
+function panelPromotes(from, to) {
+    try {
+        const c = new Chess('chess', positions[cursor].fen);
+        const piece = c.get(from);
+        if (!piece || piece.type !== 'p') return null;
+        return (piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1') ? piece.color : null;
+    } catch (e) { return null; }
+}
+
+function legalTargets(from) {
+    try {
+        return new Chess('chess', positions[cursor].fen).moves({square: from, verbose: true}).map(m => m.to);
+    } catch (e) { return []; }
 }
 
 // ---- rendering ----------------------------------------------------------------------------------
 
-// The board renderer sizes itself ONCE, from the width of its host at build time. Coming back to
-// this page re-injects the markup while the page's stylesheet is still disabled (options.js
-// re-enables the cached sheet around the same tick), so the host is briefly full-width and the
-// board is built that size and stays it -- a board twice as wide as its column, with the move list
-// pushed underneath. Watch the wrapper instead and rebuild whenever its width really changes;
-// that covers the re-entry race and an ordinary window resize with the same three lines.
-let boardResizeObs = null;
 function watchBoardSize() {
     if (boardResizeObs || typeof ResizeObserver === 'undefined') return;
     const wrap = document.querySelector('.an-board-wrap');
@@ -400,92 +401,131 @@ function watchBoardSize() {
         const w = Math.round(wrap.getBoundingClientRect().width);
         if (!w || Math.abs(w - last) < 3) return;
         last = w;
-        ensureBoard(true);
+        buildBoard();
         render();
     });
     boardResizeObs.observe(wrap);
 }
 
-function ensureBoard(rebuild) {
+// The renderer sizes itself from its host at build time, so it is rebuilt rather than resized.
+function buildBoard() {
     const host = $('an_board');
     if (!host) return;
-    if (board && !rebuild) return;
     host.innerHTML = '';
-    const [set, ext] = String(MephistoConfig.get('pieces') ? JSON.parse(MephistoConfig.get('pieces')) : 'wikipedia.svg').split('.');
+    let set = 'wikipedia', ext = 'svg';
+    try {
+        const raw = MephistoConfig.get('pieces');
+        if (raw) [set, ext] = String(JSON.parse(raw) || 'wikipedia.svg').split('.');
+    } catch (e) { /* defaults */ }
     board = MephistoBoard(host, {
         position: positions[cursor]?.fen || 'start',
         pieceTheme: `/res/chesspieces/${set}/{piece}.${ext}`,
         showNotation: true,
         orientation: flipped ? 'black' : 'white',
+        onMove: playMove,               // the board is PLAYABLE
+        needsPromotion: panelPromotes,
+        legalTargets,
     });
 }
 
 function render() {
     const pos = positions[cursor];
     if (!pos) return;
-    ensureBoard(false);
+    if (!board) buildBoard();
     board?.position(pos.fen);
     const ev = evalCache.get(pos.fen);
-    const human = humanCache.get(`${pos.fen}|${bandKey()}`);
-    renderBars(pos, ev);
-    renderLines(pos, ev, human);
-    renderArrows(pos, ev, human);
-    renderBands(pos);
-    renderTallies();
+    const hum = humanCache.get(humanCacheKey(pos.fen));
+    renderEval(pos, ev);
+    renderEngineLines(pos, ev);
+    renderHumanLines(pos, hum);
+    renderArrows(pos, ev, hum);
+    renderBook();
     highlightMove();
 }
 
-function renderBars(pos, ev) {
-    const cp = ev?.lines?.[0]?.cp;
-    const win = cp == null ? 50 : Core.winPercent(cp);      // always white-relative
-    const fill = $('an_winfill'), label = $('an_winlabel');
-    if (fill) fill.style.height = `${Core.clamp(win, 0, 100)}%`;
-    if (label) label.textContent = cp == null ? '—' : `${win.toFixed(1)}%`;
-    const ef = $('an_evalfill'), el = $('an_evallabel');
-    // the eval bar is the engine's own number, squashed to the bar with the same curve the panel uses
-    const pct = cp == null ? 50 : Core.clamp(50 + 50 * Math.tanh(cp / 400), 0, 100);
-    if (ef) ef.style.height = `${pct}%`;
-    if (el) el.textContent = cp == null ? '—'
-        : (Core.isMateScore(cp) ? (cp > 0 ? 'M' : '-M') : (cp / 100).toFixed(1));
+function renderEval(pos, ev) {
+    const top = (ev?.lines || []).find(l => legalHere(pos.fen, l.pv?.[0]));
+    const cp = top?.cp;
+    const fill = $('an_evalfill'), label = $('an_evallabel');
+    const pct = cp == null ? 50 : Core.clamp(50 + 50 * Math.tanh(cp / 400), 2, 98);
+    if (fill) fill.style.height = `${pct}%`;
+    if (label) {
+        label.textContent = cp == null ? '' : (Core.isMateScore(cp) ? (cp > 0 ? 'M' : '-M') : (cp / 100).toFixed(1));
+        // the number rides the filled side of the bar so it is always readable
+        label.classList.toggle('an-num-top', pct < 50);
+    }
+    const wdlEl = $('an_wdl_line');
+    if (wdlEl) {
+        const wdl = top?.wdl;
+        if (!cfg('an_wdl') || !wdl) wdlEl.textContent = '';
+        else {
+            // permille and side-to-move relative -> shown white-first, which is how it is read
+            const [w, d, l] = pos.turn === 'w' ? wdl : [wdl[2], wdl[1], wdl[0]];
+            wdlEl.textContent = `W ${(w / 10).toFixed(1)}%  D ${(d / 10).toFixed(1)}%  L ${(l / 10).toFixed(1)}%`;
+        }
+    }
 }
 
 const RANK_COLOURS = ['#3fa45b', '#5c8bb0', '#a88865', '#8f8f8f', '#7f8b95'];
 
-function renderLines(pos, ev, human) {
-    const eng = $('an_engine_lines');
-    if (eng) {
-        const lines = (ev?.lines || []).slice(0, Math.max(1, +cfg('an_multipv')));
-        eng.innerHTML = lines.length ? lines.map((l, i) => {
-            const cp = l.cp * (pos.turn === 'w' ? 1 : -1);   // mover-relative, like every UI shows it
-            const val = Core.isMateScore(l.cp) ? (cp > 0 ? '#' : '-#') : (cp / 100).toFixed(2);
-            const width = Core.clamp(Core.winPercent(l.cp * (pos.turn === 'w' ? 1 : -1)), 2, 100);
-            return `<div class="an-lrow ${i === 0 ? 'an-top' : ''}" style="--an-rank:${RANK_COLOURS[Math.min(i, 4)]}">
-                <span class="an-lrank">${i + 1}</span>
-                <span class="an-lmove">${esc(sanOf(pos.fen, l.pv?.[0]))}${l.pv?.[1] ? ` <span class="an-lval">${esc(pvText(pos.fen, l.pv, 4))}</span>` : ''}</span>
-                <span class="an-lval">${val}</span>
-                <span class="an-lbar"><i style="width:${width}%"></i></span>
-            </div>`;
-        }).join('') : `<div class="an-lrow"><span></span><span class="an-lval">thinking…</span><span></span></div>`;
-    }
-    const hum = $('an_human_lines');
-    if (hum) {
-        const title = $('an_human_title');
-        if (title) title.textContent = cfg('an_human') === 'maia3'
-            ? `Human ${cfg('an_maia3_elo')}` : (cfg('an_human') ? `Human ${cfg('an_maia_band')}` : 'Human model off');
-        hum.innerHTML = (human && human.length) ? human.map((h, i) => `
-            <div class="an-lrow ${i === 0 ? 'an-top' : ''}" style="--an-rank:#a8657f">
-                <span class="an-lrank">${i + 1}</span>
-                <span class="an-lmove">${esc(sanOf(pos.fen, h.uci))}</span>
-                <span class="an-lval">${(h.prob * 100).toFixed(1)}%</span>
-                <span class="an-lbar"><i style="width:${Core.clamp(h.prob * 100, 2, 100)}%"></i></span>
-            </div>`).join('')
-            : `<div class="an-lrow"><span></span><span class="an-lval">${cfg('an_human') ? 'thinking…' : 'off'}</span><span></span></div>`;
-    }
+function lineRow(i, colour, move, pv, value, barPct, uci) {
+    return `<div class="an-lrow ${i === 0 ? 'an-top' : ''}" style="--an-rank:${colour}" data-uci="${esc(uci)}" title="Click to play ${esc(move)}">
+        <span class="an-lrank">${i + 1}</span>
+        <span class="an-lmove">${esc(move)}${pv ? ` <span class="an-lpv">${esc(pv)}</span>` : ''}</span>
+        <span class="an-lval">${esc(value)}</span>
+        <span class="an-lbar"><i style="width:${barPct}%"></i></span>
+    </div>`;
 }
 
-// Both engines on the board at once: the engine's lines numbered like the review's, the human
-// model's first choice in its own colour, so agreement and disagreement are visible at a glance.
-function renderArrows(pos, ev, human) {
+// clicking a line plays it, which is the fastest way to walk a variation
+function wireLineClicks(host) {
+    host?.querySelectorAll('.an-lrow[data-uci]').forEach(row => {
+        const uci = row.dataset.uci;
+        if (!uci) return;
+        row.addEventListener('click', () => playMove(uci.slice(0, 2), uci.slice(2, 4), uci[4]));
+    });
+}
+
+// A line whose first move is not legal HERE belongs to another position: the engine keeps emitting
+// for a moment after it is told to stop, and on a long search that tail can outlive the switch. The
+// await in analyseCurrent closes most of the window; this closes it completely, because a move that
+// cannot be played in the position on screen must never be shown as a recommendation.
+function legalHere(fen, uci) {
+    if (!uci) return false;
+    try {
+        return !!new Chess('chess', fen).move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+    } catch (e) { return false; }
+}
+
+function renderEngineLines(pos, ev) {
+    const host = $('an_engine_lines');
+    if (!host) return;
+    const lines = (ev?.lines || []).filter(l => legalHere(pos.fen, l.pv?.[0]))
+        .slice(0, Math.max(1, +cfg('an_lines')));
+    host.innerHTML = lines.length ? lines.map((l, i) => {
+        const cp = l.cp * (pos.turn === 'w' ? 1 : -1);
+        const val = Core.isMateScore(l.cp) ? (cp > 0 ? '#' : '-#') : (cp / 100).toFixed(2);
+        const pct = Core.clamp(Core.winPercent(l.cp * (pos.turn === 'w' ? 1 : -1)), 2, 100);
+        return lineRow(i, RANK_COLOURS[Math.min(i, 4)], sanOf(pos.fen, l.pv?.[0]),
+                       pvText(pos.fen, l.pv, 4), val, pct, l.pv?.[0] || '');
+    }).join('') : '<div class="an-lrow"><span></span><span class="an-lval">thinking…</span><span></span></div>';
+    wireLineClicks(host);
+}
+
+function renderHumanLines(pos, hum) {
+    const host = $('an_human_lines');
+    if (!host) return;
+    const title = $('an_human_title');
+    const kind = cfg('an_human');
+    if (title) title.textContent = kind ? `Human ${cfg('an_band')}` : 'Human model off';
+    host.innerHTML = (hum && hum.length) ? hum.map((h, i) =>
+        lineRow(i, '#a8657f', sanOf(pos.fen, h.uci), '', `${(h.prob * 100).toFixed(1)}%`,
+                Core.clamp(h.prob * 100, 2, 100), h.uci)).join('')
+        : `<div class="an-lrow"><span></span><span class="an-lval">${kind ? 'thinking…' : 'off'}</span><span></span></div>`;
+    wireLineClicks(host);
+}
+
+function renderArrows(pos, ev, hum) {
     const svg = $('an_arrows');
     if (!svg) return;
     const inner = $('an_board')?.querySelector('.board-b72b1');
@@ -496,12 +536,13 @@ function renderArrows(pos, ev, human) {
         svg.style.height = `${inner.clientHeight}px`;
     }
     const out = [];
-    (ev?.lines || []).slice(0, Math.max(1, +cfg('an_multipv'))).forEach((l, i) => {
+    (ev?.lines || []).filter(l => legalHere(pos.fen, l.pv?.[0]))
+        .slice(0, Math.max(1, +cfg('an_lines'))).forEach((l, i) => {
         if (!l.pv?.[0]) return;
         out.push(arrow(l.pv[0], RANK_COLOURS[Math.min(i, 4)], Math.max(0.08, 0.15 - i * 0.02),
                        Math.max(0.35, 0.85 - i * 0.15), i + 1));
     });
-    if (human?.[0]) out.push(arrow(human[0].uci, '#a8657f', 0.12, 0.8, null));
+    if (hum?.[0]) out.push(arrow(hum[0].uci, '#a8657f', 0.12, 0.8, null));
     svg.innerHTML = out.filter(Boolean).join('');
 }
 
@@ -525,9 +566,12 @@ function arrow(uci, colour, width, opacity, rank) {
     const pts = [`${ex},${ey}`, `${bx + nx * wing},${by + ny * wing}`, `${bx - nx * wing},${by - ny * wing}`].join(' ');
     let tag = '';
     if (rank) {
-        const px = a.x + ux * 0.62 - uy * 0.20, py = a.y + uy * 0.62 + ux * 0.20;
-        tag = `<circle cx="${px}" cy="${py}" r="0.16" fill="${colour}" stroke="#00000040" stroke-width="0.015"/>`
-            + `<text x="${px}" y="${py + 0.06}" font-size="0.2" font-weight="700" text-anchor="middle" `
+        // THE NUMBER SITS AT THE HEAD (user report 2026-08-15): at the start it lands under the
+        // piece that is about to move and cannot be read. Beside the tip it is on empty board.
+        const px = Core.clamp(b.x + ux * 0.16 - uy * 0.24, 0.2, 7.8);
+        const py = Core.clamp(b.y + uy * 0.16 + ux * 0.24, 0.2, 7.8);
+        tag = `<circle cx="${px}" cy="${py}" r="0.19" fill="${colour}" stroke="#00000055" stroke-width="0.02"/>`
+            + `<text x="${px}" y="${py + 0.072}" font-size="0.24" font-weight="700" text-anchor="middle" `
             + `fill="#fff" font-family="system-ui,sans-serif">${rank}</text>`;
     }
     return `<g opacity="${opacity}" stroke-linejoin="round">`
@@ -535,41 +579,35 @@ function arrow(uci, colour, width, opacity, rank) {
         + `<polygon points="${pts}" fill="${colour}"/>${tag}</g>`;
 }
 
-// How the choice changes with strength: the same position asked of several Maia bands. Computed
-// lazily and only for Maia 1 (Maia 3 is one net with a dial, so there are no bands to compare).
-// EVERY band, in 100-Elo steps (user call 2026-08-15). Maia 1 ships one net per band from 1100 to
-// 2200; Maia 3 is a single net with a rating input, so its dial is swept from 600 to 2600 -- far
-// cheaper, since it loads once and is asked twenty-one times.
-const MAIA1_STEPS = MAIA_BANDS.slice();
-const MAIA3_STEPS = Array.from({length: 21}, (_, i) => String(600 + i * 100));
-
-let bandRun = 0;   // cancels a sweep whose position is no longer on the board
+// ---- moves by rating ----------------------------------------------------------------------------
+// A LINE per move across the bands rather than a wall of blocks: the shape is the point -- which
+// move rises as strength rises, and where each one peaks.
+let bandRun = 0;
 
 async function renderBands(pos) {
-    const wrap = $('an_bands_wrap'), host = $('an_bands');
+    const wrap = $('an_bands_wrap'), host = $('an_bands'), meta = $('an_bands_meta');
     if (!wrap || !host) return;
     const kind = cfg('an_human');
     if (!kind) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
-    const steps = kind === 'maia3' ? MAIA3_STEPS : MAIA1_STEPS;
+    const steps = kind === 'maia3'
+        ? Array.from({length: 21}, (_, i) => String(600 + i * 100))
+        : MAIA_BANDS.slice();
     const key = `${pos.fen}|${kind}`;
     const run = ++bandRun;
     if (!bandCache.has(key)) {
         const acc = {};
-        // Maia 3 is ONE net asked at many ratings: load it once and sweep the dial. Maia 1 is one
-        // net PER band, so each step pays a load -- which is why its sweep is the slower of the two.
         let shared = null;
         try {
-            if (kind === 'maia3') {
+            if (kind === 'maia3') {   // one net, swept across its rating dial
                 shared = makeEngine('maia3', {variant: 'chess', multipv: 3, maiaLevel: steps[0],
-                                              limitKind: 'depth', limitValue: 1, threads: 1, hash: 16},
-                                    'analysis-band');
+                                              limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'analysis-band');
                 await shared.start();
             }
             for (let i = 0; i < steps.length; i++) {
-                const band = steps[i];
                 if (run !== bandRun || positions[cursor]?.fen !== pos.fen) { shared?.dispose?.(); return; }
-                host.innerHTML = `<div class="an-lrow"><span></span><span class="an-lval">reading the bands… ${i + 1}/${steps.length}</span><span></span></div>`;
+                if (meta) meta.textContent = `${i + 1}/${steps.length}`;
+                const band = steps[i];
                 try {
                     let e = shared;
                     if (!e) {
@@ -578,7 +616,7 @@ async function renderBands(pos) {
                                        `analysis-band-${band}`);
                         await e.start();
                     } else {
-                        e.send(`setoption name UCI_Elo value ${band}`);   // Maia 3's rating dial
+                        e.send(`setoption name UCI_Elo value ${band}`);
                     }
                     const r = await e.analyse(pos.fen, pos.turn);
                     acc[band] = (r.lines || []).filter(l => l.pv?.[0]).slice(0, 3)
@@ -590,37 +628,95 @@ async function renderBands(pos) {
         if (run !== bandRun) return;
         bandCache.set(key, acc);
     }
+    if (meta) meta.textContent = `${steps[0]}-${steps[steps.length - 1]}`;
     const acc = bandCache.get(key) || {};
-    // one row per move any band likes, one cell per band, ordered by how often it is chosen
-    const counts = new Map();
-    for (const b of steps) for (const x of (acc[b] || [])) counts.set(x.uci, (counts.get(x.uci) || 0) + x.prob);
-    const moves = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, 6);
-    const cols = `grid-template-columns: repeat(${steps.length}, 1fr)`;
-    // only every other label when the sweep is long, or the axis becomes a smear
-    const labelEvery = steps.length > 12 ? 2 : 1;
-    host.innerHTML = moves.map(uci => `
-        <div class="an-band-row">
+    const totals = new Map();
+    for (const b of steps) for (const x of (acc[b] || [])) totals.set(x.uci, (totals.get(x.uci) || 0) + x.prob);
+    const moves = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, 5);
+    const colour = ['#4c9a5e', '#5c8bb0', '#a88865', '#a8657f', '#8f8f8f'];
+    host.innerHTML = moves.map((uci, mi) => {
+        const ys = steps.map(b => ((acc[b] || []).find(x => x.uci === uci)?.prob || 0));
+        const peak = ys.indexOf(Math.max(...ys));
+        const pts = ys.map((y, i) => `${(i / Math.max(1, steps.length - 1)) * 100},${22 - y * 20}`).join(' ');
+        return `<div class="an-band-row">
             <span class="an-band-move">${esc(sanOf(pos.fen, uci))}</span>
-            <div class="an-band-cells" style="${cols}">
-                ${steps.map(b => {
-                    const hit = (acc[b] || []).find(x => x.uci === uci);
-                    const pct = hit ? Math.round(hit.prob * 100) : 0;
-                    return `<div class="an-band-cell" title="${b}: ${pct}%"><i style="width:${pct}%"></i></div>`;
-                }).join('')}
-            </div>
-        </div>`).join('')
-        + `<div class="an-band-row"><span></span><div class="an-band-axis" style="${cols}">`
-        + steps.map((b, i) => `<span>${i % labelEvery ? '' : b}</span>`).join('') + '</div></div>';
+            <div class="an-band-plot"><svg viewBox="0 0 100 22" preserveAspectRatio="none">
+                <polyline points="${pts}" fill="none" stroke="${colour[mi]}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+            </svg></div>
+            <span class="an-band-peak">${Math.max(...ys) > 0 ? steps[peak] : ''}</span>
+        </div>`;
+    }).join('')
+    + `<div class="an-band-axis"><span>${steps[0]}</span><span>${steps[Math.floor(steps.length / 2)]}</span><span>${steps[steps.length - 1]}</span></div>`;
 }
 
-function renderTallies() {
-    const el = $('an_tallies');
-    if (!el) return;
-    el.innerHTML = `
-        <div class="an-tally rv-c-best"><b>${tallies.best}</b><span>best</span></div>
-        <div class="an-tally rv-c-mistake"><b>${tallies.mistake}</b><span>mistakes</span></div>
-        <div class="an-tally rv-c-blunder"><b>${tallies.blunder}</b><span>blunders</span></div>`;
+// ---- opening book -------------------------------------------------------------------------------
+// A book here is a position -> moves table. JSON and PGN are read directly. Polyglot .bin is
+// recognised and refused with the reason: decoding one needs its Zobrist key table, which comes
+// from GPL sources and is not vendored into this repo.
+
+async function onBookFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    try {
+        if (/\.bin$/i.test(file.name)) {
+            status('Polyglot .bin needs its Zobrist key table, which is not bundled here. Use a PGN or JSON book.', 'err');
+            return;
+        }
+        const text = await file.text();
+        const entries = new Map();
+        if (/\.json$/i.test(file.name)) {
+            // {fen: ["e2e4", ...]} or {fen: [{uci, weight}]}
+            for (const [fen, moves] of Object.entries(JSON.parse(text))) {
+                entries.set(keyOf(fen), (Array.isArray(moves) ? moves : []).map(m =>
+                    typeof m === 'string' ? {uci: m, weight: 1} : {uci: m.uci, weight: +m.weight || 1}));
+            }
+        } else {
+            // a PGN book: every game walked, every position counted
+            for (const game of Core.parsePgn(text)) {
+                const c = new Chess('chess', game.startFen || undefined);
+                for (const rec of game.moves) {
+                    const san = typeof rec === 'string' ? rec : rec.san;
+                    const k = keyOf(c.fen());
+                    const mv = c.move(san);
+                    if (!mv) break;
+                    const uci = mv.from + mv.to + (mv.promotion || '');
+                    const list = entries.get(k) || [];
+                    const hit = list.find(x => x.uci === uci);
+                    if (hit) hit.weight++; else list.push({uci, weight: 1});
+                    entries.set(k, list);
+                }
+            }
+        }
+        bookMoves = {name: file.name, entries};
+        status(`Book loaded: ${file.name}, ${entries.size} positions.`);
+        renderBook();
+    } catch (err) {
+        status('Could not read that book: ' + (err.message || err), 'err');
+    }
 }
+
+function keyOf(fen) { return String(fen).split(' ').slice(0, 4).join(' '); }
+
+function renderBook() {
+    const wrap = $('an_book_wrap'), host = $('an_book_lines'), meta = $('an_book_meta');
+    if (!wrap || !host) return;
+    const pos = positions[cursor];
+    const on = !!(cfg('an_book') && bookMoves && pos);
+    wrap.classList.toggle('hidden', !on);
+    if (!on) return;
+    const list = (bookMoves.entries.get(keyOf(pos.fen)) || []).slice()
+        .sort((a, b) => b.weight - a.weight).slice(0, 5);
+    if (meta) meta.textContent = bookMoves.name;
+    const total = list.reduce((a, b) => a + b.weight, 0) || 1;
+    host.innerHTML = list.length ? list.map((m, i) =>
+        lineRow(i, '#7d8a91', sanOf(pos.fen, m.uci), '', `${Math.round(m.weight / total * 100)}%`,
+                Core.clamp(m.weight / total * 100, 2, 100), m.uci)).join('')
+        : '<div class="an-lrow"><span></span><span class="an-lval">out of book</span><span></span></div>';
+    wireLineClicks(host);
+}
+
+// ---- move list ----------------------------------------------------------------------------------
 
 function renderMoves() {
     const el = $('an_moves');
@@ -632,9 +728,9 @@ function renderMoves() {
             + `<span class="an-mcell" data-ply="${i}">${esc(w?.san || '')}</span>`
             + `<span class="an-mcell" data-ply="${i + 1}">${esc(b?.san || '')}</span></div>`);
     }
-    el.innerHTML = rows.join('') || '<div class="an-mrow"><span class="an-mnum"></span><span class="an-mcell">no moves</span><span></span></div>';
-    el.querySelectorAll('.an-mcell[data-ply]').forEach(c =>
-        c.addEventListener('click', () => go(+c.dataset.ply)));
+    el.innerHTML = rows.join('')
+        || '<div class="an-mrow"><span class="an-mnum"></span><span class="an-mcell">play a move</span><span></span></div>';
+    el.querySelectorAll('.an-mcell[data-ply]').forEach(c => c.addEventListener('click', () => go(+c.dataset.ply)));
 }
 
 function highlightMove() {

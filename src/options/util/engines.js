@@ -222,13 +222,25 @@ class WasmEngine {
         this.send(`position fen ${fen}`);
         this.send(this.isMaia() ? 'go' : 'go infinite');
         return {
+            // STOP MEANS "STOPPED", NOT "ASKED TO STOP". A search that has been told to stop keeps
+            // emitting info lines until its `bestmove` arrives, and those lines describe the OLD
+            // position -- start the next search before it lands and they are collected as if they
+            // were the new one. It showed as an engine line that is illegal in the position on the
+            // board (d2d4 after 1.d4). So stop() resolves on bestmove, and the caller awaits it.
             stop: () => {
-                if (stopped) return;
+                if (stopped) return Promise.resolve();
                 stopped = true;
                 if (timer) { clearTimeout(timer); timer = null; }
-                if (!this.isMaia()) this.send('stop');
-                const i = this.listeners.indexOf(collect);
-                if (i >= 0) this.listeners.splice(i, 1);
+                const drop = () => {
+                    const i = this.listeners.indexOf(collect);
+                    if (i >= 0) this.listeners.splice(i, 1);
+                };
+                if (this.isMaia()) { drop(); return Promise.resolve(); }
+                const done = this.once(m => m.kind === 'line' && /^bestmove\b/.test(m.line), 8000)
+                    .catch(() => null)      // an engine that never answers must not wedge the page
+                    .then(() => drop());
+                this.send('stop');
+                return done;
             },
         };
     }
@@ -249,6 +261,7 @@ class WasmEngine {
     toResult(slots, turn, depth, nodes) {
         const lines = [...slots.entries()].sort((a, b) => a[0] - b[0]).map(([, info]) => ({
             cp: Core.toWhiteCp(info.score, info.mate, turn),
+                wdl: info.wdl || null,   // permille, side-to-move relative
             mate: info.mate ?? null,
             pv: info.pv,
             depth: info.depth,
