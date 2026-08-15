@@ -283,6 +283,7 @@ class WasmEngine {
             cp: Core.toWhiteCp(info.score, info.mate, turn),
                 wdl: info.wdl || null,   // permille, side-to-move relative
             mate: info.mate ?? null,
+            prob: info.prob ?? null,   // human models only; null from any search engine
             pv: info.pv,
             depth: info.depth,
         }));

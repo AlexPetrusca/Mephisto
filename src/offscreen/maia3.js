@@ -102,7 +102,8 @@ export async function createMaia3Engine(listen, initialElo) {
         const cp = wdlToCp(Array.from(out.value_logits.data));
         const n = Math.min(multipv, scored.length);
         for (let i = 0; i < n; i++)   // BEST-FIRST: multipv 1 resets the panel's lines array, so it
-            listen(`info depth 1 multipv ${i + 1} score cp ${cp} pv ${scored[i][0]}`); // must precede 2..N
+            listen(`info depth 1 multipv ${i + 1} score cp ${cp} `                     // must precede 2..N
+                 + `maiaprob ${Math.round(scored[i][2] * 10000)} pv ${scored[i][0]}`); // ten-thousandths, before pv
         console.log(`[Maia-3] elo ${selfElo} played ${scored[0][0]} (${(scored[0][2] * 100).toFixed(1)}%) — ${(performance.now() - t0).toFixed(1)}ms`);
         listen(`bestmove ${scored[0][0]}`);
     }

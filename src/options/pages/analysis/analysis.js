@@ -452,11 +452,18 @@ async function humanFor(pos) {
     const h = await ensureHuman();
     if (!h) return null;
     const res = await h.analyse(pos.fen, pos.turn);
-    // Maia scores every legal move at depth 1; its ORDER is the human likelihood. Normalised so the
-    // column reads as probabilities, which is what the number means to a person looking at it.
+    // THE NET'S OWN PROBABILITY, not a guess from the rank. This column used to derive its
+    // percentages from the move ORDER with a fixed decay, so it printed 60.0 / 24.4 / 9.9 for every
+    // position and every rating -- numbers that looked like output and carried no information. Maia
+    // emits the real softmax over the legal moves now (`maiaprob`); the decay survives only as a
+    // fallback for an older adapter that does not send it.
     const raw = (res.lines || []).filter(l => l.pv?.[0]);
-    const w = raw.map((l, i) => Math.max(0.0001, Math.exp(-i * 0.9)));
-    const total = w.reduce((a, b) => a + b, 0) || 1;
+    // A real probability is NOT renormalised over the few lines shown: it is the net's chance of
+    // playing that move out of EVERY legal move, so the visible ones summing to 95% is the truth
+    // and scaling them to 100% would be a different, wrong claim. Only the fallback is normalised.
+    const real = raw.every(l => l.prob != null);
+    const w = raw.map((l, i) => real ? l.prob : Math.max(0.0001, Math.exp(-i * 0.9)));
+    const total = real ? 1 : (w.reduce((a, b) => a + b, 0) || 1);
     const out = raw.map((l, i) => ({uci: l.pv[0], prob: w[i] / total}));
     humanCache.set(key, out);
     return out;
@@ -787,10 +794,13 @@ async function renderBands(pos) {
                     }
                     const r = await e.analyse(pos.fen, pos.turn);
                     const ls = (r.lines || []).filter(l => l.pv?.[0]).slice(0, nLines);
-                    // Maia ranks rather than scores, so the share is a decay over the ORDER -- the
-                    // same curve humanFor() uses for the column, so the two never disagree.
-                    const w = ls.map((_, idx) => Math.exp(-idx * 0.9));
-                    const sum = w.reduce((a, b) => a + b, 0) || 1;
+                    // The net's own probability per move (see humanFor). Deriving it from the rank
+                    // instead is what made every band identical: the order rarely changes across a
+                    // few hundred rating points, so a decay over the order drew flat lines and said
+                    // the same thing at 600 as at 2600. The fallback keeps an older adapter working.
+                    const real = ls.every(l => l.prob != null);
+                    const w = ls.map((l, idx) => real ? l.prob : Math.exp(-idx * 0.9));
+                    const sum = real ? 1 : (w.reduce((a, b) => a + b, 0) || 1);
                     acc[band] = ls.map((l, idx) => ({uci: l.pv[0], prob: w[idx] / sum}));
                     if (!shared) e.dispose?.();
                 } catch (err) { acc[band] = []; }

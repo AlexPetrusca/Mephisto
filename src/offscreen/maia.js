@@ -129,9 +129,14 @@ export async function createMaiaEngine(level, listen) {
         // REQUIRED: without it the panel's activeLines goes NaN and no arrows draw. BEST-FIRST
         // (multipv 1 first): the panel resets last_eval.lines when it sees multipv 1, so it must
         // arrive before lines 2..N or they get wiped (which left only one arrow/line showing).
+        // THE PROBABILITY IS THE ANSWER, and it used to be thrown away here: every line carried the
+        // same position eval, so only the ORDER of the moves survived and anything downstream had to
+        // invent numbers from the rank. `maiaprob` is in ten-thousandths, and it goes BEFORE `pv`
+        // because parseInfo takes everything after `pv` as the line.
         const n = Math.min(multipv, scored.length);
         for (let i = 0; i < n; i++)
-            listen(`info depth 1 multipv ${i + 1} score cp ${cp} pv ${scored[i][0]}`);
+            listen(`info depth 1 multipv ${i + 1} score cp ${cp} `
+                 + `maiaprob ${Math.round(scored[i][1] * 10000)} pv ${scored[i][0]}`);
         console.log(`[Maia] level ${level} played ${scored[0][0]} (${(scored[0][1] * 100).toFixed(1)}%) — net pass ${(performance.now() - t0).toFixed(1)}ms`);
         listen(`bestmove ${scored[0][0]}`);
     }

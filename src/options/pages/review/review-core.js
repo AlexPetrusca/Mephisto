@@ -701,6 +701,11 @@ function parseInfo(line) {
     // caller decides whose side it is looking from.
     const wdl = /\bwdl (\d+) (\d+) (\d+)/.exec(line);
     if (wdl) out.wdl = [+wdl[1], +wdl[2], +wdl[3]];
+    // `maiaprob N` in ten-thousandths: how likely a human of the chosen rating is to play THIS move.
+    // Only the human models emit it -- a search engine has no such number -- and it is the real
+    // output of the net rather than something derived from the move's rank.
+    const prob = /\bmaiaprob (\d+)/.exec(line);
+    if (prob) out.prob = +prob[1] / 10000;
     if (out.depth == null || (!cp && !mate) || !out.pv.length) return null;
     return out;
 }
