@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.250-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.251-3fb950)
 ![Engines](https://img.shields.io/badge/engines-8-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -898,8 +898,16 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>38 features, newest first</summary>
+<summary>39 features, newest first</summary>
 
+- [x] **Every move gets a name** (v3.1.251) - Game Review classifies with the full published scheme:
+  **Brilliant, Great, Best, Excellent, Good, Book, Forced, Inaccuracy, Mistake, Miss, Blunder**. The ordinary
+  classes are win-probability bands (under 2% lost is Excellent, under 5 Good, under 10 an Inaccuracy, under 20 a
+  Mistake, 20 or more a Blunder) and the three specifiers are earned: **Brilliant** needs real material offered
+  (an exchange is replayed on the square to prove it), the move still near-best, the position not already won and
+  not thrown away; **Great** is the only move that holds, measured against the engine's second choice; **Miss** is
+  a winning position let go, which reads nothing like a slip. The panel's live stats moved to the same bands, so
+  one move cannot get two verdicts on two screens. Verified on Morphy's Opera Game: 1 Brilliant, 6 Great.
 - [x] **The panel answers while the engine is still loading** (v3.1.250) - opening the panel used to wait for the
   engine before it registered its message handler, so on a cold browser it was up but deaf for the whole
   service-worker-wake plus net-load window: no board, no scrape, no eval. Engine init now runs alongside the rest
