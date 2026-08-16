@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.271-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.272-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -777,64 +777,10 @@ No schedule - added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>52 items, sorted by upside and effort</summary>
+<summary>38 items, sorted by upside and effort</summary>
 
-**Quick wins.** Small changes with an obvious payoff, and mostly plumbing that already exists.
-
-- [ ] **Say what the number in the panel's line list is** - with an engine it is an evaluation, with a human
-  model it is a probability, and nothing on screen says which. One header over the column.
-
-- [ ] **Put the probability on the arrow** - the board arrows carry a rank tag, which is the right label for
-  an engine's lines and the wrong one for a human model's: what matters there is how likely the move is, and
-  the number is already on the line the arrow was drawn from.
-
-- [ ] **Show more than five moves in the chart** - moves-by-rating is clamped to five lines while Maia returns
-  a probability for *every* legal move. "Everything above 1%" costs nothing extra: the forward pass has
-  already happened, and the truncation is ours rather than the model's.
-
-- [ ] **An ETA on the review's progress** - it says `62% - position 31 of 50`, which answers *where* but not
-  *how long*. The per-position times are already measured; carrying a running mean turns them into a number
-  worth reading before starting a fifty-game batch.
-
-- [ ] **Translate the strings added since v3.1.269** - `an.time`, `an.export`, `rv.strength` and the rest exist
-  in `en.json` only, so the thirteen other locales fall back to English on exactly the newest controls. The
-  interface speaks fourteen languages; the new parts of it speak one.
-
-- [ ] **A search box at the top of the settings page** - fifty-eight controls on General alone, across five
-  pages. Typing "premove" should get you there faster than scrolling does.
-
-- [ ] **Name the opening on the Analysis page** - the review ships a 443KB table of 3,810 named lines keyed
-  by *position* (lichess-org/chess-openings, CC0) and names openings offline. The Analysis page never opens
-  it, though walking an opening line is exactly when a name is wanted - and because the table is keyed by
-  position, transpositions come out right for free.
-
-- [ ] **Tablebase on the Analysis page** - the panel already asks the endgame tablebase once few enough
-  pieces are left; the page where endgames actually get studied does not. Same query, second caller.
-
-- [ ] **Drop a PGN onto the page** - neither Analysis nor Game Review accepts a dropped file; both have a
-  button and a paste box, which is two steps for what should be one. A drop handler in front of the loader
-  that already exists.
-
-- [ ] **Name the moment the game turned** - the review computes every position's score for its graph, so the
-  single swing that decided the game is one pass over data already in hand. "It was lost when you took the
-  knight" is the sentence most reviews are read for, and right now the reader has to find it on the graph
-  themselves.
-
-- [ ] **A think-time histogram** - the `[%clk]` comments are already parsed for the time-usage indicator; the
-  *shape* of how someone spends their clock - steady, spiky, the same two seconds every move - is a chart
-  away, and it is for self-review rather than only for fair play.
-
-- [ ] **A panic key** - one keystroke that hides the panel and stops every search at once. The hotkeys are
-  already rebindable; what is missing is the single action that means "everything away, NOW" without aiming
-  at a menu.
-
-- [ ] **Warn when a number cannot work** - threads above the machine's cores and hash beyond its memory are
-  both knowable (the browser reports both) and both silently make the engine *slower* today. A field that
-  turns amber with one sentence beats a search that quietly thrashes.
-
-- [ ] **A storage readout** - the puzzle database and the nets live in the browser's storage; nothing says
-  how much room they take or offers to clear one without the other. `navigator.storage.estimate()` answers
-  the first half in one call.
+**Quick wins.** Small changes with an obvious payoff. Empty once more as of v3.1.272 - all fourteen
+that were here shipped in one release.
 
 **Worth real work.** The ones that would change how this feels to use, and cost accordingly.
 
@@ -1039,7 +985,29 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>63 features, newest first</summary>
+<summary>64 features, newest first</summary>
+
+- [x] **All fourteen quick wins** (v3.1.272)
+  - **The panel's number column says what it is** - Eval from an engine, Probability from a human model - and a
+    Maia line's arrow carries the move's probability instead of an eval label that is identical on every line.
+  - **The rating chart draws everything above 1%** (up to eight moves): the five-line clamp was ours, not the
+    model's - one forward pass already prices every legal move.
+  - **The Analysis page names the opening** (the review's position-keyed table, so transpositions come out
+    right) and **asks the tablebase** once seven or fewer men are left - "Tablebase: win in 43 — Kd2".
+  - **Drop a .pgn anywhere** on Analysis or Game Review; one shared helper, the paste box lights up, a drag
+    without files is left alone.
+  - **Game Review**: the progress line carries a **time-remaining estimate**; the report **names the move the
+    game turned on** (biggest win-percent swing, preferring one that crossed the 50 line - a game that slid
+    rather than jumped correctly says nothing), clickable in its verdict's colour; and clocked PGNs get a
+    **think-time card per player** - five buckets and the longest think.
+  - **A panic key** - X by default, rebindable: hides the panel, clears every arrow, stops the search, changes
+    no setting. Reopening brings everything back as configured.
+  - **Amber warnings for numbers the machine cannot honour** - threads above the cores, hash beyond memory -
+    on all three pages that take them, with the deviceMemory spec-cap honesty written into the module.
+  - **A search box over the settings** - matches labels AND tooltips, folds empty sections away.
+  - **A storage readout** - what the extension is using, with the puzzle database named.
+  - **Every missing string translated** - the twenty-three keys the thirteen non-English locales lacked, tips
+    included, placeholders verified intact, and locale completeness is now pinned by the test ladder.
 
 - [x] **Four from the roadmap** (v3.1.271)
   - **Maia's probability in the panel.** It scores the position once and puts that one number on every line, so the
