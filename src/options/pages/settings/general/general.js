@@ -1,5 +1,6 @@
 import {define} from "../../../framework/require.js";
 import {SettingsPage} from "../../../util/SettingsPage.js";
+import {refreshLimitWarnings} from "../../../util/limits.js";
 
 // What a move that gives up `lossCp` centipawns is worth. Both formulas are Lichess's own, so a cp
 // figure here reads the same as a Lichess game review:
@@ -69,6 +70,32 @@ class GeneralSettings extends SettingsPage {
         const multipv_range = this.registerFormElement('multiple_lines', 'Multiple Lines:', 'range', 1);
         const threads_range = this.registerFormElement('threads', 'Threads:', 'range', MephistoConfig.defaultThreads());
         const memory_range = this.registerFormElement('memory', 'Memory:', 'range', 512);
+        // a number the machine cannot honour gets one amber sentence, live as the slider moves
+        const limitsWarn = () => refreshLimitWarnings(document.getElementById('set_limits_warn'),
+            threads_range.getValue(), memory_range.getValue());
+        threads_range.registerChangeListener(limitsWarn);
+        memory_range.registerChangeListener(limitsWarn);
+        setTimeout(limitsWarn, 300);   // once the stored values have been pulled into the form
+
+        // WHAT THE EXTENSION IS COSTING IN STORAGE. The puzzle database lives in IndexedDB and can
+        // run to gigabytes; nothing on any page said so. One estimate() call answers it -- and the
+        // IndexedDB slice is named as the puzzle database because that is the only thing this
+        // extension keeps there at scale. Chrome-only detail: usageDetails is not in the spec, so
+        // its absence just drops the parenthesis rather than the line.
+        const storEl = document.getElementById('storage_row');
+        if (storEl && navigator.storage?.estimate) {
+            navigator.storage.estimate().then(est => {
+                const fmt = (b) => b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB`
+                    : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
+                const idb = est.usageDetails?.indexedDB;
+                storEl.textContent = MephistoI18n.t('set.storage',
+                    'Storage: {used} used{idb} — of {quota} available to this browser profile.', {
+                        used: fmt(est.usage || 0),
+                        idb: idb > 1e6 ? ` (${fmt(idb)} of it the puzzle database)` : '',
+                        quota: fmt(est.quota || 0),
+                    });
+            }).catch(() => { /* the readout is an extra; a refusal costs nothing */ });
+        }
         this.registerFormElement('computer_evaluation', 'Show Computer Evaluation:', 'checkbox', true);
         this.registerFormElement('threat_analysis', 'Show Threat Analysis', 'checkbox', false);
         this.registerFormElement('simon_says_mode', '"Hand and Brain" Mode:', 'checkbox', false);

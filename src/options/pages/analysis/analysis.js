@@ -89,6 +89,11 @@ class AnalysisPage extends SettingsPage {
         $('an_engine_select')?.addEventListener('change', () => reloadEngine());
         for (const id of ['an_lines_input', 'an_threads_input', 'an_hash_input'])
             $(id)?.addEventListener('change', () => reloadEngine());
+        // a number the machine cannot honour gets one amber sentence, live as it is typed
+        const anWarn = () => refreshLimitWarnings($('an_limits_warn'), $('an_threads_input')?.value, $('an_hash_input')?.value);
+        $('an_threads_input')?.addEventListener('input', anWarn);
+        $('an_hash_input')?.addEventListener('input', anWarn);
+        setTimeout(anWarn, 300);   // once the stored values have been pulled into the form
         $('an_wdl_checkbox')?.addEventListener('change', () => reloadEngine());
         $('an_book_checkbox')?.addEventListener('change', () => renderBook());
         // The budget needs no engine reload -- it is spent by THIS page, not sent as a UCI option.

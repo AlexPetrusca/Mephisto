@@ -1529,6 +1529,10 @@ class ReviewPage {
         bindNumber('rv_multipv', 'rv_multipv');
         bindNumber('rv_threads', 'rv_threads');
         bindNumber('rv_hash', 'rv_hash');
+        const rvWarn = () => refreshLimitWarnings($('rv_limits_warn'), $('rv_threads')?.value, $('rv_hash')?.value);
+        $('rv_threads')?.addEventListener('input', rvWarn);
+        $('rv_hash')?.addEventListener('input', rvWarn);
+        setTimeout(rvWarn, 300);
         bindNumber('rv_maia3_elo', 'rv_maia3_elo');
         bindSteppers();
         bindHumanUi();
