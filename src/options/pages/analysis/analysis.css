@@ -105,6 +105,13 @@
 .an-wdl-d::before { background: #8f8f8f; }
 .an-wdl-b::before { background: #2b2b2b; }
 
+/* the position's own facts -- its opening's name, the tablebase's verdict -- in the same quiet row
+   style as the WDL readout above them */
+.an-extras { display: flex; gap: 16px; margin-top: 6px; font-size: 12px; color: var(--mp-dim); }
+.an-extras:empty { margin-top: 0; }
+.an-extras span:empty { display: none; }
+#an_opening { font-weight: 600; color: var(--mp-text); }
+
 .an-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 @media (max-width: 620px) { .an-cols { grid-template-columns: 1fr; } }
 .an-col-h {

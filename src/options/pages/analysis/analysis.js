@@ -61,6 +61,8 @@ let bookMoves = null;    // {name, entries: Map(positionKey -> [{uci, weight}])}
 let boardResizeObs = null;
 let searchTimer = null;  // the budget's stopwatch; null whenever the budget is the infinite notch
 let lastBands = null;    // the chart as last drawn, so the export can describe what is on screen
+let openingBook = null;  // fen(4 fields) -> name, lazily fetched from the review's bundled table
+let tbCache = new Map(); // fen -> tablebase answer (or null for "asked, nothing"), so a revisit is free
 
 // ---- page ---------------------------------------------------------------------------------------
 
@@ -663,6 +665,7 @@ function render() {
     if (!pos) return;
     if (!board) buildBoard();
     board?.position(pos.fen);
+    renderExtras(pos);
     const ev = evalCache.get(pos.fen);
     const hum = humanCache.get(humanCacheKey(pos.fen));
     renderEval(pos, ev);
