@@ -823,7 +823,7 @@ function arrow(uci, colour, width, opacity, rank) {
 let bandRun = 0;
 
 // One green per move, darkest first, so the ranking is legible before a single label is read.
-const BAND_COLOURS = ['#4aa563', '#6cbf85', '#93d5a4', '#b9e5c4', '#dcf1e0'];
+const BAND_COLOURS = ['#358a4d', '#4aa563', '#63b478', '#7cc28d', '#95d0a3', '#aeddb9', '#c6e8ce', '#dcf1e0'];
 const BAND_GEO = {X0: 46, X1: 300, Y0: 26, Y1: 152, W: 340, H: 178};
 
 function bandSeries(pos, steps, acc, moves) {
@@ -937,11 +937,14 @@ function bandSteps(kind) {
                             : MAIA_BANDS.slice();
 }
 
-// THE LINES SETTING DRIVES THIS TOO (user report 2026-08-15: "why are there only 3 lines if i put
-// 4"). It was pinned at three in three separate places -- the multipv asked for, the slice taken,
-// and a hardcoded [0.6, 0.28, 0.12] of probabilities that could not describe a fourth.
-function bandLineCount() { return Core.clamp(Math.round(+cfg('an_lines') || CFG.an_lines), 1, 5); }
-function bandKey(fen, kind, n) { return `${fen}|${kind}|${n}`; }
+// EVERYTHING ABOVE 1%, not a fixed count. The clamp at five was OURS, not the model's -- Maia has
+// already priced every legal move in the one forward pass, so asking for the top twelve costs
+// nothing over asking for five, and the chart then shows every move a human actually plays here.
+// Twelve in, eight drawn: no real position has more than a handful above 1%, and eight is where the
+// palette and the label spacing stop being readable.
+const BAND_MULTIPV = 12;
+const BAND_SHOW_MAX = 8;
+function bandKey(fen, kind) { return `${fen}|${kind}`; }
 
 // ONE SWEEP AT A TIME, whoever asked for it. The visible sweep and the one running ahead of the
 // cursor use the same engines, so overlapping them would mean two Maia 3 nets in memory and two
@@ -952,13 +955,13 @@ function queueSweep(fn) { bandChain = bandChain.then(fn, fn); return bandChain; 
 // Fill the cache for one position. `onStep` is how the visible sweep shows progress; a sweep running
 // ahead of the cursor passes nothing and is silent. Any sweep is abandoned the moment a newer one is
 // asked for, which is what `bandRun` is: stepping through a game must not queue up twenty stale ones.
-async function sweepBands(pos, kind, nLines, run, onStep) {
+async function sweepBands(pos, kind, run, onStep) {
     const steps = bandSteps(kind);
     const acc = {};
     let shared = null;
     try {
         if (kind === 'maia3') {   // one net, swept across its rating dial
-            shared = makeEngine('maia3', {variant: 'chess', multipv: nLines, maiaLevel: steps[0],
+            shared = makeEngine('maia3', {variant: 'chess', multipv: BAND_MULTIPV, maiaLevel: steps[0],
                                           limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'analysis-band');
             await shared.start();
         }
@@ -969,7 +972,7 @@ async function sweepBands(pos, kind, nLines, run, onStep) {
             try {
                 let e = shared;
                 if (!e) {
-                    e = makeEngine('maia', {variant: 'chess', multipv: nLines, maiaLevel: band,
+                    e = makeEngine('maia', {variant: 'chess', multipv: BAND_MULTIPV, maiaLevel: band,
                                             limitKind: 'depth', limitValue: 1, threads: 1, hash: 16},
                                    `analysis-band-${band}`);
                     await e.start();
@@ -983,7 +986,7 @@ async function sweepBands(pos, kind, nLines, run, onStep) {
                     e.send(`setoption name OppoElo value ${band}`);
                 }
                 const r = await e.analyse(pos.fen, pos.turn);
-                const ls = (r.lines || []).filter(l => l.pv?.[0]).slice(0, nLines);
+                const ls = (r.lines || []).filter(l => l.pv?.[0]).slice(0, BAND_MULTIPV);
                 // The net's own probability per move (see humanFor). Deriving it from the rank
                 // instead is what made every band identical: the order rarely changes across a
                 // few hundred rating points, so a decay over the order drew flat lines and said
@@ -997,7 +1000,7 @@ async function sweepBands(pos, kind, nLines, run, onStep) {
         }
     } finally { shared?.dispose?.(); }
     if (run !== bandRun) return null;
-    bandCache.set(bandKey(pos.fen, kind, nLines), acc);
+    bandCache.set(bandKey(pos.fen, kind), acc);
     return acc;
 }
 
@@ -1014,10 +1017,9 @@ function schedulePrefetch() {
         const kind = cfg('an_human');
         const next = positions[cursor + 1];
         if (!kind || !next) return;
-        const n = bandLineCount();
-        if (bandCache.has(bandKey(next.fen, kind, n))) return;
+        if (bandCache.has(bandKey(next.fen, kind))) return;
         const run = bandRun;                       // a newer visible sweep supersedes this one
-        queueSweep(() => sweepBands(next, kind, n, run, null).catch(() => null));
+        queueSweep(() => sweepBands(next, kind, run, null).catch(() => null));
     }, 500);
 }
 
@@ -1028,11 +1030,10 @@ async function renderBands(pos) {
     if (!kind) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
     const steps = bandSteps(kind);
-    const nLines = bandLineCount();
-    const key = bandKey(pos.fen, kind, nLines);
+    const key = bandKey(pos.fen, kind);
     const run = ++bandRun;
     if (!bandCache.has(key)) {
-        const got = await queueSweep(() => sweepBands(pos, kind, nLines, run, (i, n) => {
+        const got = await queueSweep(() => sweepBands(pos, kind, run, (i, n) => {
             if (meta && cursor >= 0 && positions[cursor]?.fen === pos.fen) meta.textContent = `${i}/${n}`;
         }));
         if (!got || run !== bandRun || positions[cursor]?.fen !== pos.fen) return;
@@ -1041,12 +1042,82 @@ async function renderBands(pos) {
     const acc = bandCache.get(key) || {};
     const totals = new Map();
     for (const b of steps) for (const x of (acc[b] || [])) totals.set(x.uci, (totals.get(x.uci) || 0) + x.prob);
-    const moves = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, nLines);
-    const series = bandSeries(pos, steps, acc, moves);
+    // every move that clears 1% at ANY band, best first; the cap is legibility, not the model
+    const moves = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+    const series = bandSeries(pos, steps, acc, moves).filter(sr => sr.top >= 0.01).slice(0, BAND_SHOW_MAX);
     host.innerHTML = bandsChart(steps, series);
     wireBandsHover(host, steps, series);
-    lastBands = {pos, steps, series, kind, nLines};   // what an export would have to describe
+    lastBands = {pos, steps, series, kind};           // what an export would have to describe
     schedulePrefetch();                               // ...and get the next ply ready meanwhile
+}
+
+// ---- what the position IS: its opening name, and the tablebase's verdict ------------------------
+// Both are facts the extension already knows how to establish -- the review names openings from its
+// bundled table (3,810 lines, keyed by POSITION so transpositions come out right), and the panel
+// asks the lichess tablebase through the worker once seven or fewer men are left. This page just
+// asks the same questions for the position on its board.
+
+const TB_MAX_MEN = 7;   // the largest Syzygy set lichess serves
+
+async function loadOpeningBook() {
+    if (openingBook) return openingBook;
+    try {
+        const r = await fetch(chrome.runtime.getURL('src/options/pages/review/openings.json'));
+        openingBook = r.ok ? await r.json() : {};
+    } catch (e) { openingBook = {}; }
+    return openingBook;
+}
+
+function pieceCount(fen) {
+    return (String(fen).split(' ')[0].match(/[a-zA-Z]/g) || []).length;
+}
+
+// Async on purpose, guarded by position: the book is a fetch and the tablebase is a network round
+// trip, and by the time either answers the board may show a different position. An answer for a
+// position no longer on screen is dropped, never drawn.
+async function renderExtras(pos) {
+    const opEl = $('an_opening'), tbEl = $('an_tb');
+    if (!opEl && !tbEl) return;
+
+    if (opEl) {
+        const book = await loadOpeningBook();
+        if (positions[cursor]?.fen !== pos.fen) return;
+        // the deepest named position on the way HERE, so stepping back through the moves walks back
+        // through the names too
+        let name = null;
+        for (let i = 0; i <= cursor && i < positions.length; i++) {
+            const hit = book[positions[i].fen.split(' ').slice(0, 4).join(' ')];
+            if (hit) name = hit;
+        }
+        opEl.textContent = name || '';
+    }
+
+    if (tbEl) {
+        if (pieceCount(pos.fen) > TB_MAX_MEN) { tbEl.textContent = ''; return; }
+        if (!tbCache.has(pos.fen)) {
+            const res = await new Promise(resolve => {
+                try {
+                    chrome.runtime.sendMessage({tablebaseLookup: {fen: pos.fen, variant: 'chess'}}, (r) => {
+                        resolve(chrome.runtime.lastError || !r || r.error ? null : r);
+                    });
+                } catch (e) { resolve(null); }
+            });
+            tbCache.set(pos.fen, res);
+        }
+        if (positions[cursor]?.fen !== pos.fen) return;
+        const tb = tbCache.get(pos.fen);
+        if (!tb || !tb.category) { tbEl.textContent = ''; return; }
+        // side-to-move relative, exactly as lichess reports it; the count is moves, not plies
+        const n = Math.abs(tb.dtm ?? tb.dtz ?? 0);
+        const best = tb.moves?.[0]?.uci;
+        const san = best ? sanOf(pos.fen, best) : '';
+        const word = tb.category === 'win' ? `win in ${n}`
+            : tb.category === 'loss' ? `lost in ${n}`
+            : tb.category === 'draw' ? 'draw'
+            : tb.category === 'cursed-win' ? `win in ${n} (50-move drawn)`
+            : tb.category === 'blessed-loss' ? `lost in ${n} (50-move saved)` : tb.category;
+        tbEl.textContent = `Tablebase: ${word}${san && tb.category !== 'draw' ? ` — ${san}` : ''}`;
+    }
 }
 
 // ---- opening book -------------------------------------------------------------------------------
