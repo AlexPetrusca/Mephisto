@@ -45,6 +45,7 @@ export class SettingsPage {
         this.init();
         MephistoI18n.apply(document); // the page's own markup, which only exists after init()
         this.decorateTooltips();
+        this.wireFilter();
         this.pullConfigValues();
     }
 
@@ -64,6 +65,35 @@ export class SettingsPage {
             el.appendChild(icon);
         }
         M.Tooltip.init(document.querySelectorAll('.tooltipped'), {enterDelay: 250});
+    }
+
+    // A SEARCH BOX OVER THE ROWS. Fifty-eight controls on General alone: typing "premove" should get
+    // you there faster than scrolling does. Matching is over everything a person can see about a row
+    // -- its label AND its tooltip -- so "engine strength" finds the Elo cap even though neither word
+    // is in its label. Sections with no surviving row fold away, headings included; emptying the box
+    // puts everything back. Lives here because every page built on this class gets it by carrying
+    // one <input id="settings_filter"> and nothing else.
+    wireFilter() {
+        const box = document.getElementById('settings_filter');
+        if (box || this._filterWired) { /* fall through */ } else { return; }
+        if (!box) return;
+        this._filterWired = true;
+        box.addEventListener('input', () => {
+            const q = box.value.trim().toLowerCase();
+            for (const sec of document.querySelectorAll('.set-sec')) {
+                let any = false;
+                for (const row of sec.querySelectorAll('.set-row')) {
+                    const hay = (row.textContent + ' ' +
+                        [...row.querySelectorAll('[data-tooltip]')].map(el => el.getAttribute('data-tooltip')).join(' '))
+                        .toLowerCase();
+                    const hit = !q || hay.includes(q);
+                    row.classList.toggle('filter-hidden', !hit);
+                    if (hit) any = true;
+                }
+                // a section that never held rows (About and its kin) is not the filter's business
+                if (sec.querySelector('.set-row')) sec.classList.toggle('filter-hidden', !!q && !any);
+            }
+        });
     }
 
     clearConfigValues() {

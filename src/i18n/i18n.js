@@ -101,6 +101,10 @@ function apply(scope) {
         if (first) first.textContent = text;
         else if (!node.firstElementChild) node.textContent = text;
     }
+    for (const node of el.querySelectorAll('[data-i18n-ph]')) {
+        const text = t(node.dataset.i18nPh, null);
+        if (text != null) node.setAttribute('placeholder', text);
+    }
     for (const node of el.querySelectorAll('[data-i18n-tip]')) {
         const text = t(node.dataset.i18nTip, null);
         if (text != null) node.setAttribute('data-tooltip', text);

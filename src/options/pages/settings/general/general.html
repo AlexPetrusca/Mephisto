@@ -1,6 +1,11 @@
 <div class="row">
     <div class="col s12 m7 offset-m1 xl6 offset-xl1 offset-right-m1">
         <div id="form_container" class="big-section">
+
+            <div class="set-filter">
+                <input id="settings_filter" class="browser-default" type="search" data-i18n-ph="set.filter_ph"
+                       placeholder="Search these settings…" spellcheck="false" autocomplete="off">
+            </div>
             <div id="engine" class="scrollspy">
                 <h3 data-i18n="panel.engine" class="header">Engine</h3>
                 <div class="section">
@@ -1201,6 +1206,8 @@
                        data-i18n="set.all_releases">All releases and their notes on GitHub</a>
                 </p>
             </section>
+
+            <p id="storage_row" class="set-status"></p>
 
             <div class="set-btnrow set-btnrow-end">
                 <button data-i18n="set.restore_defaults" id="reset_btn" type="button" class="set-btn">Restore Defaults</button>
