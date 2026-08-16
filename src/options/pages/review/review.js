@@ -1,4 +1,6 @@
 import {define} from "../../framework/require.js";
+import {wirePgnDrop} from "../../util/dragdrop.js";
+import {refreshLimitWarnings} from "../../util/limits.js";
 
 // Game Review: analyse a finished game on THIS page, in the background, with the extension's own
 // engines. Nothing is uploaded -- the PGN stays in the tab, the engine runs in the offscreen
@@ -1493,6 +1495,10 @@ class ReviewPage {
 
         $('rv_pgn').addEventListener('input', parsePgnBox);
         $('rv_file_btn').addEventListener('click', () => $('rv_file').click());
+        // DROP A PGN ANYWHERE ON THE PAGE -- a button and a paste box are two steps for what should
+        // be one. The whole section is the target (aiming at the one textarea is fiddly); the box
+        // lights up so the drop has somewhere visible to land, and a non-file drag is left alone.
+        wirePgnDrop(document.querySelector('.big-section'), $('rv_pgn'), (text) => loadPgnText(text));
         $('rv_file').addEventListener('change', async () => {
             const f = $('rv_file').files[0];
             if (f) loadPgnText(await f.text());

@@ -10,6 +10,8 @@
 import {define} from "../../framework/require.js";
 import {SettingsPage} from "../../util/SettingsPage.js";
 import {readBook as readPolyglot, lookup as lookupPolyglot} from "../../util/polyglot.js";
+import {wirePgnDrop} from "../../util/dragdrop.js";
+import {refreshLimitWarnings} from "../../util/limits.js";
 
 const Core = self.MephistoReviewCore;
 const {ENGINES, MAIA_BANDS, makeEngine, nativeHostAvailable} = self.MephistoEngines;
@@ -95,6 +97,11 @@ class AnalysisPage extends SettingsPage {
         $('an_time_range')?.addEventListener('change', () => { syncTimeUi(); go(cursor); });
 
         $('an_load')?.addEventListener('click', () => loadFromInput());
+        // drop a .pgn anywhere on the page; one shared helper with Game Review (util/dragdrop.js)
+        wirePgnDrop(document.getElementById('an-form'), $('an_pgn'), (text) => {
+            $('an_pgn').value = text;
+            loadFromInput();
+        });
         $('an_start')?.addEventListener('click', () => { $('an_pgn').value = ''; loadStart(); });
         $('an_paste')?.addEventListener('click', pasteFromClipboard);
         $('an_book_btn')?.addEventListener('click', () => $('an_book_file')?.click());

@@ -610,3 +610,30 @@ input[type=range]::-moz-range-thumb {
     resize: vertical;
 }
 .rv-pgn:focus, .set-ta:focus { outline: none; border-color: var(--mp-on); }
+
+/* a file is over the page and this box is where it lands -- same accent green as every focus ring */
+textarea.drop-ready { border-color: var(--mp-on) !important; box-shadow: 0 0 0 2px var(--mp-on-soft, rgba(63, 164, 91, .25)) !important; }
+
+/* one amber sentence when a thread or hash number is bigger than this machine -- the inaccuracy
+   amber, because that is exactly what the setting is */
+.limit-warn { margin: 6px 0 0; font-size: 12.5px; color: #b8860b; }
+.limit-warn:empty { margin: 0; }
+html.dark .limit-warn { color: #d8a628; }
+
+/* the settings filter: one box over the rows, in the same frame every control wears */
+.set-filter { margin: 18px 0 0; }
+.set-filter input {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 420px;
+    height: 30px !important;
+    margin: 0 !important;
+    padding: 0 10px !important;
+    border: 1px solid var(--mp-line) !important;
+    border-radius: 4px;
+    background: var(--mp-bg);
+    color: var(--mp-text);
+    font-size: 13px;
+}
+.set-filter input:focus { border-color: var(--mp-on) !important; outline: none; box-shadow: none !important; }
+.filter-hidden { display: none !important; }
