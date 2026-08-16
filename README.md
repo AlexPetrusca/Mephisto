@@ -777,7 +777,7 @@ No schedule - added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>38 items, sorted by upside and effort</summary>
+<summary>52 items, sorted by upside and effort</summary>
 
 **Quick wins.** Small changes with an obvious payoff, and mostly plumbing that already exists.
 
@@ -803,7 +803,65 @@ No schedule - added whenever I feel like it. Checked means shipped.
 - [ ] **A search box at the top of the settings page** - fifty-eight controls on General alone, across five
   pages. Typing "premove" should get you there faster than scrolling does.
 
+- [ ] **Name the opening on the Analysis page** - the review ships a 443KB table of 3,810 named lines keyed
+  by *position* (lichess-org/chess-openings, CC0) and names openings offline. The Analysis page never opens
+  it, though walking an opening line is exactly when a name is wanted - and because the table is keyed by
+  position, transpositions come out right for free.
+
+- [ ] **Tablebase on the Analysis page** - the panel already asks the endgame tablebase once few enough
+  pieces are left; the page where endgames actually get studied does not. Same query, second caller.
+
+- [ ] **Drop a PGN onto the page** - neither Analysis nor Game Review accepts a dropped file; both have a
+  button and a paste box, which is two steps for what should be one. A drop handler in front of the loader
+  that already exists.
+
+- [ ] **Name the moment the game turned** - the review computes every position's score for its graph, so the
+  single swing that decided the game is one pass over data already in hand. "It was lost when you took the
+  knight" is the sentence most reviews are read for, and right now the reader has to find it on the graph
+  themselves.
+
+- [ ] **A think-time histogram** - the `[%clk]` comments are already parsed for the time-usage indicator; the
+  *shape* of how someone spends their clock - steady, spiky, the same two seconds every move - is a chart
+  away, and it is for self-review rather than only for fair play.
+
+- [ ] **A panic key** - one keystroke that hides the panel and stops every search at once. The hotkeys are
+  already rebindable; what is missing is the single action that means "everything away, NOW" without aiming
+  at a menu.
+
+- [ ] **Warn when a number cannot work** - threads above the machine's cores and hash beyond its memory are
+  both knowable (the browser reports both) and both silently make the engine *slower* today. A field that
+  turns amber with one sentence beats a search that quietly thrashes.
+
+- [ ] **A storage readout** - the puzzle database and the nets live in the browser's storage; nothing says
+  how much room they take or offers to clear one without the other. `navigator.storage.estimate()` answers
+  the first half in one call.
+
 **Worth real work.** The ones that would change how this feels to use, and cost accordingly.
+
+- [ ] **Variants on the Analysis page** - `variant: 'chess'` is hardcoded in three places, so the one page
+  built for studying cannot open the Crazyhouse or Chess960 game the panel just played. Fairy-Stockfish and
+  its per-variant nets already ship; the board, the drops and the castling rules are the work.
+
+- [ ] **Two engines side by side** - the page contrasts an engine with a human model; contrasting two
+  ENGINES answers a different question - does the 15MB net see what the 112MB one sees - which is the thing
+  to settle before trusting the small one in a game. The rig already runs two engines at once for the
+  review's two passes, so the plumbing exists.
+
+- [ ] **Review the game you just finished, in one click** - when a game ends, the content script is holding
+  the moves it scraped all game. Offering "review this" on the spot beats export, switch tab, paste - and
+  the end of a game is exactly the moment a review is actually wanted.
+
+- [ ] **Turn your own blunders into puzzles** - the review knows every position where the game was thrown
+  away, and Puzzle Mode already serves positions with known answers. What is missing is the bridge: keep the
+  blunders, re-serve them a week later, and count whether the second try goes better.
+
+- [ ] **A command palette** - every action behind one key and a search box, the way editors do it. The
+  hotkey system already names its actions; a palette is a searchable list over those names, and it beats
+  memorising a keymap that has long outgrown what fits in one head.
+
+- [ ] **Recommend an engine for this machine** - the dropdown offers every engine and no guidance. The core
+  count is known, and one short fixed-depth benchmark per engine would measure what this machine can
+  actually run - then say so once, instead of letting a two-core laptop default into the 112MB net.
 
 - [ ] **Strength per phase of the game** - the review already works out where the opening, middlegame and
   endgame begin (on Lichess's own divider), and the strength estimate already runs move by move. Splitting it
