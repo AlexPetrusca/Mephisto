@@ -412,12 +412,27 @@ function countClasses(moves, color) {
 
 // ---- rendering --------------------------------------------------------------------------------
 
+// The ETA is derived, not measured twice: the bar already knows how much is done and when it
+// started, so the remaining time is elapsed * (1-frac)/frac. Held back until 3% is done (the first
+// positions are dominated by the engine load and would promise nonsense), and re-based when the
+// fraction falls a long way -- that is a NEW run, not this one going backwards. The strength pass
+// growing the total mid-run only dents the fraction slightly, below the re-base threshold.
+const eta = {t0: 0, last: 1};
+function etaText(frac) {
+    if (frac < eta.last - 0.15 || !eta.t0) eta.t0 = Date.now();
+    eta.last = frac;
+    if (frac < 0.03 || frac >= 1) return '';
+    const s = Math.round((Date.now() - eta.t0) / 1000 * (1 - frac) / frac);
+    if (s < 1) return '';
+    return s < 60 ? ` · ~${s}s left` : ` · ~${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s left`;
+}
+
 function progress(frac, text) {
     $('rv_progress_wrap')?.classList.remove('hidden');
     const bar = $('rv_progress_bar');
     if (bar) bar.style.width = `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%`;
     const t = $('rv_progress_text');
-    if (t) t.textContent = text ? `${Math.round(frac * 100)}% — ${text}` : '';
+    if (t) t.textContent = text ? `${Math.round(frac * 100)}% — ${text}${etaText(frac)}` : '';
 }
 
 function note(text, bad) {
@@ -461,6 +476,8 @@ function renderReport() {
     renderHeader();
     renderCards();
     renderGraph();
+    renderTurning();
+    renderTimeCards();
     renderMoves();
     renderIndicators();
     renderHumanReport();
@@ -523,6 +540,66 @@ function renderCards() {
         </div>`;
     };
     $('rv_cards').innerHTML = card('w') + card('b');
+}
+
+// THE MOMENT THE GAME TURNED, named instead of left for the reader to find on the graph. The move
+// with the biggest single swing in win percentage -- preferring one that moved the advantage across
+// the 50% line, because "it was equal and then it was lost" is what "turned" means; when nothing
+// crossed, the biggest swing stands in. A quiet game has no turning point and this says nothing:
+// below a 15-point swing there is no story to tell. Clicking the line jumps the board there.
+function renderTurning() {
+    const el = $('rv_turning');
+    if (!el) return;
+    // white-view win% both sides of every move, so "crossed 50" means what it says on the graph
+    const swings = report.moves
+        .filter(m => m.winBefore != null && m.winAfter != null)
+        .map(m => {
+            const wBefore = m.color === 'w' ? m.winBefore : 100 - m.winBefore;
+            const wAfter = m.color === 'w' ? m.winAfter : 100 - m.winAfter;
+            return {m, wBefore, wAfter, drop: Math.abs(wBefore - wAfter),
+                    crossed: (wBefore - 50) * (wAfter - 50) < 0};
+        });
+    const crossers = swings.filter(x => x.crossed && x.drop >= 15);
+    const pick = (crossers.length ? crossers : swings.filter(x => x.drop >= 15))
+        .sort((a, b) => b.drop - a.drop)[0];
+    // one line of why, because "no turning point" and "the data never arrived" look identical
+    console.log(`[review] turning: ${swings.length} swings, max drop ${swings.length
+        ? Math.round(Math.max(...swings.map(x => x.drop))) : 0}, crossers ${crossers.length}`);
+    el.classList.toggle('hidden', !pick);
+    if (!pick) return;
+    el.innerHTML = `The game turned on <span class="rv-turn-move rv-c-${pick.m.klass}">${esc(moveLabel(pick.m))}</span>`
+        + ` — White ${Math.round(pick.wBefore)}% → ${Math.round(pick.wAfter)}%`;
+    el.querySelector('.rv-turn-move')?.addEventListener('click', () => showPly(pick.m.ply + 1));
+}
+
+// HOW THE CLOCK WAS SPENT, per player, when the PGN carried clocks at all. The shape is the point:
+// steady, spiky, or the same two seconds every move say very different things about a game, and the
+// median already on the summary card cannot show any of them. Same bars the strength curve uses.
+const TIME_BUCKETS = [[1, '≤1s'], [5, '1–5s'], [15, '5–15s'], [60, '15–60s'], [Infinity, '>60s']];
+function renderTimeCards() {
+    const wrap = $('rv_time_wrap'), host = $('rv_time_cards');
+    if (!wrap || !host) return;
+    const timed = report.moves.filter(m => m.seconds != null);
+    wrap.classList.toggle('hidden', timed.length < 6);   // a handful of clocks is not a shape
+    if (timed.length < 6) return;
+    const card = (color) => {
+        const secs = timed.filter(m => m.color === color).map(m => m.seconds);
+        if (!secs.length) return '';
+        const counts = TIME_BUCKETS.map(() => 0);
+        for (const sec of secs) counts[TIME_BUCKETS.findIndex(([cap]) => sec <= cap)]++;
+        const top = Math.max(...counts) || 1;
+        const bars = counts.map((n, i) => `<span class="rv-str-bar" title="${TIME_BUCKETS[i][1]}: ${n} move${n === 1 ? '' : 's'}">`
+            + `<i style="height:${Math.max(3, Math.round(n / top * 100))}%"></i></span>`).join('');
+        const labels = TIME_BUCKETS.map(([, lab]) => `<span>${lab}</span>`).join('');
+        const longest = Math.max(...secs);
+        return `<div class="rv-card">
+            <h4>${esc(playerName(color))} — clock</h4>
+            <div class="rv-str-curve">${bars}</div>
+            <div class="rv-time-labels">${labels}</div>
+            <div class="rv-kv" style="margin-top:8px"><span>Longest think</span><span>${longest.toFixed(0)}s</span></div>
+        </div>`;
+    };
+    host.innerHTML = card('w') + card('b');
 }
 
 // The eval graph: white's advantage over the game, clamped so one mate score cannot flatten
