@@ -777,12 +777,73 @@ No schedule - added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>23 items, sorted by upside and effort</summary>
+<summary>38 items, sorted by upside and effort</summary>
 
-**Quick wins.** Small changes with an obvious payoff. Empty again as of v3.1.271 - both of the ones
-that were here shipped.
+**Quick wins.** Small changes with an obvious payoff, and mostly plumbing that already exists.
+
+- [ ] **Say what the number in the panel's line list is** - with an engine it is an evaluation, with a human
+  model it is a probability, and nothing on screen says which. One header over the column.
+
+- [ ] **Put the probability on the arrow** - the board arrows carry a rank tag, which is the right label for
+  an engine's lines and the wrong one for a human model's: what matters there is how likely the move is, and
+  the number is already on the line the arrow was drawn from.
+
+- [ ] **Show more than five moves in the chart** - moves-by-rating is clamped to five lines while Maia returns
+  a probability for *every* legal move. "Everything above 1%" costs nothing extra: the forward pass has
+  already happened, and the truncation is ours rather than the model's.
+
+- [ ] **An ETA on the review's progress** - it says `62% - position 31 of 50`, which answers *where* but not
+  *how long*. The per-position times are already measured; carrying a running mean turns them into a number
+  worth reading before starting a fifty-game batch.
+
+- [ ] **Translate the strings added since v3.1.269** - `an.time`, `an.export`, `rv.strength` and the rest exist
+  in `en.json` only, so the thirteen other locales fall back to English on exactly the newest controls. The
+  interface speaks fourteen languages; the new parts of it speak one.
+
+- [ ] **A search box at the top of the settings page** - fifty-eight controls on General alone, across five
+  pages. Typing "premove" should get you there faster than scrolling does.
 
 **Worth real work.** The ones that would change how this feels to use, and cost accordingly.
+
+- [ ] **Strength per phase of the game** - the review already works out where the opening, middlegame and
+  endgame begin (on Lichess's own divider), and the strength estimate already runs move by move. Splitting it
+  three ways costs no extra passes and answers a far more interesting question than one number does: "you
+  open like 1800 and finish like 1300" is something a player can act on.
+
+- [ ] **Show the moves the estimate is built on** - the strength number is currently a verdict with no
+  evidence behind it. The moves the winning rating found *least* likely are the ones that moved it, and
+  listing them turns a number nobody can interrogate into one that can be argued with. A verdict without its
+  working gets either ignored or over-trusted, and both are bad.
+
+- [ ] **A variation tree on the Analysis page** - playing a move truncates the line and continues from there,
+  which is right for "what if" and wrong for studying: the branch you just left is gone. Keeping branches, and
+  a way to walk back into them, is most of what separates a study board from a very good scratchpad.
+
+- [ ] **Compare two ratings directly** - the sweep already holds every band's answer for the position on the
+  board, so picking two of them and listing where they differ most is arithmetic over data that is already
+  there. "What does 2200 do differently here" is the question the chart makes people ask and does not answer.
+
+- [ ] **What a human of that rating would REPLY** - Threat Analysis shows the engine's best answer to your
+  move. The human model can answer the same question about the opponent you are actually facing, which is a
+  different and usually more useful prediction than the strongest reply on the board.
+
+- [ ] **One Maia engine per page** - the Human column, the moves-by-rating sweep and the strength estimate
+  each build their own. With Maia 3 that is 92MB of net apiece, and it is why the first sweep after picking
+  Maia 3 is a long wait. One engine, with access serialised the way the analyses were in v3.1.270, removes
+  both the memory and most of the wait.
+
+- [ ] **One cache for (position, rating)** - the chart's sweep and the strength estimate ask the same net
+  about the same positions and each throw the other's answers away. They want different slices of one forward
+  pass - the top few moves versus the whole distribution - so caching the distribution serves both.
+
+- [ ] **A board reader that knows the rules** - the recogniser already keeps its runner-up for every square
+  (that is what the one-click square fix is built on). Nothing yet uses those runners-up to reject a decode
+  that cannot be a chess position: two white kings, nine pawns, a pawn on the back rank. Accuracy bought from
+  the rules rather than from the model, and it needs no retraining.
+
+- [ ] **Fetch games from Lichess as well** - the review reads Chess.com's public archive and nothing else, so
+  half the games people want reviewed have to be pasted in by hand. Lichess's export API is public, takes a
+  username, and returns PGN with the same clock comments the review already reads.
 
 - [ ] **A faster board recogniser** - partly answered in v3.1.255, and again in v3.1.269 by giving the model
   more threads: the cap of 4 was measured against 5, 6 and 8 on a 10-core Mac (754/635/610/589/704ms at
