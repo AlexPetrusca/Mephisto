@@ -368,6 +368,8 @@ self.MephistoContent = {
     // In-page that would reload the SITE, so tear the panel down and rebuild it: fresh config, fresh
     // engine, same effect. See panel_reload() in popup.js.
     reopenPanel: async () => { removeOverlay(); await toggleOverlay(); },
+    // the panic key's landing: suspend + remove + clear the eval bar and every arrow, in one call
+    closePanel: () => removeOverlay(),
 };
 
 // ------------------------------------------------------------------------------------------

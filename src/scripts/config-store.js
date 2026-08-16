@@ -76,6 +76,7 @@
             clock_mode: 'c', clock_pace: 'k', mirror_mode: 'm', eval_bar: 'e', eval_history: 'y', live_stats: 'l', tablebase: 't', puzzle_mode: 'z',
             explorer: 'o', book_play: 'b',
             copy_fen: 'f', copy_pgn: 'g', copy_diagnostics: 'd', redetect: 'r',
+            panic: 'x',   // everything away, NOW: hide the panel, clear the arrows, stop the search
         },
         // the effective bindings: defaults overlaid with whatever the user saved in config.hotkeys
         hotkeys() {

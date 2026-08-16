@@ -5641,7 +5641,24 @@ function annotate_hotkey_labels() {
     }
 }
 
+// THE PANIC KEY: everything away, NOW. Screen first -- the panel, the eval bar and every arrow go
+// in one call (removeOverlay suspends the search before tearing anything down, so nothing keeps
+// burning cores) -- and no SETTING changes, so reopening from the toolbar brings everything back
+// exactly as configured. In the toolbar bubble there is no overlay to remove; the search is stopped
+// and the bubble closes, which is the same promise kept in that context.
+function panic() {
+    try { send_engine_uci('stop'); } catch (e) { /* the engine is not up; nothing to stop */ }
+    if (self.MephistoContent?.closePanel) {
+        self.MephistoContent.closePanel();
+    } else {
+        try { self.MephistoPanel?.suspend?.(); } catch (e) { /* not booted */ }
+        window.close();
+    }
+    return true;
+}
+
 function do_hotkey(action) {
+    if (action === 'panic') return panic();
     if (action === 'manual_play') return manual_play();
     if (action === 'copy_fen') { copy_to_button('copyfen', last_eval.fen); return true; }
     if (action === 'copy_pgn') { copy_to_button('copypgn', current_pgn()); return true; }

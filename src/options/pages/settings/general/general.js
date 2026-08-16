@@ -232,11 +232,12 @@ class GeneralSettings extends SettingsPage {
             tablebase: 'Toggle Endgame Tablebase',
             puzzle_mode: 'Toggle Puzzle Mode', explorer: 'Toggle Opening Explorer',
             book_play: 'Toggle Book Moves', copy_fen: 'Copy FEN', copy_pgn: 'Copy PGN', copy_diagnostics: 'Copy Diagnostics',
+            panic: 'Panic - hide the panel, stop the engine',
             redetect: 'Re-detect game',
         };
         const ORDER = ['manual_play', 'manual_mode', 'autoplay', 'premove', 'explorer', 'book_play',
             'help_mode', 'humanize', 'clock_mode', 'clock_pace', 'mirror_mode', 'eval_bar', 'eval_history', 'tablebase', 'puzzle_mode',
-            'copy_fen', 'copy_pgn', 'copy_diagnostics', 'redetect'];
+            'copy_fen', 'copy_pgn', 'copy_diagnostics', 'redetect', 'panic'];
         // same normalization as the content-script listener, so what we store matches what it compares
         const keyString = (e) => {
             const parts = [];
