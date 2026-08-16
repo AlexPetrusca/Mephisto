@@ -80,18 +80,21 @@ export class SettingsPage {
         this._filterWired = true;
         box.addEventListener('input', () => {
             const q = box.value.trim().toLowerCase();
+            // EVERY row on the page, not rows-inside-sections: the two builds' markup does not
+            // agree on which rows sit inside a .set-sec, and a row the loop never visits is a row
+            // the filter can never hide (measured on the fork: fourteen of them stayed visible).
+            for (const row of document.querySelectorAll('.set-row')) {
+                const hay = (row.textContent + ' ' +
+                    [...row.querySelectorAll('[data-tooltip]')].map(el => el.getAttribute('data-tooltip')).join(' '))
+                    .toLowerCase();
+                row.classList.toggle('filter-hidden', !!q && !hay.includes(q));
+            }
+            // a section folds when none of ITS rows survived; one that never held rows (About and
+            // its kin) is not the filter's business
             for (const sec of document.querySelectorAll('.set-sec')) {
-                let any = false;
-                for (const row of sec.querySelectorAll('.set-row')) {
-                    const hay = (row.textContent + ' ' +
-                        [...row.querySelectorAll('[data-tooltip]')].map(el => el.getAttribute('data-tooltip')).join(' '))
-                        .toLowerCase();
-                    const hit = !q || hay.includes(q);
-                    row.classList.toggle('filter-hidden', !hit);
-                    if (hit) any = true;
-                }
-                // a section that never held rows (About and its kin) is not the filter's business
-                if (sec.querySelector('.set-row')) sec.classList.toggle('filter-hidden', !!q && !any);
+                if (!sec.querySelector('.set-row')) continue;
+                const any = [...sec.querySelectorAll('.set-row')].some(r => !r.classList.contains('filter-hidden'));
+                sec.classList.toggle('filter-hidden', !!q && !any);
             }
         });
     }
