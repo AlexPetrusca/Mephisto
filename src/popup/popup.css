@@ -387,6 +387,17 @@ html, body {
     font-weight: 600;
 }
 
+/* one word over the number column, because the same digits are an EVAL from an engine and a
+   PROBABILITY from a human model, and nothing else on screen says which */
+#alt-lines .alt-head {
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #6b6f76;
+}
+
 #game-detection {
     height: 20px;
     margin-top: 4px;
@@ -858,6 +869,7 @@ body.mephisto-dark #chess_line_1,
 body.mephisto-dark #next-move,
 body.mephisto-dark #nps,
 body.mephisto-dark #wdl,
+body.mephisto-dark #alt-lines .alt-head { color: #9aa0a6; }
 body.mephisto-dark #alt-lines .alt-eval,
 body.mephisto-dark #alt-lines .alt-moves {
     color: #fff; /* stark, matching the pure-black light mode -- no grey */

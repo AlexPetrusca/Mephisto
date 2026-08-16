@@ -2120,7 +2120,13 @@ function render_alt_lines() {
             `<span class="alt-moves">${head}</span>` +
             (cont ? ` <span class="alt-cont">${cont}</span>` : '') + `</div>`);
     }
-    panel.innerHTML = rows.join('');
+    // SAY WHAT THE NUMBER IS. With an engine the column is an evaluation; with a human model it is
+    // a probability, and nothing on screen said which -- the same digits read completely differently.
+    const human = (last_eval.lines || []).some(l => l && l.maiaprob != null);
+    const head = rows.length
+        ? `<div class="alt-head">${human ? i18n('panel.col_prob', 'Probability') : i18n('panel.col_eval', 'Eval')}</div>`
+        : '';
+    panel.innerHTML = head + rows.join('');
 }
 
 // The engine saying, in its own handshake, that it does not have the variant we asked for. Fairy
@@ -6715,6 +6721,13 @@ function arrow_alpha(base) {
 }
 
 function arrow_label(line) {
+    // A human model's lines all carry ONE position eval (a single forward pass), so an eval label
+    // says nothing -- the number that identifies a Maia line is how likely the move is. It rides
+    // whichever numbering toggle is on: for a human model the probability IS the ranking, so it
+    // belongs wherever a rank or a label would have gone. Both toggles off still means a bare arrow.
+    if (line && line.maiaprob != null) {
+        return (config.arrow_rank || config.arrow_labels) ? `${Math.round(line.maiaprob / 100)}%` : '';
+    }
     if (!line || !config.arrow_labels) return '';
     if (Number.isFinite(line.mate) && line.mate !== 0) return `#${Math.abs(line.mate)}`;
     if (!Number.isFinite(line.score)) return '';
