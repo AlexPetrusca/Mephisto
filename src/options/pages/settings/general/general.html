@@ -784,6 +784,46 @@
                     </div>
                 </div>
 
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="set.puzzle_capture" data-i18n-tip="set.tip.puzzle_capture" class="tooltipped" data-position="right"
+                              data-tooltip="Read the solution off the puzzle page itself. These sites hand their own
+                                            client the answer -- they check your moves locally -- so it is already in
+                                            the tab. Nothing is requested and nothing is sent; only what the page was
+                                            already given is read. A solution is used only if it replays legally AND
+                                            belongs to the position on the board, so a mismatch means the engine
+                                            plays as usual. Off by default.">
+                            Read solutions from the page <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="puzzle_capture_checkbox" type="checkbox" class="set-cb">
+                        <label for="puzzle_capture_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span data-i18n="set.puzzle_capture_cdp" data-i18n-tip="set.tip.puzzle_capture_cdp" class="tooltipped" data-position="right"
+                              data-tooltip="Read the solution reliably, by watching the page's own network traffic
+                                            through Chrome's debugger. Without this, reading solutions off the page
+                                            only works when the extension loads before the site does, which on some
+                                            puzzle modes it never does - so the answer is a coin toss. The cost is
+                                            that Chrome shows its yellow 'being debugged' bar while a puzzle page is
+                                            open. Needs Read solutions from the page. Off by default.">
+                            Use the debugger to catch solutions <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <input id="puzzle_capture_cdp_checkbox" type="checkbox" class="set-cb">
+                        <label for="puzzle_capture_cdp_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Puzzle database. Not a setting (nothing to toggle): importing the file IS
                      turning it on, and with no file imported nothing below changes at all. -->
                 <div class="set-row set-block">
@@ -815,7 +855,9 @@
                 </p>
                 <div class="set-btnrow">
                     <button data-i18n="set.load_puzzle_database" id="puzzle_db_btn" type="button" class="set-btn">Load Puzzle Database</button>
-                    <button data-i18n="set.remove" id="puzzle_db_clear_btn" type="button" class="set-btn">Remove</button>
+                    <button data-i18n="set.remove" id="puzzle_db_clear_btn" type="button" class="set-btn">Remove all</button>
+                    <button data-i18n="set.remove_lichess" id="puzzle_db_clear_li_btn" type="button" class="set-btn">Remove Lichess</button>
+                    <button data-i18n="set.remove_chesscom" id="puzzle_db_clear_cc_btn" type="button" class="set-btn">Remove Chess.com</button>
                     <input id="puzzle_db_file" type="file" accept="text/csv,.csv" style="display: none">
                 </div>
                 <p id="puzzle_db_status" class="set-status"></p>

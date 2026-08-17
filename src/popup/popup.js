@@ -429,6 +429,12 @@ async function initPanel(root, tabId) {
         book_play: JSON.parse(MephistoConfig.get('book_play')) || false,
         explorer_db: JSON.parse(MephistoConfig.get('explorer_db') || '"masters"'),
         puzzle_mode: JSON.parse(MephistoConfig.get('puzzle_mode')) || false,
+        // The panel builds its OWN config from named keys, so a setting the content script has is
+        // still undefined here unless it is listed. Missing these two meant try_puzzle_capture read
+        // config.puzzle_capture === undefined and never played the page's solution, however on the
+        // setting was -- captured, gated-in, and then dropped on the floor at the last step.
+        puzzle_capture: JSON.parse(MephistoConfig.get('puzzle_capture')) || false,
+        puzzle_capture_cdp: JSON.parse(MephistoConfig.get('puzzle_capture_cdp')) || false,
         language: JSON.parse(MephistoConfig.get('language')) || 'en',
         help_mode: JSON.parse(MephistoConfig.get('help_mode')) || false,
         eval_bar: JSON.parse(MephistoConfig.get('eval_bar')) || false,
@@ -2910,9 +2916,61 @@ function puzzle_expand(fen, solution) {
 // Not built: it is a real change to how the extension injects, and unverified guesses have cost
 // enough today.
 
+// --- solutions read off the page itself ----------------------------------------------------------
+// The other half of the note above, built the way that note says it has to be: a document_start probe
+// that captures the payload the page was ALREADY given, and never re-requests anything. Opt-in
+// (`puzzle_capture`), and inert until the probe reports something.
+//
+// It is checked BEFORE the database because it needs no round trip at all -- the answer is already in
+// this tab -- and because when both know the position they agree; the page's own solution is the one
+// the page will score you against.
+//
+// Safety is structural rather than careful: the capture is stored under its own position, the lookup
+// is by the position ON THE BOARD, and the line was replayed for legality before it was stored. A
+// capture belonging to a different run is a key that never matches, so the failure mode is a MISS and
+// the engine plays, which is exactly where the feature started.
+function puzzle_capture_enabled() {
+    return config.puzzle_mode && config.puzzle_capture
+        && PUZZLE_DB_SITES.includes(detected_prefix)
+        && (!config.variant || config.variant === 'chess');
+}
+
+function try_puzzle_capture(fen) {
+    if (!puzzle_capture_enabled()) return false;
+    let hit = null;
+    try { hit = self.puzzleCaptureFor?.(fen) || null; } catch (e) { return false; }
+    if (!hit?.line) return false;
+    const map = puzzle_expand(fen, hit.line);
+    // expand replays from the BOARD's fen; a line that does not fit the board leaves nothing useful
+    // behind, and taking it would only mean claiming an answer we do not have
+    if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(map.get(puzzle_key(fen)) ?? '')) return false;
+    puzzle_solutions = map;
+    // the publisher's own rating rides along with the captured line -- both lichess and chess.com
+    // put it in the payload, so a page-read solution shows "Rating N" exactly like a database one
+    puzzle_rating = (typeof hit.rating === 'number' && hit.rating > 0) ? hit.rating : null;
+    puzzle_from_page = true;
+    puzzle_answered = puzzle_key(fen);
+    puzzle_deferred = null;
+    clearTimeout(puzzle_defer_timer);
+    console.log(`Puzzle: solution read from the page -- ${hit.line}`
+              + (puzzle_rating ? ` (rated ${puzzle_rating})` : ''));
+    update_best_move_suffix();
+    return true;
+}
+
 // Fire-and-forget, exactly like the tablebase probe: the move path never awaits it, it either has an
 // answer by the time a move is due or it doesn't.
 function request_puzzle_solution(fen) {
+    // The page's own answer costs nothing to check and arrives with no wait, so it goes first.
+    if (try_puzzle_capture(fen)) {
+        if (last_eval.fen === fen) {
+            const pick = puzzle_pick(fen);
+            if (pick) show_puzzle_answer(pick);
+            draw_moves();
+        }
+        maybe_play_puzzle_move(fen);
+        return;
+    }
     if (!puzzle_db_enabled()) return;
     if (puzzle_solutions?.has(puzzle_key(fen))) return; // already covered by the line in hand
     if (puzzle_asked === puzzle_key(fen)) return;       // asked once; the answer is coming or was null
@@ -2932,6 +2990,7 @@ function request_puzzle_solution(fen) {
         clearTimeout(puzzle_defer_timer);
         puzzle_solutions = puzzle_expand(fen, res.solution);
         puzzle_rating = res.rating ?? null;
+        puzzle_from_page = false;
         console.log(`Puzzle DB: solution known -- ${res.solution}` +
                     (puzzle_rating ? ` (rated ${puzzle_rating})` : ''));
         update_best_move_suffix();
@@ -3037,6 +3096,7 @@ function puzzle_move_delay_ms() {
 // send the move twice, which the content-script then has to drop on its `moving` guard.
 let puzzle_move_timer = null;
 let puzzle_rating = null;   // what the publisher rated the puzzle we are on, when they said
+let puzzle_from_page = false;   // did this solution come from the page (capture) or the imported DB
 
 // ...and a watchdog behind it, because the puzzle click path does NOT verify itself.
 //
@@ -3108,7 +3168,8 @@ function puzzle_label() {
     if (!puzzle_pick(last_eval.fen)) return '';
     // The rating belongs on THIS line rather than beside the move: this is the line that says where
     // the move came from, and "how hard was it" is the same kind of fact.
-    return i18n('panel.puzzle_db_label', 'Puzzle database')
+    return (puzzle_from_page ? i18n('panel.puzzle_page_label', 'Page solution')
+                            : i18n('panel.puzzle_db_label', 'Puzzle database'))
         + (puzzle_rating ? ` (${i18n('panel.msg.puzzle_rating', 'Rating {r}', {r: puzzle_rating})})` : '');
 }
 
@@ -7185,7 +7246,8 @@ function copy_diagnostics(onDone = () => {}) {
             reason: idle_reason_text,
             fen: last_eval.fen || '',
             toggles: ['autoplay', 'premove', 'help_mode', 'manual_mode', 'humanize', 'puzzle_mode',
-                      'clock_mode', 'mirror_mode', 'background_play', 'verbose_log']
+                      'puzzle_capture', 'puzzle_capture_cdp', 'clock_mode', 'mirror_mode',
+                      'background_play', 'verbose_log']
                 .filter(k => config[k]).join(' ') || 'none on',
             // The page-side script's own view. Without this a dead content script and a page with no
             // board produce byte-identical reports.

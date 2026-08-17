@@ -3,7 +3,7 @@
   "manifest_version": 3,
   "name": "Mephisto Chess Extension",
   "description": "Next best move analysis for your favorite chess websites",
-  "version": "3.1.275",
+  "version": "3.1.276",
   "homepage_url": "https://github.com/AlexPetrusca/Mephisto",
   "author": "Alex Petrusca",
   "icons": {
@@ -74,6 +74,18 @@
       ],
       "world": "MAIN",
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://lichess.org/*",
+        "*://www.chess.com/*",
+        "*://chess.com/*"
+      ],
+      "js": [
+        "src/scripts/puz-probe.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
     }
   ],
   "options_ui": {

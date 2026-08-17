@@ -134,6 +134,8 @@ class GeneralSettings extends SettingsPage {
         this.initCopyDiagnostics();
         this.registerFormElement('puzzle_mode', 'Puzzle Mode:', 'checkbox', false);
         this.registerFormElement('puzzle_delay', 'Puzzle Move Delay (ms):', 'input', 300);
+        this.registerFormElement('puzzle_capture', 'Read Solutions From The Page:', 'checkbox', false);
+        this.registerFormElement('puzzle_capture_cdp', 'Use The Debugger To Catch Solutions:', 'checkbox', false);
         this.registerFormElement('puzzle_auto_next', 'Auto-Next Puzzle:', 'checkbox', false);
         this.registerFormElement('puzzle_next_delay', 'Auto-Next Delay (ms):', 'input', 300);
         this.registerFormElement('python_autoplay_backend', 'Python Autoplay Backend:', 'checkbox', false);
@@ -263,7 +265,7 @@ class GeneralSettings extends SettingsPage {
             redetect: 'Re-detect game',
         };
         const ORDER = ['manual_play', 'manual_mode', 'autoplay', 'premove', 'explorer', 'book_play',
-            'help_mode', 'humanize', 'clock_mode', 'clock_pace', 'mirror_mode', 'eval_bar', 'eval_history', 'tablebase', 'puzzle_mode',
+            'help_mode', 'humanize', 'clock_mode', 'clock_pace', 'mirror_mode', 'eval_bar', 'eval_history', 'live_stats', 'tablebase', 'puzzle_mode',
             'copy_fen', 'copy_pgn', 'copy_diagnostics', 'redetect', 'panic'];
         // same normalization as the content-script listener, so what we store matches what it compares
         const keyString = (e) => {
@@ -682,11 +684,20 @@ class GeneralSettings extends SettingsPage {
         };
         idle();
         btn.addEventListener('click', () => file.click());
-        clearBtn?.addEventListener('click', async () => {
-            status.textContent = 'Removing…';
-            try { await PuzzleDB.clear(); } catch (e) { /* reported by idle() */ }
-            idle();
-        });
+        // Remove all, or one site at a time -- clear(site) already exists; the point of the per-site
+        // buttons is testing the live page-capture, where an imported Chess.com database would answer
+        // every position and hide whether the capture is doing anything. Drop just that one and the
+        // 30-minute Lichess import stays put.
+        const wireClear = (id, site, label) => {
+            document.getElementById(id)?.addEventListener('click', async () => {
+                status.textContent = `Removing ${label}…`;
+                try { await PuzzleDB.clear(site); } catch (e) { /* reported by idle() */ }
+                idle();
+            });
+        };
+        wireClear('puzzle_db_clear_btn', undefined, 'all');
+        wireClear('puzzle_db_clear_li_btn', 'li', 'Lichess');
+        wireClear('puzzle_db_clear_cc_btn', 'cc', 'Chess.com');
         file.addEventListener('change', async () => {
             const f = file.files[0];
             file.value = ''; // re-picking the SAME file must fire 'change' again

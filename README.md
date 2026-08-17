@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.275-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.276-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -457,6 +457,16 @@ key on the position, so neither overwrites the other. A database of **820,000+ C
 solutions** will be published once [the upstream pull request](https://github.com/AlexPetrusca/Mephisto/pull/37) is
 merged; it covers rated tactics and the daily archive.
 
+**Read solutions from the page** (v3.1.276, off by default) - the puzzle sites hand their own client the answer so
+it can score your moves locally, which means the solution is already sitting in the tab. With this on, Puzzle Mode
+reads it there and plays it with **no search and no database**: Lichess Training, Storm, Racer and Streak, Chess.com
+Rated, Rush and Learning, with the puzzle's own rating shown beside the move. Nothing is requested and nothing is
+sent; a solution is only used if it replays legally *and* belongs to the position on the board, so a mismatch means
+the engine simply plays as usual. Some Chess.com modes fetch their puzzles before the extension can watch - a second
+opt-in, **Use the debugger to catch solutions**, reads them reliably through Chrome's debugger at the cost of the
+yellow "being debugged" bar while a puzzle page is open. The database's Remove button is now three - **Remove all,
+Remove Lichess, Remove Chess.com** - so one import can be dropped without the other.
+
 <details>
 <summary><b>Building your own Chess.com puzzle CSV</b> - the exact format the importer accepts</summary>
 
@@ -536,8 +546,8 @@ host otherwise just looks like a panel that never evaluates.
 
 | Site | Analysis | Autoplay | Premove | Puzzles | Online | Variants |
 |---|:---:|:---:|:---:|:---:|:---:|---|
-| **Chess.com** | ✅ | ✅ incl. Play Bots | ✅ | ✅ Rush / Storm | ✅ | 3-Check, KotH, Crazyhouse, Antichess, Atomic, Horde, Racing Kings, **Duck, Minihouse, Seirawan, Chaturanga** + Chess960, **4-player** |
-| **Lichess** | ✅ | ✅ incl. AI & From Position | ✅ | ✅ Storm · Racer · Training | ✅ live & correspondence | All Lichess variants + Chess960 |
+| **Chess.com** | ✅ | ✅ incl. Play Bots | ✅ | ✅ Rated · Rush · Learning + page-read solutions | ✅ | 3-Check, KotH, Crazyhouse, Antichess, Atomic, Horde, Racing Kings, **Duck, Minihouse, Seirawan, Chaturanga** + Chess960, **4-player** |
+| **Lichess** | ✅ | ✅ incl. AI & From Position | ✅ | ✅ Training · Storm · Racer · Streak | ✅ live & correspondence | All Lichess variants + Chess960 |
 | **TakeTakeTake** | ✅ | ✅ bot games | ✅ | - | ✅ Lichess-backed | - |
 | **BlitzTactics** | ✅ | ✅ | - | ✅ puzzle streams | - | - |
 | **ChessBase Tactics** | ✅ arrows on the canvas | ✅ v3.1.269 | - | ✅ Solve / Sprint | - | - |
@@ -780,6 +790,8 @@ is a subset writing to the same storage. Everything applies to the next move wit
 | **Puzzle Mode** / **Puzzle Database** | See [Puzzles](#puzzles). Puzzle Mode turns itself on when you open a puzzle page and off when you leave - unless you set it yourself, which is never overridden. |
 | **Drag Pieces** | Play a move as a drag instead of two clicks. Off by default, and it needs a Move Time of at least 250ms - a snapped drag is the shape that drops captures silently. Chess.com's variants boards drag regardless, because a capture is not playable there any other way; a short Move Time is floored for them rather than honoured. |
 | **Puzzle Move Delay** | How long to wait before playing a known puzzle answer. A database hit runs no search, so without a pause the move lands the instant the position appears. |
+| **Read Solutions From The Page** | Puzzle pages hand their own client the answer; with this on, Puzzle Mode reads it off the page and plays it with no search. A solution is used only when it replays legally and matches the board - otherwise the engine plays as usual. Off by default. |
+| **Use The Debugger To Catch Solutions** | Watches the page's own network traffic through Chrome's debugger, for the Chess.com modes that fetch puzzles before the extension can see them. Shows Chrome's yellow "being debugged" bar while a puzzle page is open. Needs Read Solutions From The Page. Off by default. |
 | **Auto-Next Puzzle** | Click through to the next puzzle when one ends. Needs Puzzle Mode and Autoplay, and runs on `/puzzles/rated` and `/puzzles/learning` only - Rush and Streak advance themselves. |
 | **Auto-Next Delay** | The pause before that click. |
 | **Python Backend** | Moves the real pointer via a local Python helper instead of synthetic clicks. Needs `mephisto-clicker.py` and PyAutoGUI permissions. Almost nobody needs this. |
@@ -1023,7 +1035,20 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>67 features, newest first</summary>
+<summary>68 features, newest first</summary>
+
+- [x] **Puzzle solutions read off the page** (v3.1.276)
+  - **Read solutions from the page** - opt-in; Puzzle Mode reads the answer the site already handed its own
+    client and plays it with no search and no database: Lichess Training, Storm, Racer and Streak, Chess.com
+    Rated, Rush and Learning, with the puzzle's own rating shown beside the move. A solution is used only if
+    it replays legally and belongs to the position on the board, so a mismatch means the engine plays as usual.
+  - **Use the debugger to catch solutions** - second opt-in for the Chess.com modes that fetch their puzzles
+    before a page script can watch; reads them reliably through Chrome's debugger, at the cost of the yellow
+    "being debugged" bar while a puzzle page is open.
+  - **Remove Lichess / Remove Chess.com** - the puzzle database's Remove button split per site, so one import
+    can be dropped without the other.
+  - The open panel no longer swallows autoplay clicks aimed at the squares underneath it - the click passes
+    through for exactly the moment of the click, on every site.
 
 - [x] **One Maia per page, and games fetched from Lichess** (v3.1.275)
   - **One Maia engine per page** - the Game Review strength estimate now sweeps the human pass's own

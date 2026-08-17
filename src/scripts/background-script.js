@@ -199,6 +199,15 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       .catch(() => sendResponse({ok: false, enabled: false}));
     return true; // async sendResponse
   }
+  // Open the settings page AT the Updates section, without arming an install the way startUpdate
+  // does -- this is "come and finish setting this up", not "run it now".
+  if (msg.openUpdates) {
+    chrome.storage.local.set({mephisto_focus_updates: true}, () => {
+      chrome.runtime.openOptionsPage();
+      sendResponse({ok: true});
+    });
+    return true; // async sendResponse
+  }
   // The panel asking us to run it. The install lives on the settings page (only a page can hold the
   // directory handle's permission and show progress), so flag it and open that page -- it starts by
   // itself from there.
@@ -1349,7 +1358,88 @@ function cdpAttach(tabId) {
   });
 }
 chrome.debugger.onDetach?.addListener((src) => {
-  if (src.tabId) { attached.delete(src.tabId); lastPos.delete(src.tabId); }
+  if (src.tabId) { attached.delete(src.tabId); lastPos.delete(src.tabId); puzzleNetTabs.delete(src.tabId); }
+});
+
+// --- reading puzzle payloads over the debugger -----------------------------------------------------
+// WHY THIS EXISTS RATHER THAN A PAGE PATCH. The page-world probe wraps fetch, XHR and the Response
+// body readers, and on most sites that is enough. On chess.com's Puzzle Rush it is not: their bundle
+// takes its own reference to fetch before a MAIN-world content script can install, so the request
+// that carries the puzzles never passes through anything we own. Measured repeatedly -- 16-20KB of
+// puzzles returned by /callback/tactics/challenge/puzzles while the probe recorded seen=0.
+//
+// The debugger sees the response whatever the page did to get it. We already hold that permission and
+// already stay attached for autoplay's clicks, so the cost here is the attachment lasting while a
+// puzzle page is open, which is exactly what the setting is for. It is OPT-IN and off by default: the
+// attachment raises Chrome's "being debugged" infobar, and that is the user's call to make, not ours.
+const puzzleNetTabs = new Set();          // tabs we have enabled the Network domain on
+const PUZZLE_BODY_URL = /\/(callback\/tactics|puzzles?|tactics|training|storm|racer)\b|challenge\/puzzles|puzzle/i;
+const PUZZLE_BODY_MAX = 4e6;
+// Diagnostics only, parallel to the content script's counters: "off", "attached but the page sent
+// nothing", and "sent bodies we forwarded" are three different states and one flag cannot tell them
+// apart. Read via self.puzzleNetDebug().
+const puzzleNet = {matched: 0, forwarded: 0, urls: []};
+self.puzzleNetDebug = () => ({tabs: [...puzzleNetTabs], ...puzzleNet, urls: puzzleNet.urls.slice(-6)});
+
+// Both toggles, read fresh: values are JSON strings in this store, and "false" is a truthy string.
+async function puzzleNetWanted() {
+  try {
+    const c = await chrome.storage.local.get(['puzzle_mode', 'puzzle_capture', 'puzzle_capture_cdp']);
+    const on = (k) => { try { return JSON.parse(c[k] ?? 'false') === true; } catch (e) { return false; } };
+    return on('puzzle_mode') && on('puzzle_capture') && on('puzzle_capture_cdp');
+  } catch (e) { return false; }
+}
+
+// A puzzle page finished loading: if the user asked for it, stay attached and watch the network.
+chrome.tabs?.onUpdated?.addListener(async (tabId, info, tab) => {
+  if (info.status !== 'complete') return;
+  const url = tab?.url || '';
+  if (!/^https?:\/\/(www\.)?(chess\.com|lichess\.org)\//.test(url)) return;
+  if (!/\/(puzzles|training|storm|racer|lessons\/practice)\b/.test(url)) return;
+  if (!(await puzzleNetWanted())) return;
+  try { await puzzleNetEnable(tabId); } catch (e) { /* the user can decline the attachment */ }
+});
+
+async function puzzleNetEnable(tabId) {
+  if (puzzleNetTabs.has(tabId)) return;
+  await cdpAttach(tabId);
+  await new Promise((res) => chrome.debugger.sendCommand({tabId}, 'Network.enable', {}, () => {
+    void chrome.runtime.lastError; res();
+  }));
+  puzzleNetTabs.add(tabId);
+}
+
+chrome.debugger.onEvent?.addListener((src, method, params) => {
+  if (method !== 'Network.responseReceived' || !src.tabId || !puzzleNetTabs.has(src.tabId)) return;
+  try {
+    const url = params?.response?.url || '';
+    const mime = params?.response?.mimeType || '';
+    if (!/json/i.test(mime) || !PUZZLE_BODY_URL.test(url)) return;
+    puzzleNet.matched++;
+    puzzleNet.urls.push(url.replace(/^https?:\/\/[^/]+/, '').slice(0, 80));
+    // The body is only fetchable for a short window after the response lands, so ask straight away
+    // rather than waiting for loadingFinished.
+    setTimeout(() => {
+      chrome.debugger.sendCommand({tabId: src.tabId}, 'Network.getResponseBody',
+        {requestId: params.requestId}, (r) => {
+          if (chrome.runtime.lastError || !r || r.base64Encoded || typeof r.body !== 'string') return;
+          if (!r.body || r.body.length > PUZZLE_BODY_MAX) return;
+          puzzleNet.forwarded++;
+          // Inject the body straight into the page's MAIN world, where the probe lives, as a fixed
+          // 'm7' event. It MUST land in the main world: a content script cannot pass an event detail
+          // to the page (isolated->main hands over null), so bouncing through the content script
+          // silently dropped the body. executeScript's args cross worlds cleanly, and the dispatch
+          // then happens in the same world as the listener.
+          try {
+            chrome.scripting.executeScript({
+              target: {tabId: src.tabId}, world: 'MAIN',
+              func: (body) => { try { document.dispatchEvent(new CustomEvent('m7', {detail: body})); } catch (e) { /* */ } },
+              args: [r.body],
+            }).catch(() => { /* tab navigated or closed */ });
+          } catch (e) { /* tab gone */ }
+        });
+    }, 60);
+  } catch (e) { /* a diagnostic path must never break the worker */ }
 });
 
 // Free a panel's offscreen engine when its tab closes (the popup iframe is gone with it). Tab events

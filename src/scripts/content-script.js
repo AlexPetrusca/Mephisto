@@ -350,6 +350,14 @@ self.MephistoContent = {
         `observer=${positionObserver ? 'on' : 'off'}`,
         `board=${(() => { try { return getBoard() ? 'found' : 'not found'; } catch (e) { return 'threw'; } })()}`,
         `moving=${moving ? 'yes' : 'no'}`,
+        // Whether the page's own puzzle payload was ever seen. "Off" and "on but nothing captured"
+        // look identical from the outside, and the second one is the report worth having: it means
+        // the site changed its payload, not that the user forgot the toggle.
+        // whether the page-world probe was ever heard from AT ALL, which is a different failure from
+        // hearing it and finding nothing usable
+        `puzzleProbe=${puzSid ? 'connected' : 'never announced'}`,
+        `puzzleCaptures=${puzzleCaptures.size} seen=${puzzleSeen} unread=${puzzleUnread} rejected=${puzzleRejected}`,
+        puzzleSample ? `puzzleLast=${puzzleSample}` : null,
         lastScrapeFail ? `lastScrapeFail=${lastScrapeFail}` : null,
     ].filter(Boolean).join('  '),
     detectVariant: () => ({variant: detectVariant(), href: location.href}),
@@ -1964,7 +1972,248 @@ document.addEventListener('m9', (e) => {
         cbSid = d.s;
         document.addEventListener(cbSid + 's', ev => { try { cbState = JSON.parse(ev.detail); } catch (err) { cbState = null; } });
         document.addEventListener(cbSid + 'u', ev => { try { cbState = JSON.parse(ev.detail); } catch (err) { return; } if (config) schedulePush(); });
+    } else if (d.t === 'puz' && d.s !== puzSid) {
+        puzSid = d.s;
+        document.addEventListener(puzSid + 'p', ev => {
+            let got;
+            try { got = JSON.parse(ev.detail); } catch (err) { return; }
+            acceptPuzzleCaptures(got?.found);
+        });
+        // the probe runs at document_start and has almost certainly already caught the page's own
+        // bootstrap payload by now; ask it to replay what it is holding
+        try { document.dispatchEvent(new CustomEvent(puzSid + 'r')); } catch (err) { /* */ }
     }
+});
+
+// --- captured puzzle solutions ---------------------------------------------------------------
+// The page-world probe (puz-probe.js) reports things SHAPED like a puzzle: a position next to a line
+// of moves. Nothing it reports is trusted on that basis. A line is kept only if chess.js can replay
+// it in full from the position it came with -- an illegal or half-legal line is a payload we have
+// misread, and the one outcome worth engineering against is playing a confident wrong move into a
+// puzzle. Whether the position is the one on the BOARD is a separate check again, and it happens at
+// lookup time in popup.js, which is where the rendered board is known.
+//
+// Storing by placement+side means a capture for a DIFFERENT run (the failure that got the earlier
+// version of this reverted) can only ever MISS. It cannot mis-answer: a key that is not the board's
+// key is never read.
+const puzzleCaptures = new Map();   // "placement stm" -> {line, id, where}
+let puzSid = null;
+let puzzleReported = 0;
+// Bookkeeping for the diagnostics. "Nothing was captured" has three very different causes -- the
+// probe saw no payload, it saw one in an encoding we cannot read, or it read one and the moves did
+// not replay -- and a single count of zero cannot tell them apart. It cost a full round trip with a
+// user to learn that, so the counts and one raw sample are kept and reported.
+let puzzleSeen = 0;       // candidate payloads the probe offered
+let puzzleUnread = 0;     // ...whose solution field was in an encoding we could not decode
+let puzzleRejected = 0;   // ...that decoded but would not replay from any candidate position
+let puzzleSample = null;  // a short look at the last thing we could not use
+
+function puzzleCaptureKey(fen) {
+    const p = String(fen).trim().split(/\s+/);
+    return `${p[0]} ${p[1] === 'b' ? 'b' : 'w'}`;
+}
+
+// chess.js THROWS on a move it does not like rather than returning false, which matters here more
+// than anywhere else: rejecting a payload is the normal path, not the error path.
+function puzzleTryMove(c, m) {
+    try { return !!c.move(m); } catch (e) { return false; }
+}
+
+// chess.com encodes its solution as TCN, two characters per move. Same algorithm as the puzzle
+// database's importer (src/scripts/puzzle-db.js) -- that copy lives in the service worker, which the
+// page world cannot reach, and pulling the whole IndexedDB module into every tab to borrow twenty
+// lines of string arithmetic is the wrong trade. If either copy changes, both must.
+const PUZ_TCN_ALPHABET =
+    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?{~}(^)[_]@#$,./&-*++=';
+
+function puzzleTcnToUci(tcn) {
+    if (typeof tcn !== 'string' || !tcn.length || tcn.length % 2) return null;
+    const sq = (i) => String.fromCharCode(97 + (i % 8)) + (Math.floor(i / 8) + 1);
+    const out = [];
+    for (let i = 0; i < tcn.length; i += 2) {
+        const from = PUZ_TCN_ALPHABET.indexOf(tcn[i]);
+        let to = PUZ_TCN_ALPHABET.indexOf(tcn[i + 1]);
+        if (from < 0 || to < 0 || from > 63) return null;
+        let promo = '';
+        if (to > 63) {
+            promo = 'qnrbkp'[Math.floor((to - 64) / 3)] || '';
+            to = from + (from < 16 ? -8 : 8) + ((to - 64) % 3) - 1;
+            if (to < 0 || to > 63) return null;
+        }
+        out.push(sq(from) + sq(to) + promo);
+    }
+    return out.join(' ');
+}
+
+// Does this whole line replay from this position? Nothing is stored on a partial answer -- a line
+// that fits for three moves and then does not is a payload we have misread, and misreading it is
+// exactly how the reverted version played confident wrong moves.
+function puzzleLineFits(fen, moves) {
+    try {
+        const c = new Chess('chess', fen);
+        for (const m of moves) {
+            if (!puzzleTryMove(c, {from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4]})) return false;
+        }
+        return true;
+    } catch (e) { return false; }
+}
+
+function acceptPuzzleCaptures(found) {
+    // OPT-IN GATE. The probe observes unconditionally, but nothing is retained unless the user asked
+    // for it -- otherwise "captures=N" in the diagnostics meant the probe ran, not that the feature
+    // was armed, and a solution could sit in memory for a user who never turned the setting on.
+    // Before config has arrived the intent is unknown, so a capture is not dropped on that account.
+    if (config && !config.puzzle_capture) return;
+    if (!Array.isArray(found) || !found.length) return;
+    let kept = 0, unknown = 0;
+    for (const f of found) {
+        if (!f) continue;
+        puzzleSeen++;
+        // Every reading of this payload that might be a solution. The page world offers what it could
+        // not decide between (square indices from either corner, say); TCN is decoded here because the
+        // decoder lives here. Only a reading that replays legally survives, so offering several costs
+        // nothing and picking one blind would be the actual risk.
+        const lineStrs = [];
+        if (f.line) lineStrs.push(f.line);
+        if (Array.isArray(f.alts)) for (const a of f.alts) if (a) lineStrs.push(a);
+        if (!lineStrs.length && f.raw && typeof f.raw.value === 'string') {
+            const tcn = puzzleTcnToUci(f.raw.value.trim());
+            if (tcn) lineStrs.push(tcn);
+        }
+        if (!lineStrs.length) {
+            if (f.raw) {
+                unknown++;
+                puzzleUnread++;
+                puzzleSample = `unread ${f.raw.key}=${String(f.raw.value).slice(0, 90)}`;
+                if (puzzleReported < 3) {
+                    console.log(`puzzle capture: a solution field "${f.raw.key}" in an encoding that is `
+                              + `neither UCI nor TCN nor move objects: ${String(f.raw.value).slice(0, 120)}`);
+                }
+            } else {
+                puzzleSample = `no solution field beside fen=${String(f.fen || f.pgn || '?').slice(0, 40)}`;
+            }
+            continue;
+        }
+
+        // Candidate starting positions. A payload either states the position, or (lichess) states the
+        // game's moves and leaves the position to be derived -- and where in that game the puzzle
+        // starts is a CONVENTION, not something to hardcode. So the candidates are offered and the
+        // one where the whole solution is legal is the one that is kept. If a site changes its mind
+        // about the convention this keeps working; if none of them fit, nothing is stored.
+        const cands = [];
+        let moves = null;
+        if (typeof f.fen === 'string' && f.fen.trim()) {
+            const parts = f.fen.trim().split(/\s+/);
+            cands.push(parts.length >= 4 ? f.fen.trim()
+                     : `${parts[0]} ${parts[1] || 'w'} ${parts[2] || '-'} ${parts[3] || '-'} 0 1`);
+        }
+        if (typeof f.pgn === 'string' && f.pgn.trim()) {
+            const san = f.pgn.trim().split(/\s+/).filter(Boolean);
+            // measured on lichess /training: the puzzle position is after the FULL move list, and
+            // solution[0] is the SOLVER's move -- which is what puzzle_expand already assumes. The
+            // ply the payload carries is offered too, in case that is ever the cut instead.
+            const cuts = [san.length];
+            if (Number.isInteger(f.ply) && f.ply >= 0 && f.ply <= san.length) { cuts.push(f.ply, f.ply + 1); }
+            for (const cut of cuts) {
+                if (cut > san.length) continue;
+                try {
+                    const c = new Chess('chess');
+                    let ok = true;
+                    for (let i = 0; i < cut; i++) if (!puzzleTryMove(c, san[i])) { ok = false; break; }
+                    if (ok) cands.push(c.fen());
+                } catch (e) { /* not a game we can replay */ }
+            }
+        }
+
+        // Every (position, reading) pair, and the first one that is legal all the way through wins.
+        let start = null;
+        for (const cand of cands) {
+            for (const s of lineStrs) {
+                const mv = String(s).split(/\s+/).filter(Boolean);
+                if (mv.length && puzzleLineFits(cand, mv)) { start = cand; moves = mv; break; }
+            }
+            if (start) break;
+        }
+        if (!start || !moves) {
+            // We understood the encoding and still could not use it: the moves do not replay from any
+            // position the payload offered. That is the interesting failure -- it means the pairing or
+            // the convention is wrong, not the decoding -- so it is counted apart from the unread ones.
+            puzzleRejected++;
+            puzzleSample = `rejected ${String(lineStrs[0]).slice(0, 40)} vs ${cands.length} position(s)`;
+            if (puzzleReported < 3) {
+                puzzleReported++;
+                console.log(`puzzle capture: read a solution (${String(lineStrs[0]).slice(0, 40)}) but it does `
+                          + `not replay from any of the ${cands.length} position(s) offered with it`);
+            }
+            continue;
+        }
+
+        // WHOSE MOVE IS FIRST DIFFERS BY SITE AND BY MODE, and getting it wrong shifts the whole
+        // solution by a ply. Lichess Storm and chess.com's rated tactics both store the position
+        // BEFORE the opponent's setup move, so their line[0] is the OPPONENT's; lichess /training
+        // hands over the position with the solver already to move. That is a convention, and the
+        // note in puzzle-db.js is there because reading it wrong once already cost a release.
+        //
+        // Rather than detect it, store BOTH readings under their own positions and let the board
+        // choose: the puzzle you are looking at is at exactly one of them. The pre-setup position is
+        // the opponent to move, so even if the board is caught there, it is not our turn and nothing
+        // is played from it.
+        const rating = (typeof f.rating === 'number' && f.rating > 0) ? f.rating : null;
+        const store = (fen, line) => {
+            if (!line.length) return;
+            const key = puzzleCaptureKey(fen);
+            if (!puzzleCaptures.has(key)) kept++;
+            puzzleCaptures.set(key, {line: line.join(' '), id: f.id || null, where: f.where || null, rating});
+        };
+        store(start, moves);
+        if (moves.length >= 2) {
+            try {
+                const c = new Chess('chess', start);
+                const m = moves[0];
+                if (puzzleTryMove(c, {from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4]})) {
+                    store(c.fen(), moves.slice(1));
+                }
+            } catch (e) { /* the direct reading is still stored */ }
+        }
+    }
+    if (puzzleCaptures.size > 400) {
+        // a Storm run is ~137 and a long session can stack several; keep the newest
+        const drop = puzzleCaptures.size - 400;
+        let i = 0;
+        for (const k of puzzleCaptures.keys()) { if (i++ >= drop) break; puzzleCaptures.delete(k); }
+    }
+    // Say what was captured ONCE per page, and say it plainly: a shape we could not read is the one
+    // thing worth reporting, because it is the difference between "this site is not supported yet"
+    // and "this site is supported and the position simply is not one of these".
+    if ((kept || unknown) && puzzleReported < 3) {
+        puzzleReported++;
+        console.log(`puzzle capture: ${puzzleCaptures.size} position(s) with a verified line`
+                  + (unknown ? `, ${unknown} candidate(s) in an encoding not recognised` : ''));
+    }
+}
+
+// Answer for the position ACTUALLY ON THE BOARD, or nothing. This is the check the revert note is
+// about: compare against the rendered board, never against another copy of the same guess.
+// Exposed on `self` rather than leaned on as a bare global: popup.js loads BEFORE this file, so the
+// binding it would close over is not initialised yet at its load time. (The isolated world is not
+// reachable from the page, so this name is not page-visible footprint.)
+function puzzleCaptureFor(fen) {
+    return puzzleCaptures.get(puzzleCaptureKey(fen)) || null;
+}
+self.puzzleCaptureFor = puzzleCaptureFor;
+
+// The debugger route delivers its body to the MAIN world directly (the service worker injects it
+// there), not through here -- an isolated-world content script cannot hand an event detail to the
+// page. So there is nothing to ingest on this side; the extraction and the store both happen the
+// same way a page-world catch does, and this file only sees the finished `found` array.
+
+// which SOURCES the stored captures came from (page / fetch / xhr / ws / res.json / res.text / cdp),
+// so a test can tell the debugger route apart from a lucky page-world catch
+self.puzzleCaptureDebug = () => ({
+    size: puzzleCaptures.size,
+    wheres: [...new Set([...puzzleCaptures.values()].map(v => v.where))],
+    probe: puzSid ? 'connected' : 'no',
+    seen: puzzleSeen, unread: puzzleUnread, rejected: puzzleRejected, last: puzzleSample,
 });
 
 function ttQuery() {
@@ -3636,7 +3885,43 @@ function warmClicker() {
     catch (e) { return Promise.resolve(); }   // orphaned content-script
 }
 
+// THE PANEL SITS OVER THE BOARD, AND AN OPEN ONE EATS THE CLICK. Minimising already sets
+// pointer-events:none for exactly this reason ("it cannot sit over a destination square and eat the
+// autoplay click") -- but an OPEN panel keeps pointer-events:auto, so any square underneath it is
+// unreachable. The panel is a fixed box at the top right and the board's right-hand files run under
+// it, which is why the moves that stalled were on the h-file (h4h8, g8h6) while everything on the
+// left half played fine, and why tabbing away "fixes" it: a CDP click into a background tab is
+// dispatched to the page rather than hit-tested against the panel on screen.
+//
+// So the box is made click-through for the moment the click is dispatched, and put back afterwards.
+// Restored in a `finally` and guarded on its own state, so an exception mid-click can never leave
+// the panel permanently unclickable.
+function withPanelClickThrough(fn) {
+    const wrap = overlayEl(PANEL_OVERLAY_ID);
+    const frame = wrap?.querySelector('.mephisto-panel-box');
+    if (!wrap) return fn();
+    const prevWrap = wrap.style.pointerEvents;
+    const prevFrame = frame ? frame.style.pointerEvents : null;
+    wrap.style.pointerEvents = 'none';
+    if (frame) frame.style.pointerEvents = 'none';
+    const restore = () => {
+        try {
+            wrap.style.pointerEvents = prevWrap || '';
+            if (frame) frame.style.pointerEvents = prevFrame || '';
+        } catch (e) { /* panel torn down mid-click */ }
+    };
+    let out;
+    try { out = fn(); } catch (e) { restore(); throw e; }
+    return Promise.resolve(out).then(
+        (v) => { restore(); return v; },
+        (e) => { restore(); throw e; });
+}
+
 function dispatchSimulateClick(x, y, travelMs = 0) {
+    return withPanelClickThrough(() => dispatchSimulateClickInner(x, y, travelMs));
+}
+
+function dispatchSimulateClickInner(x, y, travelMs = 0) {
     try {
         // NO CURSOR TRAVEL IN A HIDDEN TAB, for two independent reasons.
         //
@@ -3727,6 +4012,7 @@ function simulateMove(move, deselect, think = null) {
             : ['h'.charCodeAt(0) - coords[0].charCodeAt(0), parseInt(coords[1]) - 1];
         return new DOMRect(boardBounds.x + xIdx * squareSide, boardBounds.y + yIdx * squareSide, squareSide, squareSide);
     }
+
 
     function getThinkTime() {
         // an explicit per-move think (humanize / clock mode, computed in the popup) overrides the
