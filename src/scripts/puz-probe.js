@@ -85,7 +85,16 @@
         const tos = cells.map(o => pick(o, TO));
         if (froms.some(x => x === undefined) || tos.some(x => x === undefined)) return [];
         const promos = cells.map((o, i) => {
-            const p = pick(o, ['promotion', 'promo', 'p']) ?? pick(arr[i], ['promotion', 'promo']);
+            // any key that MENTIONS promotion, not a fixed name: chess.com's rated endpoint calls it
+            // `promotionPieceType` ('PROMOTION_PIECE_TYPE_QUEEN'), and the fixed list missed it -- the
+            // move went out as a bare a7a8, failed the legality replay, and the whole capture was
+            // rejected on exactly the puzzles where the database is most wanted
+            const promoOf = (obj) => {
+                if (!obj || typeof obj !== 'object') return undefined;
+                for (const [k, v] of Object.entries(obj)) if (/promo/i.test(k) && v != null) return v;
+            };
+            const p = pick(o, ['promotion', 'promo', 'p']) ?? promoOf(o)
+                ?? pick(arr[i], ['promotion', 'promo']) ?? promoOf(arr[i]);
             if (typeof p !== 'string') return '';
             // enum-style names as well as a bare letter: PROMOTION_QUEEN, PIECE_KNIGHT, "q"
             const u = p.toUpperCase();
@@ -188,6 +197,19 @@
             return;
         }
         if (typeof node !== 'object') return;
+        // A rating that lives in the SAME object as the solution line is the PUZZLE's rating; any
+        // other is somebody else's -- lichess puts the two players' ratings in `game.players`, which
+        // the walk reaches BEFORE `puzzle.rating`, and taking the first one shown a player's 2015 as
+        // the puzzle's on a 1321 puzzle. The line-sibling goes to the front, the rest keep their
+        // order behind it, and the caller's ratings[0] stays the one honest answer.
+        let nodeRating = null, nodeHasLine = false;
+        for (const [k, v] of Object.entries(node)) {
+            if (typeof v === 'number' && /^rating$/i.test(k) && v > 0 && v < 4000) nodeRating = v;
+            if ((typeof v === 'string' || Array.isArray(v)) && asLine(v)) nodeHasLine = true;
+        }
+        if (nodeRating != null) {
+            if (nodeHasLine) ratings.unshift(nodeRating); else ratings.push(nodeRating);
+        }
         for (const [k, v] of Object.entries(node)) {
             if (typeof v === 'string') {
                 const s = asSan(v);
@@ -199,11 +221,39 @@
                 if (l && lines.length < 20) lines.push(l);
             } else if (typeof v === 'number' && /ply/i.test(k) && v >= 0 && v < 1000) {
                 plies.push(v);
-            } else if (typeof v === 'number' && /^rating$/i.test(k) && v > 0 && v < 4000) {
-                ratings.push(v);   // lichess keeps it in the puzzle object, a sibling of the game pgn
             }
             harvestSan(v, sans, lines, plies, ratings, depth + 1);
         }
+    }
+
+    // The puzzle's rating is not always a sibling of its position: chess.com's rated endpoint keeps
+    // the fen inside `puzzle` and the rating two objects away in `puzzleStats.ratings[]`, each entry
+    // a {rating, ratingType} pair. So when a capture has no rating of its own, look over the whole
+    // payload. The entry the SITE displays is the BOOSTED one, not the standard one -- measured on
+    // the same puzzle (#2752375): the page showed 250 while STANDARD_RATING said 200, and a sibling
+    // puzzle's trio was standard 200 / shadow 200 / SHADOW_RATING_BOOSTED_1600 447 with the page
+    // showing that same 400s band. "Boosted 1600" is chess.com's public scale; "standard" is the
+    // legacy internal number nobody sees. So: boosted first, standard second, then a lone
+    // unambiguous value -- and if several DIFFERENT ratings are on offer with nothing to choose
+    // between them, attach none, because a missing rating reads better than a wrong one.
+    function payloadRating(node, acc, depth) {
+        if (!node || depth > 8) return;
+        if (Array.isArray(node)) { for (const v of node) payloadRating(v, acc, depth + 1); return; }
+        if (typeof node !== 'object') return;
+        let r = null, standard = false, boosted = false;
+        for (const [k, v] of Object.entries(node)) {
+            if (typeof v === 'number' && /^rating$/i.test(k) && v > 0 && v < 4000) r = v;
+            if (typeof v === 'string' && /type/i.test(k)) {
+                if (/boost/i.test(v)) boosted = true;
+                else if (/standard/i.test(v)) standard = true;
+            }
+        }
+        if (r != null) {
+            acc.vals.add(r);
+            if (boosted && acc.boost == null) acc.boost = r;
+            if (standard && acc.std == null) acc.std = r;
+        }
+        for (const v of Object.values(node)) payloadRating(v, acc, depth + 1);
     }
 
     // EVERYTHING IS BUFFERED, because the most valuable capture happens before anyone is listening:
@@ -270,6 +320,15 @@
         if (!data || typeof data !== 'object') return;
         const out = [];
         harvest(data, out, 0);
+        // a capture with no rating of its own borrows the payload's, if the payload names exactly one
+        if (out.length && out.some(o => o.rating == null)) {
+            const acc = {boost: null, std: null, vals: new Set()};
+            payloadRating(data, acc, 0);
+            const fb = acc.boost != null ? acc.boost
+                : acc.std != null ? acc.std
+                : acc.vals.size === 1 ? [...acc.vals][0] : null;
+            if (fb != null) for (const o of out) { if (o.rating == null) o.rating = fb; }
+        }
         // the pgn+solution form, when no position came with the payload
         if (!out.some(o => o.line)) {
             const sans = [], lines = [], plies = [], ratings = [];
