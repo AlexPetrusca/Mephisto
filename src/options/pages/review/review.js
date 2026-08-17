@@ -208,7 +208,13 @@ async function strengthPass(positions, moves, prog) {
     if (usable.length < 6) return null;   // too few decisions to say anything at all
     const bands = strengthBands(kind);
     prog.plan(bands.length * usable.length);   // so the bar keeps climbing instead of restarting
-    const ll = {};                        // band -> {w, b} summed log-likelihood
+    // One record per usable move. The three read-outs below (per-phase rating, the moves behind the
+    // number, comparing two ratings) are all arithmetic over THIS -- the played move's probability
+    // under each band, and each band's own most-likely move -- so none of them costs a second pass.
+    const rec = usable.map(({m, i}) => ({
+        ply: m.ply, color: m.color === 'w' ? 'w' : 'b', san: m.san, uci: m.uci,
+        prob: {}, top: {},   // band -> played-move probability ; band -> {uci, prob} the band would play
+    }));
     let shared = null;
     try {
         if (kind === 'maia3') {
@@ -229,42 +235,78 @@ async function strengthPass(positions, moves, prog) {
                 e.send(`setoption name SelfElo value ${band}`);   // NOT UCI_Elo -- see maia3.js
                 e.send(`setoption name OppoElo value ${band}`);
             }
-            const acc = {w: 0, b: 0, nw: 0, nb: 0};
             for (let k = 0; k < usable.length; k++) {
                 if (cancel) { if (!shared) e.dispose?.(); return null; }
                 const {m, i} = usable[k];
                 prog.tick(`rating ${band}: move ${k + 1} of ${usable.length}`);
-                let p = 0;
-                try {
-                    const r = await e.analyse(positions[i].fen, positions[i].turn);
-                    p = (r.lines || []).find(l => l.pv?.[0] === m.uci)?.prob ?? 0;
-                } catch (err) { p = 0; }
-                // A move the model gives no weight at all would be -Infinity and would erase the
-                // band. Floored instead: "this rating essentially never plays that" is information,
-                // not a disqualification.
-                const side = m.color === 'w' ? 'w' : 'b';
-                acc[side] += Math.log(Math.max(p, 1e-6));
-                acc[side === 'w' ? 'nw' : 'nb']++;
+                let lines = [];
+                try { lines = (await e.analyse(positions[i].fen, positions[i].turn)).lines || []; }
+                catch (err) { lines = []; }
+                rec[k].prob[band] = lines.find(l => l.pv?.[0] === m.uci)?.prob ?? 0;
+                const top = lines.reduce((a, l) => ((l.prob ?? 0) > (a?.prob ?? -1) ? l : a), null);
+                rec[k].top[band] = top?.pv?.[0] ? {uci: top.pv[0], prob: top.prob ?? 0} : null;
             }
             if (!shared) e.dispose?.();
-            ll[band] = acc;
         }
     } catch (e) {
         return null;   // the estimate is an extra; it never costs the report
     } finally { shared?.dispose?.(); }
 
-    const forSide = (side) => {
-        const n = side === 'w' ? 'nw' : 'nb';
-        const rows = bands.map(b => ({band: +b, ll: ll[b][side], n: ll[b][n]})).filter(r => r.n > 0);
-        if (!rows.length) return null;
-        const best = rows.reduce((a, b) => (b.ll > a.ll ? b : a));
-        // Everything within 2 log-likelihood units of the best is a standard support interval: the
-        // ratings this game cannot tell apart. Reporting the peak alone would claim a precision that
-        // twenty-odd moves cannot carry.
-        const near = rows.filter(r => best.ll - r.ll <= 2).map(r => r.band);
-        return {best: best.band, n: best.n, low: Math.min(...near), high: Math.max(...near), curve: rows};
-    };
-    return {kind, bands: bands.map(Number), w: forSide('w'), b: forSide('b')};
+    const phases = Core.gamePhases(positions.map(p => p.fen));
+    const w = strengthForSide(rec, 'w', bands, phases);
+    const b = strengthForSide(rec, 'b', bands, phases);
+    if (!w && !b) return null;
+    // `moves` (the per-move matrix) and `bands` ride along so the compare-two-ratings view can be
+    // recomputed for any pair the reader picks without touching the engine again.
+    return {kind, bands: bands.map(Number), phases, moves: rec, w, b};
+}
+
+// A maximum-likelihood rating over a SET of decisions: sum log P(played | band) for each band, and
+// the band that was least surprised wins. Reused as-is for the whole game and for one phase of it.
+function strengthEstimateOver(records, bands) {
+    if (!records.length) return null;
+    // A move the model gives no weight at all would be -Infinity and erase the band. Floored: "this
+    // rating essentially never plays that" is information, not a disqualification.
+    const curve = bands.map(band => {
+        let ll = 0;
+        for (const r of records) ll += Math.log(Math.max(r.prob[band] ?? 0, 1e-6));
+        return {band: +band, ll};
+    });
+    const best = curve.reduce((a, c) => (c.ll > a.ll ? c : a));
+    // Everything within 2 log-likelihood units of the peak is the standard support interval: the
+    // ratings this game cannot tell apart. The peak alone claims a precision the moves cannot carry.
+    const near = curve.filter(r => best.ll - r.ll <= 2).map(r => r.band);
+    return {best: best.band, n: records.length, low: Math.min(...near), high: Math.max(...near), curve};
+}
+
+function strengthForSide(rec, side, bands, phases) {
+    const mine = rec.filter(r => r.color === side);
+    if (mine.length < 3) return null;
+    const overall = strengthEstimateOver(mine, bands);
+    if (!overall) return null;
+
+    // (1) Same estimate over each phase separately -- the dividers already exist, so "opens like 1800,
+    //     finishes like 1300" is free. A phase with too few real choices to say anything stays null.
+    const phase = {};
+    for (const key of ['opening', 'middlegame', 'endgame']) {
+        const set = mine.filter(r => Core.phaseOf(r.ply, phases) === key);
+        phase[key] = set.length >= 3 ? strengthEstimateOver(set, bands) : null;
+    }
+
+    // (2) The evidence for the number: the moves that pushed the winning band past its nearest rival.
+    //     Contribution is log P(move | winner) - log P(move | rival); the biggest ones are the moves
+    //     the field explained worst and the winner explained best -- the ones that MOVED the estimate.
+    const winner = overall.best;
+    const others = overall.curve.filter(r => r.band !== winner);
+    const rival = others.length ? others.reduce((a, c) => (c.ll > a.ll ? c : a)).band : winner;
+    const evidence = mine.map(r => {
+        const pW = r.prob[winner] ?? 0, pR = r.prob[rival] ?? 0;
+        return {ply: r.ply, color: r.color, san: r.san, uci: r.uci,
+                contrib: Math.log(Math.max(pW, 1e-6)) - Math.log(Math.max(pR, 1e-6)),
+                pWin: pW, pRival: pR, top: r.top[winner]};
+    }).filter(e => e.contrib > 0.05).sort((a, b) => b.contrib - a.contrib).slice(0, 6);
+
+    return {...overall, phases: phase, winner, rival, evidence};
 }
 
 // Start whatever the settings ask for, once. The caller owns the teardown, which is what lets a
@@ -785,6 +827,7 @@ function renderStrength() {
       + `<b>This is a strength estimate, not a fair-play measurement</b>: a player using an engine reads as `
       + `STRONGER here, not as suspicious, and one game is a small sample however it is counted.`;
 
+    const PHASE_LBL = {opening: 'Opening', middlegame: 'Middlegame', endgame: 'Endgame'};
     const card = (color, s) => {
         if (!s) return '';
         const spread = s.low === s.high ? `${s.low}` : `${s.low}–${s.high}`;
@@ -797,6 +840,11 @@ function renderStrength() {
             return `<span class="rv-str-bar" title="${r.band}: ${r.ll.toFixed(1)}">`
                  + `<i style="height:${Math.max(3, h)}%"></i></span>`;
         }).join('');
+        // per-phase read-out: the same estimate over each phase's own decisions
+        const ph = ['opening', 'middlegame', 'endgame']
+            .filter(k => s.phases[k])
+            .map(k => `<span><b>${PHASE_LBL[k]}</b> ${s.phases[k].best}</span>`).join('');
+        const phase = ph ? `<div class="rv-str-phase">${ph}</div>` : '';
         return `<div class="rv-card">
             <h4>${esc(playerName(color))}</h4>
             <div class="rv-big">${s.best}</div>
@@ -804,9 +852,86 @@ function renderStrength() {
             <div class="rv-kv"><span>Decisions it is drawn from</span><span>${s.n}</span></div>
             <div class="rv-str-curve">${bars}</div>
             <div class="rv-sub">${st.bands[0]} to ${st.bands[st.bands.length - 1]}, taller is a better fit</div>
+            ${phase}
         </div>`;
     };
     $('rv_strength_cards').innerHTML = card('w', st.w) + card('b', st.b);
+
+    // the moves the number is built on: for each side, the handful that pushed the winning band past
+    // its nearest rival, so the estimate can be argued with instead of just read
+    const evidence = (color, s) => {
+        if (!s || !s.evidence.length) return '';
+        const rows = s.evidence.map(e => {
+            const alt = e.top && e.top.uci !== e.uci
+                ? ` <span class="rv-str-alt">${esc(s.winner)} would play ${esc(uciToSan(report.positions[e.ply].fen, e.top.uci))}</span>`
+                : '';
+            return `<li><a href="#" data-ply="${e.ply}">${esc(moveLabel(e))}</a> `
+                 + `<span class="rv-str-pct">${s.winner}: ${(e.pWin * 100).toFixed(0)}%</span> `
+                 + `<span class="rv-str-pct rv-str-dim">${s.rival}: ${(e.pRival * 100).toFixed(0)}%</span>`
+                 + `${alt}</li>`;
+        }).join('');
+        return `<div class="rv-str-ev">
+            <h4>${esc(playerName(color))} reads as ${s.best}, not ${s.rival} — because of these</h4>
+            <ol>${rows}</ol></div>`;
+    };
+    $('rv_strength_evidence').innerHTML = evidence('w', st.w) + evidence('b', st.b);
+
+    // compare-two-ratings control: the sweep already holds every band's answer for every position, so
+    // picking two and listing where they disagree most is arithmetic over data that is already here
+    const opt = (sel) => st.bands.map(b => `<option value="${b}"${b === sel ? ' selected' : ''}>${b}</option>`).join('');
+    const a0 = st.bands[0], b0 = st.bands[st.bands.length - 1];
+    $('rv_strength_compare').innerHTML = `
+        <h4>Compare two ratings</h4>
+        <div class="rv-str-cmp-ctl">
+            <select id="rv_cmp_a" class="browser-default">${opt(a0)}</select>
+            <span>vs</span>
+            <select id="rv_cmp_b" class="browser-default">${opt(b0)}</select>
+        </div>
+        <div id="rv_cmp_out" class="rv-str-cmp-out"></div>`;
+    const reRun = () => renderStrengthCompare(+$('rv_cmp_a').value, +$('rv_cmp_b').value);
+    $('rv_cmp_a').addEventListener('change', reRun);
+    $('rv_cmp_b').addEventListener('change', reRun);
+    reRun();
+
+    // one delegated jump-to-board for every move link the section draws (evidence + compare)
+    if (!sec.dataset.plyBound) {
+        sec.dataset.plyBound = '1';
+        sec.addEventListener('click', (e) => {
+            const a = e.target.closest('a[data-ply]');
+            if (!a) return;
+            e.preventDefault();
+            showPly(+a.dataset.ply + 1);
+        });
+    }
+}
+
+// The two picked ratings, side by side, over the positions where they most disagree about what to
+// play. Pure arithmetic over the stored sweep -- no engine, so it is instant on every dropdown change.
+function renderStrengthCompare(a, b) {
+    const out = $('rv_cmp_out');
+    const st = report?.strength;
+    if (!out || !st) return;
+    if (a === b) { out.innerHTML = `<p class="rv-sub">Pick two different ratings.</p>`; return; }
+    const rows = st.moves.map(r => {
+        const ta = r.top[a], tb = r.top[b];
+        if (!ta || !tb) return null;
+        // rank disagreements: a different top move first (weighted by how sure each side is), then by
+        // how far apart the two ratings are on the move that was actually played
+        const differ = ta.uci !== tb.uci;
+        const score = (differ ? 100 : 0) + ta.prob + tb.prob
+                    + Math.abs(Math.log(Math.max(r.prob[a] ?? 0, 1e-6)) - Math.log(Math.max(r.prob[b] ?? 0, 1e-6)));
+        return {r, ta, tb, differ, score};
+    }).filter(Boolean).sort((x, y) => y.score - x.score).slice(0, 8);
+    if (!rows.every(x => x.differ) || !rows.length) { /* still show what we have */ }
+    const pick = (fen, t) => `${esc(uciToSan(fen, t.uci))} <span class="rv-str-pct">${(t.prob * 100).toFixed(0)}%</span>`;
+    const body = rows.map(({r, ta, tb}) => {
+        const fen = report.positions[r.ply].fen;
+        return `<tr><td><a href="#" data-ply="${r.ply}">${esc(moveLabel(r))}</a></td>`
+             + `<td>${pick(fen, ta)}</td><td>${pick(fen, tb)}</td></tr>`;
+    }).join('');
+    out.innerHTML = body
+        ? `<table class="rv-str-cmp-tbl"><thead><tr><th>Position</th><th>${a} plays</th><th>${b} plays</th></tr></thead><tbody>${body}</tbody></table>`
+        : `<p class="rv-sub">These two ratings played this game the same way.</p>`;
 }
 
 function renderHumanReport() {
@@ -1021,8 +1146,10 @@ function drawArrows(pos, played) {
 
 const ENGINE_ARROW = '#2f7d41';
 
-// The engine's rank, drawn on the arrow's own shaft near its start so it never sits under the head
-// or off the board. Only the engine lines carry one; the played move is identified by its badge.
+// The engine's rank, drawn at the END of its arrow -- by the arrowhead, offset to the side. Placing
+// it there (not partway along the shaft) keeps the numbers apart even when several lines run up the
+// same file: each number sits at its own destination square. Only the engine lines carry one; the
+// played move is identified by its badge.
 function rankTag(spec) {
     const m = /^([a-h][1-8])([a-h][1-8])/.exec(spec.uci || '');
     if (!m) return '';
@@ -1033,9 +1160,10 @@ function rankTag(spec) {
     const a = sq(m[1]), b = sq(m[2]);
     const dx = b.x - a.x, dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
-    // a third of the way along, offset to the side, so two arrows from the same square stay apart
-    const px = a.x + dx / len * 0.62 - dy / len * 0.20;
-    const py = a.y + dy / len * 0.62 + dx / len * 0.20;
+    // pulled back a touch from the arrowhead and offset to the side, so the number rides beside the
+    // tip rather than under it -- at the line's end, where two colinear arrows no longer collide.
+    const px = b.x - dx / len * 0.24 - dy / len * 0.26;
+    const py = b.y - dy / len * 0.24 + dx / len * 0.26;
     return `<g opacity="${Math.max(0.55, spec.opacity)}">`
         + `<circle cx="${px}" cy="${py}" r="0.135" fill="${spec.color}" stroke="#00000040" stroke-width="0.012"/>`
         + `<text x="${px}" y="${py + 0.050}" font-size="0.17" font-weight="700" text-anchor="middle" `
@@ -1678,7 +1806,6 @@ function syncLimitUi(fromInput) {
     num.value = String(disp);
     const value = isD ? disp : Math.round(disp * 1000);   // internal: plies or ms
     $('rv_limit_value').value = value;
-    $('rv_limit_unit').textContent = isD ? `${disp} plies per position` : `${disp.toFixed(1)}s per position`;
     setCfg('rv_limit_value', value);
     setCfg(PER_KIND_KEY[kind], value);
     updateEngineOptions();

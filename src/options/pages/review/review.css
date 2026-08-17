@@ -117,6 +117,33 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 .rv-kv span:last-child { color: var(--mp-dim); font-variant-numeric: tabular-nums; }
 .rv-kv b { font-weight: 600; color: var(--rv-c, var(--mp-text)); }
 
+/* per-phase ratings, sitting under the curve in each card */
+.rv-str-phase { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px;
+    padding-top: 9px; border-top: 1px solid var(--mp-line); font-size: 12.5px; color: var(--mp-dim); }
+.rv-str-phase b { font-weight: 600; color: var(--mp-mute); margin-right: 3px; }
+
+/* the moves the estimate is built on, and the compare-two-ratings table */
+.rv-str-ev { margin-bottom: 14px; }
+.rv-str-ev h4 { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; color: var(--mp-mute); }
+.rv-str-ev ol { margin: 0; padding-left: 20px; }
+.rv-str-ev li { font-size: 13px; padding: 2px 0; }
+.rv-str-ev a, .rv-str-cmp-tbl a { color: var(--mp-text); text-decoration: none; font-weight: 600; }
+.rv-str-ev a:hover, .rv-str-cmp-tbl a:hover { text-decoration: underline; }
+.rv-str-pct { font-variant-numeric: tabular-nums; color: var(--mp-dim); }
+.rv-str-dim { opacity: .7; }
+.rv-str-alt { color: var(--mp-dim); font-style: italic; }
+
+.rv-str-compare { margin-top: 8px; }
+.rv-str-compare h4 { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; color: var(--mp-mute); }
+.rv-str-cmp-ctl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--mp-dim); }
+.rv-str-cmp-ctl select { padding: 3px 6px; border: 1px solid var(--mp-line); border-radius: 4px;
+    background: var(--mp-raised); color: var(--mp-text); font: inherit; }
+.rv-str-cmp-out { margin-top: 10px; }
+.rv-str-cmp-tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
+.rv-str-cmp-tbl th { text-align: left; font-weight: 600; color: var(--mp-mute); padding: 3px 10px 5px 0;
+    border-bottom: 1px solid var(--mp-line); font-size: 12px; }
+.rv-str-cmp-tbl td { padding: 4px 10px 4px 0; border-bottom: 1px solid var(--mp-line); vertical-align: baseline; }
+
 /* the sentence under the graph naming where the game turned; the move is clickable and wears its
    classification's colour, same as everywhere else a verdict shows */
 .rv-turning { margin-top: 8px; font-size: 13px; color: var(--mp-dim); }
@@ -407,3 +434,15 @@ html.dark .rv-ev-strong  { color: #d15050; }
 .rv-oneline { flex-wrap: nowrap; }
 .rv-oneline .rv-select { width: 130px; flex: 0 0 auto; }
 .rv-oneline .set-btn { flex: 0 0 auto; }
+
+/* ANALYSIS ROWS: one uniform control column (user call 2026-08-17 - the controls were a ragged
+   right edge with a desert of empty space next to each label). Every simple control (a select, a
+   -/+ stepper, or a toggle) fills the same fixed block, so their edges line up and read as the same
+   size; the row is capped tighter so the control sits next to its label, not a screen away. The
+   button rows (Run, the chess.com review) are excluded - they carry several buttons of their own. */
+#rv-analysis .set-row:not(.set-wide) { max-width: 560px; }
+/* every control row EXCEPT the ones carrying their own buttons (Run, chess.com review) */
+#rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) { flex: 0 0 234px; justify-content: flex-end; gap: 7px; }
+#rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > select { flex: 1 1 auto; min-width: 0; max-width: 100%; }
+#rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > .set-step { flex: 1 1 auto; }
+#rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > label.set-tgl { flex: 1 1 auto; min-width: 0; justify-content: center; }

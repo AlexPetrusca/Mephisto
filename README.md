@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.273-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.274-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -298,6 +298,18 @@ fully offline. (If you would rather have chess.com's own review instead, see the
   decisions it is drawn from, and the likelihood curve - so a flat curve is visible as flat. Book and
   forced moves are left out: everyone plays those the same way. **A strength estimate, not a fair-play
   measurement** - a player using an engine reads as *stronger* here, and one game is a small sample.
+  Three read-outs come off that one sweep, at no extra cost in engine time:
+  - **Per phase** - the same estimate over the opening, the middlegame and the endgame separately,
+    using the dividers the review already computes. "Opens like 1800, finishes like 1300" is a far more
+    useful sentence than one number, and it is something a player can act on.
+  - **The moves it is built on** - the handful that pushed the winning rating past its nearest rival,
+    each with both ratings' probability for the move actually played, and what the winning rating would
+    have played instead when it differs. A verdict with its working attached can be argued with; one
+    without gets either ignored or over-trusted.
+  - **Compare two ratings** - pick any two of the model's ratings and see the positions where they most
+    disagree about what to play, with each one's move and how sure it was. "What does 2200 do
+    differently here" is the question the curve makes people ask, answered from data already in hand.
+    Every move in all three lists is clickable and takes the board there.
 - **Human likeness (optional, off)** - the whole game read by that second judge instead: how expected each
   move was rather than how good, and the moves the engine ranked first that the human model never saw
   coming.
@@ -831,7 +843,7 @@ No schedule - added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>38 items, sorted by upside and effort</summary>
+<summary>35 items, sorted by upside and effort</summary>
 
 **Quick wins.** Small changes with an obvious payoff. Empty once more as of v3.1.272 - all fourteen
 that were here shipped in one release.
@@ -863,23 +875,9 @@ that were here shipped in one release.
   count is known, and one short fixed-depth benchmark per engine would measure what this machine can
   actually run - then say so once, instead of letting a two-core laptop default into the 112MB net.
 
-- [ ] **Strength per phase of the game** - the review already works out where the opening, middlegame and
-  endgame begin (on Lichess's own divider), and the strength estimate already runs move by move. Splitting it
-  three ways costs no extra passes and answers a far more interesting question than one number does: "you
-  open like 1800 and finish like 1300" is something a player can act on.
-
-- [ ] **Show the moves the estimate is built on** - the strength number is currently a verdict with no
-  evidence behind it. The moves the winning rating found *least* likely are the ones that moved it, and
-  listing them turns a number nobody can interrogate into one that can be argued with. A verdict without its
-  working gets either ignored or over-trusted, and both are bad.
-
 - [ ] **A variation tree on the Analysis page** - playing a move truncates the line and continues from there,
   which is right for "what if" and wrong for studying: the branch you just left is gone. Keeping branches, and
   a way to walk back into them, is most of what separates a study board from a very good scratchpad.
-
-- [ ] **Compare two ratings directly** - the sweep already holds every band's answer for the position on the
-  board, so picking two of them and listing where they differ most is arithmetic over data that is already
-  there. "What does 2200 do differently here" is the question the chart makes people ask and does not answer.
 
 - [ ] **What a human of that rating would REPLY** - Threat Analysis shows the engine's best answer to your
   move. The human model can answer the same question about the opponent you are actually facing, which is a
@@ -1039,7 +1037,22 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>65 features, newest first</summary>
+<summary>66 features, newest first</summary>
+
+- [x] **The strength estimate, with its working shown** (v3.1.274)
+  - **Strength per phase of the game** - the opening, the middlegame and the endgame each get their own
+    rating, off the dividers the review already computes. "Opens like 2000, finishes like 2400" is a
+    sentence a player can act on; one number for a whole game is not.
+  - **The moves the estimate is built on** - the handful that pushed the winning rating past its nearest
+    rival, each showing both ratings' probability for the move that was played, and what the winning
+    rating would have played when that differs. The number stops being a verdict with nothing behind it.
+  - **Compare two ratings directly** - pick any two of the model's ratings and read the positions where
+    they most disagree, each one's move and how sure it was. Answers "what does 2200 do differently
+    here" from the sweep that already ran.
+  - All three are arithmetic over the one sweep the estimate already performs, so they cost **no extra
+    engine time**, and every move listed is clickable and takes the board there.
+  - **The settings search box wears its own glyph** and keeps clear of the first section heading, so it
+    reads as a search box without needing a label.
 
 - [x] **chess.com Game Review, on your board** (v3.1.273)
   - **chess.com's own Game Review** - Ask Chess.com sends the game to chess.com's real game-review

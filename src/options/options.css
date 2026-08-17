@@ -620,15 +620,26 @@ textarea.drop-ready { border-color: var(--mp-on) !important; box-shadow: 0 0 0 2
 .limit-warn:empty { margin: 0; }
 html.dark .limit-warn { color: #d8a628; }
 
-/* the settings filter: one box over the rows, in the same frame every control wears */
-.set-filter { margin: 18px 0 0; }
+/* the settings filter: one quiet box over the rows, in the same frame every control wears. The
+   glyph sits INSIDE it (dim, like the info icons) so the box says what it is without a label, and
+   the bottom margin keeps it off the first section heading -- it sat hard against "Engine" and the
+   two read as one crowded block (user report 2026-08-16). */
+.set-filter { position: relative; margin: 20px 0 18px; max-width: 420px; }
+.set-filter .material-icons {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 17px;
+    color: var(--mp-mute);
+    pointer-events: none;
+}
 .set-filter input {
     box-sizing: border-box;
     width: 100%;
-    max-width: 420px;
     height: 30px !important;
     margin: 0 !important;
-    padding: 0 10px !important;
+    padding: 0 10px 0 31px !important;
     border: 1px solid var(--mp-line) !important;
     border-radius: 4px;
     background: var(--mp-bg);
