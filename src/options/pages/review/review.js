@@ -172,7 +172,7 @@ async function runReview(game, rig, onProgress) {
     built.strength = await strengthPass(positions, moves, {
         plan: (n) => { total += n; },
         tick: (what) => { done++; onProgress(done / total, what); },
-    });
+    }, rig);
     return built;
 }
 
@@ -182,7 +182,8 @@ async function runReview(game, rig, onProgress) {
 // and one rating fits better than the others: the one whose predictions were least surprised. That
 // is a maximum-likelihood estimate, and it is cheap for a reason worth writing down -- Maia costs ONE
 // forward pass whatever MultiPV is set to, so asking for the whole distribution costs nothing over
-// asking for five lines. The bill is bands x positions passes, and nothing else.
+// asking for five lines. The bill is bands x positions passes, and nothing else -- run on the human
+// pass's own engine when it is Maia 3, so the estimate loads no net of its own either.
 //
 // What it is NOT: a fair-play measurement. A player using an engine reads as STRONGER here, which is
 // the opposite of an accusation, and one game is a small sample however it is counted. Both are said
@@ -201,7 +202,7 @@ function strengthBands(kind) {
 // forced moves are arithmetic, and both are played the same way by everyone.
 function strengthUsable(m) { return !m.isBook && !m.onlyMove && m.uci; }
 
-async function strengthPass(positions, moves, prog) {
+async function strengthPass(positions, moves, prog, rig) {
     const kind = cfg('rv_human');
     if (!cfg('rv_strength') || !kind) return null;
     const usable = moves.map((m, i) => ({m, i})).filter(({m}) => strengthUsable(m));
@@ -216,11 +217,22 @@ async function strengthPass(positions, moves, prog) {
         prob: {}, top: {},   // band -> played-move probability ; band -> {uci, prob} the band would play
     }));
     let shared = null;
+    let borrowed = false;
     try {
         if (kind === 'maia3') {
-            shared = makeEngine('maia3', {variant: 'chess', multipv: STRENGTH_MULTIPV, maiaLevel: bands[0],
-                                          limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'review-strength');
-            await shared.start();
+            // The human pass's engine is the SAME 92MB net this sweep was loading a second copy of,
+            // and by the time this runs that pass is finished (both passes are awaited before
+            // assemble). Borrow it and sweep it across its rating dial instead: the second net load
+            // -- most of the estimate's wait, and all of its extra memory -- disappears.
+            if (rig?.human) {
+                shared = rig.human;
+                borrowed = true;
+                shared.send(`setoption name MultiPV value ${STRENGTH_MULTIPV}`);
+            } else {
+                shared = makeEngine('maia3', {variant: 'chess', multipv: STRENGTH_MULTIPV, maiaLevel: bands[0],
+                                              limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'review-strength');
+                await shared.start();
+            }
         }
         for (let bi = 0; bi < bands.length; bi++) {
             if (cancel) return null;
@@ -250,7 +262,15 @@ async function strengthPass(positions, moves, prog) {
         }
     } catch (e) {
         return null;   // the estimate is an extra; it never costs the report
-    } finally { shared?.dispose?.(); }
+    } finally {
+        if (borrowed) {
+            // Hand the engine back exactly as the human pass runs it: a batch review reuses this rig
+            // for the next game, and its human pass assumes five lines at the configured rating.
+            shared.send('setoption name MultiPV value 5');
+            shared.send(`setoption name SelfElo value ${cfg('rv_maia3_elo')}`);
+            shared.send(`setoption name OppoElo value ${cfg('rv_maia3_elo')}`);
+        } else { shared?.dispose?.(); }
+    }
 
     const phases = Core.gamePhases(positions.map(p => p.fen));
     const w = strengthForSide(rec, 'w', bands, phases);
@@ -1517,6 +1537,24 @@ async function fetchChesscom(user) {
     return out.reverse().slice(0, 40).join('\n\n');
 }
 
+// Lichess, same shape: the export API is public, takes a username, and answers PGN directly -- with
+// the same [%clk] comments the think-time cards already read. Standard chess only (perfType): the
+// review's board, openings and phases are all standard, so a crazyhouse game would only come back as
+// a broken review with no hint of why.
+async function fetchLichess(user) {
+    const clean = String(user || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!clean) throw new Error('Type a Lichess username first.');
+    const r = await fetch(`https://lichess.org/api/games/user/${clean}?max=40&clocks=true`
+                          + '&perfType=ultraBullet,bullet,blitz,rapid,classical,correspondence',
+                          {headers: {Accept: 'application/x-chess-pgn'}});
+    if (r.status === 404) throw new Error(`No Lichess player called "${clean}".`);
+    if (r.status === 429) throw new Error('Lichess is rate-limiting; wait a minute and try again.');
+    if (!r.ok) throw new Error(`Lichess answered ${r.status}`);
+    const text = (await r.text()).trim();
+    if (!text) throw new Error(`No games found for "${clean}".`);
+    return text;
+}
+
 // ---- page wiring ------------------------------------------------------------------------------
 
 function loadPgnText(text) {
@@ -1990,9 +2028,10 @@ class ReviewPage {
         $('rv_clear_btn').addEventListener('click', () => loadPgnText(''));
         $('rv_fetch_btn').addEventListener('click', async () => {
             const btn = $('rv_fetch_btn');
+            const site = $('rv_fetch_site')?.value || 'chesscom';
             btn.disabled = true;
-            note('Fetching from chess.com...');
-            try { loadPgnText(await fetchChesscom($('rv_user').value)); }
+            note(`Fetching from ${site === 'lichess' ? 'lichess.org' : 'chess.com'}...`);
+            try { loadPgnText(await (site === 'lichess' ? fetchLichess : fetchChesscom)($('rv_user').value)); }
             catch (e) { note(String(e.message || e), true); }
             finally { btn.disabled = false; }
         });

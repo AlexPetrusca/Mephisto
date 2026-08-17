@@ -579,9 +579,34 @@ function humanCacheKey(fen) { return `${fen}|${cfg('an_human')}|${cfg('an_band')
 async function humanFor(pos) {
     const key = humanCacheKey(pos.fen);
     if (humanCache.has(key)) return humanCache.get(key);
+    const kind = cfg('an_human');
+    // The sweep has already priced every move here at every band -- its answer for the selected band
+    // IS this column, so a position the chart has visited never costs a second forward pass. The
+    // sweep keeps twelve lines; this column keeps its usual five.
+    const swept = bandCache.get(bandKey(pos.fen, kind))?.[cfg('an_band')];
+    if (swept?.length) {
+        const out = swept.slice(0, 5);
+        humanCache.set(key, out);
+        return out;
+    }
     const h = await ensureHuman();
     if (!h) return null;
-    const res = await h.analyse(pos.fen, pos.turn);
+    // With Maia 3 the sweep runs on THIS engine, so the call goes through the same queue the sweeps
+    // use -- an analyse landing mid-sweep would answer at whatever rating the dial was passing. The
+    // queue also means a sweep may finish first and leave the answer in its cache; take it and skip
+    // the pass. Maia 1 keeps its own per-band engines, and skips the queue rather than waiting
+    // behind a sweep it cannot collide with.
+    const res = kind === 'maia3'
+        ? await queueSweep(() => {
+              const again = bandCache.get(bandKey(pos.fen, kind))?.[cfg('an_band')];
+              return again?.length ? {cached: again} : h.analyse(pos.fen, pos.turn);
+          })
+        : await h.analyse(pos.fen, pos.turn);
+    if (res?.cached) {
+        const out = res.cached.slice(0, 5);
+        humanCache.set(key, out);
+        return out;
+    }
     // THE NET'S OWN PROBABILITY, not a guess from the rank. This column used to derive its
     // percentages from the move ORDER with a fixed decay, so it printed 60.0 / 24.4 / 9.9 for every
     // position and every rating -- numbers that looked like output and carried no information. Maia
@@ -974,11 +999,22 @@ async function sweepBands(pos, kind, run, onStep) {
     const steps = bandSteps(kind);
     const acc = {};
     let shared = null;
+    let borrowed = false;
     try {
         if (kind === 'maia3') {   // one net, swept across its rating dial
-            shared = makeEngine('maia3', {variant: 'chess', multipv: BAND_MULTIPV, maiaLevel: steps[0],
-                                          limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'analysis-band');
-            await shared.start();
+            // The human column's engine IS this net. Loading a second 92MB copy for the sweep is
+            // what made the first sweep after picking Maia 3 a long wait, so borrow the one already
+            // running instead: every caller of it is serialised through queueSweep, so the dial can
+            // be turned without a search in flight.
+            shared = await ensureHuman().catch(() => null);
+            if (shared) {
+                borrowed = true;
+                shared.send(`setoption name MultiPV value ${BAND_MULTIPV}`);
+            } else {
+                shared = makeEngine('maia3', {variant: 'chess', multipv: BAND_MULTIPV, maiaLevel: steps[0],
+                                              limitKind: 'depth', limitValue: 1, threads: 1, hash: 16}, 'analysis-band');
+                await shared.start();
+            }
         }
         for (let i = 0; i < steps.length; i++) {
             if (run !== bandRun) return null;
@@ -1013,7 +1049,14 @@ async function sweepBands(pos, kind, run, onStep) {
                 if (!shared) e.dispose?.();
             } catch (err) { acc[band] = []; }
         }
-    } finally { shared?.dispose?.(); }
+    } finally {
+        if (borrowed) {
+            // hand it back the way the human column runs it: five lines at the selected rating
+            shared.send('setoption name MultiPV value 5');
+            shared.send(`setoption name SelfElo value ${cfg('an_band')}`);
+            shared.send(`setoption name OppoElo value ${cfg('an_band')}`);
+        } else { shared?.dispose?.(); }
+    }
     if (run !== bandRun) return null;
     bandCache.set(bandKey(pos.fen, kind), acc);
     return acc;

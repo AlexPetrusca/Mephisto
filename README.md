@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.274-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.275-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -113,7 +113,6 @@ working. Unpacking into a *new* folder changes the id and means re-running the n
 
 To pick up a change: reload on `chrome://extensions`, then reload the game tab. The panel checks this repository for
 a newer release at most once every 12 hours, from the service worker, so the chess page never makes the request.
-
 
 ### Automatic updates (opt-in)
 
@@ -267,9 +266,12 @@ one engine at a time. Studying wants the opposite.
 <summary>accuracy, move quality, alternate lines, fair-play measurements - all local</summary>
 
 Analyse finished games on the extension's own page - **Settings → Game Review**. Paste a PGN, load a
-`.pgn`, or fetch a player's recent games from Chess.com's public archive. **Nothing leaves your machine**:
-the text stays in the tab and the search runs in the extension's own engine, so this whole review works
-fully offline. (If you would rather have chess.com's own review instead, see the next section.)
+`.pgn`, or fetch a player's recent games from Chess.com's or Lichess's public API - pick the site, type
+the username, and their recent games land in the picker (standard chess only from Lichess, so a
+crazyhouse game cannot come back as a silently broken review). **Nothing leaves your machine** during
+the review itself: the text stays in the tab and the search runs in the extension's own engine, so the
+review works fully offline once the games are in the box. (If you would rather have chess.com's own
+review instead, see the next section.)
 
 - **Any engine, at your budget** - the bundled WASM Stockfishes, or a native host at full power. A
   **depth** is reproducible (the same depth is the same answer on any machine) and is the default at 16;
@@ -843,7 +845,7 @@ No schedule - added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>35 items, sorted by upside and effort</summary>
+<summary>32 items, sorted by upside and effort</summary>
 
 **Quick wins.** Small changes with an obvious payoff. Empty once more as of v3.1.272 - all fourteen
 that were here shipped in one release.
@@ -883,23 +885,10 @@ that were here shipped in one release.
   move. The human model can answer the same question about the opponent you are actually facing, which is a
   different and usually more useful prediction than the strongest reply on the board.
 
-- [ ] **One Maia engine per page** - the Human column, the moves-by-rating sweep and the strength estimate
-  each build their own. With Maia 3 that is 92MB of net apiece, and it is why the first sweep after picking
-  Maia 3 is a long wait. One engine, with access serialised the way the analyses were in v3.1.270, removes
-  both the memory and most of the wait.
-
-- [ ] **One cache for (position, rating)** - the chart's sweep and the strength estimate ask the same net
-  about the same positions and each throw the other's answers away. They want different slices of one forward
-  pass - the top few moves versus the whole distribution - so caching the distribution serves both.
-
 - [ ] **A board reader that knows the rules** - the recogniser already keeps its runner-up for every square
   (that is what the one-click square fix is built on). Nothing yet uses those runners-up to reject a decode
   that cannot be a chess position: two white kings, nine pawns, a pawn on the back rank. Accuracy bought from
   the rules rather than from the model, and it needs no retraining.
-
-- [ ] **Fetch games from Lichess as well** - the review reads Chess.com's public archive and nothing else, so
-  half the games people want reviewed have to be pasted in by hand. Lichess's export API is public, takes a
-  username, and returns PGN with the same clock comments the review already reads.
 
 - [ ] **A faster board recogniser** - partly answered in v3.1.255, and again in v3.1.269 by giving the model
   more threads: the cap of 4 was measured against 5, 6 and 8 on a 10-core Mac (754/635/610/589/704ms at
@@ -932,7 +921,6 @@ that were here shipped in one release.
 - [ ] **Your history across games** - Live Stats answers *how am I doing right now*; this answers *how have I
   been doing*. Accuracy over time, which openings actually lose, whether the Humanize settings you chose still
   look like you. Game Review computes the per-game numbers already; this keeps them.
-
 
 **Known problems.** Named faults rather than ideas: blocked on a diagnosis or on a site, not on wanting to.
 
@@ -986,7 +974,6 @@ that were here shipped in one release.
 
 - [ ] **Translate the README** - the interface speaks fourteen languages; the documentation still speaks one.
 
-
 **Speculative.** Kept because they might turn into something, not because they are planned.
 
 - [ ] **Mirroring another bot** - run a second game in a background tab and relay its moves into yours, so what
@@ -1002,7 +989,6 @@ that were here shipped in one release.
   and let it choose. Language models play badly and propose illegal moves, so as a source of moves this is a
   curiosity. One step across it is genuinely interesting: the same model as the voice behind Talking Mode and
   the move explanations, which is where the effort belongs.
-
 
 **Always open.**
 
@@ -1037,7 +1023,22 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>66 features, newest first</summary>
+<summary>67 features, newest first</summary>
+
+- [x] **One Maia per page, and games fetched from Lichess** (v3.1.275)
+  - **One Maia engine per page** - the Game Review strength estimate now sweeps the human pass's own
+    Maia 3 across its rating dial instead of loading a second 92MB copy, and the Analysis page's
+    moves-by-rating chart borrows the Human column's engine the same way, serialised on the sweep
+    queue so a request cannot land mid-dial. Both hand the engine back at five lines and the selected
+    rating when they finish.
+  - **One answer for (position, rating)** - the chart's sweep already prices every move at every
+    rating, so the Human column is served from the sweep's cache whenever the position has been swept
+    - stepping through a game no longer pays a second forward pass per ply for a column the sweep
+    already knew.
+  - **Fetch games from Lichess as well** - the review's fetch row gained a site picker: Chess.com's
+    public archive or Lichess's public export API, both by username, no login. Lichess games arrive
+    with the same clock comments the think-time cards read, standard chess only so a variant game
+    cannot come back as a silently broken review.
 
 - [x] **The strength estimate, with its working shown** (v3.1.274)
   - **Strength per phase of the game** - the opening, the middlegame and the endgame each get their own

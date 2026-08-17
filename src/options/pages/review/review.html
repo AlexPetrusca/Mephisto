@@ -49,15 +49,19 @@
 
                 <div class="set-row">
                     <div class="set-lbl">
-                        <span data-i18n="rv.chesscom" data-i18n-tip="rv.tip.chesscom" class="tooltipped" data-position="right"
-                              data-tooltip="Fetch a player's recent games from Chess.com's public API. Public data
+                        <span data-i18n="rv.fetch_from" data-i18n-tip="rv.tip.fetch_from" class="tooltipped" data-position="right"
+                              data-tooltip="Fetch a player's recent games from the site's public API. Public data
                                             only -- the same games anyone can see on their profile -- and no login.
                                             The request goes out from this extension page, so the game site never
                                             sees it.">
-                            Chess.com <i class="material-icons info-tooltip">info</i>
+                            Online games <i class="material-icons info-tooltip">info</i>
                         </span>
                     </div>
                     <div class="set-ctl rv-btns">
+                        <select id="rv_fetch_site" class="rv-select browser-default">
+                            <option value="chesscom">Chess.com</option>
+                            <option value="lichess">Lichess</option>
+                        </select>
                         <input id="rv_user" class="rv-input browser-default" type="text" placeholder="username" spellcheck="false">
                         <button id="rv_fetch_btn" class="set-btn" type="button" data-i18n="rv.fetch">Fetch games</button>
                     </div>
