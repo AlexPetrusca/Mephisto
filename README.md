@@ -17,7 +17,7 @@ you with timing and move choices tuned to look human.
 
 It also does a full **game review**: an **offline engine review** (accuracy, move quality, an eval graph and
 fair-play indicators) that never leaves your machine, or **chess.com's own Game Review** - the real one from their
-service, at their Fast/Standard/Deep/Maximum tiers with no daily limit - rendered right on the board.
+service, at their Fast/Standard/Deep/Maximum tiers, run from your own account - rendered right on the board.
 
 Click the toolbar icon to toggle a floating panel over the board. Unlike a normal extension popup it stays open while
 you click and play, so analysis and autoplay keep running for the whole game.
@@ -61,7 +61,7 @@ New here:
 
 - **Game Review** - a full **offline game review** (accuracy, move quality, an eval graph and fair-play
   indicators) that never leaves your machine, **and chess.com's own Game Review** rendered on the same
-  board, run from your own session with no daily limit.
+  board, run from your own account (unlimited with chess.com premium, the free-tier allowance without).
 - **Engines** - modern **Stockfish dev / 18**, the human-like **Maia** and **Maia-3** nets, and an **Elo cap**.
 - **Playing like a person** - **Humanize**, **Clock Mode** and **Mirror Time**.
 - **Automation** - **Safe Premove**, **Pondering**, **Help Mode**, **Manual Mode** and rebindable **hotkeys**.
@@ -320,17 +320,20 @@ fully offline. (If you would rather have chess.com's own review instead, see the
 
 ### chess.com Game Review
 
-**chess.com's own Game Review, on Mephisto's board - no daily limit.** This is the real thing: it calls
-chess.com's actual Game Review service and shows you *their* review, not a Mephisto imitation of it. Load
-a game, pick a strength (**Fast**, **Standard**, **Deep** or **Maximum** - chess.com's own tiers), and
-press **Ask Chess.com**. Every move comes back with chess.com's own verdict - brilliant, great, best,
-excellent, good, book, forced, inaccuracy, mistake, miss or blunder - the coach's commentary, both
-accuracies and the named opening, rendered on the same board and move list as the offline review, with
-the verdict icon before each move.
+**chess.com's own Game Review, on Mephisto's board.** This is the real thing: it calls chess.com's actual
+Game Review service and shows you *their* review, not a Mephisto imitation of it. Load a game, pick a
+strength (**Fast**, **Standard**, **Deep** or **Maximum** - chess.com's own tiers), and press **Ask
+Chess.com**. Every move comes back with chess.com's own verdict - brilliant, great, best, excellent,
+good, book, forced, inaccuracy, mistake, miss or blunder - the coach's commentary, both accuracies and
+the named opening, rendered on the same board and move list as the offline review, with the verdict icon
+before each move.
 
-It runs on **your own chess.com session**, the same way their site does, so there is no per-day cap and
-no token or password to hand over. If a chess.com tab is open it uses that; otherwise it opens one in the
-background and closes it again - all you need is to be signed in to chess.com in the browser.
+It runs on **your own chess.com account**, the same way their site does, so you get exactly the reviews
+your account gets: a **chess.com premium membership (Diamond) reviews without limit**, and a free account
+is held to chess.com's normal free-tier allowance. Either way there is no token or password to hand over.
+If a chess.com tab is open it uses that; otherwise it opens one in the background and closes it again -
+all you need is to be signed in to chess.com in the browser. (Want no limit and no data leaving your
+machine at all? The [offline Game review](#game-review-offline) above does that.)
 
 This is the one part of Game Review that sends anything anywhere - the game (a PGN) goes to chess.com. If
 you want a review that **never leaves your machine**, the [offline Game review](#game-review-offline)
@@ -344,9 +347,10 @@ above runs Stockfish or Maia entirely in your browser and uploads nothing.
   game accuracies and the named opening. The strength tiers are chess.com's own.
 - **On the shared board** - it drives the same board, move list and navigation as the offline review; the
   classification icon sits before each move and each summary-card label.
-- **Your session, no credentials** - the request carries your first-party chess.com session, so signing
-  in is the only requirement (a signed-out request is refused by chess.com). Mephisto never sees or
-  stores a password or token.
+- **Your account, no credentials** - the request carries your first-party chess.com session, so being
+  signed in is the requirement (a signed-out request is refused by chess.com). You get whatever your
+  account gets: unlimited reviews with a **premium (Diamond)** membership, the free-tier allowance
+  without one. Mephisto never sees or stores a password or token.
 - **Any standard game** - castling and all four promotions encode correctly, each mapped from a real
   capture.
 - **Copy / Save** keep chess.com's raw response; if a review errors, one button copies the message and
@@ -1042,9 +1046,10 @@ veto for real blunders, and the clock rules above.
     service and their review comes back on the same board and move list the offline review uses: the
     eleven verdicts, the coach's commentary, both accuracies and the named opening.
     Fast/Standard/Deep/Maximum are chess.com's own strength tiers, not a Mephisto imitation.
-  - **Your session, no credentials** - it runs in a chess.com tab (borrowed, or opened in the background
-    and closed again), so it uses your first-party session with no per-day cap and nothing to paste;
-    castling and all four promotions encode correctly, each mapped from a real capture.
+  - **Your account, no credentials** - it runs in a chess.com tab (borrowed, or opened in the background
+    and closed again), using your first-party session with nothing to paste; you get what your account
+    gets (unlimited with chess.com premium, the free-tier allowance without). Castling and all four
+    promotions encode correctly, each mapped from a real capture.
   - **A one-time heads-up** before the first review (10s before Accept), and a copy-error / open-ticket
     button when a review fails.
   - **Classification icons** now sit before the notation in the move list and before each summary-card
