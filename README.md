@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.276-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.277-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -1035,7 +1035,15 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>68 features, newest first</summary>
+<summary>69 features, newest first</summary>
+
+- [x] **Multi-move page-read puzzles play to the end** (v3.1.277)
+  - A page-read solution stalled one move in on Lichess Training (and any puzzle solved from the
+    capture alone): after our first move the board lands on the capture's "post-setup" reading, whose
+    line leads with the opponent's move, and the solution map was being built by move parity - which
+    labelled our real second move as the opponent's and dropped it. It now reads the parity off whose
+    turn it actually is, so the rest of the line plays. Storm, Streak and the chess.com modes were
+    unaffected and stay so.
 
 - [x] **Puzzle solutions read off the page** (v3.1.276)
   - **Read solutions from the page** - opt-in; Puzzle Mode reads the answer the site already handed its own

@@ -2863,11 +2863,21 @@ function puzzle_key(fen) {
 }
 
 // Walk the solution from the position it was stored against, recording OUR move for each of our
-// turns. The stored line alternates ours/theirs starting with ours, so our positions are the even
-// steps. chess.js is what makes the intermediate positions trustworthy -- unlike the import, this
+// turns. chess.js is what makes the intermediate positions trustworthy -- unlike the import, this
 // runs once per puzzle, not six million times.
+//
+// OURS is the side to move at a position matching the SOLVER's side, NOT the even steps. The line
+// does not always lead with our move: the capture store keeps a "post-setup" reading -- the position
+// right after our first move, opponent to reply -- whose line[0] is THEIRS. On lichess /training the
+// board lands on exactly that reading after our first move and re-matches it, so expanding it by loop
+// parity marked our real SECOND move as the opponent's (null), and the puzzle stalled one move in
+// while streak/storm (which never re-match a stored position mid-solution) played on. Asking the
+// board whose turn it is fixes the parity for either leading side; it falls back to the old even-step
+// rule only when the side is somehow unavailable, which keeps every our-leading line byte-identical.
 function puzzle_expand(fen, solution) {
     const map = new Map();
+    let ourSide = null;
+    try { const s = our_side(); ourSide = s === 'white' ? 'w' : s === 'black' ? 'b' : null; } catch (e) { /* board not ready */ }
     try {
         const chess = new Chess(config.variant, fen);
         const moves = solution.split(' ').filter(Boolean);
@@ -2881,7 +2891,9 @@ function puzzle_expand(fen, solution) {
             // middle of a solved line to a full search, which then draws its own arrow over the
             // solution and moves the eval bar. The next scrape lands back in the line and it snaps
             // back: an arrow that jumps to a different move in a puzzle that has a fixed one.
-            map.set(puzzle_key(chess.fen()), (i % 2 === 0) ? moves[i] : null);
+            const stm = chess.fen().split(' ')[1];
+            const ours = ourSide ? (stm === ourSide) : (i % 2 === 0);
+            map.set(puzzle_key(chess.fen()), ours ? moves[i] : null);
             const m = moves[i];
             if (!chess.move({from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4]})) break;
         }
