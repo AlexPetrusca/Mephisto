@@ -1,5 +1,5 @@
 /* Toolbar-popup mode (Panel Style = "popup"): the page is top-level, so shrink the whole thing with
-   zoom — Chrome sizes the popup window to the zoomed content, so it takes up much less screen. The
+   zoom - Chrome sizes the popup window to the zoomed content, so it takes up much less screen. The
    floating-panel iframe never gets this class (the content-script scales it separately). */
 html.toolbar-popup {
     zoom: 0.7;

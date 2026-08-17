@@ -104,7 +104,7 @@ const MephistoUpdater = (function () {
             manifest = JSON.parse(await (await handle.getFileHandle('manifest.json')).getFile()
                 .then(f => f.text()));
         } catch (e) {
-            throw new Error('No manifest.json in that folder — pick the folder you loaded as an unpacked extension.');
+            throw new Error('No manifest.json in that folder - pick the folder you loaded as an unpacked extension.');
         }
         const want = chrome.runtime.getManifest().name;
         if (manifest.name !== want) {
@@ -326,7 +326,7 @@ const MephistoUpdater = (function () {
         const restore = [];
         for (const p of (m.saved || [])) {
             const bytes = await readFileAt(gen, p);
-            if (!bytes) throw new Error(`The backup is missing ${p} — refusing to half-restore.`);
+            if (!bytes) throw new Error(`The backup is missing ${p} - refusing to half-restore.`);
             restore.push({path: p, bytes});
         }
         let n = 0;
@@ -377,7 +377,7 @@ const MephistoUpdater = (function () {
         const staging = await dir.getDirectoryHandle(STAGING).catch(() => null);
         if (!staging) throw new Error('There is no interrupted update to finish.');
         const raw = await readFileAt(staging, 'manifest.json');
-        if (!raw) throw new Error('The staged update has no manifest — download it again.');
+        if (!raw) throw new Error('The staged update has no manifest - download it again.');
         const version = JSON.parse(new TextDecoder().decode(raw)).version;
 
         onStatus(`Reading the staged v${version}…`);
@@ -385,7 +385,7 @@ const MephistoUpdater = (function () {
         const files = [];
         for (const p of paths) {
             const bytes = await readFileAt(staging, p);
-            if (!bytes) throw new Error(`The staged update is missing ${p} — download it again.`);
+            if (!bytes) throw new Error(`The staged update is missing ${p} - download it again.`);
             files.push({path: p, bytes});
         }
         // An interrupted install already took a backup. Only take one if it did not get that far,
@@ -436,7 +436,7 @@ const MephistoUpdater = (function () {
         const rel = await check({force: true});
         if (!rel.latest) throw new Error('Could not reach GitHub.');
         if (!rel.newer) return {already: true, version: rel.latest};
-        if (!rel.asset) throw new Error(`Release v${rel.latest} has no update archive — use the full zip.`);
+        if (!rel.asset) throw new Error(`Release v${rel.latest} has no update archive - use the full zip.`);
 
         onStatus(`Downloading v${rel.latest}…`);
         const res = await fetch(rel.asset, {credentials: 'omit'});

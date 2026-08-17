@@ -1,4 +1,4 @@
-# Mephisto remote engine — runs a local UCI chess engine (Stockfish, Fairy-Stockfish, ...) and lets
+# Mephisto remote engine - runs a local UCI chess engine (Stockfish, Fairy-Stockfish, ...) and lets
 # the browser extension talk to it over localhost. Keep this window open while you play, then set the
 # extension's Engine to "Remote Engine".
 #
@@ -35,7 +35,7 @@ app = Flask(__name__)
 
 
 # The sites the extension runs on (mirrors manifest.json content_scripts matches). The panel runs in
-# the page's isolated world, so its fetches carry the SITE's Origin — not chrome-extension://.
+# the page's isolated world, so its fetches carry the SITE's Origin - not chrome-extension://.
 ALLOWED_HOSTS = {'www.chess.com', 'lichess.org', 'blitztactics.com', 'taketaketake.com',
                  'www.taketaketake.com', 'tactics.chessbase.com'}
 
@@ -43,7 +43,7 @@ ALLOWED_HOSTS = {'www.chess.com', 'lichess.org', 'blitztactics.com', 'taketaketa
 @app.before_request
 def _reject_foreign_origins():
     # Only the extension may drive this server (issue #36 §2): allow extension-context fetches,
-    # fetches from the sites the panel runs on, and no-Origin callers (curl / manual testing) —
+    # fetches from the sites the panel runs on, and no-Origin callers (curl / manual testing) - 
     # the guard targets requests from arbitrary web pages. An Origin header can't be spoofed by
     # page script.
     origin = request.headers.get('Origin', '')
@@ -65,7 +65,7 @@ args = parser.parse_args()
 
 def set_option(key, value):
     # Apply one already-parsed engine option. `value` keeps its native type (str from the CLI, but
-    # int/bool from the extension's JSON — e.g. Hash:512, UCI_LimitStrength:true) so python-chess
+    # int/bool from the extension's JSON - e.g. Hash:512, UCI_LimitStrength:true) so python-chess
     # gets the type it expects. Never crashes the server on a bad option.
     key = str(key).strip()
     if not key:
@@ -74,7 +74,7 @@ def set_option(key, value):
     if key.lower() in MANAGED_OPTIONS:
         return  # python-chess manages these itself; setting them directly would fight it
     if key not in engine.options:
-        print(f"ignoring option '{key}' — this engine doesn't offer it")
+        print(f"ignoring option '{key}' - this engine doesn't offer it")
         return
     try:
         engine.configure({key: value})
@@ -88,7 +88,7 @@ def apply_option(opt):
     if opt is None:
         return
     if ':' not in opt:
-        print(f"skipping malformed option '{opt}' — expected NAME:VALUE, e.g. -o Hash:128")
+        print(f"skipping malformed option '{opt}' - expected NAME:VALUE, e.g. -o Hash:128")
         return
     key, value = opt.split(':', 1)
     set_option(key.strip(), value.strip())
@@ -212,7 +212,7 @@ def analyse():
         except (TypeError, ValueError):
             multipv = 1
         if 'multipv' not in engine.options:
-            multipv = 1 # engine doesn't support MultiPV — don't ask for it
+            multipv = 1 # engine doesn't support MultiPV - don't ask for it
 
         terminal = not any(board.legal_moves) # authoritative game-over signal
         try:
@@ -226,7 +226,7 @@ def analyse():
                         bestmove = analysis.wait().move # actual move (search or book)
             return format_lines(analysis.multipv, terminal, bestmove)
         except chess.engine.EngineTerminatedError:
-            return {'error': 'the engine process stopped — restart this script'}, 503
+            return {'error': 'the engine process stopped - restart this script'}, 503
 
 
 @app.route('/configure', methods=['POST'])
@@ -262,7 +262,7 @@ def start_engine(path):
         return chess.engine.SimpleEngine.popen_uci(path)
     except FileNotFoundError:
         sys.exit(f"Couldn't find an engine at: {path}\n"
-                 f"Check the path is right — tip: drag the engine file into the terminal to paste its full path.")
+                 f"Check the path is right - tip: drag the engine file into the terminal to paste its full path.")
     except PermissionError:
         sys.exit(f"The engine at {path} isn't executable.\n"
                  f"On macOS/Linux, run:  chmod +x \"{path}\"")
@@ -278,7 +278,7 @@ if __name__ == '__main__':
     print("In the extension, set Engine = \"Remote Engine\". Keep this window open while you play.")
     print("Press Ctrl+C here to stop.")
     try:
-        app.run(host='127.0.0.1', port=args.port)  # loopback only — never expose on the LAN
+        app.run(host='127.0.0.1', port=args.port)  # loopback only - never expose on the LAN
     except OSError as ex:
         sys.exit(f"Couldn't start the server on port {args.port}:\n    {ex}\n"
                  f"That port may already be in use (is this script already running?). "

@@ -26,18 +26,18 @@
                             Engine
                         </span>
                         <select name="engine" id="engine_select">
-                            <option value="sf-native">Stockfish (local, full power — setup required)</option>
+                            <option value="sf-native">Stockfish (local, full power - setup required)</option>
                             <option value="stockfish-dev-nnue">Stockfish dev WASM - 90MB</option>
                             <option value="stockfish-18-nnue">Stockfish 18 WASM - 112MB</option>
                             <option value="stockfish-18-small-nnue">Stockfish 18 Small WASM - 15MB</option>
                             <option value="stockfish-11-hce">Stockfish 11 HCE WASM</option>
-                            <option value="fairy-native">Fairy-Stockfish (local, full power — setup required)</option>
+                            <option value="fairy-native">Fairy-Stockfish (local, full power - setup required)</option>
                             <option value="fairy-stockfish-14-nnue">Fairy Stockfish 14 WASM</option>
                             <option value="maia">Maia (human-like)</option>
                             <option value="maia3">Maia-3 (600-2600)</option>
-                            <option value="tetrarch-native">Tetrarch (4-player chess — Teams mode only)</option>
-                            <option value="cloud-chessapi">Stockfish 18 (online — chess-api.com, position leaves your machine)</option>
-                            <option value="cloud-stockfish-online">Stockfish 17.1 (online — stockfish.online, position leaves your machine)</option>
+                            <option value="tetrarch-native">Tetrarch (4-player chess - Teams mode only)</option>
+                            <option value="cloud-chessapi">Stockfish 18 (online - chess-api.com, position leaves your machine)</option>
+                            <option value="cloud-stockfish-online">Stockfish 17.1 (online - stockfish.online, position leaves your machine)</option>
                             <option value="remote">Remote Engine</option>
                         </select>
                     </label>
@@ -91,7 +91,7 @@
                         <span data-i18n="panel.fourpc_mode" data-i18n-tip="set.tip.four_player_mode" class="tooltipped" data-position="right"
                               data-tooltip="Which rules the four-player board is played under. Auto-detect reads it
                                             from chess.com's own mode label, which is a guess about someone else's
-                                            markup — set it yourself when that guess is wrong. It changes the rules
+                                            markup - set it yourself when that guess is wrong. It changes the rules
                                             the search runs under: promotion is the 8th rank in free-for-all and the
                                             11th in Teams. Tetrarch searches Teams only.">
                             Four-player Mode <i class="material-icons info-tooltip">info</i>
@@ -365,14 +365,14 @@
                     <div class="set-ctl">
                         <select name="ui_mode" id="ui_mode_select">
                             <option data-i18n="set.floating_panel_over_the_board" value="floating">Floating panel (over the board)</option>
-                            <option data-i18n="set.toolbar_popup_safer_no_page" value="popup">Toolbar popup (safer — no page footprint)</option>
+                            <option data-i18n="set.toolbar_popup_safer_no_page" value="popup">Toolbar popup (safer - no page footprint)</option>
                         </select>
                     </div>
                 </div>
                 <p data-i18n-html="set.note.the_floating_panel_is_embedded" id="ui_mode_note" class="set-note">
                     ⚠️ The <b>floating panel</b> is embedded in the web page, which makes the extension easier for a
                     chess site to detect. The <b>toolbar popup</b> runs entirely in the browser and leaves no page
-                    footprint — the safer choice for pure <b>analysis</b>. Note: the popup closes when you click the
+                    footprint - the safer choice for pure <b>analysis</b>. Note: the popup closes when you click the
                     board, so <b>Autoplay and Premove work only with the Floating panel</b>.
                 </p>
                 <p data-i18n-html="set.note.the_panel_button_row_bottom" class="set-note">
@@ -804,11 +804,11 @@
                     <a href="https://database.lichess.org/#puzzles" target="_blank">database.lichess.org</a>, decompress it
                     (<code>unzstd lichess_db_puzzle.csv.zst</code>), then pick the <b>.csv</b> here.
                     It is about six million positions, so the import takes <b>roughly half an
-                    hour</b> — leave this page open. It only has to be done once, and if it is
+                    hour</b> - leave this page open. It only has to be done once, and if it is
                     interrupted nothing is lost: run it again and it picks up what is missing.
                 </p>
                 <p class="set-note">
-                    The <b>Chess.com puzzle database</b> loads through this same button — the format is
+                    The <b>Chess.com puzzle database</b> loads through this same button - the format is
                     detected from the file, so there is nothing extra to choose. Importing both simply
                     gives you both; they key on the position, so neither overwrites the other.
                 </p>
@@ -992,7 +992,7 @@
                 </div>
 
                 <p data-i18n="set.note.priority_time_mirror_clock" class="set-note">
-                    Priority — Time: Mirror ▸ Clock ▸ Humanize ▸ Search Time. Move: Book ▸ Humanize ▸ engine best.
+                    Priority - Time: Mirror ▸ Clock ▸ Humanize ▸ Search Time. Move: Book ▸ Humanize ▸ engine best.
                 </p>
             </section>
 
@@ -1001,7 +1001,7 @@
                  same category, and reading them apart was the whole problem. general.js binds the
                  number inputs by id; the sliders are gone, so it treats `range` as optional. -->
             <section id="humanize" class="set-sec scrollspy">
-                <h3 data-i18n="set.sec.humanize_move_mix" class="set-h">Humanize — move mix</h3>
+                <h3 data-i18n="set.sec.humanize_move_mix" class="set-h">Humanize - move mix</h3>
 
                 <p data-i18n="set.note.how_often_each_quality_of" class="set-note">
                     How often each quality of move is played. The seven shares must total 100. Each threshold is how
@@ -1046,7 +1046,7 @@
                         <tr>
                             <td data-i18n="set.top_move">Top move</td>
                             <td><input id="humanize_top_mixnum" type="number" min="0" max="100" step="1"></td>
-                            <td class="set-dash">—</td>
+                            <td class="set-dash"> - </td>
                             <td class="set-readout">100%</td>
                         </tr>
                         <tr>
@@ -1098,7 +1098,7 @@
 
                 <p data-i18n="set.note.giving_a_share_to_anything" class="set-note">
                     Giving a share to anything below the near-best bands makes the engine search a wider list so a move
-                    that bad exists to choose from — that costs search depth. A pure Top + Second mix keeps the cheaper
+                    that bad exists to choose from - that costs search depth. A pure Top + Second mix keeps the cheaper
                     search.
                 </p>
             </section>
@@ -1108,7 +1108,7 @@
                 <h3 data-i18n="set.hotkeys" class="set-h">Hotkeys</h3>
                 <p data-i18n-html="set.note.keyboard_shortcuts_that_work_while" class="set-note">
                     Keyboard shortcuts that work while you're on the game page (they only fire when the floating panel
-                    is open). Click a key to rebind it — the next key you press (with any Ctrl/Alt/Shift/Meta) becomes
+                    is open). Click a key to rebind it - the next key you press (with any Ctrl/Alt/Shift/Meta) becomes
                     the binding; press <b>Esc</b> to cancel, or <b>Backspace/Delete</b> to clear it. Defaults are
                     <b>single letters</b>; the play-move key is Spacebar. If one clashes with a shortcut the site
                     itself uses, rebind it with any Ctrl/Alt/Shift/Meta combination.
@@ -1144,10 +1144,10 @@
                 </div>
                 <p id="copy_diag_status" class="set-status"></p>
                 <p data-i18n-html="set.note.the_panel_s_clipboard_button" class="set-note">
-                    The button above — and <b>D</b> on the game page, rebindable under Hotkeys — copies a report you
+                    The button above - and <b>D</b> on the game page, rebindable under Hotkeys - copies a report you
                     can paste straight into a bug report:
                     version, engine, what was detected, why the last move was or was not played, and the last 200 trace
-                    lines. It deliberately carries <b>no addresses and nothing that identifies you</b> — no full URL, no
+                    lines. It deliberately carries <b>no addresses and nothing that identifies you</b> - no full URL, no
                     query string, no extension id.
                 </p>
             </section>
@@ -1166,7 +1166,7 @@
                               data-tooltip="Chrome never updates an extension you loaded yourself, so Mephisto can do it
                                             instead: download the small update archive from its releases page and write it
                                             straight into this extension's own folder. Turning this on asks Chrome for
-                                            permission to download from that one repository — nothing is ever installed
+                                            permission to download from that one repository - nothing is ever installed
                                             without you pressing Install."><i class="material-icons info-tooltip">info</i></span>
                     </div>
                     <div class="set-ctl">
@@ -1179,7 +1179,7 @@
 
                 <p data-i18n-html="set.note.updates_are_applied_in_place" class="set-note">
                     Updates are applied <b>in place</b>, which is the point: your extension ID never changes, so the
-                    native engine hosts you installed keep working, and the bundled engines are left alone — the
+                    native engine hosts you installed keep working, and the bundled engines are left alone - the
                     download is about <b>6 MB</b> rather than 585. Choose the folder you loaded as an unpacked
                     extension once; Chrome remembers it. After an update, reload any game tab you had open.
                 </p>
@@ -1188,7 +1188,7 @@
                 </p>
                 <p data-i18n-html="set.note.every_update_is_undoable" class="set-note">
                     Every update is <b>undoable</b>. Before anything is overwritten the new version is written to a
-                    staging folder, and the files it replaces are copied to a backup — so <b>Roll Back</b> puts the
+                    staging folder, and the files it replaces are copied to a backup - so <b>Roll Back</b> puts the
                     previous version straight back, and an update interrupted halfway can be finished without
                     downloading it again. One generation is kept, and the bundled engines are never part of it.
                 </p>
@@ -1228,7 +1228,7 @@
                 <li><a data-i18n="set.sec.beyond_the_engine" href="#beyond">Beyond the engine</a></li>
                 <li><a data-i18n="set.sec.puzzles" href="#puzzles">Puzzles</a></li>
                 <li><a data-i18n="set.sec.timing" href="#timing">Timing</a></li>
-                <li><a data-i18n="set.sec.humanize_move_mix" href="#humanize">Humanize — move mix</a></li>
+                <li><a data-i18n="set.sec.humanize_move_mix" href="#humanize">Humanize - move mix</a></li>
                 <li><a data-i18n="set.hotkeys" href="#hotkeys">Hotkeys</a></li>
                 <li><a data-i18n="set.sec.diagnostics" href="#diagnostics">Diagnostics</a></li>
                 <li><a data-i18n="set.sec.updates" href="#updates">Updates</a></li>

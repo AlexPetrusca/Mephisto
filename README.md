@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.272-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.273-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -10,10 +10,14 @@
 
 </div>
 
-**Real-time chess analysis and automated play on Chess.com, Lichess, BlitzTactics, TakeTakeTake and ChessBase
-Tactics.** Mephisto reads the position straight off the page, runs **Stockfish** (NNUE), **Fairy-Stockfish** or
-**Maia** entirely in your browser - no server, no account - and draws the best move on the board, or plays it for you
-with timing and move choices tuned to look human.
+**Real-time chess analysis, game review and automated play on Chess.com, Lichess, BlitzTactics, TakeTakeTake and
+ChessBase Tactics.** Mephisto reads the position straight off the page, runs **Stockfish** (NNUE), **Fairy-Stockfish**
+or **Maia** entirely in your browser - no server, no account - and draws the best move on the board, or plays it for
+you with timing and move choices tuned to look human.
+
+It also does a full **game review**: an **offline engine review** (accuracy, move quality, an eval graph and
+fair-play indicators) that never leaves your machine, or **chess.com's own Game Review** - the real one from their
+service, at their Fast/Standard/Deep/Maximum tiers with no daily limit - rendered right on the board.
 
 Click the toolbar icon to toggle a floating panel over the board. Unlike a normal extension popup it stays open while
 you click and play, so analysis and autoplay keep running for the whole game.
@@ -55,12 +59,17 @@ original did still works.
 
 New here:
 
+- **Game Review** - a full **offline game review** (accuracy, move quality, an eval graph and fair-play
+  indicators) that never leaves your machine, **and chess.com's own Game Review** rendered on the same
+  board, run from your own session with no daily limit.
 - **Engines** - modern **Stockfish dev / 18**, the human-like **Maia** and **Maia-3** nets, and an **Elo cap**.
 - **Playing like a person** - **Humanize**, **Clock Mode** and **Mirror Time**.
 - **Automation** - **Safe Premove**, **Pondering**, **Help Mode**, **Manual Mode** and rebindable **hotkeys**.
 - **Beyond the engine** - the **Opening Explorer**, an **endgame tablebase** and the **puzzle database**.
-- **On screen** - the **eval bar**, the **eval history graph**, **screen reading** and a **playable panel board**.
-- **Coverage** - **Chess.com variants**, **TakeTakeTake**, **Chess960** and **fourteen languages**.
+- **On screen** - the **eval bar**, the **eval history graph**, **screen reading**, a **screenshot-to-FEN**
+  reader and a **playable panel board**.
+- **Coverage** - **Chess.com variants**, **four-player chess**, **TakeTakeTake**, **Chess960** and
+  **fourteen languages**.
 - **Under the hood** - a **zero-iframe panel** with no page-visible extension URLs, move-correctness guards,
   copy FEN/PGN and settings export/import.
 
@@ -252,20 +261,21 @@ one engine at a time. Studying wants the opposite.
 
 </details>
 
-### Game review
+### Game review (offline)
 
 <details>
-<summary>accuracy, move quality, alternate lines, fair-play measurements</summary>
+<summary>accuracy, move quality, alternate lines, fair-play measurements - all local</summary>
 
 Analyse finished games on the extension's own page - **Settings → Game Review**. Paste a PGN, load a
-`.pgn`, or fetch a player's recent games from Chess.com's public archive. Nothing is uploaded: the text
-stays in the tab and the search runs in the extension's own engine.
+`.pgn`, or fetch a player's recent games from Chess.com's public archive. **Nothing leaves your machine**:
+the text stays in the tab and the search runs in the extension's own engine, so this whole review works
+fully offline. (If you would rather have chess.com's own review instead, see the next section.)
 
 - **Any engine, at your budget** - the bundled WASM Stockfishes, or a native host at full power. A
   **depth** is reproducible (the same depth is the same answer on any machine) and is the default at 16;
-  a **time per move** runs 0.1s to 15s in tenths, with one notch past the end that means no limit at all.
-  Each mode remembers its own number, so switching between them does not reinterpret one in the other's
-  units. Native hosts take either. 1–10 candidate lines, your own thread and hash counts.
+  a **time per move** is a plain box in seconds (default 0.5s, steps of 0.5, type any value). Each mode
+  remembers its own number, so switching between them does not reinterpret one in the other's units.
+  Native hosts take either. 1–10 candidate lines, your own thread and hash counts.
 - **What you actually gave up** - every position is searched once, so the score before a move and the
   score after it come from the same search at the same budget, and the played move's rank in the engine's
   own list is exact.
@@ -305,6 +315,46 @@ stays in the tab and the search runs in the extension's own engine.
   anywhere.
 
 ![The game review page](docs/game-review.png)
+
+</details>
+
+### chess.com Game Review
+
+**chess.com's own Game Review, on Mephisto's board - no daily limit.** This is the real thing: it calls
+chess.com's actual Game Review service and shows you *their* review, not a Mephisto imitation of it. Load
+a game, pick a strength (**Fast**, **Standard**, **Deep** or **Maximum** - chess.com's own tiers), and
+press **Ask Chess.com**. Every move comes back with chess.com's own verdict - brilliant, great, best,
+excellent, good, book, forced, inaccuracy, mistake, miss or blunder - the coach's commentary, both
+accuracies and the named opening, rendered on the same board and move list as the offline review, with
+the verdict icon before each move.
+
+It runs on **your own chess.com session**, the same way their site does, so there is no per-day cap and
+no token or password to hand over. If a chess.com tab is open it uses that; otherwise it opens one in the
+background and closes it again - all you need is to be signed in to chess.com in the browser.
+
+This is the one part of Game Review that sends anything anywhere - the game (a PGN) goes to chess.com. If
+you want a review that **never leaves your machine**, the [offline Game review](#game-review-offline)
+above runs Stockfish or Maia entirely in your browser and uploads nothing.
+
+<details>
+<summary>how it works, what it needs</summary>
+
+- **chess.com's real review** - the request goes to chess.com's own `game-review` endpoint and the reply
+  is decoded as-is: the eleven move classes chess.com uses, its one-line commentary per move, the two
+  game accuracies and the named opening. The strength tiers are chess.com's own.
+- **On the shared board** - it drives the same board, move list and navigation as the offline review; the
+  classification icon sits before each move and each summary-card label.
+- **Your session, no credentials** - the request carries your first-party chess.com session, so signing
+  in is the only requirement (a signed-out request is refused by chess.com). Mephisto never sees or
+  stores a password or token.
+- **Any standard game** - castling and all four promotions encode correctly, each mapped from a real
+  capture.
+- **Copy / Save** keep chess.com's raw response; if a review errors, one button copies the message and
+  opens a fresh issue.
+
+A one-time heads-up before the first review explains that the game leaves your machine on your own
+session. Signed out, it tells you so rather than failing silently. This uses chess.com's service on your
+account - use it at your own discretion.
 
 </details>
 
@@ -985,7 +1035,22 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>64 features, newest first</summary>
+<summary>65 features, newest first</summary>
+
+- [x] **chess.com Game Review, on your board** (v3.1.273)
+  - **chess.com's own Game Review** - Ask Chess.com sends the game to chess.com's real game-review
+    service and their review comes back on the same board and move list the offline review uses: the
+    eleven verdicts, the coach's commentary, both accuracies and the named opening.
+    Fast/Standard/Deep/Maximum are chess.com's own strength tiers, not a Mephisto imitation.
+  - **Your session, no credentials** - it runs in a chess.com tab (borrowed, or opened in the background
+    and closed again), so it uses your first-party session with no per-day cap and nothing to paste;
+    castling and all four promotions encode correctly, each mapped from a real capture.
+  - **A one-time heads-up** before the first review (10s before Accept), and a copy-error / open-ticket
+    button when a review fails.
+  - **Classification icons** now sit before the notation in the move list and before each summary-card
+    label, the same glyphs the board draws.
+  - **The review budget is a plain box** - depth in plies, or time in seconds (default 0.5s, step 0.5,
+    any value), replacing the slider.
 
 - [x] **All fourteen quick wins** (v3.1.272)
   - **The panel's number column says what it is** - Eval from an engine, Probability from a human model - and a
@@ -993,7 +1058,7 @@ veto for real blunders, and the clock rules above.
   - **The rating chart draws everything above 1%** (up to eight moves): the five-line clamp was ours, not the
     model's - one forward pass already prices every legal move.
   - **The Analysis page names the opening** (the review's position-keyed table, so transpositions come out
-    right) and **asks the tablebase** once seven or fewer men are left - "Tablebase: win in 43 — Kd2".
+    right) and **asks the tablebase** once seven or fewer men are left - "Tablebase: win in 43 - Kd2".
   - **Drop a .pgn anywhere** on Analysis or Game Review; one shared helper, the paste box lights up, a drag
     without files is left alone.
   - **Game Review**: the progress line carries a **time-remaining estimate**; the report **names the move the

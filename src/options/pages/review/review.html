@@ -135,24 +135,27 @@
                                             when you want to compare two reviews, and with Threads set to 1 it is
                                             reproducible: measured on this build, three depth-14 searches of the same
                                             position agreed exactly on one thread and disagreed (27/25/24cp) on four,
-                                            because a multi-threaded search explores in a different order every time. Time runs from 1 to 60 seconds per
-                                            position, and one notch past 60 removes the clock entirely: the engine
-                                            is told `go infinite` and keeps thinking about the position until you
-                                            press Stop, which scores it with whatever depth it reached and ends the
-                                            run. A game is roughly 2 positions per move, so 80 positions at 1s is
-                                            about a minute and a half.">
+                                            because a multi-threaded search explores in a different order every time.
+                                            Time is seconds per position (default 0.5s); the -/+ buttons step by 0.5s
+                                            and you can type any value. A game is roughly 2 positions per move, so a
+                                            40-move game at 0.5s is about a minute.">
                             Budget <i class="material-icons info-tooltip">info</i>
                         </span>
                     </div>
-                    <div class="set-ctl rv-btns">
+                    <div class="set-ctl rv-budget">
                         <select id="rv_limit_kind" class="rv-select rv-narrow browser-default">
                             <option value="depth" data-i18n="rv.depth">Depth</option>
                             <option value="time" data-i18n="rv.time_per_move">Time per move</option>
                         </select>
-                        <input id="rv_limit_slider" class="rv-slider" type="range" min="1" max="151" step="1">
+                        <!-- a plain -/+ box (user call 2026-08-16): the buttons step by the input's
+                             own step -- 1 ply in Depth, 0.5s in Time -- and any value can be typed. -->
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="rv_limit_num" type="number" min="0.1" step="0.5">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
                         <span id="rv_limit_unit" class="rv-unit"></span>
-                        <!-- the number the slider is really setting: kept because a review is a
-                             long job and "16 plies" or "8s" is worth reading back exactly -->
+                        <!-- the active budget the run reads: plies in Depth, ms in Time -->
                         <input id="rv_limit_value" type="hidden">
                     </div>
                 </div>
@@ -287,6 +290,52 @@
                 <div id="rv_progress_wrap" class="rv-progress-wrap hidden">
                     <div class="rv-progress"><div id="rv_progress_bar"></div></div>
                     <div id="rv_progress_text" class="rv-status"></div>
+                </div>
+
+                <!-- chess.com's own review of the loaded game: runs in a chess.com tab (borrowed or
+                     opened in the background) so it uses your own session, and renders on the board
+                     below. Copy/Save keep the raw protobuf. Strings here are not data-i18n'd yet. -->
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span class="tooltipped" data-position="right"
+                              data-tooltip="chess.com's OWN Game Review -- the real one from their site, not a
+                                            Mephisto imitation. Fast/Standard/Deep/Maximum are chess.com's own strength
+                                            tiers. It uses YOUR chess.com session: if a chess.com tab is open it runs
+                                            there, otherwise it opens one in the background and closes it again -- you
+                                            just need to be signed in to chess.com in this browser. This is the one part
+                                            of Game Review that leaves your machine: the PGN goes to chess.com.">
+                            Chess.com Game review <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl rv-oneline">
+                        <select id="rv_ccr_strength" class="rv-select browser-default">
+                            <option value="Fast">Fast (~1 sec, 3270 Rating)</option>
+                            <option value="Standard" selected>Standard (~5 sec, 3430 Rating)</option>
+                            <option value="Deep">Deep (~20 sec, 3500 Rating)</option>
+                            <option value="Maximum">Maximum (~1 min 30 sec, 3560 Rating)</option>
+                        </select>
+                        <button id="rv_ccr_run" class="set-btn set-btn-go" type="button">Ask Chess.com</button>
+                        <button id="rv_ccr_copy" class="set-btn hidden" type="button">Copy JSON</button>
+                        <button id="rv_ccr_save" class="set-btn hidden" type="button">Save .json</button>
+                        <button id="rv_ccr_ticket" class="set-btn hidden" type="button">Copy error &amp; open ticket</button>
+                    </div>
+                </div>
+                <div id="rv_ccr_status" class="rv-status"></div>
+                <pre id="rv_ccr_out" class="rv-ccr-out hidden"></pre>
+
+                <!-- one-time caution gate before the first chess.com review: 10s before Accept is live -->
+                <div id="rv_ccr_consent" class="ccr-modal hidden">
+                    <div class="ccr-modal-box">
+                        <h4>Heads up</h4>
+                        <p>chess.com Game Review sends the loaded game to chess.com from your own
+                           session, the same way their site does. There's a small chance chess.com
+                           could flag automated requests, so use it at your own discretion - Mephisto
+                           isn't responsible for anything that happens to your account.</p>
+                        <div class="ccr-modal-btns">
+                            <button id="rv_ccr_decline" class="set-btn" type="button">Cancel</button>
+                            <button id="rv_ccr_accept" class="set-btn set-btn-go" type="button" disabled>Got it (10)</button>
+                        </div>
+                    </div>
                 </div>
             </section>
 

@@ -417,6 +417,32 @@ function countClasses(moves, color) {
 // positions are dominated by the engine load and would promise nonsense), and re-based when the
 // fraction falls a long way -- that is a NEW run, not this one going backwards. The strength pass
 // growing the total mid-run only dents the fraction slightly, below the re-base threshold.
+let ccrJson = '';           // the chess.com review's last raw answer
+let ccrLastError = '';      // the last chess.com error text, for the "copy error & open ticket" button
+
+// A one-time caution gate before the FIRST chess.com review: the game leaves the machine on the user's
+// own chess.com session, so this spells out the risk and forces a 10s wait before Accept goes live.
+// Accepting is REMEMBERED (ccr_consent); declining is not, so a declined attempt is asked again next time.
+function ccrConsent() {
+    return new Promise((resolve) => {
+        if (cfg('ccr_consent')) return resolve(true);
+        const modal = $('rv_ccr_consent'), accept = $('rv_ccr_accept'), decline = $('rv_ccr_decline');
+        if (!modal || !accept || !decline) return resolve(true);   // no gate in the DOM -> do not block
+        let n = 10;
+        accept.disabled = true;
+        accept.textContent = `Got it (${n})`;
+        modal.classList.remove('hidden');
+        const tick = setInterval(() => {
+            n -= 1;
+            if (n <= 0) { clearInterval(tick); accept.disabled = false; accept.textContent = 'Got it'; }
+            else accept.textContent = `Got it (${n})`;
+        }, 1000);
+        const done = (val) => { clearInterval(tick); modal.classList.add('hidden'); accept.onclick = null; decline.onclick = null; resolve(val); };
+        accept.onclick = () => { setCfg('ccr_consent', true); done(true); };
+        decline.onclick = () => done(false);
+    });
+}
+
 const eta = {t0: 0, last: 1};
 function etaText(frac) {
     if (frac < eta.last - 0.15 || !eta.t0) eta.t0 = Date.now();
@@ -432,7 +458,7 @@ function progress(frac, text) {
     const bar = $('rv_progress_bar');
     if (bar) bar.style.width = `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%`;
     const t = $('rv_progress_text');
-    if (t) t.textContent = text ? `${Math.round(frac * 100)}% — ${text}${etaText(frac)}` : '';
+    if (t) t.textContent = text ? `${Math.round(frac * 100)}% - ${text}${etaText(frac)}` : '';
 }
 
 function note(text, bad) {
@@ -472,6 +498,8 @@ function renderReport() {
     if (!report) return;
     $('rv-report').classList.remove('hidden');
     $('rv-indicators').classList.remove('hidden');
+    // a preceding chess.com review hides these engine-only blocks; restore them for an engine run.
+    document.querySelector('.rv-graph-wrap')?.classList.remove('hidden');
     $('rv_export').disabled = false;
     renderHeader();
     renderCards();
@@ -508,10 +536,14 @@ function renderHeader() {
     if (t.Date) bits.push(esc(Core.formatDate(t.Date)));
     if (t.TimeControl) bits.push(esc(t.TimeControl));
     if (report.book.name) bits.push(esc(report.book.name));
-    const eng = ENGINES.find(e => e.id === report.engineId);
-    const budget = report.opts.limitKind === 'depth'
-        ? `depth ${report.opts.limitValue}` : `${report.opts.limitValue}ms/move`;
-    bits.push(`${esc(eng ? eng.label : report.engineId)}, ${budget}, ${report.opts.multipv} line(s)`);
+    if (report.ccr) {
+        bits.push(`chess.com Game Review${report.ccrStrength ? ` - ${esc(report.ccrStrength)}` : ''}`);
+    } else {
+        const eng = ENGINES.find(e => e.id === report.engineId);
+        const budget = report.opts.limitKind === 'depth'
+            ? `depth ${report.opts.limitValue}` : `${report.opts.limitValue}ms/move`;
+        bits.push(`${esc(eng ? eng.label : report.engineId)}, ${budget}, ${report.opts.multipv} line(s)`);
+    }
     $('rv_header').innerHTML =
         `<div class="rv-vs">${esc(playerLine('w'))} &ndash; ${esc(playerLine('b'))}`
         + ` &nbsp;${esc(report.game.result)}</div>`
@@ -527,14 +559,14 @@ function renderCards() {
         const counts = report.counts[color];
         const rows = Core.CLASS_ORDER
             .filter(k => counts[k])
-            .map(k => `<div class="rv-kv rv-c-${k}"><span><b>${CLASS_LABEL[k]}</b></span><span>${counts[k]}</span></div>`)
+            .map(k => `<div class="rv-kv rv-c-${k}"><span>${classIcon(k)}<b>${CLASS_LABEL[k]}</b></span><span>${counts[k]}</span></div>`)
             .join('');
         return `<div class="rv-card">
             <h4>${esc(name)}</h4>
-            <div class="rv-big">${acc == null ? '—' : acc.toFixed(1) + '%'}</div>
+            <div class="rv-big">${acc == null ? ' - ' : acc.toFixed(1) + '%'}</div>
             <div class="rv-sub">accuracy over ${ind.moves} moves</div>
             <div style="margin-top:10px">${rows}</div>
-            <div class="rv-kv" style="margin-top:8px"><span>Avg. centipawn loss</span><span>${ind.acpl ?? '—'}</span></div>
+            <div class="rv-kv" style="margin-top:8px"><span>Avg. centipawn loss</span><span>${ind.acpl ?? ' - '}</span></div>
             ${ind.top1 == null ? '' : `<div class="rv-kv"><span>Engine's first choice</span><span>${(ind.top1 * 100).toFixed(0)}%</span></div>`}
             ${ind.secMedian == null ? '' : `<div class="rv-kv"><span>Median think time</span><span>${ind.secMedian.toFixed(1)}s</span></div>`}
         </div>`;
@@ -568,7 +600,7 @@ function renderTurning() {
     el.classList.toggle('hidden', !pick);
     if (!pick) return;
     el.innerHTML = `The game turned on <span class="rv-turn-move rv-c-${pick.m.klass}">${esc(moveLabel(pick.m))}</span>`
-        + ` — White ${Math.round(pick.wBefore)}% → ${Math.round(pick.wAfter)}%`;
+        + ` - White ${Math.round(pick.wBefore)}% → ${Math.round(pick.wAfter)}%`;
     el.querySelector('.rv-turn-move')?.addEventListener('click', () => showPly(pick.m.ply + 1));
 }
 
@@ -593,7 +625,7 @@ function renderTimeCards() {
         const labels = TIME_BUCKETS.map(([, lab]) => `<span>${lab}</span>`).join('');
         const longest = Math.max(...secs);
         return `<div class="rv-card">
-            <h4>${esc(playerName(color))} — clock</h4>
+            <h4>${esc(playerName(color))} - clock</h4>
             <div class="rv-str-curve">${bars}</div>
             <div class="rv-time-labels">${labels}</div>
             <div class="rv-kv" style="margin-top:8px"><span>Longest think</span><span>${longest.toFixed(0)}s</span></div>
@@ -615,7 +647,7 @@ function renderGraph() {
     });
     $('rv_graph_legend').innerHTML = Core.CLASS_ORDER
         .filter(k => report.counts.w[k] || report.counts.b[k])
-        .map(k => `<span class="rv-c-${k}">${CLASS_LABEL[k]} — white ${report.counts.w[k]}, black ${report.counts.b[k]}</span>`)
+        .map(k => `<span class="rv-c-${k}">${CLASS_LABEL[k]} - white ${report.counts.w[k]}, black ${report.counts.b[k]}</span>`)
         .join('');
 }
 
@@ -698,7 +730,7 @@ function moveCell(m) {
     const k = m.klass || 'good';
     const loss = (m.cpLoss == null || m.cpLoss < 1) ? '' : `−${Math.round(m.cpLoss)}`;
     return `<div class="rv-mcell rv-c-${k}" data-ply="${m.ply}" title="${esc(CLASS_LABEL[k])}">
-        <span class="rv-dot"></span><span class="rv-san">${esc(m.san)}</span>
+        ${classIcon(k)}<span class="rv-san">${esc(m.san)}</span>
         <span class="rv-loss">${loss}</span></div>`;
 }
 
@@ -850,15 +882,15 @@ function renderBatch() {
 
     $('rv_batch_players').innerHTML = pooled.map(p => `<div class="rv-card">
         <h4>${esc(p.name)}</h4>
-        <div class="rv-big">${p.acc == null ? '—' : p.acc.toFixed(1) + '%'}</div>
+        <div class="rv-big">${p.acc == null ? ' - ' : p.acc.toFixed(1) + '%'}</div>
         <div class="rv-sub">mean accuracy over ${p.games} game${p.games === 1 ? '' : 's'},
             ${p.ind.moves} moves</div>
         <div style="margin-top:10px">
           <div class="rv-kv"><span>Engine's first choice, real choices</span>
-            <span>${p.ind.realTop1 == null ? '—' : Math.round(p.ind.realTop1 * 100) + '%'}</span></div>
+            <span>${p.ind.realTop1 == null ? ' - ' : Math.round(p.ind.realTop1 * 100) + '%'}</span></div>
           <div class="rv-kv"><span>...in sharp positions</span>
-            <span>${p.ind.sharpTop1 == null ? '—' : Math.round(p.ind.sharpTop1 * 100) + '%'}</span></div>
-          <div class="rv-kv"><span>Avg. centipawn loss</span><span>${p.ind.acpl ?? '—'}</span></div>
+            <span>${p.ind.sharpTop1 == null ? ' - ' : Math.round(p.ind.sharpTop1 * 100) + '%'}</span></div>
+          <div class="rv-kv"><span>Avg. centipawn loss</span><span>${p.ind.acpl ?? ' - '}</span></div>
         </div>
         <div class="rv-ev" style="margin-top:10px">
           <span class="rv-ev-flag rv-ev-${p.est.level}">${esc(p.est.level)}</span>${esc(p.est.text)}
@@ -921,6 +953,10 @@ function showPly(ply) {
 function renderEvalBar(pos) {
     const fill = $('rv_evalfill'), label = $('rv_evallabel');
     if (!fill && !label) return;
+    // chess.com reviews carry no centipawn eval, so there is nothing for the bar to show -- hide it.
+    const bar = (fill || label)?.closest('.rv-bar');
+    if (bar) bar.classList.toggle('hidden', !!report?.ccr);
+    if (report?.ccr) return;
     const cp = pos?.lines?.[0]?.cp;
     const pct = cp == null ? 50 : Core.clamp(50 + 50 * Math.tanh(cp / 400), 2, 98);
     if (fill) fill.style.height = `${pct}%`;
@@ -1075,6 +1111,13 @@ function classBadge(klass, cx, cy, r) {
          + `stroke="#00000033" stroke-width="${r * 0.08}"/>${glyph}</g>`;
 }
 
+// The same classification badge as an inline icon (a self-contained 24x24 SVG), for the move list and
+// the summary cards -- the coloured dot said "there is a verdict"; the icon says which.
+function classIcon(klass) {
+    const g = classBadge(klass, 12, 12, 11);
+    return g ? `<svg class="rv-mic" viewBox="0 0 24 24" aria-hidden="true">${g}</svg>` : '';
+}
+
 
 
 // One arrow in board coordinates (0..8 on both axes). A rounded shaft that stops short of the head
@@ -1125,7 +1168,7 @@ function renderDetail(pos, played) {
     const el = $('rv_move_detail');
     if (!el) return;
     if (!played) {
-        el.innerHTML = `<span class="rv-meta">Start position${report.book.name ? ` — ${esc(report.book.name)}` : ''}.</span>`;
+        el.innerHTML = `<span class="rv-meta">Start position${report.book.name ? ` - ${esc(report.book.name)}` : ''}.</span>`;
     } else {
         const k = played.klass || 'good';
         const bits = [`<span class="rv-c-${k}"><span class="rv-klass">${CLASS_LABEL[k]}</span></span>`,
@@ -1139,6 +1182,8 @@ function renderDetail(pos, played) {
                 ? 'the human model expected this'
                 : `the human model expected ${esc(uciToSan(report.positions[played.ply].fen, played.maiaMove))}`);
         }
+        // chess.com's coach line, when this is a chess.com review (engine reviews have none).
+        if (played.commentary) bits.push(`<span class="rv-ccr-say">${esc(played.commentary)}</span>`);
         el.innerHTML = bits.join(' · ');
     }
     const lines = (pos.lines || []).slice(0, report.opts.multipv);
@@ -1296,7 +1341,7 @@ async function exportHtml(btn) {
         const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Game review — ${esc(title)}</title>
+<title>Game review - ${esc(title)}</title>
 <style>${css}</style>
 </head><body><main><div class="container">
 ${wrap.innerHTML}
@@ -1360,7 +1405,7 @@ function parsePgnBox() {
     if (games.length > 1) {
         sel.innerHTML = games.map((g, i) => {
             const t = g.tags;
-            return `<option value="${i}">${esc(`${i + 1}. ${t.White || '?'} — ${t.Black || '?'}`
+            return `<option value="${i}">${esc(`${i + 1}. ${t.White || '?'} - ${t.Black || '?'}`
                 + `  ${g.result}  ${t.Date || ''}`)}</option>`;
         }).join('');
         row.classList.remove('hidden');
@@ -1370,7 +1415,7 @@ function parsePgnBox() {
     if (!text.trim()) note('');
     else if (!games.length) note('No games found in that text. A PGN needs at least one move.', true);
     else note(`${games.length} game${games.length > 1 ? 's' : ''} read`
-        + (games.length === 1 ? ` — ${games[0].moves.length} moves` : '') + '.');
+        + (games.length === 1 ? ` - ${games[0].moves.length} moves` : '') + '.');
 }
 
 function selectedGame() {
@@ -1396,7 +1441,7 @@ async function onRun() {
         const done = [];
         for (let g = 0; g < list.length; g++) {
             if (cancel) break;
-            const label = batch ? `game ${g + 1} of ${list.length} — ` : '';
+            const label = batch ? `game ${g + 1} of ${list.length} - ` : '';
             // Each game gets its own slice of the bar, so a batch of forty does not sit at 2%.
             const base = g / list.length, span = 1 / list.length;
             const built = await runReview(list[g], rig,
@@ -1430,6 +1475,157 @@ async function onRun() {
 
 // The PGN of one game as it was pasted, so the export can carry it. Rebuilt from the parse rather
 // than re-split from the textarea: a batch needs one game's text, not all forty.
+// Build the struct chess.com's v2 review wants, from a PGN. The MOVES are the load-bearing part --
+// from/to squares chess.js gives us, converted to chess.com's 1-based index (a1=1..h8=64); the rest
+// is metadata off the PGN tags. Player UUIDs are not in a PGN and are omitted (the worker notes the
+// consequence). Castling/promotion move encoding is unverified upstream, so this refuses a game with
+// one rather than send a guess that reads as a wrong move.
+// The decoded review as readable text (the pane is a <pre>). SAN is merged in from the PGN we sent,
+// since the response gives from/to squares, not SAN. The classification enum was mapped from a full
+// capture (futzmutz111 vs dgango66): all 76 moves + the site's per-side counts + ten named moves
+// (Qf2=brilliant .. Qb7=blunder) agree. 11=forced is the only-legal-move tier the collapsed panel folds away.
+const CCR_CLASS = {
+    1: 'book', 2: 'brilliant', 3: 'great', 4: 'best', 5: 'excellent', 6: 'good',
+    7: 'inaccuracy', 8: 'mistake', 9: 'blunder', 10: 'miss', 11: 'forced',
+};
+function renderCcrReview(r, pgnText) {
+    const lines = [];
+    if (r.opening?.name) lines.push(`${r.opening.name}${r.opening.eco ? ` (${r.opening.eco})` : ''}`);
+    if (r.accuracy) lines.push(`Accuracy   White ${(+r.accuracy.white).toFixed(1)}   Black ${(+r.accuracy.black).toFixed(1)}`);
+    // chess.com only returns a game rating when the PGN header carried one; hide the row otherwise.
+    if (r.ratings && r.ratings.white != null && r.ratings.black != null)
+        lines.push(`Rating     White ${r.ratings.white}   Black ${r.ratings.black}`);
+    if (r.summaryLine) lines.push(r.summaryLine);
+    lines.push('');
+    let sans = [];
+    try { sans = (Core.parsePgn(pgnText)[0]?.moves || []).map(m => typeof m === 'string' ? m : m.san); } catch (e) { /* */ }
+    r.moves.forEach((m, i) => {
+        const num = Math.floor(i / 2) + 1;
+        const label = `${num}.${i % 2 ? '..' : ''} ${sans[i] || (m.from + m.to) || '?'}`.padEnd(9);
+        const cls = (CCR_CLASS[m.classification] || `#${m.classification}`).padEnd(9);
+        lines.push(`${label} ${cls} ${m.commentary || ''}`.trimEnd());
+    });
+    return lines.join('\n');
+}
+
+// Turn a decoded chess.com review into the SAME report shape the engine path builds, so the normal
+// board + move list + badges render it. No engine data (no evals/lines), so the eval bar, graph and
+// indicators sit out; what chess.com DOES give -- per-move classification, coach commentary, accuracy,
+// opening -- lands on exactly the widgets the engine review uses for those same things. Positions come
+// from replaying the PGN (chess.com sends from/to squares, not FENs), zipped by ply with the review.
+function buildCcrReport(review, pgnText) {
+    const parsed = Core.parsePgn(pgnText)[0];
+    if (!parsed || !parsed.moves.length) return null;
+    const t = parsed.tags || {};
+    let chess;
+    try { chess = new Chess('chess', parsed.startFen || undefined); } catch (e) { return null; }
+    const positions = [{fen: chess.fen()}];
+    const moves = [];
+    parsed.moves.forEach((rec, i) => {
+        const san = typeof rec === 'string' ? rec : rec.san;
+        let mv;
+        try { mv = chess.move(san); } catch (e) { mv = null; }
+        if (!mv) return;
+        const rm = review.moves[i] || {};
+        moves.push({
+            ply: i,
+            color: mv.color === 'w' ? 'w' : 'b',
+            san: mv.san,
+            uci: mv.from + mv.to + (mv.promotion || ''),
+            klass: CCR_CLASS[rm.classification] || 'good',
+            commentary: rm.commentary || '',
+            cpLoss: 0,
+        });
+        positions.push({fen: chess.fen()});
+    });
+    if (!moves.length) return null;
+    const counts = (color) => {
+        const o = {};
+        for (const k of Core.CLASS_ORDER) o[k] = 0;
+        for (const m of moves) if (m.color === color) o[m.klass] = (o[m.klass] || 0) + 1;
+        return o;
+    };
+    const stub = (color) => ({moves: moves.filter(m => m.color === color).length, acpl: null, top1: null, secMedian: null});
+    return {
+        game: {tags: t, result: parsed.result || t.Result || '*', moves},
+        positions, moves,
+        book: {plies: 0, name: review.opening?.name || ''},
+        opts: {multipv: 1, variant: 'chess'},
+        phases: {},
+        accuracy: {w: review.accuracy ? +review.accuracy.white : null,
+                   b: review.accuracy ? +review.accuracy.black : null},
+        counts: {w: counts('w'), b: counts('b')},
+        indicators: {w: stub('w'), b: stub('b')},
+        ccr: true, ccrStrength: null,
+        at: new Date().toISOString(),
+    };
+}
+
+// Render a chess.com report through the shared board/move-list, hiding the engine-only blocks.
+function renderCcrReport(strengthLabel) {
+    if (!report) return;
+    report.ccrStrength = strengthLabel || null;
+    $('rv-report').classList.remove('hidden');
+    $('rv_export').disabled = true;                                    // no engine export
+    document.querySelector('.rv-graph-wrap')?.classList.add('hidden'); // no eval graph
+    $('rv-indicators')?.classList.add('hidden');                       // engine-only readings
+    $('rv-strength')?.classList.add('hidden');
+    $('rv-human')?.classList.add('hidden');
+    $('rv_turning')?.classList.add('hidden');
+    $('rv_time_wrap')?.classList.add('hidden');
+    renderHeader();
+    renderCards();
+    renderMoves();
+    ensureBoard();
+    showPly(report.moves.length);
+    $('rv-report').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+function buildCcrGame(pgnText) {
+    const parsed = Core.parsePgn(pgnText)[0];
+    if (!parsed || !parsed.moves.length) return {error: 'no game in that text'};
+    const t = parsed.tags || {};
+    const idx = (sq) => (sq.charCodeAt(0) - 96) + (Number(sq[1]) - 1) * 8;
+    const PROMO = {n: 1, b: 2, r: 3, q: 4};   // n, r, q each verified from a capture; b bracketed between
+    const chess = new Chess('chess', parsed.startFen || undefined);
+    const moves = [];
+    for (const rec of parsed.moves) {
+        const san = typeof rec === 'string' ? rec : rec.san;
+        let mv;
+        try { mv = chess.move(san); } catch (e) { mv = null; }
+        if (!mv) return {error: `could not replay "${san}" - is this legal, standard chess?`};
+        const clk = (rec && rec.clk != null) ? Math.round(rec.clk * 1000) : 0;
+        const m = {from: idx(mv.from), to: idx(mv.to), clockMs: clk};
+        if (mv.promotion) m.promo = PROMO[mv.promotion] || PROMO.q;
+        // castling: king from/to are mv.from/mv.to; the rook slides h->f (kingside) or a->d (queenside)
+        if (mv.flags && (mv.flags.includes('k') || mv.flags.includes('q'))) {
+            const rank = mv.from[1];
+            const king = mv.flags.includes('k');
+            m.castle = {rookFrom: idx((king ? 'h' : 'a') + rank), rookTo: idx((king ? 'f' : 'd') + rank)};
+        }
+        moves.push(m);
+    }
+    const gameId = (() => { const m = /chess\.com\/game\/live\/(\d+)/.exec(t.Link || ''); return m ? Number(m[1]) : 0; })();
+    const tcBase = (() => { const m = /^(\d+)/.exec(t.TimeControl || ''); return m ? Number(m[1]) * 1000 : 0; })();
+    const winner = t.Result === '1-0' ? 1 : t.Result === '0-1' ? 2 : 0;
+    const now = Date.now();
+    return {
+        moves,
+        white: {elo: Number(t.WhiteElo) || 0, name: t.White || 'White'},
+        black: {elo: Number(t.BlackElo) || 0, name: t.Black || 'Black'},
+        tcMs: tcBase,
+        gameId,
+        winner,
+        reqUuid: (crypto.randomUUID ? crypto.randomUUID() : `${now}-${Math.random()}`),
+        ts: Math.floor(now / 1000),
+        ns: (now % 1000) * 1e6,
+        // sent EXACTLY as the captured (working) hello until a second capture maps the strength tier
+        strength: 10,
+        coach: 'Botez_coach',
+        locale: 'en-US',
+    };
+}
+
 function gameText(game) {
     const tags = Object.entries(game.tags).map(([k, v]) => `[${k} "${v}"]`).join('\n');
     const body = [];
@@ -1446,59 +1642,43 @@ function gameText(game) {
     return `${tags}\n\n${body.join(' ')}`;
 }
 
-// The budget is a SLIDER (user call 2026-08-15). Time mode steps in TENTHS of a second from 0.1s to
-// 15s (user call 2026-08-15: whole seconds were far too coarse at the short end, where a review
-// actually lives -- 1s to 2s is a doubling), and then one notch further, which is UNBOUNDED: the
-// engine is given `go infinite` and that is all it is given. Nothing here decides it has thought long
-// enough -- the search on the current position ends when Stop is pressed. Depth mode is 1..40 plies.
-const TIME_STEPS = 150;              // notch n = n*100ms, so 1 = 0.1s and 150 = 15.0s
-const INFINITE_NOTCH = TIME_STEPS + 1;
-
-function sliderToValue(kind, slider) {
-    if (kind === 'depth') return Math.max(1, Math.min(40, slider));
-    return slider >= INFINITE_NOTCH ? LIMIT_INFINITE : slider * 100;   // ms
-}
-
-function valueToSlider(kind, value) {
-    if (kind === 'depth') return Math.max(1, Math.min(40, value || DEPTH_DEFAULT));
-    if (value >= LIMIT_INFINITE) return INFINITE_NOTCH;
-    return Math.max(1, Math.min(TIME_STEPS, Math.round((value || TIME_DEFAULT_MS) / 100)));
-}
+// The budget is a -/+ BOX (user call 2026-08-16: the slider "is done terrible"). The box shows the
+// number in each mode's natural units -- plies in Depth, seconds in Time -- and the -/+ buttons step
+// by the input's own step (1 ply, 0.5s); any value can be typed. Time defaults to 0.5s. There is no
+// infinite option any more: it was a slider notch with nowhere to live on a plain number box.
 
 // EACH MODE REMEMBERS ITS OWN NUMBER (user report 2026-08-15: "budget for time and depth is weird").
-// One stored value served both, so it was read in whatever units the mode was in: switching from
-// depth 12 to time asked for 12ms, which clamped to the minimum, and switching back asked for depth
-// 1000. Both are kept now, and `rv_limit_value` stays what it always was -- the ACTIVE budget the
-// run reads -- so nothing downstream changes.
+// `rv_limit_value` stays the ACTIVE budget the run reads -- plies in Depth, MS in Time -- so nothing
+// downstream changes; the box just edits it in friendlier units.
 const PER_KIND_KEY = {depth: 'rv_limit_depth', time: 'rv_limit_time'};
+const TIME_DEFAULT_MS_UI = 500;      // 0.5s, the review's default time budget (user call 2026-08-16)
 
 function storedFor(kind) {
     const raw = MephistoConfig.get(PER_KIND_KEY[kind]);
     const v = raw == null || raw === '' ? null : +JSON.parse(raw);
     if (v && isFinite(v)) return v;
-    return kind === 'depth' ? DEPTH_DEFAULT : TIME_DEFAULT_MS;
+    return kind === 'depth' ? DEPTH_DEFAULT : TIME_DEFAULT_MS_UI;
 }
 
-// `fromSlider` says which side is the truth this time. Dragging the slider must NOT be answered by
-// writing the stored value back over it -- that was the first version, and the readout sat at "1s"
-// no matter where the handle went, because every input event reset the handle from storage.
-function syncLimitUi(fromSlider) {
+// `fromInput` says the box is the truth this time (a keystroke or a -/+ step); otherwise the MODE is,
+// so the box is loaded with the number this mode was last left on rather than reinterpreting the other
+// mode's number in these units. Internal value is plies (Depth) or ms (Time).
+function syncLimitUi(fromInput) {
     const kind = $('rv_limit_kind').value;
-    const slider = $('rv_limit_slider');
-    const v = $('rv_limit_value');
-    slider.min = 1;
-    slider.max = kind === 'depth' ? 40 : INFINITE_NOTCH;
-    // Not from the slider means the MODE decides: read back the number this mode was last left on
-    // rather than reinterpreting the other mode's number in these units.
-    if (!fromSlider) slider.value = valueToSlider(kind, storedFor(kind));
-    else slider.value = Math.min(+slider.value, +slider.max);
-    const value = sliderToValue(kind, +slider.value);
-    v.value = value;
-    $('rv_limit_unit').textContent = kind === 'depth'
-        ? `${slider.value} plies per position`
-        : (value >= LIMIT_INFINITE
-            ? 'no limit -- until you press Stop'
-            : `${(value / 1000).toFixed(1)}s per position`);
+    const num = $('rv_limit_num');
+    const isD = kind === 'depth';
+    num.step = isD ? 1 : 0.5;            // the -/+ buttons read this
+    num.min = isD ? 1 : 0.1;
+    num.max = isD ? 40 : 300;
+    let disp = fromInput ? parseFloat(num.value)
+                         : (isD ? storedFor('depth') : storedFor('time') / 1000);
+    if (!isFinite(disp)) disp = isD ? DEPTH_DEFAULT : TIME_DEFAULT_MS_UI / 1000;
+    disp = isD ? Math.max(1, Math.min(40, Math.round(disp)))
+               : Math.max(0.1, Math.min(300, Math.round(disp * 10) / 10));   // 0.1s resolution
+    num.value = String(disp);
+    const value = isD ? disp : Math.round(disp * 1000);   // internal: plies or ms
+    $('rv_limit_value').value = value;
+    $('rv_limit_unit').textContent = isD ? `${disp} plies per position` : `${disp.toFixed(1)}s per position`;
     setCfg('rv_limit_value', value);
     setCfg(PER_KIND_KEY[kind], value);
     updateEngineOptions();
@@ -1515,7 +1695,7 @@ function updateEngineOptions() {
     sel.innerHTML = ENGINES.map(e => {
         const missing = e.kind === 'native' && nativeAvailable && !nativeAvailable[e.id];
         return `<option value="${e.id}"${missing ? ' disabled' : ''}>`
-            + `${esc(e.label + (missing ? ' — host not installed' : ''))}</option>`;
+            + `${esc(e.label + (missing ? ' - host not installed' : ''))}</option>`;
     }).join('');
     const opt = [...sel.options].find(o => o.value === current && !o.disabled);
     sel.value = opt ? current : ([...sel.options].find(o => !o.disabled)?.value || ENGINES[0].id);
@@ -1572,6 +1752,100 @@ class ReviewPage {
 
         $('rv_pgn').addEventListener('input', parsePgnBox);
         $('rv_file_btn').addEventListener('click', () => $('rv_file').click());
+
+        // ---- chess.com review (DEBUG STAGE): send the loaded game, show the raw JSON ----------
+        // The game the button sends is EXACTLY the one the engine run would analyse -- the selected
+        // entry when a file/fetch produced a list, the box otherwise -- so the two reviews can never
+        // quietly disagree about which game they are looking at.
+        $('rv_ccr_run')?.addEventListener('click', async () => {
+            const btn = $('rv_ccr_run');
+            const sel = +($('rv_game_select')?.value || 0);
+            const pgn = (games.length ? gameText(games[sel] ? games[sel] : games[0]) : '')
+                || ($('rv_pgn')?.value || '');
+            const out = $('rv_ccr_out'), status = $('rv_ccr_status');
+            // every error shows the ticket button and remembers its text; a non-error hides it again.
+            const say = (t, bad) => {
+                status.textContent = t; status.classList.toggle('rv-bad', !!bad);
+                ccrLastError = bad ? t : '';
+                $('rv_ccr_ticket')?.classList.toggle('hidden', !bad);
+            };
+            if (!pgn.trim()) return say('Load a game first - paste a PGN or fetch one above.', true);
+            if (!(await ccrConsent())) return say('Cancelled - accept the caution to run a chess.com review.', false);
+            btn.disabled = true;
+            const was = btn.textContent;
+            btn.textContent = 'Asking…';
+            say(`Sent to chess.com (${$('rv_ccr_strength').value}). The game leaves this machine now; waiting on their answer…`);
+            out.classList.add('hidden');
+            $('rv_ccr_copy').classList.add('hidden');
+            $('rv_ccr_save').classList.add('hidden');
+            const game = buildCcrGame(pgn);
+            if (game.error) { btn.disabled = false; btn.textContent = was; return say(game.error, true); }
+            let res;
+            try {
+                res = await chrome.runtime.sendMessage({chesscomAnalyze: {game}});
+            } catch (e) { res = {error: String(e.message || e)}; }
+            btn.disabled = false;
+            btn.textContent = was;
+            if (!res || res.error) { say(res?.error || 'No answer.', true); if (res?.sentB64) { ccrJson = JSON.stringify(res, null, 2); out.textContent = ccrJson; out.classList.remove('hidden'); $('rv_ccr_save').classList.remove('hidden'); } return; }
+            // v2 answers in PROTOBUF frames, not JSON: dump them as base64 so the shape can be
+            // decoded offline. A clean close with no frames is the Origin/auth signal.
+            const n = res.frames?.length || 0;
+            ccrJson = JSON.stringify(res, null, 2);
+            // if the built-in decoder got a review, show it READABLY (raw JSON stays behind Save)
+            const review = res.decoded && res.decoded.review;
+            if (review && review.moves && review.moves.length) {
+                // Drive the shared board/move-list from chess.com's answer; fall back to the readable
+                // text pane only if the PGN cannot be replayed into positions.
+                const built = buildCcrReport(review, pgn);
+                if (built) {
+                    report = built;
+                    renderCcrReport($('rv_ccr_strength').value);
+                    out.classList.add('hidden');
+                } else {
+                    out.textContent = renderCcrReview(review, pgn);
+                    out.classList.remove('hidden');
+                }
+                $('rv_ccr_copy').classList.remove('hidden');
+                $('rv_ccr_save').classList.remove('hidden');
+                const rt = review.ratings && review.ratings.white != null
+                    ? `, ~${review.ratings.white}/${review.ratings.black} rating` : '';
+                say(`Reviewed by chess.com via your logged-in tab${rt}. The board below is playable; Save for the raw protobuf.`);
+                return;
+            }
+            if (!n) {
+                const why = res.closeCode === 1008
+                    ? 'chess.com rejected it (1008) - sign in to chess.com in this browser (open chess.com, log in), then retry.'
+                    : `the socket closed (code ${res.closeCode}${res.closeReason ? ', ' + res.closeReason : ''}).`;
+                say(`Ran in your chess.com tab, no answer - ${why}`, true);
+            } else {
+                say(`Ran in your chess.com tab; ${n} protobuf frame${n === 1 ? '' : 's'} back${res.closeCode ? ` (closed ${res.closeCode})` : ''}. Base64 below - save it.`);
+            }
+            out.textContent = ccrJson;
+            out.classList.remove('hidden');
+            $('rv_ccr_copy').classList.remove('hidden');
+            $('rv_ccr_save').classList.remove('hidden');
+        });
+        $('rv_ccr_copy')?.addEventListener('click', async (e) => {
+            try { await navigator.clipboard.writeText(ccrJson || ''); e.target.textContent = 'Copied ✓'; }
+            catch (err) { e.target.textContent = 'Copy failed'; }
+            setTimeout(() => e.target.textContent = 'Copy JSON', 1200);
+        });
+        $('rv_ccr_save')?.addEventListener('click', () => {
+            const url = URL.createObjectURL(new Blob([ccrJson || ''], {type: 'application/json'}));
+            const aEl = document.createElement('a');
+            aEl.href = url;
+            aEl.download = 'chesscom-review.json';
+            aEl.click();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        });
+        // copy the error onto the clipboard and open a fresh issue so it can be pasted into a ticket.
+        $('rv_ccr_ticket')?.addEventListener('click', (e) => {
+            const body = `Mephisto chess.com review error:\n${ccrLastError || '(no message)'}\n\nWhat I did:\n`;
+            navigator.clipboard.writeText(body).catch(() => {});
+            e.target.textContent = 'Copied ✓ - opening ticket';
+            setTimeout(() => { e.target.textContent = 'Copy error & open ticket'; }, 1500);
+            window.open('https://github.com/IchNukeDichWeg/Mephisto/issues/new', '_blank', 'noopener');
+        });
         // DROP A PGN ANYWHERE ON THE PAGE -- a button and a paste box are two steps for what should
         // be one. The whole section is the target (aiming at the one textarea is fiddly); the box
         // lights up so the drop has somewhere visible to land, and a non-file drag is left alone.
@@ -1596,13 +1870,14 @@ class ReviewPage {
             finally { btn.disabled = false; }
         });
 
-        $('rv_limit_slider')?.addEventListener('input', () => syncLimitUi(true));
+        // The box is the truth on a keystroke; the -/+ buttons fire 'change' through bindSteppers.
+        $('rv_limit_num')?.addEventListener('input', () => syncLimitUi(true));
+        $('rv_limit_num')?.addEventListener('change', () => syncLimitUi(true));
         $('rv_limit_kind').value = cfg('rv_limit_kind');
         $('rv_limit_kind').addEventListener('change', () => {
             setCfg('rv_limit_kind', $('rv_limit_kind').value);
             syncLimitUi();
         });
-        bindNumber('rv_limit_value', 'rv_limit_value');
         bindNumber('rv_multipv', 'rv_multipv');
         bindNumber('rv_threads', 'rv_threads');
         bindNumber('rv_hash', 'rv_hash');

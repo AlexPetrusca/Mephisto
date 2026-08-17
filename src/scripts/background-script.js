@@ -215,6 +215,10 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     updateCheck(msg.updateCheck?.force).then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }
+  if (msg.chesscomAnalyze) {
+    chesscomAnalyze(msg.chesscomAnalyze).then(sendResponse).catch(e => sendResponse({error: String(e)}));
+    return true; // async sendResponse
+  }
   if (msg.tablebaseLookup) {
     tablebaseLookup(msg.tablebaseLookup).then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
@@ -710,6 +714,276 @@ const TABLEBASE_PATHS = {chess: 'standard', atomic: 'atomic', antichess: 'antich
 const tablebaseCache = new Map(); // `${variant}|${fen}` -> response
 const TABLEBASE_CACHE_MAX = 300;
 
+// ---- chess.com's game review, v2 -----------------------------------------------------------------
+// The endpoint (wss://analysis.chess.com/v2/game-review) speaks PROTOBUF, not JSON. The first message
+// IS the game natively encoded: moves as from/to square pairs (a1=1 .. h8=64) with a promotion piece
+// (n=1,b=2,r=3,q=4) and, for castling, the rook's own from/to; clocks in ms; players + Elo; the game
+// id; the winner; and an option envelope. The encoder below reproduces a real captured hello
+// BYTE-FOR-BYTE (pinned in the ladder), and the promotion/castling encodings were each mapped from
+// their own captures, so it is trustworthy on any standard game. The response is decoded the same way.
+//
+// AUTH IS THE BROWSER'S OWN chess.com SESSION: the socket must go out with a native
+// Origin: https://www.chess.com and the first-party session cookie, neither of which a service-worker
+// socket can send (that is a 1008). So it runs in the MAIN world of a chess.com TAB via
+// chrome.scripting.executeScript -- an already-open one, or one opened in the background and closed
+// again. THE GAME LEAVES THIS MACHINE (that is the point): the PGN goes to chess.com, as on their
+// own analysis page.
+//
+// Still as-captured until a second capture maps them: the strength tier (f3) and the option flags
+// (the Strength select is carried but not yet applied). Player UUIDs are omitted (a PGN has none).
+
+// >>> CCR_PROTO_BEGIN  (pure; the ladder slices this block and runs it against the captured bytes)
+function ccrVarint(n) {
+  const o = []; n = Math.trunc(n);
+  while (n > 127) { o.push((n & 0x7f) | 0x80); n = Math.floor(n / 128); }
+  o.push(n); return o;
+}
+function ccrTag(f, w) { return ccrVarint((f << 3) | w); }
+function ccrVf(f, n) { return [...ccrTag(f, 0), ...ccrVarint(n)]; }
+function ccrBf(f, b) { return [...ccrTag(f, 2), ...ccrVarint(b.length), ...b]; }
+function ccrSf(f, str) { return ccrBf(f, [...new TextEncoder().encode(str)]); }
+function ccrMf(f, arr) { return ccrBf(f, arr); }
+// algebraic square -> chess.com's 1-based index: a1=1, b1=2, ... h8=64
+function ccrSquare(alg) { return (alg.charCodeAt(0) - 96) + (Number(alg[1]) - 1) * 8; }
+
+function ccrEncodeGameReview(g) {
+  // The move's from/to sub-message. Two extensions, both mapped from real captures: a PROMOTION adds
+  // f3 = the piece (n=1, b=2, r=3, q=4 -- q, r and n each verified from a capture, b bracketed between
+  // them); CASTLING adds f5 = {kingFrom, kingTo, rookFrom, rookTo}, with f1/f2 staying the king's own
+  // from/to. A check adds nothing to the move (it is a property of the position).
+  const moveInner = (m) => {
+    let parts = [].concat(ccrVf(1, m.from), ccrVf(2, m.to));
+    if (m.promo) parts = parts.concat(ccrVf(3, m.promo));
+    if (m.castle) parts = parts.concat(ccrMf(5, [].concat(
+      ccrVf(1, m.from), ccrVf(2, m.to), ccrVf(3, m.castle.rookFrom), ccrVf(4, m.castle.rookTo))));
+    return parts;
+  };
+  const move = (m) => [].concat(
+    ccrMf(1, moveInner(m)),
+    ccrMf(2, ccrVf(2, m.clockMs || 0)),
+  );
+  const player = (colour, pl) => [].concat(
+    ccrVf(1, colour),
+    ccrMf(2, ccrVf(1, pl.elo || 0)),
+    pl.uuid ? ccrMf(3, ccrSf(1, pl.uuid)) : [],
+    ccrSf(4, pl.name || ''),
+  );
+  const moves = g.moves.reduce((a, m) => a.concat(ccrMf(2, move(m))), []);
+  const meta = ccrMf(3, [].concat(
+    ccrMf(1, player(1, g.white)),
+    ccrMf(1, player(2, g.black)),
+    ccrMf(2, ccrMf(1, ccrVf(1, g.tcMs || 0))),
+    ccrMf(6, [].concat(ccrSf(1, g.reqUuid), ccrVf(2, g.gameId || 0), ccrVf(4, g.winner || 0))),
+    ccrVf(10, 0),
+  ));
+  const game = moves.concat(meta);
+  const inner = [].concat(ccrMf(1, game), ccrMf(3, ccrVf(3, 1)));
+  return [].concat(
+    ccrMf(1, ccrMf(1, inner)),
+    ccrMf(2, ccrMf(3, ccrVf(1, 2))),
+    ccrVf(3, g.strength || 10),
+    ccrMf(4, ccrVf(1, 1)),
+    ccrMf(5, [].concat(ccrVf(1, 1), ccrVf(2, 2), ccrMf(3, [].concat(ccrVf(1, g.ts || 0), ccrVf(2, g.ns || 0))))),
+    ccrMf(6, [].concat(ccrVf(4, 5), ccrVf(5, 1))),
+    ccrMf(7, [].concat(ccrSf(1, g.coach || 'Generic_coach'), ccrSf(2, g.locale || 'en-US'))),
+  );
+}
+// <<< CCR_PROTO_END
+
+// >>> CCR_DECODE_BEGIN  (pure; the ladder slices this and decodes the captured 5107-byte response)
+function ccrWalk(b) {
+  const out = []; let i = 0;
+  const varint = () => { let v = 0, s = 0; for (;;) { const x = b[i++]; v += (x & 0x7f) * 2 ** s; if (!(x & 0x80)) return v; s += 7; } };
+  while (i < b.length) {
+    const t = varint(), f = t >>> 3, w = t & 7;
+    if (w === 0) out.push({f, w, v: varint()});
+    else if (w === 5) { out.push({f, w, v: new DataView(b.buffer, b.byteOffset + i, 4).getFloat32(0, true)}); i += 4; }
+    else if (w === 1) { out.push({f, w, v: new DataView(b.buffer, b.byteOffset + i, 8).getFloat64(0, true)}); i += 8; }
+    else if (w === 2) { const ln = varint(); out.push({f, w, v: b.subarray(i, i + ln)}); i += ln; }
+    else break;
+  }
+  return out;
+}
+const ccrSub = (b, f) => { const e = b && ccrWalk(b).find(x => x.f === f && x.w === 2); return e ? e.v : null; };
+const ccrSubs = (b, f) => (b ? ccrWalk(b).filter(x => x.f === f && x.w === 2).map(x => x.v) : []);
+const ccrNum = (b, f) => { const e = b && ccrWalk(b).find(x => x.f === f && (x.w === 0 || x.w === 5)); return e ? e.v : null; };
+const ccrStr = (b, f) => { const v = ccrSub(b, f); return v ? new TextDecoder().decode(v) : null; };
+const ccrAlg = (n) => (n >= 1 && n <= 64) ? 'abcdefgh'[(n - 1) % 8] + (Math.floor((n - 1) / 8) + 1) : null;
+
+function ccrIsMsg(b) {
+  try {
+    let i = 0, n = 0;
+    const vi = () => { let v = 0, s = 0; for (;;) { const x = b[i++]; v += (x & 0x7f) * 2 ** s; if (!(x & 0x80)) return v; s += 7; } };
+    while (i < b.length) {
+      const t = vi(), f = t >>> 3, w = t & 7;
+      if (f === 0 || w === 3 || w === 4 || w === 6 || w === 7) return false;
+      if (w === 0) vi(); else if (w === 1) i += 8; else if (w === 5) i += 4;
+      else { const ln = vi(); if (i + ln > b.length) return false; i += ln; }
+      n++;
+    }
+    return i === b.length && n > 0;
+  } catch (e) { return false; }
+}
+
+function ccrText(b) {
+  const parts = [];
+  const rec = (x) => {
+    for (const {f, w, v} of ccrWalk(x)) {
+      if (w !== 2 || f === 2) continue;
+      if (ccrIsMsg(v)) { rec(v); continue; }
+      let txt = null;
+      try { txt = new TextDecoder('utf-8', {fatal: true}).decode(v); } catch (e) { txt = null; }
+      if (txt != null && /[a-zA-Z]/.test(txt) && !/[\x00-\x08\x0e-\x1f]/.test(txt)) parts.push(txt);
+    }
+  };
+  rec(b);
+  return parts.join('').replace(/\s+/g, ' ').trim();
+}
+
+function ccrDecodeReview(outer) {
+  const game = ccrSub(outer, 2);
+  if (!game) return null;
+  const summary = ccrSub(game, 2);
+  const acc = ccrSub(summary, 3);
+  const s5 = ccrSub(summary, 5);
+  const op = ccrSub(game, 6);
+  const md = ccrSub(game, 3);
+  const moves = ccrSubs(md, 3).map((e) => {
+    const a = ccrSub(e, 2);
+    const ft = ccrSub(a, 1);
+    return {
+      from: ccrAlg(ccrNum(ft, 1)),
+      to: ccrAlg(ccrNum(ft, 2)),
+      // the played move's classification is a.f3 (a.f4.f3 is a constant book/eval tag -- 13 -- not this)
+      classification: ccrNum(a, 3),
+      commentary: ccrText(ccrSub(a, 5)),
+    };
+  });
+  return {
+    accuracy: acc ? {white: ccrNum(acc, 1), black: ccrNum(acc, 2)} : null,
+    ratings: s5 ? {white: ccrNum(ccrSub(s5, 1), 4), black: ccrNum(ccrSub(s5, 2), 4)} : null,
+    summaryLine: ccrStr(s5, 3),
+    opening: op ? {name: ccrStr(op, 1), eco: ccrStr(op, 3)} : null,
+    headline: ccrStr(md, 1),
+    moves,
+  };
+}
+
+function ccrDecodeFrames(rawFrames) {
+  let progress = null, review = null;
+  for (const bytes of rawFrames) {
+    for (const {f, w, v} of ccrWalk(bytes)) {
+      if (w !== 2) continue;
+      if (f === 1) { const pf = ccrWalk(v).find(x => x.f === 1 && x.w === 5); if (pf) progress = pf.v; }
+      else if (f === 2) review = ccrDecodeReview(v);
+    }
+  }
+  return {progress, review};
+}
+// <<< CCR_DECODE_END
+
+function toB64(u8) {
+  let bin = '';
+  for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+  return btoa(bin);
+}
+function b64ToU8(b64) {
+  const bin = atob(b64); const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+
+// THE SOCKET RUNS FROM A CHESS.COM PAGE, NOT FROM US. chess.com's v2 review authenticates by the
+// FIRST-PARTY session: the site's own request carries Origin: https://www.chess.com and the logged-in
+// cookies. A websocket opened from the extension's service worker carries Origin:
+// chrome-extension://<id> and no chess.com cookies, and 1008s -- and DNR cannot rewrite a
+// service-worker websocket handshake (measured: the rule is added but never matches the request). So
+// the socket is opened in the MAIN world of a logged-in chess.com tab, where the browser attaches the
+// right Origin and cookies natively. This is the tt-probe / cb-probe pattern: page context does what
+// the extension context cannot. No cookie blob, nothing to keep fresh -- just a logged-in tab.
+//
+// Injected as a stringified function, so it must be SELF-CONTAINED (no closures, no worker consts).
+function ccrPageSocket(b64) {
+  return new Promise((resolve) => {
+    let bytes;
+    try { const bin = atob(b64); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+    catch (e) { return resolve({error: 'bad payload'}); }
+    let ws;
+    try { ws = new WebSocket('wss://analysis.chess.com/v2/game-review'); }
+    catch (e) { return resolve({error: 'websocket refused: ' + e.message}); }
+    ws.binaryType = 'arraybuffer';
+    const frames = [];
+    let settled = false;
+    const done = (extra) => { if (settled) return; settled = true; try { ws.close(); } catch (e) {} resolve(Object.assign({frames}, extra)); };
+    const timer = setTimeout(() => done({note: 'stopped after 90s (no known terminal frame yet)'}), 90000);
+    ws.onopen = () => { try { ws.send(bytes); } catch (e) { clearTimeout(timer); done({error: 'send failed: ' + e.message}); } };
+    ws.onmessage = (ev) => {
+      const u = new Uint8Array(ev.data); let bin = '';
+      for (let i = 0; i < u.length; i++) bin += String.fromCharCode(u[i]);
+      if (frames.length < 300) frames.push(btoa(bin));
+    };
+    ws.onerror = () => { /* the close event carries the code */ };
+    ws.onclose = (ev) => { clearTimeout(timer); done({closeCode: ev.code, closeReason: ev.reason || ''}); };
+  });
+}
+
+// Resolve when the tab finishes loading, or after a timeout -- chess.com is heavy, but the socket
+// only needs the tab's ORIGIN (for its first-party cookies), which is live long before load finishes,
+// so the timeout is a floor, not a failure.
+function ccrWaitComplete(tabId, timeoutMs) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (done) return; done = true; try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {} resolve(); };
+    const onUpd = (id, info) => { if (id === tabId && info.status === 'complete') finish(); };
+    try { chrome.tabs.onUpdated.addListener(onUpd); } catch (e) { return resolve(); }
+    setTimeout(finish, timeoutMs);
+  });
+}
+
+// The socket must run in a logged-in chess.com tab (native Origin + first-party session cookie). If
+// one is already open we borrow it; otherwise we open one in the BACKGROUND -- the session cookie
+// lives in the browser profile, so a fresh tab carries it -- and the caller closes it again after.
+async function ccrEnsureTab() {
+  let tabs = [];
+  try { tabs = await chrome.tabs.query({url: ['*://www.chess.com/*', '*://chess.com/*']}); } catch (e) { /* */ }
+  const existing = tabs.find((t) => t.id != null);
+  if (existing) return {tab: existing, spawned: false};
+  let tab;
+  try { tab = await chrome.tabs.create({url: 'https://www.chess.com/', active: false}); }
+  catch (e) { return {error: `could not open a chess.com tab (${e.message})`}; }
+  await ccrWaitComplete(tab.id, 15000);
+  return {tab, spawned: true};
+}
+
+async function chesscomAnalyze({game}) {
+  if (!game || !Array.isArray(game.moves) || !game.moves.length) return {error: 'no game to send'};
+  let bytes;
+  try { bytes = new Uint8Array(ccrEncodeGameReview(game)); }
+  catch (e) { return {error: `encode failed: ${e.message}`}; }
+  const b64 = toB64(bytes);
+
+  const found = await ccrEnsureTab();
+  if (found.error) return {sentBytes: bytes.length, error: `${found.error} - or open chess.com in a tab and log in, then retry`, needChesscomTab: true};
+  const tab = found.tab;
+  try {
+    let res;
+    try {
+      const out = await chrome.scripting.executeScript({target: {tabId: tab.id}, world: 'MAIN', func: ccrPageSocket, args: [b64]});
+      res = out && out[0] && out[0].result;
+    } catch (e) { return {sentBytes: bytes.length, error: `could not run in the chess.com tab (${e.message}) - reload that tab and retry`}; }
+    if (!res) return {sentBytes: bytes.length, error: 'the chess.com tab returned nothing'};
+    if (res.error) return {sentBytes: bytes.length, sentB64: b64, viaTab: tab.url, spawnedTab: found.spawned, error: res.error};
+
+    const frames = (res.frames || []).map((f) => ({b64: f, len: b64ToU8(f).length}));
+    let decoded = null;
+    try { decoded = ccrDecodeFrames((res.frames || []).map(b64ToU8)); } catch (e) { decoded = {error: String(e.message || e)}; }
+    return {sentBytes: bytes.length, sentB64: b64, viaTab: tab.url, spawnedTab: found.spawned, decoded, frames, closeCode: res.closeCode, closeReason: res.closeReason, note: res.note};
+  } finally {
+    // close ONLY a tab we opened; one the user already had stays put.
+    if (found.spawned) { try { await chrome.tabs.remove(tab.id); } catch (e) { /* */ } }
+  }
+}
+
 async function tablebaseLookup({fen, variant}) {
   const path = TABLEBASE_PATHS[variant || 'chess'];
   if (!path) return {error: `no tablebase for variant ${variant}`};
@@ -780,7 +1054,7 @@ async function explorerLookup({fen, db}) {
       if (lichess_note_response(r, 'explorer')) { out = {error: `HTTP ${r.status}`}; break; } // don't try the other host
       out = r.ok ? await r.json()
         : {error: r.status === 401
-            ? 'Lichess needs an API token for the opening explorer — Settings → General → Lichess API token'
+            ? 'Lichess needs an API token for the opening explorer - Settings → General → Lichess API token'
             : `HTTP ${r.status}`};
       // log the REQUEST, not just the verdict: "no moves" is indistinguishable from "wrong FEN"
       // without seeing exactly what was asked for
@@ -1269,7 +1543,7 @@ function ensureNative(name) {
     console.warn(`[uci] ${name} native host DISCONNECTED`,
                  chrome.runtime.lastError ? chrome.runtime.lastError.message : '(no error given)');
     const why = `${label} native host unavailable` + (err ? ` (${err.message})` : '') +
-      ' — run native-host/install-native.sh once (see the README).';
+      ' - run native-host/install-native.sh once (see the README).';
     for (const p of peers()) { try { p.postMessage({fatal: why}); } catch (e) { /* */ } }
   });
   return np;

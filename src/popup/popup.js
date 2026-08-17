@@ -16,7 +16,7 @@ let PANEL_BOOTED = false; // popup.js also loads on every chess page as a conten
 // When shown as the toolbar POPUP (Panel Style = "popup") this page is top-level; when shown as the
 // floating panel it's an iframe the content-script scales down itself. Only the top-level toolbar
 // popup renders at full 568x672, so shrink just that one (CSP blocks an inline <head> script, so we
-// tag it here — a brief flash as the popup opens is fine). The floating iframe is left untouched.
+// tag it here - a brief flash as the popup opens is fine). The floating iframe is left untouched.
 if (location.protocol === 'chrome-extension:' && window.top === window.self) {
     document.documentElement.classList.add('toolbar-popup'); // real toolbar popup only, never the host page
 }
@@ -308,7 +308,7 @@ async function initPanel(root, tabId) {
     const moveVariance = JSON.parse(MephistoConfig.get('move_variance'));
     const autoplay = JSON.parse(MephistoConfig.get('autoplay'));
     const computerEval = JSON.parse(MephistoConfig.get('computer_evaluation'));
-    // engines dropped in this version — migrate stale selections to the current default
+    // engines dropped in this version - migrate stale selections to the current default
     const REMOVED_ENGINES = ['stockfish-6', 'stockfish-16-nnue-40', 'stockfish-16-nnue-7', 'lc0', 'stockfish-17-nnue-79'];
     let storedEngine = JSON.parse(MephistoConfig.get('engine'));
     if (REMOVED_ENGINES.includes(storedEngine)) storedEngine = null;
@@ -543,7 +543,7 @@ async function initPanel(root, tabId) {
                 parsed = parse_position_from_response(response.dom);
             } catch (e) {
                 console.warn('Mephisto: skipping unparseable scrape:', e.message);
-                return; // transient scrape garbage — the next poll (100ms) retries
+                return; // transient scrape garbage - the next poll (100ms) retries
             }
             let {fen, startFen, moves} = parsed;
             // AN EMPTY FEN IS NOT A POSITION. A scrape can parse "successfully" into nothing -- a
@@ -1190,7 +1190,7 @@ function init_quick_settings() {
             const bad = health_rows(health_state()).filter(r => r.ok === false);
             set_idle_reason(bad.length
                 ? `${bad[0].label}: ${bad[0].detail || 'not working'}`
-                : 'All checks passed — board, settings and engine are all live.');
+                : 'All checks passed - board, settings and engine are all live.');
             copy_diagnostics((err) => {
                 diagBtn.textContent = err ? '✕' : '✓';
                 if (err) set_idle_reason(err);
@@ -1387,7 +1387,7 @@ async function initialize_engine(reuseWarm = false) {
                 effective_multipv(), config.elo, !!config.premove, config.maia_level].join('|');
     if (reuseWarm && engine_ready && fp === last_init_fp) {
         if (WASM_ENGINES.includes(config.engine)) engine = offscreen_engine;
-        console.log('Engine warm — reused as-is (no reconfigure)');
+        console.log('Engine warm - reused as-is (no reconfigure)');
         return;
     }
     // Net stays loaded only when its IDENTITY is unchanged: engine + variant (+ maia_level, since a
@@ -1595,15 +1595,15 @@ function on_engine_error(message) {
     // and a failure to LOAD one at all -- a missing net, a model that won't fetch, a bad build. The
     // second kind fell through the regex and was dropped, so the panel just sat on its progress bar
     // with the single most useful sentence already in hand. Say it, whatever kind it is.
-    update_best_move(i18n('panel.msg.engine_error', 'Engine error — {detail}', {detail: String(message).slice(0, 120)}));
+    update_best_move(i18n('panel.msg.engine_error', 'Engine error - {detail}', {detail: String(message).slice(0, 120)}));
     if (!/RuntimeError|Aborted|worker sent an error/.test(String(message))) {
         engine_ready = false; // a load that failed is not a warm engine; make the next open re-init
         toggle_calculating(false); // nothing is coming, so stop pretending a search is running
         return;
     }
     if (engine_restarts >= 3) {
-        // ponytail: cap restarts — a build that keeps trapping (some wasm builds on some machines) shouldn't loop forever
-        update_best_move(i18n('panel.msg.engine_keeps_crashing', 'Engine keeps crashing — pick a different engine in Settings.'));
+        // ponytail: cap restarts - a build that keeps trapping (some wasm builds on some machines) shouldn't loop forever
+        update_best_move(i18n('panel.msg.engine_keeps_crashing', 'Engine keeps crashing - pick a different engine in Settings.'));
         return;
     }
     engine_restarts++;
@@ -1611,7 +1611,7 @@ function on_engine_error(message) {
     engine_restarting = true;
     engine = null; // drop the dead instance; send_engine_uci becomes a no-op meanwhile
     engine_ready = false; // a reopen mid-restart must do a full init, not warm-reuse the dead engine
-    update_best_move(i18n('panel.msg.engine_restarting', 'Engine crashed — restarting (attempt {n}/3)', {n: engine_restarts}));
+    update_best_move(i18n('panel.msg.engine_restarting', 'Engine crashed - restarting (attempt {n}/3)', {n: engine_restarts}));
     initialize_engine()
         .then(() => { last_eval = {fen: '', activeLines: 0, lines: []}; }) // force re-analysis on next fen poll
         .catch((e) => console.error('Engine restart failed:', e))
@@ -1631,7 +1631,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
     const white = i18n('color.white', 'White'), black = i18n('color.black', 'Black');
     const toplay = (turn === 'w') ? white : black;
     const next = (turn === 'w') ? black : white;
-    if (!best || best === '(none)') { // game over (or crashed search) — there is no move to draw or play
+    if (!best || best === '(none)') { // game over (or crashed search) - there is no move to draw or play
         const pvLine = last_eval.lines[0] || {};
         if ('mate' in pvLine) {
             update_evaluation(i18n('panel.msg.checkmate', 'Checkmate!'));
@@ -1671,7 +1671,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         // engine (WASM, native SF/Fairy, remote) does.
         const pondering = config.ponder && toplay.toLowerCase() !== our_side()
             && config.engine !== 'maia' && config.engine !== 'maia3';
-        update_best_move(`${pondering ? i18n('panel.msg.pondering', 'Pondering — ') : ''}` + i18n('panel.msg.to_play_best', '{side} to play, best move is {move}', {side: toplay, move: notate(last_eval.fen, best)}));
+        update_best_move(`${pondering ? i18n('panel.msg.pondering', 'Pondering - ') : ''}` + i18n('panel.msg.to_play_best', '{side} to play, best move is {move}', {side: toplay, move: notate(last_eval.fen, best)}));
     }
 
     if (toplay.toLowerCase() === our_side()) {
@@ -2139,7 +2139,7 @@ function note_unsupported_variant(name) {
     const el = PANEL_ROOT.getElementById('game-detection');
     if (el) {
         el.classList.add('unsupported');
-        el.innerText = `${name} is not a variant this engine has — the analysis below is standard chess`;
+        el.innerText = `${name} is not a variant this engine has - the analysis below is standard chess`;
     }
 }
 
@@ -2731,7 +2731,7 @@ function restore_setup_state() {
         if (row) row.style.display = '';
         const input = PANEL_ROOT.getElementById('setup_fen_input');
         if (input) input.value = setup_fen;
-        setup_fen_msg(i18n('panel.fen.restored', 'Restored the position you had set — Re-detect to follow the page again'));
+        setup_fen_msg(i18n('panel.fen.restored', 'Restored the position you had set - Re-detect to follow the page again'));
         update_snap_follow_button();
         try {
             turn = setup_fen.split(' ')[1] || 'w';
@@ -3258,7 +3258,7 @@ function panel_line_goto(idx) {
     if (input) input.value = fen;
     const row = PANEL_ROOT.getElementById('setup-fen-row');
     if (row) row.style.display = '';
-    setup_fen_msg(i18n('panel.fen.walking_line', 'Walking the panel line — play a move to continue from here, Re-detect to follow the page'));
+    setup_fen_msg(i18n('panel.fen.walking_line', 'Walking the panel line - play a move to continue from here, Re-detect to follow the page'));
     last_eval.fen = ''; prev_ply_count = 0;
     abandon_search();
     try {
@@ -3337,7 +3337,7 @@ function play_on_panel_board(from, to, promotion) {
     if (row) row.style.display = '';
     const input = PANEL_ROOT.getElementById('setup_fen_input');
     if (input) input.value = next;
-    setup_fen_msg(i18n('panel.fen.panel_board', 'Playing on the panel board — Re-detect to follow the page again'));
+    setup_fen_msg(i18n('panel.fen.panel_board', 'Playing on the panel board - Re-detect to follow the page again'));
     last_eval.fen = ''; prev_ply_count = 0;
     opp_spend = opp_clock_mark = last_our_eval = null;
     explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
@@ -3618,7 +3618,7 @@ function render_unsure(low) {
     const el = PANEL_ROOT.getElementById('setup_fen_msg');
     if (!el) return;
     const unsure = (low || []).filter(sq => sq.prob < 0.9);
-    el.textContent = 'Read from screen — turn with the king switch, orientation with Flip board';
+    el.textContent = 'Read from screen - turn with the king switch, orientation with Flip board';
     if (!unsure.length) return;
     el.appendChild(document.createTextNode(' · least sure: '));
     unsure.forEach((sq, i) => {
@@ -3689,7 +3689,7 @@ async function snap_position(crop) {
     if (!res || res.error) {
         // No board found -> offer the manual path rather than dead-ending. This is the documented
         // fallback: the detector is the flakiest step on a busy page or a video frame.
-        setup_fen_msg(`${res?.error === 'no board found' ? 'No board found' : `Failed: ${res?.error}`} — drag a box around the board`);
+        setup_fen_msg(`${res?.error === 'no board found' ? 'No board found' : `Failed: ${res?.error}`} - drag a box around the board`);
         request_drag_select();
         return;
     }
@@ -3698,7 +3698,7 @@ async function snap_position(crop) {
     // the turn, and the FEN box is right there showing what was read).
     const fen = `${res.placement} w - - 0 1`;
     if (!is_legal_position(fen)) {
-        setup_fen_msg(i18n('panel.fen.illegal_read', 'Read a position that is not legal — try dragging a box around the board'));
+        setup_fen_msg(i18n('panel.fen.illegal_read', 'Read a position that is not legal - try dragging a box around the board'));
         request_drag_select();
         return;
     }
@@ -3773,7 +3773,7 @@ function apply_setup_fen() {
     }
     setup_fen = parsed;
     stash_setup_state();
-    setup_fen_msg(i18n('panel.fen.set', 'Set — the panel is no longer following the page'));
+    setup_fen_msg(i18n('panel.fen.set', 'Set - the panel is no longer following the page'));
     // treat it as a brand-new game so no stale pacing/premove/book state carries over
     last_eval.fen = ''; prev_ply_count = 0;
     opp_spend = opp_clock_mark = last_our_eval = null;
@@ -4420,7 +4420,7 @@ function parse_position_from_response(txt) {
         turn = chess.turn();
 
         // a mid-animation scrape or wrong turn guess can yield a position where the side to move
-        // could capture the king — searching such a position crashes the stockfish wasm (OOB)
+        // could capture the king - searching such a position crashes the stockfish wasm (OOB)
         const opponent = (turn === 'w') ? 'b' : 'w';
         if (chess._isKingAttacked(opponent)) {
             throw Error('illegal position scraped (opponent king en prise)');
@@ -4653,7 +4653,7 @@ function move_confidence_label() {
 // costs ~18px of a column that has room, and neither string has to be abbreviated to fit.
 function readout_extras() {
     // Both labels return BARE text and the separator is added here. They used to carry their own
-    // leading '—' / '·', so which punctuation started the line depended on which label happened to
+    // leading ' - ' / '·', so which punctuation started the line depended on which label happened to
     // be present -- and stripping it back off needed a regex that missed the em dash.
     const extra = [puzzle_label(), tablebase_label(), move_confidence_label()].filter(Boolean).join(' · ');
     return extra ? `<span class="line1-extra">${extra}</span>` : '';
@@ -4797,7 +4797,7 @@ async function refresh_engine_health() {
     const ok = await native_host_available(native_port_name());
     if (config.engine !== want) return;
     el.className = ok ? 'ok' : 'down';
-    el.title = ok ? 'Native host is responding' : 'Native host not responding — run native-host/install.sh once';
+    el.title = ok ? 'Native host is responding' : 'Native host not responding - run native-host/install.sh once';
 }
 
 // The status line under the buttons. A variant chess.js can't replay would otherwise sit there
@@ -4845,8 +4845,8 @@ function note_relay_result(lastError) {
     const why = String(lastError.message || lastError);
     console.warn('Mephisto: the panel cannot reach this tab\'s content script:', why);
     set_detection_status(/access|permission/i.test(why)
-        ? i18n('panel.no_site_access', 'No access to this site — check the extension\'s permissions')
-        : i18n('panel.reload_the_page', 'Reload this page — the extension was updated'));
+        ? i18n('panel.no_site_access', 'No access to this site - check the extension\'s permissions')
+        : i18n('panel.reload_the_page', 'Reload this page - the extension was updated'));
 }
 
 function send_to_active_tab(message) {
@@ -5450,7 +5450,7 @@ async function run_self_test() {
     }
     const mark = (b) => b ? '✓' : '✗';
     const allOK = scrapeOK && engineOK && nativeOK;
-    el.innerText = `Self-test — Scrape ${mark(scrapeOK)} · Engine ${mark(engineOK)}${nativePart}`;
+    el.innerText = `Self-test - Scrape ${mark(scrapeOK)} · Engine ${mark(engineOK)}${nativePart}`;
     el.classList.toggle('unsupported', !allOK);
     setTimeout(() => { el.innerText = prev; el.classList.toggle('unsupported', wasUnsupported); }, 6000);
 }
@@ -5722,7 +5722,7 @@ function sync_puzzle_mode_to_page(onPuzzlePage) {
     // hotkeys use for the same reason.
     box.checked = onPuzzlePage;
     box.dispatchEvent(new Event('change'));
-    console.log(`Puzzle Mode ${onPuzzlePage ? 'on' : 'off'} — following the page`);
+    console.log(`Puzzle Mode ${onPuzzlePage ? 'on' : 'off'} - following the page`);
 }
 
 // ==================================================================================================
@@ -5774,7 +5774,7 @@ function sync_fourpc_engine_to_page(onFourPCPage) {
         fourpc_prev_engine = config.engine;            // remember what to restore
         sel.value = FOURPC_ENGINES[0];
         sel.dispatchEvent(new Event('change'));        // the one path that saves, pushes and reloads
-        console.log(`Engine -> ${FOURPC_ENGINES[0]} — following the page (was ${fourpc_prev_engine})`);
+        console.log(`Engine -> ${FOURPC_ENGINES[0]} - following the page (was ${fourpc_prev_engine})`);
         return;
     }
     // LEFT THE 4PC PAGES. Unlike Puzzle Mode this is not a preference to respect: Tetrarch plays
@@ -5787,7 +5787,7 @@ function sync_fourpc_engine_to_page(onFourPCPage) {
     fourpc_prev_engine = null;
     sel.value = back;
     sel.dispatchEvent(new Event('change'));
-    console.log(`Engine -> ${back} — restored on leaving 4-player chess`);
+    console.log(`Engine -> ${back} - restored on leaving 4-player chess`);
 }
 
 // 4PC does NOT go through request_automove. That function is two-player to its bones: it asks
@@ -5943,7 +5943,7 @@ function on_new_pos_4pc(payload) {
     // R+Y against B+G (RULES.md 2). Needed BEFORE the search so the streamed info can use it too.
     const team = (seat) => (seat === 'R' || seat === 'Y') ? 0 : 1;
     const flip = (ourSeat !== '?' && team(turn) !== team(ourSeat)) ? -1 : 1;
-    set_detection_status(i18n('panel.fourpc_detected', '4-player chess — {seat} to move',
+    set_detection_status(i18n('panel.fourpc_detected', '4-player chess - {seat} to move',
         {seat: FOURPC_SEAT_NAME[turn] || turn}));
     if (!is_fourpc_engine()) {
         update_best_move(i18n('panel.fourpc_needs_engine',
@@ -5959,7 +5959,7 @@ function on_new_pos_4pc(payload) {
     if (mode === 'ffa') {
         fourpc_busy = false;
         update_best_move(i18n('panel.fourpc_ffa',
-            'Free-for-all — Tetrarch searches Teams mode only'));
+            'Free-for-all - Tetrarch searches Teams mode only'));
         return;
     }
     // MultiPV alongside it. Tetrarch declares MultiPV (spin 1-64) and emits one `info ... multipv N`
@@ -6048,7 +6048,7 @@ function on_new_pos_4pc(payload) {
             // always means it was never installed, and "Engine error" sent people looking for a bug
             // instead of the installer. Say what to do.
             update_best_move(native_host_missing(e)
-                ? i18n('panel.tetrarch_setup', 'Tetrarch is not installed yet — see the README section '
+                ? i18n('panel.tetrarch_setup', 'Tetrarch is not installed yet - see the README section '
                        + '"Four-player chess" for macOS, Linux and Windows setup')
                 : i18n('panel.engine_error', 'Engine error'));
             console.warn('Mephisto: 4PC analyse failed', e);
@@ -6382,7 +6382,7 @@ function maybe_autodetect_variant() {
         // stays on the explicit Detect button (which now switches to Fairy too).
         if (!/\/variants\//.test(href)) return;
         // already correct: right variant AND (no Fairy needed, or already on some Fairy engine).
-        // (Which Fairy engine — native vs WASM — is resolved by an async probe inside apply.)
+        // (Which Fairy engine - native vs WASM - is resolved by an async probe inside apply.)
         if (config.variant === v && (!needs_fairy_engine(v) || FAIRY_ENGINES.includes(config.engine))) return;
         const key = 'mephisto.autodetected:' + href;
         try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (e) { /* */ }
@@ -6479,7 +6479,7 @@ function mark_autoplay_overridden() {
     const by = config.help_mode ? 'Help Mode' : config.manual_mode ? 'Manual Mode' : null;
     row.classList.toggle('qs-overridden', !!(config.autoplay && by));
     row.title = by && config.autoplay
-        ? `Autoplay is on but ${by} is playing the move instead — turn ${by} off to autoplay`
+        ? `Autoplay is on but ${by} is playing the move instead - turn ${by} off to autoplay`
         : '';
 }
 
@@ -7040,7 +7040,7 @@ function maybe_suggest_calibration() {
         if (Math.abs(want - config.compute_time) < Math.max(100, config.compute_time * 0.25)) return;
         const el = PANEL_ROOT.getElementById('calibrate-notice');
         if (!el) return;
-        el.textContent = i18n('panel.calibrated', 'This machine measures {nps}M nps — ', {nps: (median / 1e6).toFixed(1)}) +
+        el.textContent = i18n('panel.calibrated', 'This machine measures {nps}M nps - ', {nps: (median / 1e6).toFixed(1)}) +
             `Search Time ${want}ms matches the reference strength (now ${config.compute_time}ms). Tap to apply.`;
         el.hidden = false;
         el.onclick = (e) => {
@@ -7070,7 +7070,7 @@ function check_for_update() {
                 note.version !== chrome.runtime.getManifest().version) return check_for_update_assets(el);
             chrome.storage.local.remove('mephisto_whats_new');
             el.textContent = note.headline
-                ? i18n('panel.updated_to_with_note', 'Updated to v{v} — {note}',
+                ? i18n('panel.updated_to_with_note', 'Updated to v{v} - {note}',
                     {v: note.version, note: note.headline})
                 : i18n('panel.updated_to', 'Updated to v{v}', {v: note.version});
             el.hidden = false;
@@ -7091,7 +7091,7 @@ function check_for_update_assets(el) {
         chrome.runtime.sendMessage({assetsCheck: true}, (res) => {
             if (chrome.runtime.lastError || !res || res.ok) return check_for_update_version(el);
             el.textContent = i18n('panel.incomplete_install',
-                'Engines missing — you have the update-only download. Get the full zip.');
+                'Engines missing - you have the update-only download. Get the full zip.');
             el.href = `https://github.com/${UPDATE_REPO_SLUG}/releases/latest`;
             el.hidden = false;
             el.onclick = (e) => {
@@ -7121,7 +7121,7 @@ function check_for_update_version(el) {
 
 function show_update_notice(el, res) {
     {
-            el.textContent = i18n('panel.update_available', 'Update available — v{latest} (you have v{current})',
+            el.textContent = i18n('panel.update_available', 'Update available - v{latest} (you have v{current})',
       {latest: res.latest, current: res.current});
             el.hidden = false;
             // Set the REAL destination on the anchor. Belt and braces: in the toolbar popup a plain
@@ -7150,7 +7150,7 @@ function show_update_notice(el, res) {
             if (chrome.runtime.lastError) return;
             if (ready?.ok) {
                 el.textContent = i18n('panel.update_install_now',
-                    'Update available — v{latest} (you have v{current}) — click to install',
+                    'Update available - v{latest} (you have v{current}) - click to install',
                     {latest: res.latest, current: res.current});
                 el.onclick = (e) => {
                     e.preventDefault();
@@ -7158,7 +7158,7 @@ function show_update_notice(el, res) {
                 };
             } else if (ready?.enabled) {
                 el.textContent = i18n('panel.update_finish_setup',
-                    'Update available — v{latest} — finish setting up automatic updates',
+                    'Update available - v{latest} - finish setting up automatic updates',
                     {latest: res.latest});
                 el.onclick = (e) => {
                     e.preventDefault();
@@ -7427,8 +7427,8 @@ async function parse_backend_json(res) {
     try {
         return JSON.parse(text);
     } catch (e) {
-        // an unrelated server on the port answers with HTML ("<!doctype ...") — surface that instead of a SyntaxError
-        throw new Error(`Remote engine at ${res.url} did not return JSON — is remote-engine.py running on that port?`);
+        // an unrelated server on the port answers with HTML ("<!doctype ...") - surface that instead of a SyntaxError
+        throw new Error(`Remote engine at ${res.url} did not return JSON - is remote-engine.py running on that port?`);
     }
 }
 

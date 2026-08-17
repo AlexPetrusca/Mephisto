@@ -89,7 +89,7 @@ class GeneralSettings extends SettingsPage {
                     : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
                 const idb = est.usageDetails?.indexedDB;
                 storEl.textContent = MephistoI18n.t('set.storage',
-                    'Storage: {used} used{idb} — of {quota} available to this browser profile.', {
+                    'Storage: {used} used{idb} - of {quota} available to this browser profile.', {
                         used: fmt(est.usage || 0),
                         idb: idb > 1e6 ? ` (${fmt(idb)} of it the puzzle database)` : '',
                         quota: fmt(est.quota || 0),
@@ -275,7 +275,7 @@ class GeneralSettings extends SettingsPage {
             parts.push(e.key.length === 1 ? e.key.toLowerCase() : e.key);
             return parts.join('+');
         };
-        const pretty = (k) => !k ? '—' : k.split('+').map(p => p === ' ' ? 'Space' : (p.length === 1 ? p.toUpperCase() : p)).join(' + ');
+        const pretty = (k) => !k ? ' - ' : k.split('+').map(p => p === ' ' ? 'Space' : (p.length === 1 ? p.toUpperCase() : p)).join(' + ');
         const load = () => { try { return {...DEFAULTS, ...(JSON.parse(MephistoConfig.get('hotkeys')) || {})}; } catch (e) { return {...DEFAULTS}; } };
         const save = (obj) => MephistoConfig.set('hotkeys', JSON.stringify(obj));
         let bindings = load();
@@ -394,7 +394,7 @@ class GeneralSettings extends SettingsPage {
         }
         cell.textContent = share > 0
             ? `${Math.round(acc / share)}% acc · ${Math.round(drop / share)}% drop`
-            : '—';
+            : ' - ';
     }
 
     // Per-category centipawn thresholds, each with a live accuracy/win-drop readout. The two formulas
@@ -464,7 +464,7 @@ class GeneralSettings extends SettingsPage {
                 }
                 try {
                     await navigator.clipboard.writeText(res.report);
-                    status.textContent = `Copied — ${res.report.split('\n').length} lines. Paste it into your report.`;
+                    status.textContent = `Copied - ${res.report.split('\n').length} lines. Paste it into your report.`;
                 } catch (e) {
                     status.textContent = `Collected, but the clipboard refused: ${e.message || e}`;
                 }
@@ -498,14 +498,14 @@ class GeneralSettings extends SettingsPage {
             const granted = on && await MephistoUpdater.hasPermission();
             cb.checked = on;
             buttons.forEach(b => b.disabled = !granted);
-            if (!on) return say('Off — Mephisto downloads nothing and asks GitHub for nothing extra.');
+            if (!on) return say('Off - Mephisto downloads nothing and asks GitHub for nothing extra.');
             if (!granted) {
-                return say('On, but Chrome is no longer holding the download permission — ' +
+                return say('On, but Chrome is no longer holding the download permission - ' +
                     'switch this off and on again to ask for it.');
             }
             const dir = await MephistoUpdater.savedFolder();
-            if (!dir) return say(`On — you have v${current}. Choose the extension folder to finish setting this up.`);
-            say(`On — you have v${current}, and updates go into "${dir.name}".`);
+            if (!dir) return say(`On - you have v${current}. Choose the extension folder to finish setting this up.`);
+            say(`On - you have v${current}, and updates go into "${dir.name}".`);
             // Both of these exist only as a consequence of a previous install, so they are hidden
             // until there is actually something to undo or finish -- a permanently greyed-out
             // button teaches you nothing.
@@ -517,19 +517,19 @@ class GeneralSettings extends SettingsPage {
             if (back && rollbackBtn) rollbackBtn.textContent = `Roll Back to v${back.version}`;
             resumeBtn?.classList.toggle('hidden', !pending);
             if (pending) return say(`An update to v${pending.version} was interrupted before it finished. ` +
-                `Press Finish Interrupted Update — the files are already downloaded.`);
+                `Press Finish Interrupted Update - the files are already downloaded.`);
             report(await MephistoUpdater.check().catch(() => null), dir);
         };
 
         // One place that turns a release into a sentence, so the automatic check on page open and
         // the Check button cannot word the same state two different ways.
         const report = (rel, dir) => {
-            if (!rel || !rel.latest) return say(`On — you have v${current}. Could not reach GitHub just now.`);
+            if (!rel || !rel.latest) return say(`On - you have v${current}. Could not reach GitHub just now.`);
             latest = rel;
-            if (!rel.newer) return say(`Up to date — v${current} is the newest release.`);
-            if (!dir) return say(`Update available — v${rel.latest}. Choose the extension folder, then press Install Update.`);
-            if (!rel.asset) return say(`Update available — v${rel.latest}, but that release has no update archive. Download the full zip.`);
-            say(`Update available — v${rel.latest} (${(rel.size / 1048576).toFixed(1)} MB). Press Install Update.`);
+            if (!rel.newer) return say(`Up to date - v${current} is the newest release.`);
+            if (!dir) return say(`Update available - v${rel.latest}. Choose the extension folder, then press Install Update.`);
+            if (!rel.asset) return say(`Update available - v${rel.latest}, but that release has no update archive. Download the full zip.`);
+            say(`Update available - v${rel.latest} (${(rel.size / 1048576).toFixed(1)} MB). Press Install Update.`);
         };
 
         // Turning it ON is the permission prompt, and a refusal has to snap the switch back --
@@ -561,7 +561,7 @@ class GeneralSettings extends SettingsPage {
         folderBtn.addEventListener('click', async () => {
             try {
                 const picked = await MephistoUpdater.pickFolder();
-                say(`Folder set — "${picked.name}", holding v${picked.version}.`);
+                say(`Folder set - "${picked.name}", holding v${picked.version}.`);
                 report(latest || await MephistoUpdater.check().catch(() => null), {name: picked.name});
             } catch (e) {
                 // AbortError is the user closing the picker, which is not a failure and needs no line
@@ -574,7 +574,7 @@ class GeneralSettings extends SettingsPage {
             try {
                 const res = await MephistoUpdater.install(say);
                 if (res.already) {
-                    say(`Up to date — v${res.version} is the newest release.`);
+                    say(`Up to date - v${res.version} is the newest release.`);
                 } else {
                     // The reload tears this page down, so the line has to be on screen first. It
                     // also orphans the content script in every open game tab, hence the reminder.
@@ -590,7 +590,7 @@ class GeneralSettings extends SettingsPage {
                     // serve here -- it is cleared the first time the panel shows it.
                     await chrome.storage.local.set({mephisto_installed_version: res.installed});
                     const kept = res.backedUp ? ` Roll back to v${res.from} from this page if it misbehaves.` : '';
-                    say(`Installed v${res.installed} over v${res.from} — ${res.files} files.${kept} ` +
+                    say(`Installed v${res.installed} over v${res.from} - ${res.files} files.${kept} ` +
                         `Reloading the extension; reload your game tabs.`);
                     setTimeout(() => chrome.runtime.reload(), 1500);
                     return; // leave the buttons disabled: this page is about to go away
@@ -606,7 +606,7 @@ class GeneralSettings extends SettingsPage {
             buttons.forEach(b => b.disabled = true);
             try {
                 const res = await MephistoUpdater.rollback(say);
-                say(`Rolled back to v${res.version} — ${res.files} files restored` +
+                say(`Rolled back to v${res.version} - ${res.files} files restored` +
                     `${res.removed ? `, ${res.removed} removed` : ''}. Reloading the extension; reload your game tabs.`);
                 setTimeout(() => chrome.runtime.reload(), 1500);
                 return; // this page is about to go away
@@ -620,7 +620,7 @@ class GeneralSettings extends SettingsPage {
             buttons.forEach(b => b.disabled = true);
             try {
                 const res = await MephistoUpdater.finishStaged(say);
-                say(`Finished the update to v${res.version} — ${res.files} files. ` +
+                say(`Finished the update to v${res.version} - ${res.files} files. ` +
                     `Reloading the extension; reload your game tabs.`);
                 setTimeout(() => chrome.runtime.reload(), 1500);
                 return;
@@ -675,7 +675,7 @@ class GeneralSettings extends SettingsPage {
                 if (c.cc) parts.push(`${n(c.cc)} Chess.com`);
                 status.textContent = parts.length
                     ? `${parts.join(' · ')} puzzle positions loaded. Puzzle Mode plays the known solution.`
-                    : 'No puzzle database loaded — Puzzle Mode uses the engine.';
+                    : 'No puzzle database loaded - Puzzle Mode uses the engine.';
             } catch (e) {
                 status.textContent = `Could not read the database: ${e}`;
             }
@@ -696,7 +696,7 @@ class GeneralSettings extends SettingsPage {
             // parse error that reads like a corrupt download.
             if (/\.zst$/i.test(f.name)) {
                 status.textContent = 'That is the compressed file. Decompress it first: ' +
-                    'unzstd lichess_db_puzzle.csv.zst — then pick the .csv.';
+                    'unzstd lichess_db_puzzle.csv.zst - then pick the .csv.';
                 return;
             }
             btn.disabled = clearBtn.disabled = true;
@@ -733,7 +733,7 @@ class GeneralSettings extends SettingsPage {
                 // it loaded ten times what it did.
                 const stored = await PuzzleDB.count(res.site);
                 const which = res.site === 'cc' ? 'Chess.com' : 'Lichess';
-                status.textContent = `Done — ${n(stored)} ${which} puzzle positions loaded from ` +
+                status.textContent = `Done - ${n(stored)} ${which} puzzle positions loaded from ` +
                     `${n(res.rows)} puzzles. Puzzle Mode will play the known solution.`;
             } catch (e) {
                 status.textContent = `Import failed: ${e}`;

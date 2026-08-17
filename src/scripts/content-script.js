@@ -173,7 +173,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
             sendToPanel({ dom: res, orient: orient, clocks: scrapeClocks(), fenresponse: true,
                           puzzlePage: isPuzzlePage(), fourPCPage: is4PC() });
         } catch (e) {
-            // extension was reloaded — this orphaned content-script can't reach it anymore
+            // extension was reloaded - this orphaned content-script can't reach it anymore
         }
         // Turn is shown by the panel's header king-switch (driven off the parsed FEN), not here.
         return;
@@ -250,7 +250,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // move after the first. The lane has its own protection: it re-analyses whatever is actually
         // on the board, and a move computed for a stale position simply loses to the next scrape.
         if (!response.fourpc && !boardStillMatchesAnalysis()) {
-            dropMove('The board moved on while it was thinking — re-analysing.',
+            dropMove('The board moved on while it was thinking - re-analysing.',
                 'DROPPED: board no longer matches the analysed position');
             mismatchAborts++;
             console.warn(`Mephisto: board changed since the analysed position -- move dropped, re-scraping (${mismatchAborts} so far)`);
@@ -280,7 +280,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
             // `.finally(endMoving)` tidied up behind it, so autoplay simply skipped a move with
             // nothing stuck and nothing logged. The sender already decided; read what it sent.
             if (response.fourpc && !is4PCGame()) {
-                dropMove('This four-player board is not playable — open a game or the analysis board.',
+                dropMove('This four-player board is not playable - open a game or the analysis board.',
                     'DROPPED: 4PC move outside a game url', {path: location.pathname});
                 endMoving();
             } else if (response.fourpc) {
@@ -587,7 +587,7 @@ function applyHideOpponent(on) {
         hideOppMatched = n;
         bgLog('hide opponent', {matched: n, site});
         if (n === 0) {
-            console.warn('Mephisto: Hide Opponent Name matched nothing on this page — the site has ' +
+            console.warn('Mephisto: Hide Opponent Name matched nothing on this page - the site has ' +
                          'most likely renamed the classes it used to use.');
         }
     }
@@ -740,7 +740,7 @@ async function toggleOverlay() {
         'width: 220px; padding: 12px 14px; border-radius: 8px; background: #23242a; color: #e6e6e6; ' +
         'font: 13px/18px -apple-system, "Roboto", system-ui, sans-serif; ' +
         'box-shadow: 0 6px 24px rgba(0,0,0,0.45);';
-    placeholder.textContent = 'Mephisto — starting…';
+    placeholder.textContent = 'Mephisto - starting…';
     overlayRoot.appendChild(placeholder);
     // How long the worker takes to answer is the number the "waiting for the background worker"
     // message is about, so it is stamped out here where BOTH the success and the failure path can
@@ -748,7 +748,7 @@ async function toggleOverlay() {
     const assetsAsked = Date.now();
     // Say more the longer it takes, rather than sitting on one word. Cleared either way below.
     const slow = setTimeout(() => {
-        placeholder.textContent = 'Mephisto — waiting for the extension’s background worker. ' +
+        placeholder.textContent = 'Mephisto - waiting for the extension’s background worker. ' +
             'It can be slow to start after a browser restart.';
     }, 2500);
 
@@ -1242,7 +1242,7 @@ function drawLiveStats(stats, bounds) {
     box.style.width = `${Math.max(1, Math.round(bounds.width))}px`;
     box.style.boxSizing = 'border-box';
     const side = (name, s) => {
-        const acc = (s.accuracy == null) ? '—' : `${s.accuracy}%`;
+        const acc = (s.accuracy == null) ? ' - ' : `${s.accuracy}%`;
         return `<span><b style="color:#fff">${name}</b> ${acc}` +
                `<span style="opacity:.75"> · ${s.best}✓ ${s.inaccuracy}?! ${s.mistake}? ${s.blunder}??</span></span>`;
     };
@@ -2396,7 +2396,7 @@ async function promote4PC(piece) {
         if (!found) await promiseTimeout(120);
     }
     if (!found) {
-        dropMove(`Promotion to ${want.toUpperCase()} — pick the piece on the board yourself.`,
+        dropMove(`Promotion to ${want.toUpperCase()} - pick the piece on the board yourself.`,
             'PROMOTION: no picker matched the expected shape', {piece: want});
         return;
     }
@@ -2429,7 +2429,7 @@ function simulateMove4PC(move, think = null) {
         return pt ? new DOMRect(pt.x - geo.size / 2, pt.y - geo.size / 2, geo.size, geo.size) : null;
     };
     if (!rectOf(m[1]) || !rectOf(m[2])) {
-        dropMove('Could not find that square on the board — is it fully visible?',
+        dropMove('Could not find that square on the board - is it fully visible?',
             'DROPPED: 4PC move has no on-screen square', {move});
         return Promise.resolve();
     }

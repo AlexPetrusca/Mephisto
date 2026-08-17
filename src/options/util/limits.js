@@ -8,14 +8,14 @@
 export function threadsWarning(n) {
     const cores = navigator.hardwareConcurrency || 0;
     if (!cores || !(n > cores)) return '';
-    return `This machine has ${cores} cores — ${n} threads will fight each other and search slower, not faster.`;
+    return `This machine has ${cores} cores - ${n} threads will fight each other and search slower, not faster.`;
 }
 
 export function hashWarning(mb) {
     const gb = navigator.deviceMemory || 0;
     if (!gb || gb >= 8) return '';            // at the spec cap the real memory is unknowable
     if (!(mb > gb * 1024 / 2)) return '';     // half of a small machine is already generous for hash
-    return `This machine reports ${gb}GB of memory — a ${mb}MB hash will push it into swapping.`;
+    return `This machine reports ${gb}GB of memory - a ${mb}MB hash will push it into swapping.`;
 }
 
 // One line per page: both checks, joined, into a .limit-warn element that hides itself when empty.

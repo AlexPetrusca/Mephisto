@@ -73,7 +73,7 @@
 <div id="quick-settings">
 <div class="qs-title-row">
         <div id="qs_turn_switch" class="turn-switch" role="button" tabindex="0"
-             title="Whose turn to move — tap to flip if it's wrong (puzzles / custom positions)">
+             title="Whose turn to move - tap to flip if it's wrong (puzzles / custom positions)">
             <span class="turn-thumb">&#9812;</span>
             <!-- the glyph alone never said what it meant: a pill with a king in it reads as an
                  unlabelled toggle. The text states the side, and the caption states what tapping
@@ -127,22 +127,22 @@
     <div class="qs-row qs-toggle">
         <input id="qs_manual" type="checkbox" class="qs-cb">
         <label for="qs_manual" data-i18n="panel.manual_mode" data-i18n-tip="panel.tip.the_engine_keeps_thinking_until" class="qs-label tooltipped" data-position="left"
-              data-tooltip="The engine keeps thinking until YOU press the play-move hotkey (Spacebar by default), then it plays the best move it has found. Your own timing — overrides Clock/Mirror/Humanize timing and never fires on its own. Rebind the key in Settings → Hotkeys.">Manual Mode</label>
+              data-tooltip="The engine keeps thinking until YOU press the play-move hotkey (Spacebar by default), then it plays the best move it has found. Your own timing - overrides Clock/Mirror/Humanize timing and never fires on its own. Rebind the key in Settings → Hotkeys.">Manual Mode</label>
     </div>
     <div class="qs-row qs-toggle">
         <input id="qs_humanize" type="checkbox" class="qs-cb">
         <label for="qs_humanize" data-i18n="panel.humanize" data-i18n-tip="panel.tip.play_like_a_human_instant" class="qs-label tooltipped" data-position="left"
-              data-tooltip="Play like a human: instant recaptures and forced moves, quick obvious moves, long thinks in critical positions -- and occasionally a second-best move, a mistake, or (rarely) a blunder. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Humanize</label>
+              data-tooltip="Play like a human: instant recaptures and forced moves, quick obvious moves, long thinks in critical positions -- and occasionally a second-best move, a mistake, or (rarely) a blunder. Priority - Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Humanize</label>
     </div>
     <div class="qs-row qs-toggle">
         <input id="qs_clock" type="checkbox" class="qs-cb">
         <label for="qs_clock" data-i18n="panel.clock_mode" data-i18n-tip="panel.tip.read_the_game_clock_off" class="qs-label tooltipped" data-position="left"
-              data-tooltip="Read the game clock off the page and budget every move to it: roughly time/30 plus 60% of the increment, shrinking the engine search too, near-instant when short on time. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Clock Mode</label>
+              data-tooltip="Read the game clock off the page and budget every move to it: roughly time/30 plus 60% of the increment, shrinking the engine search too, near-instant when short on time. Priority - Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Clock Mode</label>
     </div>
     <div class="qs-row qs-toggle">
         <input id="qs_mirror" type="checkbox" class="qs-cb">
         <label for="qs_mirror" data-i18n="panel.mirror_time" data-i18n-tip="panel.tip.pace_to_the_opponent_instead" class="qs-label tooltipped" data-position="left"
-              data-tooltip="Pace to the opponent instead: spend what they spent on their last move, minus 10%, staying just ahead on the clock (30% extra haste when behind). Uses the Clock Mode budget for the first move / when their spend is unknown. Recaptures and forced moves stay instant. Priority — Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Mirror Time</label>
+              data-tooltip="Pace to the opponent instead: spend what they spent on their last move, minus 10%, staying just ahead on the clock (30% extra haste when behind). Uses the Clock Mode budget for the first move / when their spend is unknown. Recaptures and forced moves stay instant. Priority - Time: Mirror > Clock > Humanize > Search Time (first one enabled sets the duration; recaptures & forced moves always instant). Move: Humanize > engine best.">Mirror Time</label>
     </div>
     <div class="qs-row qs-toggle">
         <input id="qs_clockpace" type="checkbox" class="qs-cb">
@@ -196,7 +196,7 @@
     </div>
 <div class="qs-row" id="qs_maia3_row">
         <span data-i18n-tip="panel.tip.maia_3_target_rating_one" class="qs-label tooltipped" data-position="left"
-              data-tooltip="Maia-3 target rating. One transformer model conditioned on the Elo you set, so it plays like a human of that strength — anywhere from 600 to 2600, in fine steps. Changing it applies instantly (no reload)."><span data-i18n="panel.maia3_elo">Maia-3 Elo</span> (<span id="qs_maia3_val">1500</span>)</span>
+              data-tooltip="Maia-3 target rating. One transformer model conditioned on the Elo you set, so it plays like a human of that strength - anywhere from 600 to 2600, in fine steps. Changing it applies instantly (no reload)."><span data-i18n="panel.maia3_elo">Maia-3 Elo</span> (<span id="qs_maia3_val">1500</span>)</span>
         <input id="qs_maia3_elo" class="browser-default" type="range" min="600" max="2600" step="50">
     </div>
 <div class="qs-row" id="qs_variant_row">
@@ -236,7 +236,7 @@
     </div>
 <div class="qs-row" id="qs_maia_row">
         <span data-i18n="panel.maia_level" data-i18n-tip="panel.tip.which_maia_network_to_use" class="qs-label tooltipped" data-position="left"
-              data-tooltip="Which Maia network to use. Each is trained on human games at that rating, so it plays like a human of that strength — human-like mistakes, not a strong engine told to play badly. Changing this loads a different net.">Maia Level</span>
+              data-tooltip="Which Maia network to use. Each is trained on human games at that rating, so it plays like a human of that strength - human-like mistakes, not a strong engine told to play badly. Changing this loads a different net.">Maia Level</span>
         <select id="qs_maia_level" class="browser-default">
             <option value="1100">1100</option>
             <option value="1200">1200</option>
@@ -297,7 +297,7 @@
     <div class="qs-row qs-toggle">
         <input id="qs_book" type="checkbox" class="qs-cb">
         <label for="qs_book" data-i18n="panel.book_moves" data-i18n-tip="panel.tip.play_the_opening_from_the" class="qs-label tooltipped" data-position="left"
-              data-tooltip="Play the opening from the database instead of the engine's pick: a WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the same line every game. A move must be played in at least 20 games AND rate within 40cp of the engine's best, so it varies without playing worse. Falls back to the engine move if the lookup hasn't arrived. Priority — Move: Book > Humanize > engine best. Needs Autoplay.">Book Moves</label>
+              data-tooltip="Play the opening from the database instead of the engine's pick: a WEIGHTED-RANDOM choice among the popular replies, so you don't repeat the same line every game. A move must be played in at least 20 games AND rate within 40cp of the engine's best, so it varies without playing worse. Falls back to the engine move if the lookup hasn't arrived. Priority - Move: Book > Humanize > engine best. Needs Autoplay.">Book Moves</label>
     </div>
     <div class="qs-row qs-toggle">
         <input id="qs_tablebase" type="checkbox" class="qs-cb">

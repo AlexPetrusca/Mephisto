@@ -177,7 +177,7 @@ function syncTimeUi() {
     const slider = $('an_time_range'), out = $('an_time_unit');
     if (!slider) return;
     const secs = Math.max(1, Math.min(AN_INFINITE, +slider.value || AN_INFINITE));
-    if (out) out.textContent = secs >= AN_INFINITE ? 'no limit — until you move on' : `${secs}s per position`;
+    if (out) out.textContent = secs >= AN_INFINITE ? 'no limit - until you move on' : `${secs}s per position`;
     slider.style.setProperty('--fill', `${((secs - 1) / (AN_INFINITE - 1)) * 100}%`);
 }
 
@@ -362,7 +362,7 @@ async function exportPosition(btn) {
         const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Position — ${esc(pos.fen.split(' ')[0].slice(0, 24))}</title>
+<title>Position - ${esc(pos.fen.split(' ')[0].slice(0, 24))}</title>
 <style>${css}</style>
 </head><body><main><div class="container">
 <h3 class="set-h">Position</h3>
@@ -1131,7 +1131,7 @@ async function renderExtras(pos) {
             : tb.category === 'draw' ? 'draw'
             : tb.category === 'cursed-win' ? `win in ${n} (50-move drawn)`
             : tb.category === 'blessed-loss' ? `lost in ${n} (50-move saved)` : tb.category;
-        tbEl.textContent = `Tablebase: ${word}${san && tb.category !== 'draw' ? ` — ${san}` : ''}`;
+        tbEl.textContent = `Tablebase: ${word}${san && tb.category !== 'draw' ? ` - ${san}` : ''}`;
     }
 }
 
