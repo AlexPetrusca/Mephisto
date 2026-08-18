@@ -3955,7 +3955,19 @@ function expand_placement(fen) {
 // forbid playing -- so with Autoplay off the panel drew the arrow and then said NOTHING: no move, no
 // score, the previous position's numbers still sitting there. Showing the answer and playing it are
 // different jobs and only the second one is Autoplay's business.
+// The answer this position was given, kept for the diagnostics alone. A wrong move on a puzzle is
+// either a wrong ANSWER or a right answer clicked onto the wrong squares, and a report that carries
+// neither cannot tell them apart -- which is exactly the position one live report left us in.
+// Paired with the content script's `lastAimed`, one paste settles it.
+let last_puzzle_answer = null;
+
 function show_puzzle_answer(uci) {
+    try {
+        last_puzzle_answer = `${uci} from ${puzzle_from_page ? 'page' : 'database'}`
+            + (puzzle_rating ? ` (rated ${puzzle_rating})` : '')
+            + ` for ${puzzle_key(last_eval.fen || '')}`
+            + (puzzle_solutions ? ` [${puzzle_solutions.size} plies mapped]` : '');
+    } catch (e) { last_puzzle_answer = `${uci} (context unavailable)`; }
     toggle_calculating(false);
     update_best_move(i18n('panel.msg.puzzle_solution', 'Puzzle solution: {move}', {move: uci}));
     // Nothing searched this position, so the number in the readout belongs to a DIFFERENT one --
@@ -7279,6 +7291,11 @@ function copy_diagnostics(onDone = () => {}) {
             // board produce byte-identical reports.
             content: (() => { try { return self.MephistoContent?.status?.() || 'no page script'; }
                               catch (e) { return 'status threw: ' + (e && e.message); } })(),
+            // The two halves of a wrong move, which no report carried until one went unexplained:
+            // WHICH answer was chosen and where it came from, and (in `content`, as lastAimed) which
+            // squares the clicks were actually pointed at. Agreeing but wrong on the board means the
+            // answer was wrong; disagreeing means the coordinates were.
+            puzzleAnswer: last_puzzle_answer || 'none this session',
         };
         chrome.runtime.sendMessage({diagnostics: ctx}, (res) => {
             if (chrome.runtime.lastError || !res || res.error) {

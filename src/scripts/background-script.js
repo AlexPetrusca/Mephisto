@@ -597,6 +597,11 @@ async function buildDiagnostics(ctx = {}) {
     ctx.reason ? `reason    ${ctx.reason}` : null,
     ctx.toggles ? `toggles   ${ctx.toggles}` : null,
     ctx.content ? `content   ${ctx.content}` : null,
+    // The answer the panel chose for the last puzzle position, beside the squares the content script
+    // says the clicks were aimed at (`lastAimed`, inside `content`). A wrong move on the board is
+    // either a wrong ANSWER or a right one aimed at the wrong squares; without both halves in the
+    // report, a live sighting cannot be told apart from the other, and one already could not be.
+    ctx.puzzleAnswer ? `puzzle    ${ctx.puzzleAnswer}` : null,
     `worker    ${workerLoadLine()}`,
     ctx.fen ? `position  ${ctx.fen}` : null,
     '',

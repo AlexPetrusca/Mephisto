@@ -359,6 +359,13 @@ self.MephistoContent = {
         `puzzleCaptures=${puzzleCaptures.size} seen=${puzzleSeen} unread=${puzzleUnread} rejected=${puzzleRejected}`,
         puzzleSample ? `puzzleLast=${puzzleSample}` : null,
         lastScrapeFail ? `lastScrapeFail=${lastScrapeFail}` : null,
+        // WHAT THE LAST MOVE ACTUALLY AIMED AT, in squares. A wrong move on the board is one of two
+        // completely different faults -- the answer was wrong, or the answer was right and the
+        // CLICKS went somewhere else -- and they need opposite fixes. Reading it back as squares
+        // (from the same rect and orientation the clicks were computed with) is what tells them
+        // apart, and it is here rather than in the trace because bgLog is suppressed while the tab
+        // is focused, which is precisely when someone is watching it happen.
+        lastAimed ? `lastAimed=${lastAimed}` : null,
     ].filter(Boolean).join('  '),
     detectVariant: () => ({variant: detectVariant(), href: location.href}),
     // popup.js's apply_compact calls this: the panel is a fixed-size scaled box, so hiding its
@@ -3993,6 +4000,12 @@ function clickableBoardBounds() {
     return board ? board.getBoundingClientRect() : null;
 }
 
+// The last move's intent, recorded in the terms the failure is argued in: the move that was asked
+// for, and the squares the clicks were actually pointed at. If those two disagree the fault is in
+// the coordinates; if they agree and the board still shows something else, the fault is upstream in
+// the answer. Diagnostics-only -- nothing reads this to decide anything.
+let lastAimed = null;
+
 function simulateMove(move, deselect, think = null) {
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move ?? '')) {
         console.warn(`Mephisto: refusing to play invalid move '${move}'`); // e.g. '(none)' or a crazyhouse drop
@@ -4051,6 +4064,24 @@ function simulateMove(move, deselect, think = null) {
         // The think delay is over and the infobar (if any) has settled: this is the last moment
         // before a coordinate is used, so it is the right one to measure at.
         refreshBoardGeometry();
+        // Record the intent, in squares, from the geometry these clicks are about to use. Read back
+        // through the SAME rect and orientation, so `aimed` is what the pixels mean -- if it does not
+        // read back as the move that was asked for, the coordinates are the fault.
+        try {
+            const backRead = (rect) => {
+                const s = boardBounds.width / 8;
+                const col = Math.floor((rect.x + rect.width / 2 - boardBounds.x) / s);
+                const row = Math.floor((rect.y + rect.height / 2 - boardBounds.y) / s);
+                if (col < 0 || col > 7 || row < 0 || row > 7) return 'OFF-BOARD';
+                return (orientation === 'white')
+                    ? String.fromCharCode(97 + col) + (8 - row)
+                    : String.fromCharCode(104 - col) + (row + 1);
+            };
+            lastAimed = `${move}->${backRead(getBoundsFromCoords(move.substring(0, 2)))}`
+                      + `${backRead(getBoundsFromCoords(move.substring(2, 4)))}`
+                      + ` (${orientation}, board ${Math.round(boardBounds.x)},${Math.round(boardBounds.y)}`
+                      + ` ${Math.round(boardBounds.width)}px)`;
+        } catch (e) { lastAimed = `${move}->read-back threw`; }
         // Clear a stale selection (a piece left selected by a prior failed click would be DESELECTED
         // by our from-click, making the move a no-op). `deselect` is an empty square the moving piece
         // can't reach, so clicking it only ever deselects -- never moves anything. ONLY on a RETRY:
