@@ -249,6 +249,9 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // analysed FEN. On a 14x14 board that comparison can never succeed, so it dropped every 4PC
         // move after the first. The lane has its own protection: it re-analyses whatever is actually
         // on the board, and a move computed for a stale position simply loses to the next scrape.
+        // Kept for the SECOND check, taken after the think delay -- see performSimulatedMoveClicks.
+        // One module var is enough: `moving` already forbids two click sequences at once.
+        pendingForPush = response.forPush || null;
         if (!response.fourpc && !boardStillMatchesAnalysis(response.forPush)) {
             dropMove('The board moved on while it was thinking - re-analysing.',
                 'DROPPED: board no longer matches the analysed position');
@@ -4016,6 +4019,9 @@ function clickableBoardBounds() {
 // the coordinates; if they agree and the board still shows something else, the fault is upstream in
 // the answer. Diagnostics-only -- nothing reads this to decide anything.
 let lastAimed = null;
+// The reference for the move currently in flight, so the check can be repeated at the moment the
+// clicks actually happen rather than only when the move arrived.
+let pendingForPush = null;
 
 function simulateMove(move, deselect, think = null) {
     if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move ?? '')) {
@@ -4075,6 +4081,26 @@ function simulateMove(move, deselect, think = null) {
         // The think delay is over and the infobar (if any) has settled: this is the last moment
         // before a coordinate is used, so it is the right one to measure at.
         refreshBoardGeometry();
+        // AND THE POSITION IS CHECKED AGAIN, HERE, for the same reason the rectangle is measured
+        // here. The check on arrival happens BEFORE the think delay -- 400ms by default, seconds
+        // under Humanize or Clock Mode -- and on a page that advances itself (Auto-Next on rated
+        // puzzles fires constantly) the board can move on inside that window. The move then lands in
+        // a position it was never computed for, which is a correct answer to a board nobody is
+        // looking at any more: measured as g1g2, right for the endgame it was found in, played into
+        // an unrelated middlegame. Checking on arrival alone can only catch a board that had ALREADY
+        // moved on; this catches the one that moves on while we wait.
+        if (!is4PC() && pendingForPush && !boardStillMatchesAnalysis(pendingForPush)) {
+            dropMove('The board moved on while it was thinking - re-analysing.',
+                'DROPPED: board moved on during the think delay');
+            mismatchAborts++;
+            lastAimed = `${move}->NOT CLICKED (board moved on during the think)`;
+            // Same recovery as the arrival-time drop: clear both dedupes and re-push, or the panel
+            // sits on a position it has already analysed and nothing follows the refusal.
+            lastPushKey = lastDisplayKey = null;
+            resumePush = true;
+            pushWhenSettled();
+            return;
+        }
         // Record the intent, in squares, from the geometry these clicks are about to use. Read back
         // through the SAME rect and orientation, so `aimed` is what the pixels mean -- if it does not
         // read back as the move that was asked for, the coordinates are the fault.
