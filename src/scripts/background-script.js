@@ -240,8 +240,21 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.bgTrace) {
     const t = new Date().toISOString().slice(11, 23);
     console.log(`[bg ${t}] ${msg.bgTrace.from} |`, ...msg.bgTrace.args);
-    traceRing.push(`${t} ${msg.bgTrace.from} | ` + msg.bgTrace.args
-      .map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
+    const body = `${msg.bgTrace.from} | ` + msg.bgTrace.args
+      .map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+    // COLLAPSE A REPEAT INTO A COUNT instead of spending a slot on it. Auto-Next alone writes one
+    // line every few seconds forever, and a 200-line ring made of that is a ring holding nothing:
+    // a wrong move reported minutes later arrived with every line around it already flushed, which
+    // is precisely the report where the surrounding lines were the evidence. The message body is
+    // the identity -- the timestamp is not, or nothing would ever match -- and the kept line shows
+    // the LATEST time it happened with a count, so a flood still reads as a flood.
+    const prev = traceRing.length ? traceRing[traceRing.length - 1] : null;
+    if (prev && prev.body === body) {
+      prev.n++;
+      prev.t = t;
+      return;
+    }
+    traceRing.push({t, body, n: 1});
     if (traceRing.length > TRACE_RING) traceRing.shift();
     return;
   }
@@ -609,7 +622,7 @@ async function buildDiagnostics(ctx = {}) {
     ...(starts.length ? starts : ['(none recorded)']),
     '',
     `--- last ${traceRing.length} trace lines ---`,
-    ...traceRing,
+    ...traceRing.map(l => `${l.t} ${l.body}` + (l.n > 1 ? `  (x${l.n}, last shown)` : '')),
   ].filter(l => l !== null);
   return {report: lines.join('\n')};
 }
