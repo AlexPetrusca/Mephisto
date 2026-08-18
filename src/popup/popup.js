@@ -551,6 +551,9 @@ async function initPanel(root, tabId) {
                 console.warn('Mephisto: skipping unparseable scrape:', e.message);
                 return; // transient scrape garbage - the next poll (100ms) retries
             }
+            // stamped before anything can reject this push; promoted to `analysed_push_key` only
+            // once the position is actually accepted (see on_new_pos)
+            incoming_push_key = `${response.orient}|${response.dom}`;
             let {fen, startFen, moves} = parsed;
             // AN EMPTY FEN IS NOT A POSITION. A scrape can parse "successfully" into nothing -- a
             // board element that exists with its pieces not yet rendered, a move list the replay
@@ -3110,6 +3113,21 @@ let puzzle_move_timer = null;
 let puzzle_rating = null;   // what the publisher rated the puzzle we are on, when they said
 let puzzle_from_page = false;   // did this solution come from the page (capture) or the imported DB
 
+// WHICH SCRAPE THIS PANEL IS ACTUALLY WORKING FROM.
+//
+// `incoming_push_key` is the key of the push being handled right now; `analysed_push_key` is the one
+// the panel ACCEPTED and reasoned about. They differ exactly when a push is looked at and rejected --
+// a puzzle misread being the case that matters, because it deliberately leaves the panel's state
+// untouched. When that happens the panel goes on holding the previous position, and any move it
+// still has pending belongs to THAT position, not to what is on screen now.
+//
+// The key is the content script's own (`orientation|scrape`), so it can re-derive it from the live
+// board and compare. Shipped with every move it sends, which is what lets a move be refused when the
+// board is no longer the position it was computed for -- see boardStillMatchesAnalysis. A puzzle
+// answer from the previous puzzle was played into the next one three times before this existed.
+let incoming_push_key = null;
+let analysed_push_key = null;
+
 // ...and a watchdog behind it, because the puzzle click path does NOT verify itself.
 //
 // A normal autoplay move goes through simulateMoveVerified: it checks the move list actually grew,
@@ -3998,8 +4016,15 @@ function on_new_pos(fen, startFen, moves) {
     // exactly as it was, and both of those are visible changes.
     if (puzzle_misread(fen)) {
         bgTrace('puzzle misread -- ignoring this poll', {fen: String(fen).split(' ')[0]});
-        return;
+        return;   // deliberately WITHOUT promoting incoming_push_key: we are still on the old position
     }
+    // This position is accepted, so it is the one every move issued from here belongs to.
+    // CONSUMED, not just read: on_new_pos is also reached from paths that have no push behind them
+    // at all (a pasted FEN, the panel's own board, a re-detect). Those must not inherit the key of
+    // whatever was scraped last -- clearing it leaves `forPush` null there, which falls back to
+    // exactly the check that was being made before this existed.
+    analysed_push_key = incoming_push_key;
+    incoming_push_key = null;
     clear_idle_reason();   // a new position: whatever stopped the last move no longer applies
 
     console.log("on_new_pos", fen, startFen, moves);
@@ -6216,8 +6241,12 @@ function request_automove(move, think = null, manual = false, opts = {}) {
         // whole line without going back to the engine, and every move after the first was the tail of
         // a single short search -- unsearched moves that threw away won puzzles. Every move it plays
         // is now a move it actually searched.
-        ? {automove: true, pv: [move], deselect, verify, timing, manual}
-        : {automove: true, move: move, deselect, verify, think, timing, manual};
+        // `forPush` is the scrape this move was computed from. The content script refuses to click
+        // when the live board no longer matches it -- the check it already made, but against the
+        // right reference: its own last push can have moved on to a position this panel never
+        // accepted, which is how a stale answer reached a live board.
+        ? {automove: true, pv: [move], deselect, verify, timing, manual, forPush: analysed_push_key}
+        : {automove: true, move: move, deselect, verify, think, timing, manual, forPush: analysed_push_key};
     send_to_active_tab(message);
 }
 

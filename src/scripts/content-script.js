@@ -249,7 +249,7 @@ function handleExtensionMessage(response, sender, sendResponse) {
         // analysed FEN. On a 14x14 board that comparison can never succeed, so it dropped every 4PC
         // move after the first. The lane has its own protection: it re-analyses whatever is actually
         // on the board, and a move computed for a stale position simply loses to the next scrape.
-        if (!response.fourpc && !boardStillMatchesAnalysis()) {
+        if (!response.fourpc && !boardStillMatchesAnalysis(response.forPush)) {
             dropMove('The board moved on while it was thinking - re-analysing.',
                 'DROPPED: board no longer matches the analysed position');
             mismatchAborts++;
@@ -1543,11 +1543,22 @@ function scrapePositionVariantsFen() {
 // is not the same as unchanged, and the cost of waiting is one re-push.
 let mismatchAborts = 0; // surfaced in the console; a rising count means the board is outrunning us
 
-function boardStillMatchesAnalysis() {
-    if (!lastPushKey) return true; // nothing analysed yet -- nothing to contradict
+// `forPush` is the scrape the PANEL says this move was computed from, and it is the reference that
+// actually matters. Comparing against our own last push answers a different question -- "has the
+// board changed since we last told anyone about it" -- and those come apart precisely when the panel
+// declines a push (a puzzle misread leaves it holding the previous position on purpose). The board
+// then matches our newest push, this guard passes, and a move belonging to an older position is
+// clicked into a live one: measured three times, each a previous puzzle's answer played into the
+// next puzzle, legal enough for the site to accept it.
+//
+// Absent (four-player, a pasted FEN, the panel's own board) it falls back to lastPushKey, which is
+// the check exactly as it was.
+function boardStillMatchesAnalysis(forPush) {
+    const reference = forPush || lastPushKey;
+    if (!reference) return true; // nothing analysed yet -- nothing to contradict
     const res = tryScrapePosition();
     if (res === 'no') return false;
-    return `${getOrientation()}|${res}` === lastPushKey;
+    return `${getOrientation()}|${res}` === reference;
 }
 
 // Both "board is animating" aborts below are WAITS, and a wait needs a deadline. chessground
