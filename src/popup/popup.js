@@ -3965,6 +3965,20 @@ function show_puzzle_answer(uci) {
     update_evaluation(i18n('panel.msg.no_eval', 'No evaluation - the answer was known'));
     last_eval.lines = [];        // and no stale line for draw_moves or the alt-line list to redraw
     draw_eval_bar_unevaluated(); // ...nor a stale bar, which would claim an eval that was never made
+    // ...nor a stale WIN/DRAW/LOSS row, and nor a stale NPS. Both are written ONLY from the engine's
+    // info handler, so on this path -- where `puzzle_have` reaches `abandon_search()` and no search
+    // is ever issued -- neither is reached, and both keep whatever the last real search left there
+    // (the eval that runs between puzzles, on positions outside the line). Reported as "the engine
+    // leaked through", which is exactly how it reads: a live-looking speed and a confident 100% sat
+    // directly under a line saying nothing was evaluated. Nothing was: these are last week's
+    // numbers, not this position's. Same reasoning as the score and the bar above them.
+    //
+    // NPS is deliberately sticky DURING a search (it holds the last good value through the opening
+    // milliseconds, which report impossible speeds) -- that is why it survives to here, and why it
+    // has to be cleared explicitly rather than left to the next reading.
+    render_wdl(null);
+    const npsEl = PANEL_ROOT.getElementById('nps');
+    if (npsEl) npsEl.textContent = '';
 }
 
 function on_new_pos(fen, startFen, moves) {

@@ -3998,12 +3998,27 @@ function simulateMove(move, deselect, think = null) {
         console.warn(`Mephisto: refusing to play invalid move '${move}'`); // e.g. '(none)' or a crazyhouse drop
         return Promise.resolve();
     }
-    const boardBounds = clickableBoardBounds();
+    let boardBounds = clickableBoardBounds();
     if (!boardBounds) {
         console.warn('Mephisto: no board to click on');
         return Promise.resolve();
     }
-    const orientation = getOrientation();
+    let orientation = getOrientation();
+
+    // MEASURE LATE, NOT EARLY. The geometry above is read the moment the move is requested, but the
+    // first click does not happen until the THINK delay has elapsed -- 400ms by default and several
+    // seconds under Humanize or Clock Mode. Anything that reflows the page in that window (a board
+    // resize, the left nav expanding, a late-loading panel beside the board, a window resize) leaves
+    // every coordinate here pointing at where the board USED to be, and the clicks land off-square.
+    // A horizontal shift is worst on the a-file: one square of drift there falls off the board
+    // entirely, while the same drift anywhere else merely hits the neighbouring square.
+    // Re-reading costs one getBoundingClientRect immediately before the clicks, which is nothing
+    // beside the click round-trips that follow it.
+    function refreshBoardGeometry() {
+        const fresh = clickableBoardBounds();
+        if (fresh && fresh.width > 0) boardBounds = fresh;
+        orientation = getOrientation() || orientation;
+    }
 
     function getBoundsFromCoords(coords) {
         const squareSide = boardBounds.width / 8;
@@ -4027,6 +4042,9 @@ function simulateMove(move, deselect, think = null) {
 
     async function performSimulatedMoveClicks(approachMs, travelMs, total) {
         await warmClicker();
+        // The think delay is over and the infobar (if any) has settled: this is the last moment
+        // before a coordinate is used, so it is the right one to measure at.
+        refreshBoardGeometry();
         // Clear a stale selection (a piece left selected by a prior failed click would be DESELECTED
         // by our from-click, making the move a no-op). `deselect` is an empty square the moving piece
         // can't reach, so clicking it only ever deselects -- never moves anything. ONLY on a RETRY:
