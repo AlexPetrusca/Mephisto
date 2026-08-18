@@ -4003,7 +4003,7 @@ function simulateMove(move, deselect, think = null) {
         console.warn('Mephisto: no board to click on');
         return Promise.resolve();
     }
-    let orientation = getOrientation();
+    const orientation = getOrientation();
 
     // MEASURE LATE, NOT EARLY. The geometry above is read the moment the move is requested, but the
     // first click does not happen until the THINK delay has elapsed -- 400ms by default and several
@@ -4014,10 +4014,16 @@ function simulateMove(move, deselect, think = null) {
     // entirely, while the same drift anywhere else merely hits the neighbouring square.
     // Re-reading costs one getBoundingClientRect immediately before the clicks, which is nothing
     // beside the click round-trips that follow it.
+    // THE RECTANGLE ONLY, DELIBERATELY NOT THE ORIENTATION. Where the board IS can change under us
+    // and re-reading it is strictly better. Which way it FACES is different: this move was chosen
+    // for the position that was scraped when the move was requested, so the orientation that turns
+    // it into coordinates has to be that same reading. Re-reading it here would let a board caught
+    // mid-flip (the next puzzle loading) mirror a move belonging to the previous one -- and a move
+    // played into a board that has moved on is cancelled a layer up anyway, by the position guard
+    // in maybe_play_puzzle_move / simulateMoveVerified.
     function refreshBoardGeometry() {
         const fresh = clickableBoardBounds();
         if (fresh && fresh.width > 0) boardBounds = fresh;
-        orientation = getOrientation() || orientation;
     }
 
     function getBoundsFromCoords(coords) {
