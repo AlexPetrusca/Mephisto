@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.277-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.278-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -1035,7 +1035,26 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>69 features, newest first</summary>
+<summary>70 features, newest first</summary>
+
+- [x] **A stale answer can no longer reach a live board** (v3.1.278)
+  - Four times, a puzzle played a move that belonged to an EARLIER puzzle - correct for the position
+    it was found in, aimed at exactly the right squares, and played into a later puzzle's board,
+    where it was legal enough for the site to accept it. A page reload always cleared it, which is
+    what gave it away as accumulated state rather than bad puzzle data.
+  - There was already a guard for this and it was asking the wrong question: it compared the board
+    against the last position the page had REPORTED, not against the position the move was computed
+    for. Those come apart exactly when the panel declines a reading, which is when it matters. Every
+    move now carries the position it was computed from and is refused when the board is not that.
+  - The check also runs a second time, at the moment the clicks happen rather than only when the
+    move is decided - a puzzle page that advances itself can move on during the pause before a move
+    is played.
+  - Diagnostics carry both halves of a wrong move: which answer was chosen and which squares the
+    clicks were aimed at. Those need opposite fixes, and no report could tell them apart before.
+  - The trace ring folds repeated lines into a count, so the lines around an incident survive
+    instead of being flushed by a message that repeats every few seconds.
+  - No stale search numbers beside a known answer: the win/draw/loss row and the engine speed used
+    to keep the last real search's figures while reading "No evaluation - the answer was known".
 
 - [x] **Multi-move page-read puzzles play to the end** (v3.1.277)
   - A page-read solution stalled one move in on Lichess Training (and any puzzle solved from the
