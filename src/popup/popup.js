@@ -4012,19 +4012,25 @@ function show_puzzle_answer(uci) {
 }
 
 function on_new_pos(fen, startFen, moves) {
+    // Taken here and held in a LOCAL for the whole call: whichever push brought us in, that is the
+    // one this position belongs to, and nothing that happens below can attach it to a different one.
+    // Null on the paths that have no push behind them at all (a pasted FEN, the panel's own board,
+    // a re-detect), which leaves `forPush` null and falls back to the older check.
+    const pushKeyForThisPosition = incoming_push_key;
+    incoming_push_key = null;
     // BEFORE the repaint and before the annotations are cleared: a misread must leave the panel
     // exactly as it was, and both of those are visible changes.
     if (puzzle_misread(fen)) {
         bgTrace('puzzle misread -- ignoring this poll', {fen: String(fen).split(' ')[0]});
         return;   // deliberately WITHOUT promoting incoming_push_key: we are still on the old position
     }
-    // This position is accepted, so it is the one every move issued from here belongs to.
-    // CONSUMED, not just read: on_new_pos is also reached from paths that have no push behind them
-    // at all (a pasted FEN, the panel's own board, a re-detect). Those must not inherit the key of
-    // whatever was scraped last -- clearing it leaves `forPush` null there, which falls back to
-    // exactly the check that was being made before this existed.
-    analysed_push_key = incoming_push_key;
-    incoming_push_key = null;
+    // The key travels in a LOCAL from here (see the top of this function) and is adopted only where
+    // last_eval is, far below. Adopting it here was wrong and shipped a wrong move: there are two
+    // early returns between this point and last_eval -- the deferred puzzle lookup is one -- so the
+    // panel could end up describing the OLD position with the NEW position's key. A move still
+    // pending for the old one then passed its own last_eval guard AND carried the new reference, so
+    // the content script compared the new board against the new key, matched, and clicked a stale
+    // answer into a live board. Observed as e6g8, correct for the position it was found in.
     clear_idle_reason();   // a new position: whatever stopped the last move no longer applies
 
     console.log("on_new_pos", fen, startFen, moves);
@@ -4344,6 +4350,10 @@ function on_new_pos(fen, startFen, moves) {
     }
     last_eval = {fen, activeLines: 0, lines: new Array(config.multiple_lines),
         lastMove: moves ? moves.trim().split(' ').pop() : null}; // opp's last move (humanize recapture check)
+    // IN THE SAME BREATH AS last_eval, and only here. The reference exists to say which board a move
+    // was computed for, so it has to describe the position the panel is actually reasoning with --
+    // if the two can drift apart, the check reads as passing while comparing the wrong pair.
+    analysed_push_key = pushKeyForThisPosition;
     // A known solution means no search ran, so nothing else will ever call draw_moves for this
     // position -- the arrow has to be drawn from here or there is no arrow at all.
     //
