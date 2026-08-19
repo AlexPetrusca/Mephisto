@@ -608,6 +608,9 @@ async function buildDiagnostics(ctx = {}) {
     ctx.engine ? `engine    ${ctx.engine}` : null,
     ctx.detection ? `detection ${ctx.detection}` : null,
     ctx.reason ? `reason    ${ctx.reason}` : null,
+    // engine-side state: asked/answering/dropping. "It stopped evaluating" reads identically for
+    // all three from outside the panel (see search_state in popup.js).
+    ctx.search ? `search    ${ctx.search}` : null,
     ctx.toggles ? `toggles   ${ctx.toggles}` : null,
     ctx.content ? `content   ${ctx.content}` : null,
     // The answer the panel chose for the last puzzle position, beside the squares the content script

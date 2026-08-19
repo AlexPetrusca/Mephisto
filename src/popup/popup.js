@@ -125,6 +125,27 @@ function apply_language() {
 }
 
 let pending_stops = 0; // bestmoves still owed by searches we abandoned -- drop that many (see abandon_search)
+// WHY THIS IS IN THE DIAGNOSTICS. "It stopped evaluating" has exactly one shape from outside -- the
+// progress bar with the PREVIOUS search's numbers under it -- and three causes needing different
+// fixes: nothing was asked of the engine, the engine was asked and is silent, or it is answering
+// and every frame is being dropped because a stop is still owed. Three values, none of them visible
+// anywhere, and no report could tell them apart.
+let last_info_at = 0;   // when an engine frame last reached us (0 = never this session)
+let stop_charged_at = 0; // when the oldest outstanding stop was charged (see STOP_FLUSH_MS)
+// A `stop` only yields a bestmove if a search was actually running. When it is not -- the previous
+// search had just ended, or the engine had nothing in flight -- the flush never comes, and a debt
+// that can only be paid by that flush is permanent: every frame after it is dropped and the panel
+// freezes on the progress bar with the last search's numbers under it, for the rest of the session.
+// MEASURED, not theorised: toggling Autoplay mid-game took it to owed=1 with no engine frame
+// arriving again (11s, 21s, ...), and each further toggle added another. Give the debt a deadline.
+// Letting a genuinely late bestmove through afterwards is safe by construction: every path that
+// PLAYS one re-checks the position it was computed for (see boardStillMatchesAnalysis).
+const STOP_FLUSH_MS = 1500;
+let last_go = '';       // the search actually issued -- `go infinite` never ends on its own
+function search_state() {
+    const heard = last_info_at ? `${Date.now() - last_info_at}ms ago` : 'NEVER';
+    return `${search_active ? 'active' : 'idle'} owed=${pending_stops} last-frame=${heard} go=${last_go || 'none'}`;
+}
 // Remote/native supersession. `pending_stops` only protects the WASM path -- on_engine_response
 // returns early for is_remote(), so a request issued for an OLD position used to be acted on
 // whenever it resolved late, playing a move computed for a position that is no longer on the board.
@@ -1496,6 +1517,7 @@ async function fetch_nnue(engineBasePath, nnue) {
 }
 
 function send_engine_uci(message) {
+    if (message.startsWith('go ')) last_go = message;
     try {
         if (engine instanceof Worker) {
             engine.postMessage(message);
@@ -1549,7 +1571,7 @@ function flush_engine_options() {
 }
 
 function abandon_search() {
-    if (search_active) pending_stops++;
+    if (search_active) { pending_stops++; stop_charged_at = Date.now(); }
     search_active = false;
     remote_gen++; // a remote/native request still in flight is now for a position we've left
     // ...and release the native in-flight slot with it. Bumping remote_gen commits us to DROPPING
@@ -2182,10 +2204,18 @@ function on_engine_response(message) {
         // for the rest of the session. A `go` that produces no bestmove at all is enough to start it
         // (Maia is a single forward pass: if it rejects, nothing is ever emitted). The next `go`
         // sets the flag again, so this is safe for the ordinary supersession case.
-        if (message.startsWith('bestmove')) { pending_stops--; search_active = false; }
-        return;
+        if (message.startsWith('bestmove')) { pending_stops--; search_active = false; return; }
+        // the flush is not coming -- stop eating the engine's output (see STOP_FLUSH_MS)
+        if (Date.now() - stop_charged_at > STOP_FLUSH_MS) {
+            console.warn(`Mephisto: ${pending_stops} stop(s) never flushed - resuming engine output`);
+            pending_stops = 0;
+        } else {
+            return;
+        }
     }
 
+    last_info_at = Date.now();   // the panel is HEARING the engine (see search_state for why)
+    last_info_at = Date.now();   // the panel is HEARING the engine (see search_state for why)
     if (message.includes('lowerbound') || message.includes('upperbound') || message.includes('currmove')) {
         return; // ignore these messages
     } else if (message.startsWith('bestmove')) {
@@ -4036,6 +4066,7 @@ function on_new_pos(fen, startFen, moves) {
     // a re-detect), which leaves `forPush` null and falls back to the older check.
     const pushKeyForThisPosition = incoming_push_key;
     incoming_push_key = null;
+    last_pos_args = {fen, startFen, moves};   // for the re-drive after a settings change
     // BEFORE the repaint and before the annotations are cleared: a misread must leave the panel
     // exactly as it was, and both of those are visible changes.
     if (puzzle_misread(fen)) {
@@ -6617,6 +6648,28 @@ const LIVE_CONFIG_KEYS = [
     'hotkeys',
 ];
 
+let last_pos_args = null;      // the last position handed to on_new_pos
+let config_resume_timer = null;
+const CONFIG_RESUME_MS = 1200; // long enough for a real re-push to beat it on any page measured here
+
+// A live toggle changes the SEARCH, not the position, so the panel must ask the engine again about
+// the position it is already on. It does that by asking the page to re-push -- and when that push
+// does not come (the scrape deduped, the page between mutations, a content script that never got
+// the message) nothing is asked of the engine at all and the panel sits on the progress bar with
+// the last search's numbers under it, looking frozen. MEASURED on chess.com: toggling Autoplay
+// mid-game left the engine idle with no frame arriving for as long as the position stayed put.
+// Re-drive what we already hold if the push has not landed.
+function resume_after_config_change() {
+    clearTimeout(config_resume_timer);
+    const held = last_pos_args;
+    if (!held) return;
+    config_resume_timer = setTimeout(() => {
+        if (last_eval.fen || search_active) return;   // the re-push arrived and did the work
+        console.log('Mephisto: no re-push after a settings change - re-analysing the held position');
+        on_new_pos(held.fen, held.startFen, held.moves);
+    }, CONFIG_RESUME_MS);
+}
+
 function watch_config_changes() {
     try {
         chrome.storage.onChanged.addListener((changes, area) => {
@@ -6643,11 +6696,23 @@ function watch_config_changes() {
                 if (key === 'eval_bar' && !value) request_clear_eval_bar();
                 if (key === 'eval_history') request_clear_eval_bar(); // redrawn by the next eval
                 if (key === 'tablebase') tablebase_data = null;       // a stale answer must not survive
+                // a reply computed at the old rating must not sit under a label showing the new one:
+                // drop it and ask again (ensure_threat_human retunes the net in place via setoption)
+                if (key === 'threat_human' || key === 'threat_human_elo') {
+                    last_eval.humanReply = null;
+                    threat_human_cache.clear();
+                    if (config.threat_human && last_eval.fen && last_eval.bestmove) {
+                        request_threat_human(last_eval.fen, last_eval.bestmove);
+                    } else {
+                        update_best_move_suffix();   // toggled off: take the label out of the readout
+                    }
+                }
                 if (key === 'language') load_language(value).then(apply_language);
                 // these change the go mode / search budget -- restart under the new setting
                 if (['help_mode', 'autoplay', 'clock_mode', 'mirror_mode', 'manual_mode'].includes(key)) {
                     abandon_search();
                     last_eval.fen = '';
+                    resume_after_config_change();
                 }
             }
             if (!touched) return;
@@ -6917,23 +6982,32 @@ function draw_book_moves(fen) {
     for (const a of book_arrow_specs(at)) draw_move(a.move, a.color, layer, a.width);
 }
 
-const THREAT_MAIA_BANDS = ['1100', '1200', '1300', '1400', '1500', '1600', '1700', '1800', '1900', '2200'];
+// Maia-3, not the banded Maia-1 nets: one transformer with a LIVE rating dial, so the whole
+// 600-2600 range is real and a rating change is a setoption, not a 30MB net reload.
 let threat_human_id = null;      // offscreen clientId, minted per panel boot
-let threat_human_band_loaded = null;
+let threat_human_elo_loaded = null;
 let threat_human_ready = null;   // the in-flight init, so two asks share one load
-let threat_human_cache = new Map();   // fen-after-our-move -> {uci, prob}
+let threat_human_cache = new Map();   // fen-after-our-move -> {uci, prob}, valid for ONE rating
 
-function threat_human_band() {
+function threat_human_elo() {
     const want = Number(config.threat_human_elo) || 1500;
-    let best = THREAT_MAIA_BANDS[0];
-    for (const b of THREAT_MAIA_BANDS) if (Math.abs(+b - want) < Math.abs(+best - want)) best = b;
-    return best;
+    return Math.max(600, Math.min(2600, Math.round(want)));
 }
 
 function ensure_threat_human() {
-    const band = threat_human_band();
-    if (threat_human_ready && threat_human_band_loaded === band) return threat_human_ready;
-    threat_human_band_loaded = band;
+    const elo = threat_human_elo();
+    if (threat_human_ready && threat_human_elo_loaded === elo) return threat_human_ready;
+    if (threat_human_ready && threat_human_elo_loaded !== null) {
+        // the net is up -- retune it in place; the cached replies belong to the old rating
+        threat_human_elo_loaded = elo;
+        threat_human_cache.clear();
+        chrome.runtime.sendMessage({toOffscreen: true, clientId: threat_human_id, cmd: 'uci',
+                                    line: `setoption name SelfElo value ${elo}`});
+        chrome.runtime.sendMessage({toOffscreen: true, clientId: threat_human_id, cmd: 'uci',
+                                    line: `setoption name OppoElo value ${elo}`});
+        return threat_human_ready;
+    }
+    threat_human_elo_loaded = elo;
     // ENGINE_CLIENT-derived like maia2_client(): the background relays fromOffscreen to the tab by
     // parseInt(clientId) -- a name that does not start with the tabId is never relayed to a panel.
     if (!threat_human_id) threat_human_id = ENGINE_CLIENT + ':hr';
@@ -6950,7 +7024,7 @@ function ensure_threat_human() {
             chrome.runtime.onMessage.addListener(onMsg);
         });
         chrome.runtime.sendMessage({toOffscreen: true, clientId: threat_human_id, cmd: 'init',
-                                    engine: 'maia', maiaLevel: band});
+                                    engine: 'maia3', maiaLevel: elo});
         await ready;
     })();
     return threat_human_ready;
@@ -6962,7 +7036,7 @@ function dispose_threat_human() {
     catch (e) { /* the offscreen doc is already gone */ }
     threat_human_id = null;
     threat_human_ready = null;
-    threat_human_band_loaded = null;
+    threat_human_elo_loaded = null;
     threat_human_cache.clear();
 }
 
@@ -7020,7 +7094,7 @@ function human_reply_label() {
     if (!config.threat_analysis || !config.threat_human || !last_eval.humanReply) return '';
     const r = last_eval.humanReply;
     return i18n('panel.msg.human_reply', 'A {elo} likely replies {move} ({pct}%)',
-                {elo: threat_human_band(), move: notate_after_best(r.uci), pct: (r.prob * 100).toFixed(0)});
+                {elo: threat_human_elo(), move: notate_after_best(r.uci), pct: (r.prob * 100).toFixed(0)});
 }
 
 // the reply is a move in the position AFTER our best move, so its SAN must be built there
@@ -7505,6 +7579,7 @@ function copy_diagnostics(onDone = () => {}) {
             engine: config.engine,
             detection: PANEL_ROOT.getElementById('game-detection')?.textContent || '',
             reason: idle_reason_text,
+            search: search_state(),
             fen: last_eval.fen || '',
             toggles: ['autoplay', 'premove', 'help_mode', 'manual_mode', 'humanize', 'puzzle_mode',
                       'puzzle_capture', 'puzzle_capture_cdp', 'clock_mode', 'mirror_mode',

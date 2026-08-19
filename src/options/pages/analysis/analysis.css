@@ -113,7 +113,12 @@
 #an_opening { font-weight: 600; color: var(--mp-text); }
 
 .an-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
-@media (max-width: 620px) { .an-cols { grid-template-columns: 1fr; } }
+/* With a second engine on, the point is reading the two ENGINES against each other -- in a 2-column
+   grid the second one wraps under the human model, which puts the two things being compared in
+   different rows. Three columns while it is on; the panel has the width for it. */
+.an-cols.an-cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 980px) { .an-cols.an-cols-3 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 620px) { .an-cols, .an-cols.an-cols-3 { grid-template-columns: 1fr; } }
 .an-col-h {
     display: flex;
     justify-content: space-between;
@@ -237,8 +242,13 @@
 .an-var { opacity: 0.85; }
 
 /* ---- crazyhouse pockets ------------------------------------------------------------------------ */
-.an-pocket { display: flex; gap: 6px; align-items: center; min-height: 30px; padding: 2px 4px;
+/* The pockets belong to the BOARD, not to the row that also holds the eval bar -- left-aligned in
+   the parent they started over the bar, 42px adrift of the a-file. Same grid as .an-boardrow, so
+   the pieces in hand line up with the board edge whatever the bar width becomes. */
+.an-pocket { display: grid; grid-template-columns: 30px 1fr; gap: 12px; min-height: 30px;
              font-size: 22px; line-height: 1; user-select: none; }
+.an-pocket::before { content: ''; }
+.an-pk-row { display: flex; gap: 6px; align-items: center; padding: 2px 4px; }
 .an-pk { cursor: pointer; border-radius: 5px; padding: 1px 5px; position: relative; }
 .an-pk:hover { background: rgba(127, 127, 127, 0.18); }
 .an-pk-armed { background: rgba(63, 164, 91, 0.35); outline: 2px solid #3fa45b; }

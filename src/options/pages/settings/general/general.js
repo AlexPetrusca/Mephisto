@@ -98,8 +98,16 @@ class GeneralSettings extends SettingsPage {
         }
         this.registerFormElement('computer_evaluation', 'Show Computer Evaluation:', 'checkbox', true);
         this.registerFormElement('threat_analysis', 'Show Threat Analysis', 'checkbox', false);
-        this.registerFormElement('threat_human', 'Human Reply (Maia):', 'checkbox', false);
-        this.registerFormElement('threat_human_elo', 'Human Reply Rating:', 'input', 1500);
+const threat_human = this.registerFormElement('threat_human', 'Human Reply (Maia):', 'checkbox', false);
+        const threat_human_elo = this.registerFormElement('threat_human_elo', 'Human Reply Rating:', 'input', 1500);
+        // the rating only means anything while the reply is on -- same treatment the search-budget
+        // rows get above, so a control that does nothing is not sitting there inviting a change
+        const sync_human_reply_row = () => {
+            const row = document.getElementById('threat_human_elo_row');
+            if (row) row.style.display = threat_human.getValue() ? '' : 'none';
+        };
+        threat_human.registerChangeListener(sync_human_reply_row);
+        sync_human_reply_row();
         this.registerFormElement('simon_says_mode', '"Hand and Brain" Mode:', 'checkbox', false);
         this.registerFormElement('autoplay', 'Autoplay:', 'checkbox', false);
         // Grind Mode rides on Autoplay -- it only ever acts while Autoplay is on -- and its delay is

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.279-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.280-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -1003,7 +1003,31 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>76 features, newest first</summary>
+<summary>78 features, newest first</summary>
+
+- [x] **Toggling a setting mid-game can no longer freeze the evaluation** (v3.1.280)
+  - Reported live and reproduced the same hour: flip Autoplay off (or on) during a game and the
+    panel drops to the progress bar with the last search's numbers under it - and never recovers.
+    Two faults, both fixed. The counter that drops a superseded search's output could go permanently
+    positive when the engine had nothing in flight to flush, after which EVERY frame was eaten for
+    the rest of the session (each further toggle made it worse). That debt now expires after 1.5s.
+    And a toggle relied on the page re-pushing the position to restart analysis - when that push
+    deduped or the page sat between mutations, nothing was ever asked of the engine again; the panel
+    now re-drives the position it already holds if no push lands within 1.2s. Measured after the
+    fix: the readout is back in 0.8-5s on every toggle, indefinitely.
+  - Diagnostics gained a `search` line (active/idle, stops owed, when an engine frame last arrived,
+    the exact `go` issued) - the three causes of "it stopped evaluating" were invisible and
+    indistinguishable in every report until now.
+
+- [x] **The human reply is Maia-3: any rating from 600 to 2600** (v3.1.280)
+  - v3.1.279 shipped it on the banded Maia-1 nets (1100-1900, 2200, snapped). It now asks Maia-3 -
+    one transformer with a live rating dial - so the rating you type is the rating you get, and
+    changing it retunes the net in place (a setoption, not a 30MB reload; verified live: 1234 answers
+    1.e4 with d5 at 47%, 2400 switches to c5). The rating field on the settings page shows only
+    while the toggle is on.
+  - Polish from the same visual pass: the Crazyhouse pockets line up with the board edge instead of
+    the eval bar, and with a second engine on, the Analysis page shows three columns side by side
+    instead of wrapping the second engine under the human model.
 
 - [x] **Variants on the Analysis page** (v3.1.279)
   - The study board now plays all nine variants the panel plays: pick one, or just load a PGN - a

@@ -1012,8 +1012,11 @@ function renderPockets() {
     const bottomSide = flipped ? 'b' : 'w';
     const topSide = flipped ? 'w' : 'b';
     // arming is only offered on the side TO MOVE -- a drop out of turn is not a legal ask
-    top.innerHTML = pocketHtml(topSide, pos.holdings?.[topSide], pos.turn === topSide) || '<span class="an-pk-none">no pieces in hand</span>';
-    bottom.innerHTML = pocketHtml(bottomSide, pos.holdings?.[bottomSide], pos.turn === bottomSide) || '<span class="an-pk-none">no pieces in hand</span>';
+    // wrapped in an-pk-row: the pocket is a two-column grid (bar gutter + board), so the pieces
+    // themselves sit in the second column and line up with the a-file
+    const row = (html) => `<div class="an-pk-row">${html || '<span class="an-pk-none">no pieces in hand</span>'}</div>`;
+    top.innerHTML = row(pocketHtml(topSide, pos.holdings?.[topSide], pos.turn === topSide));
+    bottom.innerHTML = row(pocketHtml(bottomSide, pos.holdings?.[bottomSide], pos.turn === bottomSide));
     for (const host of [top, bottom]) {
         host.querySelectorAll('[data-drop]').forEach(el =>
             el.addEventListener('click', () => armDrop(el.dataset.drop)));
@@ -1093,6 +1096,8 @@ function render() {
     renderEngineLines(pos, ev);
     const col2 = $('an_engine2_col');
     if (col2) col2.classList.toggle('hidden', !cfg('an_engine2'));
+    // the two engines belong beside each other, not wrapped onto separate rows (see .an-cols-3)
+    col2?.parentElement?.classList.toggle('an-cols-3', !!cfg('an_engine2'));
     if (cfg('an_engine2')) renderEngine2Lines(pos, evalCache2.get(pos.fen));
     renderHumanLines(pos, hum);
     renderArrows(pos, ev, hum);
