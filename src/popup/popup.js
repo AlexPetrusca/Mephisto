@@ -5766,12 +5766,40 @@ function annotate_hotkey_labels() {
     for (const action in HOTKEY_TOGGLES) {
         const input = PANEL_ROOT.getElementById(HOTKEY_TOGGLES[action]);
         const label = input?.closest('.qs-row')?.querySelector('.qs-label');
-        if (!label || !keys[action] || label.querySelector('.qs-hk')) continue;
-        const s = document.createElement('span');
-        s.className = 'qs-hk';
-        s.style.cssText = 'opacity:0.5;font-size:0.82em;margin-left:3px';
+        if (!label || !keys[action]) continue;
+        // UPDATED, not skipped-if-present. Skipping meant a key rebound on the settings page kept
+        // advertising the old one until the panel was rebuilt -- a label that lies about a shortcut
+        // is worse than no label.
+        let s = label.querySelector('.qs-hk');
+        if (!s) {
+            s = document.createElement('span');
+            s.className = 'qs-hk';
+            s.style.cssText = 'opacity:0.5;font-size:0.82em;margin-left:3px';
+            label.appendChild(s);
+        }
         s.textContent = `(${hotkey_pretty(keys[action])})`;
-        label.appendChild(s);
+    }
+    // ...and the title bar's own two buttons. They are the content script's markup, but they sit in
+    // the same shadow root, so they are reachable from here -- and doing it here means they follow
+    // the same bindings, the same rebinds and the same language pass as every other shortcut hint.
+    for (const [action, cls] of [['compact', 'mephisto-overlay-compact'],
+                                 ['minimize', 'mephisto-overlay-min']]) {
+        const el = PANEL_ROOT.querySelector?.(`.${cls}`);
+        if (!el || !keys[action]) continue;
+        const key = hotkey_pretty(keys[action]);
+        let hk = el.querySelector('.mephisto-bar-hk');
+        if (!hk) {
+            hk = document.createElement('span');
+            hk.className = 'mephisto-bar-hk';
+            // small and dim: the glyph is the button, this is only the reminder next to it
+            hk.style.cssText = 'opacity:0.55;font-size:0.62em;margin-left:2px;vertical-align:super';
+            el.appendChild(hk);
+        }
+        hk.textContent = key;
+        // the tooltip gains the key too, from the ORIGINAL text each time -- appending to the live
+        // title would grow "(V) (V) (V)" across rebinds
+        if (el.dataset.baseTitle === undefined) el.dataset.baseTitle = el.title || '';
+        el.title = el.dataset.baseTitle ? `${el.dataset.baseTitle} (${key})` : key;
     }
 }
 
@@ -6560,6 +6588,10 @@ const LIVE_CONFIG_KEYS = [
     // toggling the trace has to take effect on the session you are already debugging
     'verbose_log', 'fourpc_mode', 'clock_pace', 'puzzle_delay', 'puzzle_auto_next', 'puzzle_next_delay',
     'drag_moves',
+    // not a behaviour key: the listener reads the bindings fresh on every keypress, so the KEY works
+    // the moment it is saved. This is so the hints beside the toggles and on the title bar stop
+    // advertising the old one while it does.
+    'hotkeys',
 ];
 
 function watch_config_changes() {
@@ -6569,6 +6601,12 @@ function watch_config_changes() {
             let touched = false;
             for (const key of LIVE_CONFIG_KEYS) {
                 if (!(key in changes)) continue;
+                // HOTKEYS ARE NOT A PANEL VALUE. The bindings are read fresh from MephistoConfig on
+                // every keypress, so nothing here has to adopt them -- only the hints need redrawing.
+                // Handled before the parse below on purpose: "Reset hotkeys to defaults" REMOVES the
+                // key, so newValue is undefined, and JSON.parse would throw and skip the reset --
+                // leaving the panel advertising the custom keys it no longer has.
+                if (key === 'hotkeys') { annotate_hotkey_labels(); continue; }
                 let value;
                 try { value = JSON.parse(changes[key].newValue); } catch (e) { continue; }
                 if (value === undefined || value === config[key]) continue;
