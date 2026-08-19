@@ -383,7 +383,9 @@ self.MephistoContent = {
     setPanelCompact: (on) => {
         setPanelCompact(on);
         const icon = overlayEl(PANEL_OVERLAY_ID)?.querySelector('.mephisto-overlay-compact');
-        if (icon) icon.textContent = on ? '▤' : '▣';
+        // the glyph only -- `icon.textContent` would take the shortcut hint with it
+        const glyph = icon?.querySelector('.mephisto-bar-glyph') || icon;
+        if (glyph) glyph.textContent = on ? '▤' : '▣';
     },
     // Settings that need a full engine re-init (engine/variant/elo) used to reload the popup page.
     // In-page that would reload the SITE, so tear the panel down and rebuild it: fresh config, fresh
@@ -846,8 +848,13 @@ async function toggleOverlay() {
         'min-width: 0; overflow: hidden;"></span>' +
         '</span>' +
         '<span style="display: flex; align-items: center; gap: 2px;">' +
+        // The glyph sits in its OWN span. It used to be the button's text, and the compact swap set
+        // textContent -- which wipes every child, so the shortcut hint appended beside it vanished
+        // the first time you went compact and never came back (the annotator only re-runs on boot,
+        // a language change or a rebind). Anything added to this button now survives the swap.
         '<span class="mephisto-overlay-compact" title="Compact / expanded: collapse to just the move and score" ' +
-        'style="cursor: pointer; padding: 0 6px; font-size: 13px; line-height: 1;">▣</span>' +
+        'style="cursor: pointer; padding: 0 6px; font-size: 13px; line-height: 1;">' +
+        '<span class="mephisto-bar-glyph">▣</span></span>' +
         '<span class="mephisto-overlay-min" title="Minimize (autoplay keeps running)" ' +
         'style="cursor: pointer; padding: 0 6px; font-size: 18px; line-height: 1;">–</span>' +
         '<span class="mephisto-overlay-close" title="Close" ' +
