@@ -377,6 +377,9 @@ self.MephistoContent = {
     // popup.js's apply_explorer calls this when the overlay is shown/hidden, so the fixed-size box
     // grows to fit the book block instead of clipping it (the overlay never scrolls).
     setPanelBook: (on) => setPanelBook(on),
+    // the panel's hotkey dispatcher calls this: the title bar's minimize button lives out here, so
+    // the key has to be answered out here too
+    toggleMinimize: () => toggleMinimizeOverlay(),
     setPanelCompact: (on) => {
         setPanelCompact(on);
         const icon = overlayEl(PANEL_OVERLAY_ID)?.querySelector('.mephisto-overlay-compact');
@@ -711,6 +714,29 @@ function setPanelBook(on) {
     resizePanelBox();
 }
 
+// Undo a minimize. Extracted so the restore badge and the hotkey do exactly the same thing -- two
+// copies of this is how one of them ends up leaving pointer-events off and the panel invisibly
+// eating clicks (the failure the minimize path already carries a comment about).
+function restoreOverlay(wrap, badge) {
+    const frame = wrap.querySelector('.mephisto-panel-box');
+    wrap.style.opacity = '1';
+    wrap.style.pointerEvents = 'auto';
+    if (frame) frame.style.pointerEvents = 'auto';
+    if (badge) badge.remove();
+}
+
+// Hotkey entry point: minimize if the panel is up, restore if it is already minimized. Returns
+// whether it did anything, so the keydown listener only swallows the key when it acted (a key that
+// silently eats itself on a page with no panel is worse than an unbound one).
+function toggleMinimizeOverlay() {
+    const wrap = overlayEl(PANEL_OVERLAY_ID);
+    if (!wrap) return false;                       // no panel on this page -- leave the key alone
+    const badge = overlayEl(RESTORE_BADGE_ID);
+    if (badge) { restoreOverlay(wrap, badge); return true; }
+    minimizeOverlay(wrap);
+    return true;
+}
+
 function minimizeOverlay(wrap) {
     const frame = wrap.querySelector('.mephisto-panel-box'); // the panel is a plain div now, not an iframe
     wrap.style.opacity = '0';
@@ -728,12 +754,7 @@ function minimizeOverlay(wrap) {
         'width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; ' +
         'justify-content: center; cursor: pointer; background: #2d2d2d; color: #eee; ' +
         'font-size: 22px; line-height: 1; box-shadow: 0 3px 12px rgba(0,0,0,0.5); user-select: none;';
-    badge.addEventListener('click', () => {
-        wrap.style.opacity = '1';
-        wrap.style.pointerEvents = 'auto';
-        if (frame) frame.style.pointerEvents = 'auto';
-        badge.remove();
-    });
+    badge.addEventListener('click', () => restoreOverlay(wrap, badge));
     getOverlayRoot().appendChild(badge);
 }
 

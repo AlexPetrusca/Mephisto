@@ -5804,6 +5804,13 @@ function do_hotkey(action) {
         return true;
     }
     if (action === 'redetect') { PANEL_ROOT.getElementById('recheck')?.click(); return true; }
+    // The two title-bar buttons. Compact is the panel's own state; minimize is the overlay's chrome
+    // and lives in the content script, so it is asked rather than done here (same as panic).
+    if (action === 'compact') { toggle_compact(); return true; }
+    if (action === 'minimize') {
+        try { return !!self.MephistoContent?.toggleMinimize?.(); }
+        catch (e) { return false; }   // toolbar-popup mode has no overlay to minimize
+    }
     const box = HOTKEY_TOGGLES[action] && PANEL_ROOT.getElementById(HOTKEY_TOGGLES[action]);
     if (!box) return false;
     box.checked = !box.checked;
