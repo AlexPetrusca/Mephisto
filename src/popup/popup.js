@@ -5761,6 +5761,11 @@ function hotkey_pretty(k) {
 }
 // Append the bound key to each quick-settings toggle label, e.g. "Autoplay (A)", so the shortcut is
 // visible where you use it. Reads the live bindings; run once after the toggles are wired.
+// One style for every shortcut hint, wherever it appears: the quick-settings rows and the title
+// bar's two buttons read the same because they mean the same thing. The title-bar hint was smaller
+// and raised (`vertical-align:super`), which made it look like a footnote marker rather than a key.
+const HOTKEY_HINT_CSS = 'opacity:0.5;font-size:0.82em;margin-left:3px';
+
 function annotate_hotkey_labels() {
     const keys = MephistoConfig.hotkeys();
     for (const action in HOTKEY_TOGGLES) {
@@ -5774,7 +5779,7 @@ function annotate_hotkey_labels() {
         if (!s) {
             s = document.createElement('span');
             s.className = 'qs-hk';
-            s.style.cssText = 'opacity:0.5;font-size:0.82em;margin-left:3px';
+            s.style.cssText = HOTKEY_HINT_CSS;
             label.appendChild(s);
         }
         s.textContent = `(${hotkey_pretty(keys[action])})`;
@@ -5791,11 +5796,10 @@ function annotate_hotkey_labels() {
         if (!hk) {
             hk = document.createElement('span');
             hk.className = 'mephisto-bar-hk';
-            // small and dim: the glyph is the button, this is only the reminder next to it
-            hk.style.cssText = 'opacity:0.55;font-size:0.62em;margin-left:2px;vertical-align:super';
+            hk.style.cssText = HOTKEY_HINT_CSS;
             el.appendChild(hk);
         }
-        hk.textContent = key;
+        hk.textContent = `(${key})`;
         // the tooltip gains the key too, from the ORIGINAL text each time -- appending to the live
         // title would grow "(V) (V) (V)" across rebinds
         if (el.dataset.baseTitle === undefined) el.dataset.baseTitle = el.title || '';
