@@ -880,6 +880,11 @@ that were here shipped in one release.
   count is known, and one short fixed-depth benchmark per engine would measure what this machine can
   actually run - then say so once, instead of letting a two-core laptop default into the 112MB net.
 
+- [ ] **Grind Mode, the rest of it** - it starts the next game on Lichess and Chess.com and that is all it does.
+  What it cannot do yet: stop after N games or after a losing streak, respect a daily limit, or pick a different
+  time control than the one that just finished. It also has no idea whether *you* are still at the keyboard,
+  which is the thing that would make an unattended session safe rather than merely possible.
+
 - [ ] **Talking Mode** - the engine as a voice. Not a number and an arrow but a running commentary in plain
   language: what the position wants, what it is worried about, why the move it likes actually wins something.
   The pieces exist (eval, lines, the explanation work below); the hard part is saying it like a person and
