@@ -22,6 +22,8 @@ const $ = (id) => document.getElementById(id);
 // silently make the other wrong. There is no DEPTH here on purpose -- the budget is a time, and its
 // last notch is no budget at all.
 const CFG = {
+    an_variant: 'chess',
+    an_engine2: '',       // off: the second column is a choice, not a default
     an_engine: 'stockfish-18-nnue',
     an_human: 'maia',
     an_band: '1500',
@@ -50,8 +52,76 @@ function setCfg(key, value) { MephistoConfig.set(key, JSON.stringify(value)); }
 // ---- state --------------------------------------------------------------------------------------
 
 let board = null, flipped = false;
-let positions = [];      // [{fen, turn, san, uci}] -- index 0 is the start position
+// THE LINE IS A VIEW OF A TREE. `positions` is still the flat array everything below reads --
+// the path from the start through the current node and on down its first children -- and `cursor`
+// is still an index into it. What changed is what a move DOES: it used to truncate the array, so
+// the branch you stepped out of was gone; it now adds (or follows) a child, and renderMoves shows
+// every branch. Keeping the flat view is what let the rest of the page not care.
+let positions = [];      // the current line: [{fen, turn, san, uci, ...node}], index 0 = the start
 let cursor = 0;
+let treeRoot = null;     // the start node; every node is {fen, turn, san, uci, parent, children[]}
+let treeNode = null;     // the node on screen == positions[cursor]
+let nodeSeq = 0;         // ids for the move-list markup
+
+// Which rules the board plays by. Everything that builds a Chess() goes through newChess so the one
+// variant reaches all of it -- `variant: 'chess'` used to be hardcoded in three places and implied
+// in nine more, which is why the page could not open the Crazyhouse or 960 game the panel just
+// played. Human model / bands / tablebase / opening names stay standard-chess only and hide
+// elsewhere when this is not 'chess'.
+const AN_VARIANTS = [
+    ['chess', 'Standard'], ['fischerandom', 'Chess960'], ['crazyhouse', 'Crazyhouse'],
+    ['3check', 'Three-check'], ['kingofthehill', 'King of the Hill'], ['antichess', 'Antichess'],
+    ['atomic', 'Atomic'], ['horde', 'Horde'], ['racingkings', 'Racing Kings'],
+];
+// the variants only Fairy-Stockfish can analyse; chess + 960 run on any mainline SF (UCI_Chess960)
+const FAIRY_ONLY = ['crazyhouse', '3check', 'kingofthehill', 'antichess', 'atomic', 'horde', 'racingkings'];
+const FAIRY_ENGINE = 'fairy-stockfish-14-nnue';
+function anVariant() { return String(cfg('an_variant') || 'chess'); }
+function newChess(fen) { return fen === undefined ? new Chess(anVariant()) : new Chess(anVariant(), fen); }
+
+// crazyhouse only: what each side holds, tracked HERE because this chess.js plays drops but keeps
+// no pockets of its own (verified: fen() never carries holdings and any drop is accepted). Captures
+// add to the capturer's pocket -- a captured PROMOTED piece goes back as a pawn, which is why the
+// promoted squares ride along -- and a drop spends one.
+function mkNode(fen, turn, san, uci, parent, extra = {}) {
+    return {fen, turn, san, uci, parent, children: [], id: ++nodeSeq,
+            holdings: extra.holdings || (parent ? parent.holdings : {w: '', b: ''}),
+            promoted: extra.promoted || (parent ? parent.promoted : ''),
+            checksLeft: extra.checksLeft || (parent ? parent.checksLeft : {w: 3, b: 3})};
+}
+
+// the flat view: back through the parents, forward down the FIRST children
+function relinkLine() {
+    const back = [];
+    for (let n = treeNode; n; n = n.parent) back.push(n);
+    back.reverse();
+    let tip = treeNode;
+    const fwd = [];
+    while (tip.children[0]) { tip = tip.children[0]; fwd.push(tip); }
+    positions = back.concat(fwd);
+    cursor = back.length - 1;
+}
+
+// The position AS THE ENGINE MUST SEE IT. chess.js's fen() is placement-only truth: crazyhouse
+// pockets and three-check counts live on the node, and Fairy reads both from the FEN -- holdings in
+// brackets after the placement, checks as a +W+B field after the en-passant square (both verified
+// against the shipped Fairy build). Every other variant passes through untouched.
+function engineFen(pos) {
+    const v = anVariant();
+    if (v === 'crazyhouse') {
+        const parts = pos.fen.split(' ');
+        const held = (pos.holdings?.w || '').toUpperCase() + (pos.holdings?.b || '').toLowerCase();
+        parts[0] = `${parts[0]}[${held}]`;
+        return parts.join(' ');
+    }
+    if (v === '3check') {
+        const parts = pos.fen.split(' ');
+        const c = pos.checksLeft || {w: 3, b: 3};
+        parts.splice(4, 0, `+${c.w}+${c.b}`);
+        return parts.join(' ');
+    }
+    return pos.fen;
+}
 let engine = null;       // the analysis engine
 let human = null;        // the human model, started and stopped INDEPENDENTLY of the engine
 let humanKey = null;     // which model+band is loaded, so a switch only reloads that one
@@ -87,6 +157,10 @@ class AnalysisPage extends SettingsPage {
         $('an_human_select')?.addEventListener('change', () => { syncBandRow(); reloadHuman(); });
         $('an_band_select')?.addEventListener('change', () => reloadHuman());
         $('an_engine_select')?.addEventListener('change', () => reloadEngine());
+        this.registerFormElement('an_variant', 'Variant:', 'select', CFG.an_variant);
+        this.registerFormElement('an_engine2', 'Second engine:', 'select', CFG.an_engine2);
+        $('an_variant_select')?.addEventListener('change', () => onVariantChange());
+        $('an_engine2_select')?.addEventListener('change', () => reloadEngine2());
         for (const id of ['an_lines_input', 'an_threads_input', 'an_hash_input'])
             $(id)?.addEventListener('change', () => reloadEngine());
         // a number the machine cannot honour gets one amber sentence, live as it is typed
@@ -154,6 +228,21 @@ function fillSelects() {
             });
         }
     }
+    const vs = $('an_variant_select');
+    if (vs && !vs.options.length) {
+        vs.innerHTML = AN_VARIANTS.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
+    }
+    const e2 = $('an_engine2_select');
+    if (e2 && !e2.options.length) {
+        e2.innerHTML = '<option value="">Off</option>'
+            + ENGINES.map(e => `<option value="${e.id}">${e.label}</option>`).join('');
+        for (const e of ENGINES.filter(x => x.kind === 'native')) {
+            nativeHostAvailable(e.id).then(ok => {
+                const opt = [...e2.options].find(o => o.value === e.id);
+                if (opt && !ok) { opt.disabled = true; opt.text = `${e.label} (not installed)`; }
+            });
+        }
+    }
     const hs = $('an_human_select');
     if (hs && !hs.options.length) {
         hs.innerHTML = '<option value="maia">Maia 1</option><option value="maia3">Maia 3</option>'
@@ -184,7 +273,8 @@ function syncTimeUi() {
 function syncBandRow() {
     const row = $('an_band_row'), bs = $('an_band_select');
     if (!row || !bs) return;
-    row.style.display = cfg('an_human') ? '' : 'none';
+    // the Maia nets are standard chess only -- in a variant the whole human column stands down
+    row.style.display = (cfg('an_human') && anVariant() === 'chess') ? '' : 'none';
     const want = bandChoices();
     if ([...bs.options].map(o => o.value).join() !== want.join()) {
         const keep = bs.value;
@@ -204,13 +294,61 @@ function status(text, kind) {
 }
 
 function loadStart() {
-    positions = [{fen: new Chess('chess').fen(), turn: 'w', san: null, uci: null}];
-    cursor = 0;
-    evalCache.clear(); humanCache.clear(); bandCache.clear();
+    const c = newChess();
+    treeRoot = mkNode(c.fen(), c.turn(), null, null, null,
+                      {holdings: {w: '', b: ''}, promoted: '', checksLeft: {w: 3, b: 3}});
+    treeNode = treeRoot;
+    relinkLine();
+    evalCache.clear(); evalCache2.clear(); humanCache.clear(); bandCache.clear();
     buildBoard();
     renderMoves();
+    renderPockets();
     status('');
     go(0);
+}
+
+// lichess/PGN variant names -> this chess.js's ids. Unknown names load as standard with a note,
+// which is what the page did for every variant before this existed.
+const PGN_VARIANTS = {
+    'standard': 'chess', 'chess960': 'fischerandom', 'fischerandom': 'fischerandom',
+    'fischerrandom': 'fischerandom', 'crazyhouse': 'crazyhouse', 'three-check': '3check',
+    'threecheck': '3check', 'three check': '3check', 'king of the hill': 'kingofthehill',
+    'kingofthehill': 'kingofthehill', 'antichess': 'antichess', 'giveaway': 'antichess',
+    'atomic': 'atomic', 'horde': 'horde', 'racing kings': 'racingkings', 'racingkings': 'racingkings',
+};
+
+function setVariant(v) {
+    if (anVariant() === v) return;
+    setCfg('an_variant', v);
+    const sel = $('an_variant_select');
+    if (sel) sel.value = v;
+    onVariantChange(true);
+}
+
+// A variant change is a rules change: every cached answer is about a different game now. The engine
+// is reloaded (it needs the new UCI_Variant / UCI_Chess960), and an engine that cannot play the
+// variant is switched to the one that can rather than silently analysing the wrong game -- Fairy
+// answers an unknown variant by staying on the previous one, which is the failure mode the offscreen
+// loader exists to catch.
+function onVariantChange(quiet) {
+    const v = anVariant();
+    if (FAIRY_ONLY.includes(v)) {
+        if (cfg('an_engine') !== FAIRY_ENGINE) {
+            setCfg('an_engine', FAIRY_ENGINE);
+            const es = $('an_engine_select');
+            if (es) es.value = FAIRY_ENGINE;
+            if (!quiet) status(`Engine switched to Fairy-Stockfish: only it plays ${v}.`);
+        }
+        if (cfg('an_engine2') && cfg('an_engine2') !== FAIRY_ENGINE) {
+            setCfg('an_engine2', '');
+            const e2 = $('an_engine2_select');
+            if (e2) e2.value = '';
+        }
+    }
+    syncBandRow();
+    reloadEngine2();
+    reloadEngine();   // clears the eval caches and re-analyses via go(cursor)
+    loadFromInput();  // reload whatever is in the box under the new rules (empty box = start position)
 }
 
 // One box takes either: a FEN is placement data followed by a side to move, anything else is a game.
@@ -218,30 +356,62 @@ function loadFromInput() {
     const text = ($('an_pgn')?.value || '').trim();
     if (!text) return loadStart();
     try {
-        if (/^[rnbqkpRNBQKP1-8/]+\s+[wb]\s/.test(text)) {
-            const parts = text.split(/\s+/);
+        // a [Variant] tag decides the rules BEFORE anything is replayed -- a Crazyhouse game read
+        // under standard rules dies on its first drop, which is exactly the game this page could
+        // not open before
+        const tagged = /\[Variant\s+"([^"]+)"\]/.exec(text);
+        if (tagged) {
+            const v = PGN_VARIANTS[tagged[1].trim().toLowerCase()];
+            if (v && v !== anVariant()) {
+                setCfg('an_variant', v);
+                const sel = $('an_variant_select');
+                if (sel) sel.value = v;
+                onVariantChange(true);
+                return;    // onVariantChange re-enters loadFromInput under the new rules
+            }
+            if (!v) status(`Variant "${tagged[1]}" is not one this board can play -- loading as standard.`, 'err');
+        }
+        if (/^[rnbqkpRNBQKP1-8/]+(\[[a-zA-Z]*\])?\s+[wb]\s/.test(text)) {
+            // a crazyhouse FEN carries its pockets in brackets; the local rules engine keeps no
+            // pockets, so they are lifted out here and tracked on the node instead
+            let fenText = text;
+            let holdings = {w: '', b: ''};
+            const held = /\[([a-zA-Z]*)\]/.exec(fenText);
+            if (held) {
+                holdings = {w: (held[1].match(/[A-Z]/g) || []).join('').toLowerCase(),
+                            b: (held[1].match(/[a-z]/g) || []).join('')};
+                fenText = fenText.replace(/\[[a-zA-Z]*\]/, '');
+            }
+            const parts = fenText.split(/\s+/);
             // chess.js does NOT reliably throw on junk, so the shape is checked before it is handed over
             if ((parts[0] || '').split('/').length !== 8 || parts.length < 4) {
                 throw new Error('that does not look like a FEN');
             }
-            const c = new Chess('chess', text);
-            positions = [{fen: c.fen(), turn: c.turn(), san: null, uci: null}];
+            const c = newChess(fenText);
+            treeRoot = mkNode(c.fen(), c.turn(), null, null, null,
+                              {holdings, promoted: '', checksLeft: {w: 3, b: 3}});
+            treeNode = treeRoot;
             status('Position loaded.');
         } else {
             const game = Core.parsePgn(text)[0];
             if (!game) throw new Error('no game found in that text');
-            const c = new Chess('chess', game.startFen || undefined);
-            positions = [{fen: c.fen(), turn: c.turn(), san: null, uci: null}];
+            const c = newChess(game.startFen || undefined);
+            treeRoot = mkNode(c.fen(), c.turn(), null, null, null,
+                              {holdings: {w: '', b: ''}, promoted: '', checksLeft: {w: 3, b: 3}});
+            let at = treeRoot;
             for (const rec of game.moves) {
                 const san = typeof rec === 'string' ? rec : rec.san;
                 const mv = c.move(san);
                 if (!mv) throw new Error(`illegal move in the PGN: ${san}`);
-                positions.push({fen: c.fen(), turn: c.turn(), san: mv.san,
-                                uci: mv.from + mv.to + (mv.promotion || '')});
+                const child = mkNode(c.fen(), c.turn(), mv.san, uciOfMove(mv), at, nodeExtras(at, mv));
+                at.children.push(child);
+                at = child;
             }
+            treeNode = treeRoot;
             // the parser is lenient by design, so say what it understood rather than loading a
             // half-copied game silently
-            const n = positions.length - 1;
+            let n = 0;
+            for (let x = treeRoot; x.children[0]; x = x.children[0]) n++;
             status(n === 0 ? 'No moves were understood in that text.'
                  : n < 3 ? `Only ${n} move${n === 1 ? '' : 's'} understood -- check the text.`
                  : `Loaded ${n} moves.`, n === 0 ? 'err' : undefined);
@@ -249,11 +419,61 @@ function loadFromInput() {
     } catch (e) {
         return status(String(e.message || e), 'err');
     }
-    cursor = 0;
-    evalCache.clear(); humanCache.clear(); bandCache.clear();
+    relinkLine();
+    evalCache.clear(); evalCache2.clear(); humanCache.clear(); bandCache.clear();
     buildBoard();
     renderMoves();
-    go(0);
+    renderPockets();
+    go(cursor);
+}
+
+// a drop's identity is its SAN ('P@e5'); a normal move's is from+to+promotion
+function uciOfMove(mv) {
+    return mv.san?.includes('@') ? mv.san.replace(/[+#]$/, '')
+         : mv.from + mv.to + (mv.promotion || '');
+}
+
+// The node state a move carries forward: crazyhouse pockets + promoted squares, three-check counts.
+// Cheap for every other variant -- the parent's values ride along untouched.
+function nodeExtras(parent, mv) {
+    const v = anVariant();
+    const out = {};
+    if (v === 'crazyhouse') {
+        let {w, b} = parent.holdings || {w: '', b: ''};
+        let promoted = parent.promoted || '';
+        const squares = promoted ? promoted.split(',').filter(Boolean) : [];
+        const drop = mv.san?.includes('@');
+        if (drop) {
+            const type = mv.san[1] === '@' ? mv.san[0].toLowerCase() : 'p';
+            if (mv.color === 'w') w = w.replace(type, '');
+            else b = b.replace(type, '');
+        } else {
+            if (mv.captured) {
+                // a captured PROMOTED piece goes back to the pocket as the pawn it once was
+                const capSq = mv.flags?.includes?.('e') || (mv.flags & 8)   // ep: the pawn is not on `to`
+                    ? mv.to[0] + (mv.color === 'w' ? '5' : '4') : mv.to;
+                const wasPromoted = squares.includes(capSq);
+                const type = wasPromoted ? 'p' : mv.captured;
+                if (mv.color === 'w') w += type; else b += type;
+                if (wasPromoted) squares.splice(squares.indexOf(capSq), 1);
+            }
+            // the promoted mark travels with its piece, and a promotion creates one
+            const fromIdx = squares.indexOf(mv.from);
+            if (fromIdx >= 0) { squares.splice(fromIdx, 1); squares.push(mv.to); }
+            if (mv.promotion) squares.push(mv.to);
+        }
+        out.holdings = {w, b};
+        out.promoted = squares.join(',');
+    }
+    if (v === '3check') {
+        const c = {...(parent.checksLeft || {w: 3, b: 3})};
+        if (/[+#]$/.test(mv.san || '')) {
+            // the MOVER gave the check: their remaining count goes down
+            if (mv.color === 'w') c.w = Math.max(0, c.w - 1); else c.b = Math.max(0, c.b - 1);
+        }
+        out.checksLeft = c;
+    }
+    return out;
 }
 
 // The line as it stands, ready to paste somewhere else. A line that did not start from the initial
@@ -265,8 +485,10 @@ function pgnText() {
         if (i % 2 === 1) body.push(`${Math.ceil(i / 2)}.`);
         body.push(positions[i].san || '');
     }
-    const tags = (start && start !== new Chess('chess').fen())
-        ? `[SetUp "1"]\n[FEN "${start}"]\n\n` : '';
+    const varTag = anVariant() !== 'chess'
+        ? `[Variant "${(AN_VARIANTS.find(v => v[0] === anVariant()) || ['', ''])[1]}"]\n` : '';
+    const tags = (start && start !== newChess().fen())
+        ? `${varTag}[SetUp "1"]\n[FEN "${start}"]\n\n` : (varTag ? varTag + '\n' : '');
     return (tags + body.join(' ')).trim();
 }
 
@@ -405,7 +627,7 @@ async function pasteFromClipboard() {
 
 function engineOpts() {
     return {
-        variant: 'chess',
+        variant: anVariant(),
         limitKind: 'depth',      // only the NATIVE path uses this; WASM runs `go infinite`
         limitValue: 22,
         multipv: Math.max(1, +cfg('an_lines')),
@@ -433,6 +655,39 @@ async function buildEngine() {
     if (cfg('an_wdl')) e.send?.('setoption name UCI_ShowWDL value true');
     engine = e;
     return engine;
+}
+
+// THE SECOND ENGINE, side by side. The page contrasted an engine with a human model; contrasting
+// two ENGINES answers a different question -- does the 15MB net see what the 112MB one sees --
+// which is the thing to settle before trusting the small one in a game. Same serialisation
+// discipline as the first engine and for the same measured reasons; its own client id, its own
+// cache, its own column, and the SAME budget -- one slider, both searches.
+let engine2 = null;
+let liveSearch2 = null;
+let evalCache2 = new Map();
+let engine2Chain = Promise.resolve();
+function ensureEngine2() {
+    engine2Chain = engine2Chain.then(buildEngine2, buildEngine2);
+    return engine2Chain;
+}
+async function buildEngine2() {
+    if (!cfg('an_engine2')) return null;
+    if (engine2) return engine2;
+    const e = makeEngine(cfg('an_engine2'), engineOpts(), 'analysis-b');
+    await e.start();
+    if (cfg('an_wdl')) e.send?.('setoption name UCI_ShowWDL value true');
+    engine2 = e;
+    return engine2;
+}
+function reloadEngine2() {
+    evalCache2.clear();
+    analyseChain = analyseChain.then(async () => {
+        await stopSearch();
+        if (engine2) { try { engine2.dispose?.(); } catch (e) { /* */ } engine2 = null; }
+    }, () => {});
+    const col = $('an_engine2_col');
+    if (col) col.classList.toggle('hidden', !cfg('an_engine2'));
+    go(cursor);
 }
 
 // Same shape, same reason: humanFor() is called without being awaited, so two of them overlap freely.
@@ -490,6 +745,7 @@ async function reloadHuman() {
 function teardown() {
     stopSearch();
     if (engine) { try { engine.dispose?.(); } catch (e) { /* */ } engine = null; }
+    if (engine2) { try { engine2.dispose?.(); } catch (e) { /* */ } engine2 = null; }
     if (human) { try { human.dispose?.(); } catch (e) { /* */ } human = null; humanKey = null; }
     boardResizeObs?.disconnect();
     boardResizeObs = null;
@@ -499,18 +755,39 @@ function teardown() {
 // trailing info lines are read as the new position's (see startInfinite).
 function stopSearch() {
     if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
-    if (!liveSearch) return Promise.resolve();
-    const s = liveSearch;
-    liveSearch = null;
-    try { return Promise.resolve(s.stop()); } catch (e) { return Promise.resolve(); }
+    const stops = [];
+    if (liveSearch) {
+        const s = liveSearch;
+        liveSearch = null;
+        try { stops.push(Promise.resolve(s.stop())); } catch (e) { /* */ }
+    }
+    if (liveSearch2) {
+        const s2 = liveSearch2;
+        liveSearch2 = null;
+        try { stops.push(Promise.resolve(s2.stop())); } catch (e) { /* */ }
+    }
+    return stops.length ? Promise.all(stops) : Promise.resolve();
 }
 
 // ---- stepping and analysing ---------------------------------------------------------------------
 
 function go(ply) {
     if (!positions.length) return;
-    cursor = Core.clamp(ply, 0, positions.length - 1);
+    treeNode = positions[Core.clamp(ply, 0, positions.length - 1)];
+    relinkLine();          // stepping BACK re-roots the forward tail on the mainline children
     render();
+    renderPockets();
+    analyseCurrent();
+}
+
+// jump to any node in the tree (a variation cell in the move list)
+function goNode(n) {
+    if (!n) return;
+    treeNode = n;
+    relinkLine();
+    render();
+    renderMoves();         // the highlighted line may have changed shape
+    renderPockets();
     analyseCurrent();
 }
 
@@ -544,7 +821,9 @@ async function analyseNow() {
     // through as if they described this one.
     if (cursor !== at || positions[at]?.fen !== pos.fen) return;
     const secs = +cfg('an_time');
-    const search = e.startInfinite(pos.fen, pos.turn, (res) => {
+    // the engine sees the node's FULL state -- crazyhouse pockets, three-check counts -- while the
+    // page keeps keying its caches by the plain fen the board renders
+    const search = e.startInfinite(engineFen(pos), pos.turn, (res) => {
         if (cursor !== at || positions[at]?.fen !== pos.fen) return;
         evalCache.set(pos.fen, res);
         renderEval(pos, res);
@@ -554,6 +833,20 @@ async function analyseNow() {
         if (m) m.textContent = `depth ${res.depth}${res.nodes ? ` · ${(res.nodes / 1000).toFixed(0)}k` : ''}`;
     });
     liveSearch = search;
+    if (cfg('an_engine2')) {
+        try {
+            const e2 = await ensureEngine2();
+            if (e2 && cursor === at && positions[at]?.fen === pos.fen) {
+                liveSearch2 = e2.startInfinite(engineFen(pos), pos.turn, (res) => {
+                    if (cursor !== at || positions[at]?.fen !== pos.fen) return;
+                    evalCache2.set(pos.fen, res);
+                    renderEngine2Lines(pos, res);
+                    const m2 = $('an_engine2_meta');
+                    if (m2) m2.textContent = `depth ${res.depth}${res.nodes ? ` · ${(res.nodes / 1000).toFixed(0)}k` : ''}`;
+                });
+            }
+        } catch (err) { status(`Second engine unavailable (${err.message || err})`, 'err'); }
+    }
     // THE BUDGET IS A CHOICE (user call 2026-08-15). The last notch means the search runs until the
     // position changes, the way an analysis board always did; every other notch stops it after that
     // many seconds. `stop` rather than `go movetime` on purpose: it is the one search path, so the
@@ -577,6 +870,7 @@ async function analyseNow() {
 function humanCacheKey(fen) { return `${fen}|${cfg('an_human')}|${cfg('an_band')}`; }
 
 async function humanFor(pos) {
+    if (anVariant() !== 'chess') return null;   // the nets know one game
     const key = humanCacheKey(pos.fen);
     if (humanCache.has(key)) return humanCache.get(key);
     const kind = cfg('an_human');
@@ -626,27 +920,49 @@ async function humanFor(pos) {
 
 // ---- playing on the board -----------------------------------------------------------------------
 
-// A move played on the board (click or drag) TRUNCATES the line and continues from here: an
-// analysis board is for asking "what if", so the answer is a new continuation, not a refusal.
-function playMove(from, to, promotion) {
+// A move played on the board (click or drag) used to TRUNCATE the line -- right for "what if",
+// wrong for studying, because the branch you stepped out of was gone. It BRANCHES now: a move that
+// already exists as a child is followed, anything else becomes a new variation, and the move list
+// shows every branch with a way back in. `drop` is a crazyhouse pocket piece ('P'..'Q', ours),
+// played by SAN because that is the only drop syntax this chess.js accepts.
+function playMove(from, to, promotion, drop) {
     const pos = positions[cursor];
     if (!pos) return false;
+    let mv, fenAfter, turnAfter;
     try {
-        const c = new Chess('chess', pos.fen);
-        const mv = c.move({from, to, promotion: promotion || 'q'});
+        const c = newChess(pos.fen);
+        if (drop) {
+            // the page keeps the pockets (chess.js accepts ANY drop), so the pocket is the gate
+            const type = drop.toLowerCase();
+            const side = pos.turn;
+            if (!(pos.holdings?.[side] || '').includes(type)) return false;
+            mv = c.move(`${type === 'p' ? 'P' : type.toUpperCase()}@${to}`);
+        } else {
+            mv = c.move({from, to, promotion: promotion || 'q'});
+        }
         if (!mv) return false;
-        positions = positions.slice(0, cursor + 1);
-        positions.push({fen: c.fen(), turn: c.turn(), san: mv.san,
-                        uci: mv.from + mv.to + (mv.promotion || '')});
+        fenAfter = c.fen(); turnAfter = c.turn();
     } catch (e) { return false; }
+    const uci = uciOfMove(mv);
+    const existing = treeNode.children.find(ch => ch.uci === uci);
+    if (existing) {
+        treeNode = existing;                       // walking back INTO a branch follows it
+    } else {
+        const child = mkNode(fenAfter, turnAfter, mv.san, uci, treeNode, nodeExtras(treeNode, mv));
+        treeNode.children.push(child);             // children[0] stays the mainline
+        treeNode = child;
+    }
+    relinkLine();
     renderMoves();
-    go(cursor + 1);
+    renderPockets();
+    armDrop(null);
+    go(cursor);
     return true;
 }
 
 function panelPromotes(from, to) {
     try {
-        const c = new Chess('chess', positions[cursor].fen);
+        const c = newChess(positions[cursor].fen);
         const piece = c.get(from);
         if (!piece || piece.type !== 'p') return null;
         return (piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1') ? piece.color : null;
@@ -655,9 +971,76 @@ function panelPromotes(from, to) {
 
 function legalTargets(from) {
     try {
-        return new Chess('chess', positions[cursor].fen).moves({square: from, verbose: true}).map(m => m.to);
+        return newChess(positions[cursor].fen).moves({square: from, verbose: true}).map(m => m.to);
     } catch (e) { return []; }
 }
+
+// ---- crazyhouse pockets ---------------------------------------------------------------------------
+// The pockets are the page's own state (see mkNode): two strips beside the board, the opponent's
+// above and ours below, following the flip. Clicking a held piece ARMS it; the next click on an
+// empty board square drops it there (chess.js validates the square -- no pawns on the back ranks --
+// and the page has already validated the pocket). Clicking the armed piece again, or pressing
+// Escape, disarms.
+let armedDrop = null;   // 'p'|'n'|'b'|'r'|'q' from the side to move's pocket, or null
+
+function armDrop(type) {
+    armedDrop = armedDrop === type ? null : type;
+    renderPockets();
+}
+
+const POCKET_GLYPHS = {w: {p: '\u2659', n: '\u2658', b: '\u2657', r: '\u2656', q: '\u2655'},
+                       b: {p: '\u265F', n: '\u265E', b: '\u265D', r: '\u265C', q: '\u265B'}};
+
+function pocketHtml(side, holdings, canArm) {
+    const counts = {};
+    for (const ch of holdings || '') counts[ch] = (counts[ch] || 0) + 1;
+    return ['q', 'r', 'b', 'n', 'p'].filter(k => counts[k]).map(k =>
+        `<span class="an-pk ${canArm && armedDrop === k ? 'an-pk-armed' : ''}" ${canArm ? `data-drop="${k}"` : ''}
+              title="${canArm ? `Click, then click an empty square to drop` : `Held by the opponent`}">
+            ${POCKET_GLYPHS[side][k]}${counts[k] > 1 ? `<i>${counts[k]}</i>` : ''}</span>`).join('');
+}
+
+function renderPockets() {
+    const top = $('an_pocket_top'), bottom = $('an_pocket_bottom');
+    if (!top || !bottom) return;
+    const zh = anVariant() === 'crazyhouse';
+    top.classList.toggle('hidden', !zh);
+    bottom.classList.toggle('hidden', !zh);
+    if (!zh) { armedDrop = null; return; }
+    const pos = positions[cursor];
+    if (!pos) return;
+    const bottomSide = flipped ? 'b' : 'w';
+    const topSide = flipped ? 'w' : 'b';
+    // arming is only offered on the side TO MOVE -- a drop out of turn is not a legal ask
+    top.innerHTML = pocketHtml(topSide, pos.holdings?.[topSide], pos.turn === topSide) || '<span class="an-pk-none">no pieces in hand</span>';
+    bottom.innerHTML = pocketHtml(bottomSide, pos.holdings?.[bottomSide], pos.turn === bottomSide) || '<span class="an-pk-none">no pieces in hand</span>';
+    for (const host of [top, bottom]) {
+        host.querySelectorAll('[data-drop]').forEach(el =>
+            el.addEventListener('click', () => armDrop(el.dataset.drop)));
+    }
+}
+
+// an armed drop lands wherever the next board click does; the board's own move handling is not
+// involved (there is no `from` square), so the square is read off the click's geometry
+function wireDropClicks(host) {
+    host.addEventListener('click', (e) => {
+        if (!armedDrop || anVariant() !== 'crazyhouse') return;
+        const inner = host.querySelector('.board-b72b1') || host;
+        const r = inner.getBoundingClientRect();
+        if (!r.width) return;
+        const fx = Math.floor(((e.clientX - r.left) / r.width) * 8);
+        const fy = Math.floor(((e.clientY - r.top) / r.height) * 8);
+        if (fx < 0 || fx > 7 || fy < 0 || fy > 7) return;
+        const file = flipped ? 7 - fx : fx;
+        const rank = flipped ? fy + 1 : 8 - fy;
+        const sq = String.fromCharCode(97 + file) + rank;
+        // an occupied square cannot take a drop -- fall through to normal click handling instead
+        try { if (newChess(positions[cursor].fen).get(sq)) return; } catch (err) { return; }
+        playMove(null, sq, null, armedDrop);
+    }, true);
+}
+
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && armedDrop) armDrop(armedDrop); });
 
 // ---- rendering ----------------------------------------------------------------------------------
 
@@ -686,6 +1069,7 @@ function buildBoard() {
         const raw = MephistoConfig.get('pieces');
         if (raw) [set, ext] = String(JSON.parse(raw) || 'wikipedia.svg').split('.');
     } catch (e) { /* defaults */ }
+    if (!host.dataset.dropWired) { wireDropClicks(host); host.dataset.dropWired = '1'; }
     board = MephistoBoard(host, {
         position: positions[cursor]?.fen || 'start',
         pieceTheme: `/res/chesspieces/${set}/{piece}.${ext}`,
@@ -707,6 +1091,9 @@ function render() {
     const hum = humanCache.get(humanCacheKey(pos.fen));
     renderEval(pos, ev);
     renderEngineLines(pos, ev);
+    const col2 = $('an_engine2_col');
+    if (col2) col2.classList.toggle('hidden', !cfg('an_engine2'));
+    if (cfg('an_engine2')) renderEngine2Lines(pos, evalCache2.get(pos.fen));
     renderHumanLines(pos, hum);
     renderArrows(pos, ev, hum);
     renderBook();
@@ -768,7 +1155,8 @@ function wireLineClicks(host) {
 function legalHere(fen, uci) {
     if (!uci) return false;
     try {
-        return !!new Chess('chess', fen).move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+        if (uci.includes('@')) return !!newChess(fen).move(uci.replace(/[+#]$/, ''));   // a drop line from Fairy
+        return !!newChess(fen).move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
     } catch (e) { return false; }
 }
 
@@ -787,12 +1175,36 @@ function renderEngineLines(pos, ev) {
     wireLineClicks(host);
 }
 
+// the second engine's column: same rows, its own palette, so the two reads sit side by side
+const RANK_COLOURS_B = ['#c98a2d', '#b0925c', '#a88865', '#8f8f8f', '#7f8b95'];
+
+function renderEngine2Lines(pos, ev) {
+    const host = $('an_engine2_lines');
+    if (!host) return;
+    const title = $('an_engine2_title');
+    if (title) {
+        const id = cfg('an_engine2');
+        title.textContent = ENGINES.find(x => x.id === id)?.label || 'Second engine';
+    }
+    const lines = (ev?.lines || []).filter(l => legalHere(pos.fen, l.pv?.[0]))
+        .slice(0, Math.max(1, +cfg('an_lines')));
+    host.innerHTML = lines.length ? lines.map((l, i) => {
+        const cp = l.cp * (pos.turn === 'w' ? 1 : -1);
+        const val = Core.isMateScore(l.cp) ? (cp > 0 ? '#' : '-#') : (cp / 100).toFixed(2);
+        const pct = Core.clamp(Core.winPercent(l.cp * (pos.turn === 'w' ? 1 : -1)), 2, 100);
+        return lineRow(i, RANK_COLOURS_B[Math.min(i, 4)], sanOf(pos.fen, l.pv?.[0]),
+                       pvText(pos.fen, l.pv, 4), val, pct, l.pv?.[0] || '');
+    }).join('') : '<div class="an-lrow"><span></span><span class="an-lval">thinking…</span><span></span></div>';
+    wireLineClicks(host);
+}
+
 function renderHumanLines(pos, hum) {
     const host = $('an_human_lines');
     if (!host) return;
     const title = $('an_human_title');
-    const kind = cfg('an_human');
-    if (title) title.textContent = kind ? `Human ${cfg('an_band')}` : 'Human model off';
+    const kind = anVariant() === 'chess' ? cfg('an_human') : '';
+    if (title) title.textContent = kind ? `Human ${cfg('an_band')}`
+        : (cfg('an_human') && anVariant() !== 'chess' ? 'Human model (standard chess only)' : 'Human model off');
     host.innerHTML = (hum && hum.length) ? hum.map((h, i) =>
         lineRow(i, '#a8657f', sanOf(pos.fen, h.uci), '', `${(h.prob * 100).toFixed(1)}%`,
                 Core.clamp(h.prob * 100, 2, 100), h.uci)).join('')
@@ -1085,7 +1497,7 @@ async function renderBands(pos) {
     const wrap = $('an_bands_wrap'), host = $('an_bands'), meta = $('an_bands_meta');
     if (!wrap || !host) return;
     const kind = cfg('an_human');
-    if (!kind) { wrap.style.display = 'none'; return; }
+    if (!kind || anVariant() !== 'chess') { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
     const steps = bandSteps(kind);
     const key = bandKey(pos.fen, kind);
@@ -1137,6 +1549,12 @@ async function renderExtras(pos) {
     const opEl = $('an_opening'), tbEl = $('an_tb');
     if (!opEl && !tbEl) return;
 
+    if (anVariant() !== 'chess') {
+        // the opening table and the lichess tablebase both describe standard chess and nothing else
+        if (opEl) opEl.textContent = '';
+        if (tbEl) tbEl.textContent = '';
+        return;
+    }
     if (opEl) {
         const book = await loadOpeningBook();
         if (positions[cursor]?.fen !== pos.fen) return;
@@ -1210,7 +1628,7 @@ async function onBookFile(e) {
         } else {
             // a PGN book: every game walked, every position counted
             for (const game of Core.parsePgn(text)) {
-                const c = new Chess('chess', game.startFen || undefined);
+                const c = new Chess('chess', game.startFen || undefined);   // books are standard chess
                 for (const rec of game.moves) {
                     const san = typeof rec === 'string' ? rec : rec.san;
                     const k = keyOf(c.fen());
@@ -1256,24 +1674,69 @@ function renderBook() {
 
 // ---- move list ----------------------------------------------------------------------------------
 
+// The move list is the TREE now. The mainline renders as the familiar numbered rows; wherever a
+// node has more than one child, the alternatives render underneath as indented, parenthesised lines
+// (each recursively carrying its own sub-variations). Every cell knows its node, so clicking any
+// move -- mainline or buried three variations deep -- walks the board back into that line.
+const nodeIndex = new Map();   // id -> node, rebuilt per render (the tree is tiny)
+
+function moveNumberOf(node) {
+    // the ply is the DEPTH, not an array index: variations share their depth with the mainline
+    let ply = 0;
+    for (let n = node; n.parent; n = n.parent) ply++;
+    return {num: Math.ceil(ply / 2), white: ply % 2 === 1};
+}
+
+function varLineHtml(node) {
+    // one variation: this node onward, down FIRST children, with sub-variations nested
+    const parts = [];
+    let n = node;
+    let first = true;
+    while (n) {
+        const {num, white} = moveNumberOf(n);
+        const prefix = white ? `${num}. ` : (first ? `${num}... ` : '');
+        parts.push(`<span class="an-mcell an-vcell" data-node="${n.id}">${prefix}${esc(n.san || '')}</span>`);
+        for (const alt of n.children.slice(1)) parts.push(`<span class="an-var">(${varLineHtml(alt)})</span>`);
+        n = n.children[0];
+        first = false;
+    }
+    return parts.join(' ');
+}
+
 function renderMoves() {
     const el = $('an_moves');
     if (!el) return;
+    nodeIndex.clear();
+    (function index(n) { nodeIndex.set(n.id, n); n.children.forEach(index); })(treeRoot);
+    // the mainline of the tree (first children all the way), rendered in numbered pairs; a node
+    // with siblings drops its variation block after the row the branching move appears in
+    const main = [];
+    for (let n = treeRoot.children[0]; n; n = n.children[0]) main.push(n);
     const rows = [];
-    for (let i = 1; i < positions.length; i += 2) {
-        const w = positions[i], b = positions[i + 1];
-        rows.push(`<div class="an-mrow"><span class="an-mnum">${Math.ceil(i / 2)}</span>`
-            + `<span class="an-mcell" data-ply="${i}">${esc(w?.san || '')}</span>`
-            + `<span class="an-mcell" data-ply="${i + 1}">${esc(b?.san || '')}</span></div>`);
+    for (let i = 0; i < main.length; i += 2) {
+        const w = main[i], b = main[i + 1];
+        rows.push(`<div class="an-mrow"><span class="an-mnum">${Math.ceil((i + 1) / 2)}</span>`
+            + `<span class="an-mcell" data-node="${w.id}">${esc(w?.san || '')}</span>`
+            + `<span class="an-mcell" ${b ? `data-node="${b.id}"` : ''}>${esc(b?.san || '')}</span></div>`);
+        for (const branchOwner of [w, b]) {
+            if (!branchOwner?.parent) continue;
+            for (const alt of branchOwner.parent.children.slice(1)) {
+                // siblings of a MAINLINE move: the variations you could have played instead
+                if (branchOwner.parent.children[0] !== branchOwner) continue;
+                rows.push(`<div class="an-mrow an-vrow"><span class="an-mnum"></span>`
+                    + `<span class="an-vline">(${varLineHtml(alt)})</span></div>`);
+            }
+        }
     }
     el.innerHTML = rows.join('')
         || '<div class="an-mrow"><span class="an-mnum"></span><span class="an-mcell">play a move</span><span></span></div>';
-    el.querySelectorAll('.an-mcell[data-ply]').forEach(c => c.addEventListener('click', () => go(+c.dataset.ply)));
+    el.querySelectorAll('[data-node]').forEach(c =>
+        c.addEventListener('click', (e) => { e.stopPropagation(); goNode(nodeIndex.get(+c.dataset.node)); }));
 }
 
 function highlightMove() {
     document.querySelectorAll('.an-mcell.an-sel').forEach(e => e.classList.remove('an-sel'));
-    const sel = document.querySelector(`.an-mcell[data-ply="${cursor}"]`);
+    const sel = document.querySelector(`.an-mcell[data-node="${treeNode?.id}"]`);
     if (sel) { sel.classList.add('an-sel'); sel.scrollIntoView({block: 'nearest'}); }
 }
 
@@ -1282,18 +1745,20 @@ function highlightMove() {
 function sanOf(fen, uci) {
     if (!uci) return '';
     try {
-        const c = new Chess('chess', fen);
-        const mv = c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+        const c = newChess(fen);
+        const mv = uci.includes('@') ? c.move(uci.replace(/[+#]$/, ''))
+                                     : c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
         return mv ? mv.san : uci;
     } catch (e) { return uci; }
 }
 
 function pvText(fen, pv, n) {
     try {
-        const c = new Chess('chess', fen);
+        const c = newChess(fen);
         const out = [];
         for (const uci of (pv || []).slice(0, n)) {
-            const mv = c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+            const mv = uci.includes('@') ? c.move(uci.replace(/[+#]$/, ''))
+                                         : c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
             if (!mv) break;
             out.push(mv.san);
         }

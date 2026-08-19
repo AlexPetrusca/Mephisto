@@ -93,6 +93,9 @@ function squareProbs(logits, base) {
     return p;
 }
 
+const pieceCount = (read) => (read.placement.match(/[pnbrqk]/gi) || []).length;
+const staleRead = (read) => pieceCount(read) < 2 || (read.unresolved || []).some(r => /king/.test(r));
+
 // THE MODEL IS THE COST, AND MOST READS ASK IT THE SAME QUESTION. Measured on this machine: the
 // detector is 84ms and the position model 645ms of a ~670ms read, and the shipped model is ALREADY
 // int8-quantised (MatMulInteger/ConvInteger), so there is no quantisation left to win. What is left
@@ -113,20 +116,111 @@ function cropHash(canvas) {
     return h >>> 0;
 }
 
+// --- the rules the model does not know -----------------------------------------------------------
+// A misread square usually still yields a LEGAL position, which is why the per-square confidence is
+// reported at all. But some misreads yield a position that CANNOT be chess -- two white kings, nine
+// pawns, a pawn on the back rank -- and the model already holds the correction: the runner-up it
+// kept for every square. This pass spends those runners-up on the squares that break a rule,
+// least-confident offender first, and stops the moment the board is legal. Accuracy bought from the
+// rules rather than from the model; no retraining, no extra inference.
+//
+// Placement-only rules, deliberately: side to move, castling and en passant are unknown here, so
+// only what a bare diagram can violate is enforced. Each square is flipped at most once (a flip can
+// create a new violation -- the loop re-checks -- and a once-only guard is what keeps two kings from
+// trading places forever). A violation with no runner-up that resolves it is left alone: downstream
+// chess.js validation still rejects the FEN, exactly as before this existed.
+function placementViolations(squares) {
+    const bySym = {};
+    for (const sq of squares) if (sq.piece) (bySym[sq.piece] = bySym[sq.piece] || []).push(sq);
+    const v = [];
+    for (const [K, P, side] of [['K', 'P', 'white'], ['k', 'p', 'black']]) {
+        const kings = bySym[K] || [], pawns = bySym[P] || [];
+        if (kings.length > 1) v.push({rule: `two ${side} kings`, offenders: kings});
+        if (kings.length === 0) v.push({rule: `no ${side} king`, missing: K});
+        if (pawns.length > 8) v.push({rule: `${pawns.length} ${side} pawns`, offenders: pawns});
+        const backRank = pawns.filter(sq => sq.square[1] === '1' || sq.square[1] === '8');
+        if (backRank.length) v.push({rule: `${side} pawn on the back rank`, offenders: backRank});
+        const total = squares.filter(sq => sq.piece && (sq.piece === sq.piece.toUpperCase()) === (K === 'K')).length;
+        if (total > 16) v.push({rule: `${total} ${side} pieces`,
+            offenders: squares.filter(sq => sq.piece && (sq.piece === sq.piece.toUpperCase()) === (K === 'K'))});
+    }
+    return v;
+}
+
+function repairPlacement(squares) {
+    const fixed = [];
+    const flipped = new Set();
+    const flip = (sq) => {
+        [sq.piece, sq.alt] = [sq.alt, sq.piece];
+        [sq.prob, sq.altProb] = [sq.altProb, sq.prob];
+    };
+    // A flip only counts if the board gets STRICTLY more legal. A runner-up that trades two kings
+    // for a back-rank pawn has not fixed anything -- it has changed which rule is broken, on a square
+    // that can then never be flipped again. Tentative-flip-and-count catches that generically: any
+    // candidate whose flip does not reduce the violation total is reverted and the next one tried,
+    // and a violation none of them can reduce is REPORTED rather than papered over.
+    const tryFlip = (cand, rule, before) => {
+        flip(cand);
+        if (placementViolations(squares).length < before) {
+            fixed.push({square: cand.square, from: cand.alt, to: cand.piece, rule});
+            flipped.add(cand.square);
+            return true;
+        }
+        flip(cand);                                    // revert: this trade was not an improvement
+        return false;
+    };
+    for (let pass = 0; pass < 12; pass++) {           // bounded: <= one flip per violation family
+        const violations = placementViolations(squares);
+        if (!violations.length) break;
+        let progressed = false;
+        for (const v of violations) {
+            if (v.missing) {
+                // a MISSING king cannot be fixed by removing anything: the squares whose runner-up
+                // IS that king, most confident first, until one strictly helps
+                const cands = squares.filter(sq => sq.alt === v.missing && !flipped.has(sq.square))
+                                     .sort((a, b) => b.altProb - a.altProb);
+                progressed = cands.some(c => tryFlip(c, v.rule, violations.length));
+            } else {
+                // too many of something: the least confident offenders, until one strictly helps
+                const cands = (v.offenders || []).filter(sq => !flipped.has(sq.square) && sq.alt !== null)
+                                                 .sort((a, b) => a.prob - b.prob);
+                progressed = cands.some(c => tryFlip(c, v.rule, violations.length));
+            }
+            if (progressed) break; // re-check from scratch: a flip may have changed other counts
+        }
+        if (!progressed) break;                        // nothing improves anything -- report what remains
+    }
+    return {fixed, unresolved: placementViolations(squares).map(v => v.rule)};
+}
+
+// squares (rank 8 first, file a first) -> FEN placement, after any repairs
+function placementOf(squares) {
+    const rows = [];
+    for (let r = 0; r < 8; r++) {
+        let row = '', gap = 0;
+        for (let f = 0; f < 8; f++) {
+            const piece = squares[r * 8 + f].piece;
+            if (!piece) gap++;
+            else { if (gap) { row += gap; gap = 0; } row += piece; }
+        }
+        if (gap) row += gap;
+        rows.push(row);
+    }
+    return rows.join('/');
+}
+
 async function readBoard(bitmap, box) {
     const c = draw(bitmap, BOARD_SIZE, BOARD_SIZE, box.x, box.y, box.w, box.h);
     const hash = cropHash(c);
     if (lastRead && hash === lastCropHash) { readHits++; return {...lastRead, cached: true}; }
     const out = await posSession.run({[posSession.inputNames[0]]: toTensor(c)});
     const logits = out[posSession.outputNames[0]].data; // [1,64,13], rank 8 first, file a first
-    const rows = [];
     // The model's own certainty is right here and used to be discarded with the argmax. A misread
     // square usually still produces a LEGAL position, so nothing downstream can flag it -- but the
     // model itself was unsure, and saying which square it was unsure about turns "the position looks
     // wrong somewhere" into "check e4".
     const squares = [];
     for (let r = 0; r < 8; r++) {
-        let row = '', gap = 0;
         for (let f = 0; f < 8; f++) {
             const base = (r * 8 + f) * 13;
             let best = 0;
@@ -147,16 +241,25 @@ async function readBoard(bitmap, box) {
                 alt: second < 0 ? null : (second === EMPTY ? '' : SYMS[second]),
                 altProb: second < 0 ? 0 : probs[second],
             });
-            if (best === EMPTY) gap++;
-            else { if (gap) { row += gap; gap = 0; } row += SYMS[best]; }
         }
-        if (gap) row += gap;
-        rows.push(row);
     }
-    const low = squares.filter(sq => sq.prob < LOW_CONFIDENCE_MAX)
-                       .sort((a, b) => a.prob - b.prob)
-                       .slice(0, LOW_CONFIDENCE_REPORT);
-    const result = {placement: rows.join('/'), low};
+    // rules first, placement second: a decode that cannot be chess spends the runners-up the model
+    // already paid for before anything downstream sees it
+    const {fixed, unresolved} = repairPlacement(squares);
+    const allLow = squares.filter(sq => sq.prob < LOW_CONFIDENCE_MAX);
+    const low = allLow.slice().sort((a, b) => a.prob - b.prob).slice(0, LOW_CONFIDENCE_REPORT);
+    // A repaired square joins the unsure list whatever its confidence NOW reads: it was changed on
+    // rule grounds, and listing it (with the original as its runner-up) makes the same one-click UI
+    // an undo. Deduped -- a repaired square may already be there on its own low confidence.
+    for (const fx of fixed) {
+        if (low.some(sq => sq.square === fx.square)) continue;
+        const sq = squares.find(s => s.square === fx.square);
+        if (sq) low.push({...sq, repaired: fx.rule});
+    }
+    // lowCount is the STALE-BOX signal: `low` is the top-3 report for the UI, so its length says
+    // nothing about how bad a read was. The re-detect below used to compare that ARRAY against 8,
+    // which is never true -- the stale-box recovery had been dead since the report was capped.
+    const result = {placement: placementOf(squares), low, fixed, unresolved, lowCount: allLow.length};
     lastCropHash = hash;
     lastRead = result;
     return result;
@@ -231,18 +334,26 @@ export async function recognize({dataUri, crop}) {
     let tRead = performance.now();
     // A cached box that has gone stale reads as a board full of nothing: re-detect ONCE and keep
     // the better answer, so a moved board costs one extra read rather than a wrong position.
-    if (cached && read.low > 8) {
+    // The signal is the READ, not the confidences: the int8 model's max-prob sits under 0.9 on
+    // every square of an EXACT read (measured lowCount=64 on a perfect lichess frame), so any
+    // confidence count fires on ordinary frames. What a stale box actually produces is a board
+    // with no kings or almost no pieces (measured: off-board crop -> 0 pieces + both kings
+    // unresolved; correct crop -> full position, nothing unresolved). KQK/KRK endings keep their
+    // kings, so they do not trigger. Ceiling: a box HALF-overlapping the real board can decode as
+    // king-bearing garbage no local signal catches -- the follow re-scrape is the recovery there.
+    if (cached && staleRead(read)) {
         boxMisses++;
         const fresh = await detectBoard(bitmap);
         if (fresh) {
             boxCache = {w: bitmap.width, h: bitmap.height, box: fresh};
             const second = await readBoard(bitmap, fresh);
-            if (second.low <= read.low) { read = second; box = fresh; }
+            if (!staleRead(second) || pieceCount(second) >= pieceCount(read)) { read = second; box = fresh; }
         }
         tRead = performance.now();
     }
     const answer = {
-        placement: read.placement, low: read.low, box,
+        placement: read.placement, low: read.low, lowCount: read.lowCount,
+        unresolved: read.unresolved, box,
         imageW: bitmap.width, imageH: bitmap.height,
         // what each stage cost, so "screen reading is slow" can be answered with numbers rather
         // than with a guess about which model is the expensive one

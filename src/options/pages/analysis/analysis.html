@@ -11,6 +11,10 @@
                 <div class="an-grid">
                     <label class="an-f an-f-engine"><span data-i18n-tip="an.tip.engine" class="tooltipped" data-position="top" data-tooltip="Which engine analyses the position. It runs until you move on -- there is no depth to set."><span data-i18n="an.engine">Engine</span></span>
                         <select id="an_engine_select" class="browser-default"></select></label>
+                    <label class="an-f an-f-engine"><span data-i18n-tip="an.tip.variant" class="tooltipped" data-position="top" data-tooltip="Which rules this board plays by. Loading a PGN with a Variant tag sets it for you. Fairy-only variants switch the engine to Fairy-Stockfish; the human model and the tablebase are standard chess only."><span data-i18n="an.variant">Variant</span></span>
+                        <select id="an_variant_select" class="browser-default"></select></label>
+                    <label class="an-f an-f-engine"><span data-i18n-tip="an.tip.engine2" class="tooltipped" data-position="top" data-tooltip="A second engine on the same position, beside the first. The question it answers: does the small net see what the big one sees?"><span data-i18n="an.engine2">Second engine</span></span>
+                        <select id="an_engine2_select" class="browser-default"></select></label>
                     <label class="an-f an-f-human"><span data-i18n-tip="an.tip.human" class="tooltipped" data-position="top" data-tooltip="The human model shown beside the engine: what a player of this rating would most likely play here."><span data-i18n="an.human">Human model</span></span>
                         <select id="an_human_select" class="browser-default"></select></label>
                     <label class="an-f an-f-band" id="an_band_row"><span data-i18n-tip="an.tip.band" class="tooltipped" data-position="top" data-tooltip="Which rating the human model plays at. Maia 1 has a net per band; Maia 3 is one net with a dial."><span data-i18n="an.band">Rating</span></span>
@@ -62,6 +66,7 @@
 
                 <div class="an-main">
                     <div class="an-left">
+                        <div id="an_pocket_top" class="an-pocket hidden"></div>
                         <div class="an-boardrow">
                             <div class="an-bar an-bar-eval" title="Evaluation">
                                 <div id="an_evalfill" class="an-bar-fill"></div>
@@ -72,6 +77,7 @@
                                 <svg id="an_arrows" class="an-arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
                             </div>
                         </div>
+                        <div id="an_pocket_bottom" class="an-pocket hidden"></div>
                         <div class="an-nav">
                             <button id="an_first" class="set-btn" type="button" title="Start">&laquo;</button>
                             <button id="an_prev" class="set-btn" type="button" title="Previous">&lsaquo;</button>
@@ -93,6 +99,10 @@
                             <div class="an-col">
                                 <div class="an-col-h"><span data-i18n="an.engine_moves">Engine moves</span><span id="an_engine_meta" class="an-col-sub"></span></div>
                                 <div id="an_engine_lines" class="an-lines"></div>
+                            </div>
+                            <div class="an-col hidden" id="an_engine2_col">
+                                <div class="an-col-h"><span id="an_engine2_title">Second engine</span><span id="an_engine2_meta" class="an-col-sub"></span></div>
+                                <div id="an_engine2_lines" class="an-lines"></div>
                             </div>
                         </div>
                         <div id="an_bands_wrap" class="an-bands">

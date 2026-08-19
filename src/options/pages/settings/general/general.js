@@ -98,6 +98,8 @@ class GeneralSettings extends SettingsPage {
         }
         this.registerFormElement('computer_evaluation', 'Show Computer Evaluation:', 'checkbox', true);
         this.registerFormElement('threat_analysis', 'Show Threat Analysis', 'checkbox', false);
+        this.registerFormElement('threat_human', 'Human Reply (Maia):', 'checkbox', false);
+        this.registerFormElement('threat_human_elo', 'Human Reply Rating:', 'input', 1500);
         this.registerFormElement('simon_says_mode', '"Hand and Brain" Mode:', 'checkbox', false);
         this.registerFormElement('autoplay', 'Autoplay:', 'checkbox', false);
         // Grind Mode rides on Autoplay -- it only ever acts while Autoplay is on -- and its delay is

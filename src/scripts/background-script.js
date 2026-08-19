@@ -1468,6 +1468,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   // the panel's Maia second-inference client shares the tab's lifetime under its own id
   chrome.runtime.sendMessage({toOffscreen: true, clientId: String(tabId) + ':m2', cmd: 'dispose'},
     () => void chrome.runtime.lastError);
+  // ...and so does the human-reply Maia client (threat analysis asking "what would a human do")
+  chrome.runtime.sendMessage({toOffscreen: true, clientId: String(tabId) + ':hr', cmd: 'dispose'},
+    () => void chrome.runtime.lastError);
 });
 
 // --- Offscreen engine host (N1). An offscreen document is an invisible EXTENSION-ORIGIN page, so it

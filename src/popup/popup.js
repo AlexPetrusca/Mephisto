@@ -410,6 +410,10 @@ async function initPanel(root, tabId) {
         opp_alert: JSON.parse(MephistoConfig.get('opp_alert')) || false,
         computer_evaluation: (computerEval != null) ? computerEval : true,
         threat_analysis: JSON.parse(MephistoConfig.get('threat_analysis')) || false,
+        // the HUMAN's likely reply beside the engine's best answer -- a different and usually more
+        // useful prediction about the opponent actually being faced. Standard chess only (Maia).
+        threat_human: JSON.parse(MephistoConfig.get('threat_human')) || false,
+        threat_human_elo: JSON.parse(MephistoConfig.get('threat_human_elo')) || 1500,
         simon_says_mode: JSON.parse(MephistoConfig.get('simon_says_mode')) || false,
         autoplay: (autoplay != null) ? autoplay : false,
         premove: JSON.parse(MephistoConfig.get('premove')) || false,
@@ -1686,6 +1690,8 @@ function on_engine_best_move(best, threat, isTerminal=false) {
     if (toplay.toLowerCase() === our_side()) {
         last_eval.bestmove = best;
         last_eval.threat = threat;
+        last_eval.humanReply = null;    // belongs to the previous best move until re-asked
+        request_threat_human(last_eval.fen, best);
         if (config.simon_says_mode) {
             const startSquare = best.substring(0, 2);
             if (board.position()[startSquare] == null) {
@@ -1705,6 +1711,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
             if (config.threat_analysis) {
                 clear_annotations();
                 draw_threat();
+                draw_human_reply();
             }
         }
         // Manual Mode plays on YOUR keypress and nothing else. It normally never reaches here because
@@ -1794,7 +1801,8 @@ function on_engine_best_move(best, threat, isTerminal=false) {
     if (!config.simon_says_mode) {
         draw_moves();
         if (config.threat_analysis) {
-            draw_threat()
+            draw_threat();
+            draw_human_reply();
         }
     }
 
@@ -3705,11 +3713,18 @@ async function with_panel_hidden(fn) {
 
 // The "least sure" line, as buttons. Clicking one swaps that square to the model's runner-up and
 // re-analyses -- the whole point being that a single wrong square no longer means reading again.
-function render_unsure(low) {
+function render_unsure(low, unresolved) {
     const el = PANEL_ROOT.getElementById('setup_fen_msg');
     if (!el) return;
-    const unsure = (low || []).filter(sq => sq.prob < 0.9);
+    // a repaired square is ALWAYS shown, whatever its numbers now say: it was changed on rule
+    // grounds, and its chip (whose runner-up is the original reading) is the one-click undo
+    const unsure = (low || []).filter(sq => sq.prob < 0.9 || sq.repaired);
     el.textContent = 'Read from screen - turn with the king switch, orientation with Flip board';
+    // a rule the runners-up could not fix is worth a plain sentence: the position on the board
+    // genuinely breaks it, and the chips below are where to correct it by hand
+    if (unresolved && unresolved.length) {
+        el.textContent += ` · could not fix: ${unresolved.join(', ')}`;
+    }
     if (!unsure.length) return;
     el.appendChild(document.createTextNode(' · least sure: '));
     unsure.forEach((sq, i) => {
@@ -3718,8 +3733,11 @@ function render_unsure(low) {
         const chip = document.createElement('span');
         chip.className = 'mephisto-fix-chip';
         chip.textContent = `${sq.square} ${name(sq.piece)} ${Math.round(sq.prob * 100)}%`;
+        if (sq.repaired) chip.textContent += ' (rule fix)';
         if (sq.alt !== undefined && sq.alt !== null && sq.alt !== sq.piece) {
-            chip.title = `Click to make ${sq.square} ${name(sq.alt)} (${Math.round((sq.altProb || 0) * 100)}%)`;
+            chip.title = sq.repaired
+                ? `Changed because the read had ${sq.repaired}. Click to put back ${name(sq.alt)}.`
+                : `Click to make ${sq.square} ${name(sq.alt)} (${Math.round((sq.altProb || 0) * 100)}%)`;
             chip.dataset.square = sq.square;
             chip.dataset.alt = sq.alt;
             chip.addEventListener('click', () => apply_square_fix(sq.square, sq.alt));
@@ -3804,7 +3822,7 @@ async function snap_position(crop) {
     // usually still yields a legal position, so this used to be the only warning anyone got, with
     // no way to act on it short of reading the whole board again. Each chip now applies the
     // model's second choice for that square, which is what a misread almost always is.
-    render_unsure(res.low || []);
+    render_unsure(res.low || [], res.unresolved || []);
     last_eval.fen = ''; prev_ply_count = 0;
     opp_spend = opp_clock_mark = last_our_eval = null;
     explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
@@ -4789,7 +4807,7 @@ function readout_extras() {
     // Both labels return BARE text and the separator is added here. They used to carry their own
     // leading ' - ' / '·', so which punctuation started the line depended on which label happened to
     // be present -- and stripping it back off needed a regex that missed the em dash.
-    const extra = [puzzle_label(), tablebase_label(), move_confidence_label()].filter(Boolean).join(' · ');
+    const extra = [puzzle_label(), tablebase_label(), move_confidence_label(), human_reply_label()].filter(Boolean).join(' · ');
     return extra ? `<span class="line1-extra">${extra}</span>` : '';
 }
 
@@ -6584,6 +6602,7 @@ const LIVE_CONFIG_KEYS = [
     'autoplay', 'premove', 'ponder', 'tablebase', 'background_play', 'hide_opponent',
     'explorer', 'book_play', 'explorer_db', 'help_mode', 'humanize', 'clock_mode', 'mirror_mode',
     'manual_mode', 'eval_bar', 'eval_history', 'live_stats', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
+    'threat_human', 'threat_human_elo',
     'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode',
     'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'forced_lines', 'pv_walk', 'pv_walk_limit',
     'premove_confidence', 'premove_plies', 'move_time', 'move_variance', 'move_reason',
@@ -6896,6 +6915,122 @@ function draw_book_moves(fen) {
     const at = fen || last_eval.fen;
     if (explorer_data?.fen !== at) return;
     for (const a of book_arrow_specs(at)) draw_move(a.move, a.color, layer, a.width);
+}
+
+const THREAT_MAIA_BANDS = ['1100', '1200', '1300', '1400', '1500', '1600', '1700', '1800', '1900', '2200'];
+let threat_human_id = null;      // offscreen clientId, minted per panel boot
+let threat_human_band_loaded = null;
+let threat_human_ready = null;   // the in-flight init, so two asks share one load
+let threat_human_cache = new Map();   // fen-after-our-move -> {uci, prob}
+
+function threat_human_band() {
+    const want = Number(config.threat_human_elo) || 1500;
+    let best = THREAT_MAIA_BANDS[0];
+    for (const b of THREAT_MAIA_BANDS) if (Math.abs(+b - want) < Math.abs(+best - want)) best = b;
+    return best;
+}
+
+function ensure_threat_human() {
+    const band = threat_human_band();
+    if (threat_human_ready && threat_human_band_loaded === band) return threat_human_ready;
+    threat_human_band_loaded = band;
+    // ENGINE_CLIENT-derived like maia2_client(): the background relays fromOffscreen to the tab by
+    // parseInt(clientId) -- a name that does not start with the tabId is never relayed to a panel.
+    if (!threat_human_id) threat_human_id = ENGINE_CLIENT + ':hr';
+    threat_human_ready = (async () => {
+        await chrome.runtime.sendMessage({ensureOffscreen: true});
+        const ready = new Promise((resolve, reject) => {
+            const timer = setTimeout(() => { cleanup(); reject(new Error('maia load timed out')); }, 60000);
+            const onMsg = (m) => {
+                if (!m || !m.fromOffscreen || m.clientId !== threat_human_id) return;
+                if (m.kind === 'ready') { cleanup(); resolve(); }
+                if (m.kind === 'error') { cleanup(); reject(new Error(m.error)); }
+            };
+            const cleanup = () => { clearTimeout(timer); chrome.runtime.onMessage.removeListener(onMsg); };
+            chrome.runtime.onMessage.addListener(onMsg);
+        });
+        chrome.runtime.sendMessage({toOffscreen: true, clientId: threat_human_id, cmd: 'init',
+                                    engine: 'maia', maiaLevel: band});
+        await ready;
+    })();
+    return threat_human_ready;
+}
+
+function dispose_threat_human() {
+    if (!threat_human_id) return;
+    try { chrome.runtime.sendMessage({toOffscreen: true, clientId: threat_human_id, cmd: 'dispose'}); }
+    catch (e) { /* the offscreen doc is already gone */ }
+    threat_human_id = null;
+    threat_human_ready = null;
+    threat_human_band_loaded = null;
+    threat_human_cache.clear();
+}
+
+// one forward pass for the position after `fen` -- resolves {uci, prob} or null
+async function threat_human_reply(fenAfter) {
+    if (threat_human_cache.has(fenAfter)) return threat_human_cache.get(fenAfter);
+    await ensure_threat_human();
+    const answer = await new Promise((resolve) => {
+        const timer = setTimeout(() => { cleanup(); resolve(null); }, 15000);
+        let top = null;
+        const onMsg = (m) => {
+            if (!m || !m.fromOffscreen || m.clientId !== threat_human_id || m.kind !== 'line') return;
+            const info = /info .*multipv 1 .*maiaprob (\d+) pv ([a-h][1-8][a-h][1-8][qrbn]?)/.exec(m.line || '');
+            if (info) top = {uci: info[2], prob: Number(info[1]) / 10000};
+            if (/^bestmove\b/.test(m.line || '')) { cleanup(); resolve(top); }
+        };
+        const cleanup = () => { clearTimeout(timer); chrome.runtime.onMessage.removeListener(onMsg); };
+        chrome.runtime.onMessage.addListener(onMsg);
+        chrome.runtime.sendMessage({toOffscreen: true, clientId: threat_human_id, cmd: 'uci', line: `position fen ${fenAfter}`});
+        chrome.runtime.sendMessage({toOffscreen: true, clientId: threat_human_id, cmd: 'uci', line: 'go nodes 1'});
+    });
+    if (answer) threat_human_cache.set(fenAfter, answer);
+    return answer;
+}
+
+// asked from the same branch that arms the threat arrow; drawn only if the position has not moved on
+function request_threat_human(fen, best) {
+    if (!config.threat_analysis || !config.threat_human) return;
+    if (config.variant && config.variant !== 'chess') return;    // the nets know one game
+    if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(best || '')) return;
+    let fenAfter;
+    try {
+        const c = new Chess(config.variant, fen);
+        if (!c.move({from: best.slice(0, 2), to: best.slice(2, 4), promotion: best[4]})) return;
+        fenAfter = c.fen();
+    } catch (e) { return; }
+    threat_human_reply(fenAfter).then((r) => {
+        if (!r) return;
+        if (last_eval.fen !== fen || last_eval.bestmove !== best) return;   // the moment has passed
+        last_eval.humanReply = r;
+        if (config.threat_analysis) draw_human_reply();
+        update_best_move_suffix();   // the reply arrives after the readout, same shape as the tablebase verdict
+    }).catch(() => {});
+}
+
+function draw_human_reply() {
+    if (last_eval.humanReply?.uci) {
+        // the human column's own colour, distinct from every engine arrow and the red threat
+        draw_move(last_eval.humanReply.uci, user_color('arrow_color_human_reply', '#a8657f'),
+                  PANEL_ROOT.getElementById('response-annotations'));
+    }
+}
+
+function human_reply_label() {
+    if (!config.threat_analysis || !config.threat_human || !last_eval.humanReply) return '';
+    const r = last_eval.humanReply;
+    return i18n('panel.msg.human_reply', 'A {elo} likely replies {move} ({pct}%)',
+                {elo: threat_human_band(), move: notate_after_best(r.uci), pct: (r.prob * 100).toFixed(0)});
+}
+
+// the reply is a move in the position AFTER our best move, so its SAN must be built there
+function notate_after_best(uci) {
+    try {
+        const c = new Chess(config.variant, last_eval.fen);
+        c.move({from: last_eval.bestmove.slice(0, 2), to: last_eval.bestmove.slice(2, 4), promotion: last_eval.bestmove[4]});
+        const mv = c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+        return mv ? mv.san : uci;
+    } catch (e) { return uci; }
 }
 
 function draw_threat() {
@@ -7688,6 +7823,7 @@ self.MephistoPanel = {
     // is a different thing and was a real bug when it lost your board -- that behaviour stays.
     suspend: () => {
         try { abandon_search(); } catch (e) { /* ignore */ }
+        try { dispose_threat_human(); } catch (e) { /* ignore */ }
         setup_fen = null; snap_crop = null; setup_view = null;
         try { snap_follow_stop(); } catch (e) { /* ignore */ }
         try { stash_setup_state(); } catch (e) { /* ignore */ } // setup_fen is null -> clears the stash

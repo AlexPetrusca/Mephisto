@@ -449,5 +449,14 @@
   "an.time": "Tempo de busca",
   "an.tip.time": "Quanto tempo o motor pensa em cada posição. O último entalhe é sem limite algum: continua a pensar até você seguir em frente.",
   "set.tip.grind_mode": "Lichess e Chess.com, e apenas enquanto o Autoplay está ligado. Quando uma partida termina, o Mephisto clica no botão que inicia a próxima - «Novo adversário» no Lichess, «Nova 1 min» (o seu ritmo) no Chess.com - para a sessão continuar sem você. O atraso abaixo é a sua janela para parar: feche o separador, navegue para outro lugar ou desligue isto durante esse tempo e nenhuma partida nova será procurada. Se o botão não estiver onde era esperado, nada acontece e a partida simplesmente fica terminada.",
-  "set.tip.grind_delay": "Quanto esperar após o fim de uma partida antes de iniciar a próxima. É a sua janela para parar - 0 inicia de imediato e o máximo são 600 segundos."
+  "set.tip.grind_delay": "Quanto esperar após o fim de uma partida antes de iniciar a próxima. É a sua janela para parar - 0 inicia de imediato e o máximo são 600 segundos.",
+  "set.threat_human": "Resposta humana (Maia)",
+  "set.tip.threat_human": "Beside the engine's best answer to your move, show what a HUMAN of the rating below would most likely reply -- the Maia model's prediction about the opponent you are actually facing, not the strongest reply on the board. Standard chess only; needs Show Threat Analysis.",
+  "set.threat_human_elo": "Rating da resposta",
+  "set.tip.threat_human_elo": "The rating the human reply is predicted at. Snapped to the nearest Maia net (1100-1900, 2200).",
+  "panel.msg.human_reply": "Um {elo} provavelmente responde {move} ({pct}%)",
+  "an.variant": "Variant",
+  "an.tip.variant": "Which rules this board plays by. Loading a PGN with a Variant tag sets it for you. Fairy-only variants switch the engine to Fairy-Stockfish; the human model and the tablebase are standard chess only.",
+  "an.engine2": "Second engine",
+  "an.tip.engine2": "A second engine on the same position, beside the first. The question it answers: does the small net see what the big one sees?"
 }

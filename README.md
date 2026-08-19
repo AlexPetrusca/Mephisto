@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.278-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.279-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -857,21 +857,12 @@ No schedule - added whenever I feel like it. Checked means shipped.
 ### Planned
 
 <details>
-<summary>32 items, sorted by upside and effort</summary>
+<summary>26 items, sorted by upside and effort</summary>
 
 **Quick wins.** Small changes with an obvious payoff. Empty once more as of v3.1.272 - all fourteen
 that were here shipped in one release.
 
 **Worth real work.** The ones that would change how this feels to use, and cost accordingly.
-
-- [ ] **Variants on the Analysis page** - `variant: 'chess'` is hardcoded in three places, so the one page
-  built for studying cannot open the Crazyhouse or Chess960 game the panel just played. Fairy-Stockfish and
-  its per-variant nets already ship; the board, the drops and the castling rules are the work.
-
-- [ ] **Two engines side by side** - the page contrasts an engine with a human model; contrasting two
-  ENGINES answers a different question - does the 15MB net see what the 112MB one sees - which is the thing
-  to settle before trusting the small one in a game. The rig already runs two engines at once for the
-  review's two passes, so the plumbing exists.
 
 - [ ] **Review the game you just finished, in one click** - when a game ends, the content script is holding
   the moves it scraped all game. Offering "review this" on the spot beats export, switch tab, paste - and
@@ -888,34 +879,6 @@ that were here shipped in one release.
 - [ ] **Recommend an engine for this machine** - the dropdown offers every engine and no guidance. The core
   count is known, and one short fixed-depth benchmark per engine would measure what this machine can
   actually run - then say so once, instead of letting a two-core laptop default into the 112MB net.
-
-- [ ] **A variation tree on the Analysis page** - playing a move truncates the line and continues from there,
-  which is right for "what if" and wrong for studying: the branch you just left is gone. Keeping branches, and
-  a way to walk back into them, is most of what separates a study board from a very good scratchpad.
-
-- [ ] **What a human of that rating would REPLY** - Threat Analysis shows the engine's best answer to your
-  move. The human model can answer the same question about the opponent you are actually facing, which is a
-  different and usually more useful prediction than the strongest reply on the board.
-
-- [ ] **A board reader that knows the rules** - the recogniser already keeps its runner-up for every square
-  (that is what the one-click square fix is built on). Nothing yet uses those runners-up to reject a decode
-  that cannot be a chess position: two white kings, nine pawns, a pawn on the back rank. Accuracy bought from
-  the rules rather than from the model, and it needs no retraining.
-
-- [ ] **A faster board recogniser** - partly answered in v3.1.255, and again in v3.1.269 by giving the model
-  more threads: the cap of 4 was measured against 5, 6 and 8 on a 10-core Mac (754/635/610/589/704ms at
-  2/4/5/6/8), so the rule is now 0.6 x cores capped at 6 - **589ms against 635ms**, and deliberately a no-op
-  below ten cores. Measured per read: decode 25ms, board
-  detection 84ms, position model 645ms. The position model is **already int8-quantised** (MatMulInteger /
-  ConvInteger), so quantisation is spent; caching (frame, board box, crop) took repeat reads to **2-3ms**, but a
-  board that genuinely changed still pays ~700ms. **WebGPU was tried and measured (v3.1.256): 774ms against the WASM build's 631ms on the same
-  machine and model - 23% slower**, because the int8 operators have no WebGPU implementation and fall back to the
-  CPU with transfer costs on top. It was not vendored (27MB of runtime for a loss). What is left is a genuinely
-  smaller model, which means retraining rather than converting.
-- [ ] **Grind Mode, the rest of it** - it starts the next game on Lichess and Chess.com and that is all it does.
-  What it cannot do yet: stop after N games or after a losing streak, respect a daily limit, or pick a different
-  time control than the one that just finished. It also has no idea whether *you* are still at the keyboard,
-  which is the thing that would make an unattended session safe rather than merely possible.
 
 - [ ] **Talking Mode** - the engine as a voice. Not a number and an arrow but a running commentary in plain
   language: what the position wants, what it is worried about, why the move it likes actually wins something.
@@ -1035,7 +998,55 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>70 features, newest first</summary>
+<summary>76 features, newest first</summary>
+
+- [x] **Variants on the Analysis page** (v3.1.279)
+  - The study board now plays all nine variants the panel plays: pick one, or just load a PGN - a
+    `[Variant]` tag or a bracket-holdings Crazyhouse FEN sets it for you. Fairy-only variants switch
+    the engine to Fairy-Stockfish (and clear an incompatible second engine) instead of failing.
+  - Crazyhouse is complete: pockets under and over the board, click a held piece then a square to
+    drop it, and the engine's own lines drop pieces back (`P@h3` in a verified live line). Chess960
+    castling reaches the mainline Stockfishes as `UCI_Chess960`; Three-Check's check counts ride the
+    FEN. The human model, the tablebase and the opening book stay standard-chess-only, by design.
+
+- [x] **A variation tree on the Analysis page** (v3.1.279)
+  - Playing a move off an earlier position no longer truncates the line: it opens a branch, shown
+    inline in the move list the way books print them. Click any move - mainline or variation - to
+    jump there; walking backwards and forwards follows the branch you are standing in.
+
+- [x] **Two engines side by side** (v3.1.279)
+  - A second engine column on the Analysis page, off by default. Both engines get the same position;
+    each keeps its own cache and its own depth/nodes readout, so "does the 15MB net see what the
+    112MB one sees" is now a thing the page answers directly (verified live: Stockfish 18 wanted
+    Bd3 at +1.24 where the small net wanted a3 at +1.17).
+
+- [x] **What a human of that rating would REPLY** (v3.1.279)
+  - Threat Analysis shows the engine's best answer to your move; a new toggle asks Maia the same
+    question - what would the opponent you are ACTUALLY facing most likely play - and draws it as its
+    own arrow with the probability in the readout ("A 1500 likely replies d5 (49%)"). The rating is
+    yours to set and snaps to the nearest Maia net; the prediction genuinely shifts with it (the same
+    position reads d5 at 49% for a 1500 and 39% for a 1900). Standard chess only, cached per
+    position, and a reply that arrives after the board has moved on is dropped rather than drawn.
+
+- [x] **A board reader that knows the rules** (v3.1.279)
+  - The recogniser now spends the runners-up it already had: a decode that cannot be chess - two
+    kings, nine pawns, a pawn on the back rank - is repaired by flipping the least-confident
+    offending square to its second choice, and only if that makes the board strictly more legal. A
+    repaired square joins the unsure chips marked "(rule fix)", where one click is the undo; what
+    could not be fixed is named instead of silently shipped. No retraining, exactly as the roadmap
+    hoped.
+
+- [x] **A faster board recogniser** (v3.1.279)
+  - Re-measured end to end, the answer is the one the last two rounds predicted: decode ~12ms, board
+    detection ~35ms, position model ~560ms steady-state, identical frames 0ms from the caches. The
+    model is already int8; a genuinely faster read means retraining a smaller one, so this item
+    closes as measured rather than pretending there is a knob left.
+  - The measuring found two real faults and fixed both: the stale-box recovery had been dead code
+    since the unsure-list was capped (it compared that 3-entry list against 8), and its first
+    replacement fired on EVERY fresh frame, because the int8 model's confidence sits under 0.9 on
+    all 64 squares of a perfect read. The recovery now triggers on what a stale box actually
+    produces - a board with no kings or almost no pieces - which was verified live by scrolling the
+    board out from under the cached box: one extra read, right answer, and quiet on normal frames.
 
 - [x] **A stale answer can no longer reach a live board** (v3.1.278)
   - Four times, a puzzle played a move that belonged to an EARLIER puzzle - correct for the position

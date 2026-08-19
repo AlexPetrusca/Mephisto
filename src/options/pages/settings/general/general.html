@@ -405,6 +405,23 @@
                 </div>
 
                 <div class="set-row set-toggle">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.threat_human" class="tooltipped" data-position="right" data-tooltip="Beside the engine's best answer to your move, show what a HUMAN of the rating below would most likely reply -- the Maia model's prediction about the opponent you are actually facing, not the strongest reply on the board. Standard chess only; needs Show Threat Analysis."><span data-i18n="set.threat_human">Human Reply (Maia)</span></span></div>
+                    <div class="set-ctl">
+                        <input id="threat_human_checkbox" type="checkbox" class="set-cb">
+                        <label for="threat_human_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.threat_human_elo" class="tooltipped" data-position="right" data-tooltip="The rating the human reply is predicted at. Snapped to the nearest Maia net (1100-1900, 2200)."><span data-i18n="set.threat_human_elo">Human Reply Rating</span></span></div>
+                    <div class="set-ctl">
+                        <input id="threat_human_elo_input" type="number" min="1100" max="2200" step="100" class="set-num">
+                    </div>
+                </div>
+
+                <div class="set-row set-toggle">
                     <div class="set-lbl">
                         <span data-i18n="set.explain_moves">Explain Moves</span>
                         <span class="set-tip tooltipped" data-position="left" data-i18n-tip="set.tip.name_the_tactic_behind_the"

@@ -449,5 +449,14 @@
   "an.time": "탐색 시간",
   "an.tip.time": "엔진이 각 국면을 생각하는 시간. 마지막 눈금은 무제한입니다: 다음으로 넘어갈 때까지 계속 생각합니다.",
   "set.tip.grind_mode": "Lichess와 Chess.com에서, Autoplay가 켜져 있는 동안에만. 게임이 끝나면 Mephisto가 다음 게임을 시작하는 버튼 - Lichess의 «새 상대», Chess.com의 «새 1분»(당신의 시간 제한) - 을 눌러 세션이 당신 없이 이어집니다. 아래 지연은 중단할 수 있는 시간입니다: 그 사이에 탭을 닫거나 다른 곳으로 이동하거나 이 설정을 끄면 새 게임을 찾지 않습니다. 버튼이 예상한 위치에 없으면 아무 일도 일어나지 않고 게임은 그대로 끝난 상태로 남습니다.",
-  "set.tip.grind_delay": "게임이 끝난 뒤 다음 게임을 시작하기까지 기다리는 시간. 이것이 중단할 수 있는 시간입니다 - 0은 즉시 시작하며 최대는 600초입니다."
+  "set.tip.grind_delay": "게임이 끝난 뒤 다음 게임을 시작하기까지 기다리는 시간. 이것이 중단할 수 있는 시간입니다 - 0은 즉시 시작하며 최대는 600초입니다.",
+  "set.threat_human": "인간 응수 (Maia)",
+  "set.tip.threat_human": "Beside the engine's best answer to your move, show what a HUMAN of the rating below would most likely reply -- the Maia model's prediction about the opponent you are actually facing, not the strongest reply on the board. Standard chess only; needs Show Threat Analysis.",
+  "set.threat_human_elo": "응수 레이팅",
+  "set.tip.threat_human_elo": "The rating the human reply is predicted at. Snapped to the nearest Maia net (1100-1900, 2200).",
+  "panel.msg.human_reply": "{elo}는 {move}로 응수할 확률 ({pct}%)",
+  "an.variant": "Variant",
+  "an.tip.variant": "Which rules this board plays by. Loading a PGN with a Variant tag sets it for you. Fairy-only variants switch the engine to Fairy-Stockfish; the human model and the tablebase are standard chess only.",
+  "an.engine2": "Second engine",
+  "an.tip.engine2": "A second engine on the same position, beside the first. The question it answers: does the small net see what the big one sees?"
 }

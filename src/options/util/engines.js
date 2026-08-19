@@ -25,6 +25,9 @@ const ENGINES = [
     {id: 'stockfish-18-nnue', label: 'Stockfish 18 (WASM)', kind: 'wasm'},
     {id: 'stockfish-18-small-nnue', label: 'Stockfish 18 Small (WASM)', kind: 'wasm'},
     {id: 'stockfish-11-hce', label: 'Stockfish 11 HCE (WASM)', kind: 'wasm'},
+    // The one engine here that plays the fairy variants; the offscreen loader picks the matching
+    // per-variant net and validates the variant against the engine's own declared list.
+    {id: 'fairy-stockfish-14-nnue', label: 'Fairy-Stockfish 14 (WASM)', kind: 'wasm'},
     {id: 'sf-native', label: 'Stockfish (native)', kind: 'native'},
     {id: 'fairy-native', label: 'Fairy-Stockfish (native)', kind: 'native'},
 ];
@@ -138,6 +141,12 @@ class WasmEngine {
             this.send(`setoption name Threads value ${this.opts.threads}`);
             this.send(`setoption name Hash value ${this.opts.hash}`);
             this.send(`setoption name MultiPV value ${this.opts.multipv}`);
+            // Chess960 castling is a UCI option on the MAINLINE Stockfishes, not a variant --
+            // exactly as the panel sends it at engine init (popup.js). Fairy is told through
+            // UCI_Variant by the offscreen loader instead, and Maia has no 960 at all.
+            if (this.opts.variant === 'fischerandom' && this.name !== 'fairy-stockfish-14-nnue') {
+                this.send('setoption name UCI_Chess960 value true');
+            }
         } else {
             // Maia has no threads and no hash -- it is one forward pass -- but it DOES read MultiPV,
             // and without this it answers with a single line. That made the human model look like it
