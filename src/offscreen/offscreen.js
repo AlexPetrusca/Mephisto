@@ -196,7 +196,12 @@ function maybeGoIdle() {
     if (busy()) return;
     idleTimer = setTimeout(() => {
         if (busy()) return;   // somebody came back
-        try { chrome.runtime.sendMessage({offscreenIdle: true}); } catch (e) { /* SW asleep */ }
+        // CLOSE OURSELVES, in the same tick as the check. Asking the service worker to do it opens
+        // a gap -- it is a message, then a promise, then the close -- and a panel that starts an
+        // engine inside that gap gets it killed a moment later: the engine is gone, the panel is
+        // still holding a search it thinks is running, and it waits forever on frames that will
+        // never come. Seen exactly once, as `owed=1 last-frame=2238ms go=go infinite`.
+        try { window.close(); } catch (e) { /* fall back to staying open; costs memory, not CPU */ }
     }, IDLE_CLOSE_MS);
 }
 

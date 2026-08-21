@@ -156,18 +156,6 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
   // A panel is about to init its engine -- make sure the offscreen host exists first (it may not,
   // if the SW just spun up). Reply when ready so the popup only sends 'init' to a live listener.
-  // The offscreen document has told us it has no engines left. Closing it is the ONLY thing that
-  // reclaims its workers: these WASM builds expose no terminate() (measured), so a dropped engine
-  // keeps its pthread pool -- and with it, whatever it was last told to search. Reported from the
-  // wild as ~400% CPU with nothing open. ensureOffscreen() builds a fresh one on the next use.
-  if (msg.offscreenIdle) {
-    chrome.offscreen.hasDocument().then(async (has) => {
-      if (!has) return;
-      try { await chrome.offscreen.closeDocument(); console.log('[Mephisto] offscreen closed (idle)'); }
-      catch (e) { /* a client came back in the meantime, or it is already gone */ }
-    }).catch(() => {});
-    return;
-  }
   if (msg.ensureOffscreen) {
     ensureOffscreen().then(() => sendResponse({ok: true}));
     return true; // async sendResponse

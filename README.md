@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.281-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.282-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -1003,7 +1003,21 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>81 features, newest first</summary>
+<summary>82 features, newest first</summary>
+
+- [x] **A silent engine is revived instead of waited on forever** (v3.1.282)
+  - The fix in v3.1.281 was incomplete, and a live report showed exactly how: `search active
+    owed=1 last-frame=2238ms go=go infinite` -- the panel holding a debt it was owed by a stopped
+    search, dropping every frame until that debt was paid, and an engine that had gone quiet and
+    would never pay it. The deadline meant to forgive that debt only ran when a frame ARRIVED, so
+    silence was the one case it could not cover. Score and speed keep showing their last values,
+    so from outside the panel simply stops producing lines.
+  - A search with no engine frame for four seconds is now treated as gone rather than thinking:
+    the unpayable debt is cleared, the board re-read, and if it is still silent after that the
+    engine is rebuilt -- its host can be torn down underneath a running panel.
+  - That teardown is no longer possible in the first place: the engine host now closes itself in
+    the same tick it finds itself empty. Asking the service worker to close it left a gap between
+    the check and the close, and an engine started inside that gap was killed a moment later.
 
 - [x] **The engine can no longer pin your cores with nothing open** (v3.1.281)
   - Reported from the wild: ~400% CPU with every window closed. The engine host is an offscreen

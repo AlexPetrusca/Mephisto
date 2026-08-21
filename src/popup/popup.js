@@ -2263,7 +2263,7 @@ function on_engine_response(message) {
     }
 
     last_info_at = Date.now();   // the panel is HEARING the engine (see search_state for why)
-    last_info_at = Date.now();   // the panel is HEARING the engine (see search_state for why)
+    revive_attempts = 0;         // ...so whatever we did to revive it worked
     if (message.includes('lowerbound') || message.includes('upperbound') || message.includes('currmove')) {
         return; // ignore these messages
     } else if (message.startsWith('bestmove')) {
@@ -6696,6 +6696,44 @@ const LIVE_CONFIG_KEYS = [
 ];
 
 let resync_after_config_change = false;
+
+// AN ENGINE THAT GOES QUIET USED TO BE FOREVER. The drop guard above (pending_stops) waits for a
+// bestmove that a stopped search owes -- and its deadline only gets a chance to run when a frame
+// ARRIVES, so silence never clears it. Reported from a live game as
+// `search active owed=1 last-frame=2238ms go=go infinite`: the panel holding a debt, dropping
+// everything, with a search it believed was running and an engine that was not answering. The
+// scores and speed on screen are the last ones from before it went quiet, so nothing looks wrong.
+// A search with no frames for this long is not thinking, it is gone.
+const ENGINE_SILENT_MS = 4000;
+const REVIVE_GAP_MS = 8000;    // never faster than this, so a revive cannot become a loop
+let last_revive_at = 0;
+let revive_attempts = 0;
+
+function revive_if_engine_silent() {
+    if (!PANEL_BOOTED || !search_active) return;
+    if (!last_info_at || Date.now() - last_info_at < ENGINE_SILENT_MS) return;
+    if (Date.now() - last_revive_at < REVIVE_GAP_MS) return;
+    last_revive_at = Date.now();
+    revive_attempts++;
+    console.warn(`Mephisto: no engine frame for ${Date.now() - last_info_at}ms during a search `
+                 + `(attempt ${revive_attempts}) -- reviving`);
+    set_idle_reason(i18n('panel.msg.engine_quiet', 'The engine went quiet - restarting the search.'));
+    abandon_search();
+    pending_stops = 0;      // AFTER abandon_search, which charges one: nothing will ever pay these
+    last_eval.fen = '';
+    // First try costs nothing: ask the page where the board is and search again. If it is still
+    // silent after that, the engine itself is gone (its host can be torn down underneath us), and
+    // only a rebuild brings it back.
+    if (revive_attempts >= 2) {
+        revive_attempts = 0;
+        console.warn('Mephisto: still silent -- rebuilding the engine');
+        try { initialize_engine(); } catch (e) { console.warn('Mephisto: engine rebuild failed', e); }
+        return;
+    }
+    fen_request_inflight = false;
+    request_fen();
+}
+setInterval(revive_if_engine_silent, 2000);
 
 function watch_config_changes() {
     try {

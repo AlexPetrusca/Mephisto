@@ -459,5 +459,6 @@
   "an.tip.variant": "Which rules this board plays by. Loading a PGN with a Variant tag sets it for you. Fairy-only variants switch the engine to Fairy-Stockfish; the human model and the tablebase are standard chess only.",
   "an.engine2": "Second engine",
   "an.tip.engine2": "A second engine on the same position, beside the first. The question it answers: does the small net see what the big one sees?",
-  "panel.msg.resyncing": "इंजन ने दूसरी स्थिति के लिए उत्तर दिया - बोर्ड फिर से पढ़ा जा रहा है।"
+  "panel.msg.resyncing": "इंजन ने दूसरी स्थिति के लिए उत्तर दिया - बोर्ड फिर से पढ़ा जा रहा है।",
+  "panel.msg.engine_quiet": "इंजन ने जवाब देना बंद कर दिया - खोज फिर से शुरू की जा रही है।"
 }
