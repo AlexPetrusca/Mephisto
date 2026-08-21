@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.282-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.283-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -1003,7 +1003,17 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>82 features, newest first</summary>
+<summary>83 features, newest first</summary>
+
+- [x] **The engine host reports its own state** (v3.1.283)
+  - A panel can only ever describe its own half: "I asked for a search and heard nothing." That
+    reads identically whether the engine is missing, still loading with commands piling up behind
+    it, or running fine and answering into the void - and diagnosing it from the panel's side
+    produced two wrong answers in a row. The report now carries the host's own account: whether
+    the document is open at all, which engines it holds, which of them are searching, what is
+    still loading, and how many commands are queued behind an engine that never came up.
+  - It also names a host that is open but not answering, rather than leaving that looking like an
+    engine that simply has nothing to say.
 
 - [x] **A silent engine is revived instead of waited on forever** (v3.1.282)
   - The fix in v3.1.281 was incomplete, and a live report showed exactly how: `search active

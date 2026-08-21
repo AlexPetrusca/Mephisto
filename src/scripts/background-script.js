@@ -588,6 +588,24 @@ const traceRing = [];
 // What goes in: enough to explain a failure, and nothing that identifies you. The extension id, the
 // full URL and the query string are all deliberately left out -- this is meant to be pasteable into
 // a public issue without a second thought.
+// The engine host's own account of itself, so a silent engine can be told apart from a missing one.
+async function offscreenStat() {
+  try {
+    if (!(await chrome.offscreen.hasDocument())) return 'document CLOSED';
+    const r = await Promise.race([
+      new Promise((res) => chrome.runtime.sendMessage({offscreenStat: true},
+                                                     (a) => { void chrome.runtime.lastError; res(a); })),
+      new Promise((res) => setTimeout(() => res(null), 1000)),
+    ]);
+    if (!r) return 'document open, NO ANSWER (host wedged)';
+    const q = Object.entries(r.queued || {}).filter(([, n]) => n).map(([k, n]) => `${k}:${n}`).join(' ');
+    return `document open  engines=${r.clients.join(',') || 'NONE'}`
+         + `  searching=${Object.keys(r.searching || {}).filter(k => r.searching[k]).join(',') || 'none'}`
+         + `${r.loading?.length ? '  loading=' + r.loading.join(',') : ''}`
+         + `${q ? '  queued=' + q : ''}`;
+  } catch (e) { return 'unavailable: ' + String(e).slice(0, 60); }
+}
+
 async function buildDiagnostics(ctx = {}) {
   const m = chrome.runtime.getManifest();
   const assets = await checkBundledAssets();
@@ -611,6 +629,7 @@ async function buildDiagnostics(ctx = {}) {
     // engine-side state: asked/answering/dropping. "It stopped evaluating" reads identically for
     // all three from outside the panel (see search_state in popup.js).
     ctx.search ? `search    ${ctx.search}` : null,
+    `host      ${await offscreenStat()}`,
     ctx.toggles ? `toggles   ${ctx.toggles}` : null,
     ctx.content ? `content   ${ctx.content}` : null,
     // The answer the panel chose for the last puzzle position, beside the squares the content script

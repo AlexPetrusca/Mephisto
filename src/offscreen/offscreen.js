@@ -319,6 +319,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             .catch(e => sendResponse({error: String(e)}));
         return true;
     }
+    // WHAT THE HOST ACTUALLY HOLDS. The panel can only report its own side -- "I asked for a search
+    // and heard nothing" -- which is the same story whether the engine is missing, never finished
+    // loading, or is running fine and answering into the void. Two rounds of guessing at that from
+    // the panel's half is what this exists to end.
+    if (msg && msg.offscreenStat) {
+        sendResponse({clients: Object.keys(clients), searching: {...searching},
+                      loading: [...loading], queued: Object.fromEntries(
+                          Object.entries(pending).map(([k, v]) => [k, v.length]))});
+        return true;
+    }
     if (!msg || !msg.toOffscreen) return;
     const {clientId, cmd} = msg;
     lastSeen[clientId] = Date.now();   // any word from the panel renews its lease
