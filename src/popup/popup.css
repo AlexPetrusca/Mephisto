@@ -363,10 +363,14 @@ html, body {
 }
 
 /* alternative engine lines under the board (visible when Multi Lines > 1);
-   sized so all 5 lines (the slider max) fit WITHOUT scrolling: 5 x 21px < 107px */
+   sized so all 5 lines (the slider max) fit WITHOUT scrolling: 5 x 21px = 105px.
+   The .alt-head row ("EVAL" / "PROBABILITY") lives INSIDE this box and was added after the cap was
+   set, so at 107px the fifth line was clipped through the middle -- which on screen reads as the
+   line below (#move-reason) overlapping it. 14px header + 105px rows = 119px, plus the same few px
+   of slack the original had. */
 #alt-lines {
     width: 368px;
-    max-height: 107px;
+    max-height: 122px;
     margin: 6px 0 0 5px;
     padding: 0 4px;
     overflow-y: hidden;
@@ -1242,7 +1246,7 @@ body.mephisto-dark #game-detection.unsupported { color: #ff7a70; }
     /* a step up from 12px: these are the engine's other candidate moves, not a footnote */
     font: 13.5px/21px -apple-system, 'Roboto', system-ui, sans-serif !important;
     color: var(--mp-dim) !important;
-    max-height: 108px;
+    max-height: 122px;   /* header + 5 rows, as above */
     font-variant-numeric: tabular-nums;
 }
 #alt-lines .alt-eval { color: var(--mp-text); font-variant-numeric: tabular-nums; font-weight: 600; }

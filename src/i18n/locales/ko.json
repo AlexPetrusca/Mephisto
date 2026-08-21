@@ -458,5 +458,6 @@
   "an.variant": "Variant",
   "an.tip.variant": "Which rules this board plays by. Loading a PGN with a Variant tag sets it for you. Fairy-only variants switch the engine to Fairy-Stockfish; the human model and the tablebase are standard chess only.",
   "an.engine2": "Second engine",
-  "an.tip.engine2": "A second engine on the same position, beside the first. The question it answers: does the small net see what the big one sees?"
+  "an.tip.engine2": "A second engine on the same position, beside the first. The question it answers: does the small net see what the big one sees?",
+  "panel.msg.resyncing": "엔진이 다른 국면에 대해 응답했습니다 - 보드를 다시 읽는 중입니다."
 }

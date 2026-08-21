@@ -1326,6 +1326,16 @@ chrome.runtime.onMessage.addListener((msg) => {
 // cannot fire in a position it was not meant for.
 let maia2 = null; // {level, doneFen, pending: {fen, line, timer}} -- lazily created per panel
 
+// Renew this panel's lease on the offscreen engine while a search is running. The engine host
+// cannot see whether this panel still exists -- a navigation or a crashed tab takes the panel with
+// no teardown -- so without this a `go infinite` keeps every core busy for the life of the browser.
+// Only while searching: an idle engine burns nothing, so there is nothing to keep alive.
+setInterval(() => {
+    if (!search_active) return;
+    try { chrome.runtime.sendMessage({toOffscreen: true, clientId: ENGINE_CLIENT, cmd: 'ping'}); }
+    catch (e) { /* SW/offscreen gone -- the lease expiring is exactly the right outcome */ }
+}, 15000);
+
 function maia2_client() { return ENGINE_CLIENT + ':m2'; }
 
 function maia2_dispose() {
@@ -1653,6 +1663,40 @@ function on_engine_error(message) {
         .finally(() => engine_restarting = false);
 }
 
+// Is this move even possible in the position the panel is holding? chess.js THROWS on an illegal
+// move rather than returning null, so the try/catch is the test. Unparseable (a variant chess.js
+// does not know, a FEN we never had) counts as legal: this guard exists to catch a stale engine,
+// not to become a second opinion on the rules.
+function move_possible_here(fen, uci) {
+    if (!fen || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci || '')) return true;
+    try {
+        const c = new Chess(config.variant, fen);
+        return !!c.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+    } catch (e) { return String(e).includes('Invalid move') ? false : true; }
+}
+
+let last_resync_at = 0;
+const RESYNC_MIN_GAP_MS = 1500;   // one recovery per position change, not a storm of them
+
+// WHEN THE ENGINE IS ANSWERING ABOUT A POSITION WE HAVE LEFT. The panel used to draw it anyway,
+// which is how a move from a square holding the OPPONENT'S KING ends up on screen as "White to
+// play, best move is g8...", and how an already-played rook move came back as an illegal
+// suggestion. The scores and NPS keep updating from the same frames, so nothing looks broken --
+// it just quietly says something impossible. Both were reported from live games.
+// This cannot be repaired from here (the engine is mid-search on the wrong position), so treat it
+// as what it is: we are out of sync. Stop, and ask the page for the position it has right now.
+function engine_out_of_sync(best) {
+    if (Date.now() - last_resync_at < RESYNC_MIN_GAP_MS) return;
+    last_resync_at = Date.now();
+    console.warn(`Mephisto: engine answered ${best}, impossible in ${last_eval.fen} -- re-syncing`);
+    set_idle_reason(i18n('panel.msg.resyncing',
+        'The engine answered for a different position - re-reading the board.'));
+    abandon_search();
+    last_eval.fen = '';
+    fen_request_inflight = false;
+    request_fen();
+}
+
 function on_engine_best_move(best, threat, isTerminal=false) {
     if (is_remote()) {
         last_eval.activeLines = last_eval.lines.length;
@@ -1685,6 +1729,10 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         }
         clear_next_move_eta(); // game over: no move coming, drop any countdown started at search time
         toggle_calculating(false);
+        return;
+    } else if (!move_possible_here(last_eval.fen, best)) {
+        // not our position any more: draw nothing, play nothing, and get back in step
+        engine_out_of_sync(best);
         return;
     } else if (config.simon_says_mode) {
         if (toplay.toLowerCase() === our_side()) {
@@ -4066,7 +4114,6 @@ function on_new_pos(fen, startFen, moves) {
     // a re-detect), which leaves `forPush` null and falls back to the older check.
     const pushKeyForThisPosition = incoming_push_key;
     incoming_push_key = null;
-    last_pos_args = {fen, startFen, moves};   // for the re-drive after a settings change
     // BEFORE the repaint and before the annotations are cleared: a misread must leave the panel
     // exactly as it was, and both of those are visible changes.
     if (puzzle_misread(fen)) {
@@ -6648,27 +6695,7 @@ const LIVE_CONFIG_KEYS = [
     'hotkeys',
 ];
 
-let last_pos_args = null;      // the last position handed to on_new_pos
-let config_resume_timer = null;
-const CONFIG_RESUME_MS = 1200; // long enough for a real re-push to beat it on any page measured here
-
-// A live toggle changes the SEARCH, not the position, so the panel must ask the engine again about
-// the position it is already on. It does that by asking the page to re-push -- and when that push
-// does not come (the scrape deduped, the page between mutations, a content script that never got
-// the message) nothing is asked of the engine at all and the panel sits on the progress bar with
-// the last search's numbers under it, looking frozen. MEASURED on chess.com: toggling Autoplay
-// mid-game left the engine idle with no frame arriving for as long as the position stayed put.
-// Re-drive what we already hold if the push has not landed.
-function resume_after_config_change() {
-    clearTimeout(config_resume_timer);
-    const held = last_pos_args;
-    if (!held) return;
-    config_resume_timer = setTimeout(() => {
-        if (last_eval.fen || search_active) return;   // the re-push arrived and did the work
-        console.log('Mephisto: no re-push after a settings change - re-analysing the held position');
-        on_new_pos(held.fen, held.startFen, held.moves);
-    }, CONFIG_RESUME_MS);
-}
+let resync_after_config_change = false;
 
 function watch_config_changes() {
     try {
@@ -6712,13 +6739,25 @@ function watch_config_changes() {
                 if (['help_mode', 'autoplay', 'clock_mode', 'mirror_mode', 'manual_mode'].includes(key)) {
                     abandon_search();
                     last_eval.fen = '';
-                    resume_after_config_change();
+                    resync_after_config_change = true;
                 }
             }
             if (!touched) return;
             sync_quick_settings();       // the panel's own switches must show the new state
             keep_alive(keep_alive_wanted(), false); // resume-only: no gesture here
             push_config();               // and the content script has to be told, or nothing changes
+            // A go-mode change abandoned the search, so something has to ask the engine again.
+            // push_config alone leans on the page choosing to re-push, which does not always land --
+            // measured on chess.com, the panel sat on the progress bar with no engine frame for as
+            // long as the board stayed still. Ask the page for the position it has RIGHT NOW: the
+            // same recovery the Re-detect button runs. This used to REPLAY the position the panel
+            // was holding, which put the previous position's move on screen (an illegal one, once
+            // the board had moved on) -- a held position is exactly what must not be trusted here.
+            if (resync_after_config_change) {
+                resync_after_config_change = false;
+                fen_request_inflight = false;   // don't let an in-flight poll's guard swallow this
+                request_fen();
+            }
         });
     } catch (e) { /* no chrome.storage here -> options changes need a panel reload, as before */ }
 }

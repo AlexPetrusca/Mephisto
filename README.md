@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.280-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.281-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -1003,7 +1003,39 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>78 features, newest first</summary>
+<summary>81 features, newest first</summary>
+
+- [x] **The engine can no longer pin your cores with nothing open** (v3.1.281)
+  - Reported from the wild: ~400% CPU with every window closed. The engine host is an offscreen
+    document, which is not a tab, so nothing tore it down when a panel died without saying goodbye
+    -- a page navigation, a reload, a crashed tab. The engine simply kept whatever it was last
+    told, and with Autoplay off that is an open-ended search on every thread.
+  - Two things made it survive every teardown we thought we had. These WASM builds expose **no
+    `terminate()`** (measured: `undefined`), so the call relying on it had always been a silent
+    no-op. And the `quit` sent in its place kills the engine's main thread before it processes the
+    stop, leaving the worker threads spinning: measured 395% before a dispose and 394% after it.
+  - Now: dispose sends `stop` and never `quit` (403% -> 0%, measured); a search whose panel has
+    gone quiet for a minute is stopped on a lease, which covers navigation and crashes rather than
+    only the tab-close case that was never the problem; and once the last engine is gone the
+    document closes, which is the only thing that actually hands the workers back (5 -> 0).
+
+- [x] **The panel says nothing rather than something impossible** (v3.1.281)
+  - Two live sightings: a suggestion of a rook move that had already been played (illegal in the
+    position on screen), and a move announced from a square holding the opponent's king. Both are
+    the same fault -- the engine answering about a position the panel has moved past -- and the
+    scores and speed keep updating from those same frames, so nothing looks broken. It just
+    quietly says something that cannot be done.
+  - A move that is impossible in the position the panel holds is no longer drawn, played or
+    announced. It is treated as what it is -- out of step -- and the board is re-read.
+  - The cause was a recovery added one release earlier: after a settings change it re-analysed the
+    position the panel was *holding*, which is exactly the thing that can be stale. It now asks the
+    page for the position it has right now, the same recovery the Re-detect button performs.
+
+- [x] **The fifth engine line is no longer clipped through the middle** (v3.1.281)
+  - With Multi Lines at 5 the candidate list is 119px of content in a 108px box, so the last row
+    was sliced in half and read as though the line below it was overlapping. The cap was written
+    as "5 rows x 21px" before the EVAL / PROBABILITY header was added inside the same box, and
+    the header was never counted.
 
 - [x] **Toggling a setting mid-game can no longer freeze the evaluation** (v3.1.280)
   - Reported live and reproduced the same hour: flip Autoplay off (or on) during a game and the
