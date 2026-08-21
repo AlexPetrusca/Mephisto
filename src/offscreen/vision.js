@@ -11,7 +11,7 @@ import * as ort from '/lib/ort/ort.wasm.bundle.min.mjs';
 
 // ort env (threads, wasm paths) is configured ONCE in ort-env.js, shared by every session
 // creator so the thread count cannot depend on which module happened to load first.
-import '/src/offscreen/ort-env.js';
+import {readyEnv} from '/src/offscreen/ort-env.js';
 
 const SYMS = ['P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k']; // upstream src/games.py order
 const EMPTY = 12;      // the 13th channel is "empty"
@@ -26,6 +26,7 @@ async function session(path) {
 }
 
 async function ready() {
+    await readyEnv();   // the thread budget must be in place BEFORE the first session is created
     if (!bboxSession) bboxSession = await session('/lib/engine/vision/bbox.onnx');
     if (!posSession) posSession = await session('/lib/engine/vision/position.onnx');
 }
@@ -194,6 +195,194 @@ function repairPlacement(squares) {
 }
 
 // squares (rank 8 first, file a first) -> FEN placement, after any repairs
+// --- READING THE BOARD'S OWN COORDINATES --------------------------------------------------------
+// The board usually says which way up it is, in the corner labels it draws itself, and that beats
+// any inference from the pieces. Both major sites label the bottom row's corner squares -- lichess
+// puts the rank digit on the RIGHT edge and the file letter bottom-left, chess.com the digit on the
+// LEFT and the letter bottom-right -- so between the two bottom corner squares there is always a
+// digit and a letter, wherever inside them they sit.
+//
+// This does NOT do OCR. It only needs to tell a handful of glyphs apart, and their TOPOLOGY does
+// that without a model, a font, or a training set: counting enclosed holes,
+//     1 -> 0     h -> 0     a -> 1     8 -> 2
+// and two holes is unique to the 8. So "an 8 in either bottom corner" means Black is at the bottom,
+// and an "a" tells you the same thing by WHICH corner it is in. Anything unreadable says nothing at
+// all and the caller falls back to the pieces -- a wrong answer here is worse than no answer.
+//
+// MEASURED against real boards, both orientations: chess.com is decided here, correctly, both ways
+// up. Lichess is NOT -- its bottom corners yielded no readable glyph one way up and fragments with
+// no clean topology the other (a JPEG-scale 8 breaking into two open pieces), so it declines and
+// the piece heuristic takes it, also correctly both ways. Declining is the designed outcome, not a
+// gap to paper over: loosening this until lichess reads would be trading a right answer for a
+// confident one.
+
+// Enclosed regions of background inside an ink blob. Pure array work, so the ladder can drive it:
+// flood the background inward from the border, and anything background it could not reach is a hole.
+function countHoles(mask, w, h) {
+    const seen = new Uint8Array(w * h);
+    const stack = [];
+    for (let x = 0; x < w; x++) { stack.push(x, x + (h - 1) * w); }
+    for (let y = 0; y < h; y++) { stack.push(y * w, w - 1 + y * w); }
+    while (stack.length) {
+        const i = stack.pop();
+        if (i < 0 || i >= w * h || seen[i] || mask[i]) continue;
+        seen[i] = 1;
+        const x = i % w, y = (i / w) | 0;
+        if (x > 0) stack.push(i - 1);
+        if (x < w - 1) stack.push(i + 1);
+        if (y > 0) stack.push(i - w);
+        if (y < h - 1) stack.push(i + w);
+    }
+    let holes = 0;
+    for (let i = 0; i < w * h; i++) {
+        if (mask[i] || seen[i]) continue;
+        holes++;                                  // a background region the outside could not reach
+        const s = [i];
+        while (s.length) {
+            const j = s.pop();
+            if (j < 0 || j >= w * h || seen[j] || mask[j]) continue;
+            seen[j] = 1;
+            const x = j % w, y = (j / w) | 0;
+            if (x > 0) s.push(j - 1);
+            if (x < w - 1) s.push(j + 1);
+            if (y > 0) s.push(j - w);
+            if (y < h - 1) s.push(j + w);
+        }
+    }
+    return holes;
+}
+
+// Ink blobs in one square, as {holes, w, h, cx, cy} -- coordinates relative to the square.
+// A label is SMALL and sits against an edge; the piece is large and central, which is what keeps a
+// knight's eye or a rook's crenellations from being read as a glyph.
+function labelBlobs(canvas, size) {
+    const d = canvas.getContext('2d', {willReadFrequently: true}).getImageData(0, 0, size, size).data;
+    // the square's own colour, sampled from a ring just inside its edge (a label never fills that)
+    const ring = [];
+    for (let k = 0; k < size; k += 2) {
+        for (const [x, y] of [[k, 1], [k, size - 2], [1, k], [size - 2, k]]) {
+            const i = (y * size + x) * 4;
+            ring.push([d[i], d[i + 1], d[i + 2]]);
+        }
+    }
+    const med = [0, 1, 2].map(c => {
+        const v = ring.map(p => p[c]).sort((a, b) => a - b);
+        return v[v.length >> 1];
+    });
+    const INK = 60;   // colour distance that counts as "not the square"
+    const mask = new Uint8Array(size * size);
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+        const dist = Math.abs(d[i] - med[0]) + Math.abs(d[i + 1] - med[1]) + Math.abs(d[i + 2] - med[2]);
+        mask[p] = dist > INK ? 1 : 0;
+    }
+    // label-sized components only
+    const seen = new Uint8Array(size * size);
+    const out = [];
+    for (let start = 0; start < size * size; start++) {
+        if (!mask[start] || seen[start]) continue;
+        const cells = [];
+        const s = [start];
+        let x0 = size, x1 = 0, y0 = size, y1 = 0;
+        while (s.length) {
+            const j = s.pop();
+            if (j < 0 || j >= size * size || seen[j] || !mask[j]) continue;
+            seen[j] = 1; cells.push(j);
+            const x = j % size, y = (j / size) | 0;
+            if (x < x0) x0 = x; if (x > x1) x1 = x;
+            if (y < y0) y0 = y; if (y > y1) y1 = y;
+            if (x > 0) s.push(j - 1);
+            if (x < size - 1) s.push(j + 1);
+            if (y > 0) s.push(j - size);
+            if (y < size - 1) s.push(j + size);
+        }
+        const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+        if (bw > size * 0.34 || bh > size * 0.34) continue;   // that is a piece, not a label
+        if (bw < 3 || bh < 5 || cells.length < 6) continue;    // that is noise
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const edge = Math.min(cx, cy, size - cx, size - cy) / size;
+        if (edge > 0.28) continue;                             // labels hug an edge; pieces do not
+        // hole-count within the blob's own box, padded so the border flood has somewhere to start
+        const pw = bw + 2, ph = bh + 2;
+        const sub = new Uint8Array(pw * ph);
+        for (const j of cells) {
+            const x = j % size - x0 + 1, y = ((j / size) | 0) - y0 + 1;
+            sub[y * pw + x] = 1;
+        }
+        out.push({holes: countHoles(sub, pw, ph), w: bw, h: bh, cx, cy});
+    }
+    return out;
+}
+
+// 'black' (Black at the bottom), 'white', or null when the board did not say.
+function cornerLabelVerdict(bitmap, box) {
+    try {
+        const s = Math.round(Math.min(box.w, box.h) / 8);
+        if (s < 24) return null;                    // too small to carry a readable label
+        const read = (sx, sy) => labelBlobs(draw(bitmap, s, s, sx, sy, s, s), s);
+        const left = read(box.x, box.y + box.h - s);
+        const right = read(box.x + box.w - s, box.y + box.h - s);
+        // an 8 is the only one of {1, 8, a, h} with two holes, and it can only be down there when
+        // the board is the other way up
+        if ([...left, ...right].some(b => b.holes === 2)) return 'black';
+        // ...and the 'a' says the same thing by which corner it turned up in
+        const aLeft = left.some(b => b.holes === 1), aRight = right.some(b => b.holes === 1);
+        if (aLeft && !aRight) return 'white';        // a-file on the left: White at the bottom
+        if (aRight && !aLeft) return 'black';        // a-file on the right: the board is turned round
+        return null;
+    } catch (e) { return null; }
+}
+
+// WHICH WAY ROUND WAS THE BOARD? The reader assumes White at the bottom, because an image carries
+// no side to move -- so a board shown from Black's side comes out rotated 180 degrees and every
+// answer about it is nonsense until someone presses Flip (user, following a stream where Black was
+// at the bottom).
+//
+// An earlier attempt at this was REVERTED, and the lesson was about the oracle, not the idea: it
+// guessed from "the white king is lower on screen", which is simply false in endgames. So this asks
+// the RULES instead, and only the parts of them that cannot be argued with:
+//   - pieces sit near their OWN home rank far more often than not
+// That is the whole signal, and it is a tendency rather than a law, so it only gets to speak when
+// it is lopsided. Anything short of that leaves the board alone: a WRONG auto-flip is worse than no
+// auto-flip, which is exactly how the first attempt earned its revert.
+//
+// The obvious harder rule -- "a pawn on rank 1 or 8 is impossible" -- is USELESS here, and the test
+// ladder is what caught me writing it anyway: a 180 rotation maps rank 1 onto rank 8, so a pawn on
+// a back rank is still on a back rank afterwards. It can never tell the two orientations apart.
+function orientationScore(placement) {
+    const ranks = placement.split('/');
+    if (ranks.length !== 8) return null;
+    const at = (r) => { // expand one FEN rank into 8 squares
+        const out = [];
+        for (const ch of ranks[r]) { if (/\d/.test(ch)) out.push(...Array(+ch).fill('')); else out.push(ch); }
+        return out.length === 8 ? out : null;
+    };
+    let home = 0;
+    for (let r = 0; r < 8; r++) {
+        const row = at(r);
+        if (!row) return null;
+        const rank = 8 - r;                       // FEN rank 0 is chess rank 8
+        for (const pc of row) {
+            if (!pc || pc.toLowerCase() === 'p') continue;   // pawns march, so they say nothing here
+            const white = pc === pc.toUpperCase();
+            home += (white ? (rank <= 2 ? 1 : 0) : (rank >= 7 ? 1 : 0));
+        }
+    }
+    return {home};
+}
+
+const rotate180 = (placement) => placement.split('/').reverse()
+    .map(r => [...r].reverse().join('')).join('/');
+
+// Returns true when the evidence that the board is upside down is strong enough to act on.
+function looksUpsideDown(placement) {
+    const asIs = orientationScore(placement);
+    const flipped = orientationScore(rotate180(placement));
+    if (!asIs || !flipped) return false;
+    // only a lopsided count gets a say: four more pieces sitting on their own home ranks the other
+    // way up. Openings and middlegames clear that easily; endgames do not, and are left alone.
+    return flipped.home - asIs.home >= 4;
+}
+
 function placementOf(squares) {
     const rows = [];
     for (let r = 0; r < 8; r++) {
@@ -259,7 +448,13 @@ async function readBoard(bitmap, box) {
     // lowCount is the STALE-BOX signal: `low` is the top-3 report for the UI, so its length says
     // nothing about how bad a read was. The re-detect below used to compare that ARRAY against 8,
     // which is never true -- the stale-box recovery had been dead since the report was capped.
-    const result = {placement: placementOf(squares), low, fixed, unresolved, lowCount: allLow.length};
+    const placement = placementOf(squares);
+    const result = {placement, low, fixed, unresolved, lowCount: allLow.length,
+                    orientationFrom: 'pieces',
+                    // reported, NOT applied here: the panel owns the flip (it also has to rotate
+                    // the arrows it draws back onto the screen), and a caller that disagrees can
+                    // simply ignore it.
+                    upsideDown: looksUpsideDown(placement)};
     lastCropHash = hash;
     lastRead = result;
     return result;
@@ -351,9 +546,15 @@ export async function recognize({dataUri, crop}) {
         }
         tRead = performance.now();
     }
+    // THE BOARD'S OWN LABELS OUTRANK ANY INFERENCE FROM THE PIECES. The home-rank tendency is a
+    // guess that declines in endgames; a coordinate the board drew itself is a fact. Only when the
+    // corners say nothing does the guess get a turn.
+    const labelled = cornerLabelVerdict(bitmap, box);
+    const upsideDown = labelled ? (labelled === 'black') : read.upsideDown;
     const answer = {
         placement: read.placement, low: read.low, lowCount: read.lowCount,
-        unresolved: read.unresolved, box,
+        unresolved: read.unresolved, upsideDown,
+        orientationFrom: labelled ? 'labels' : (read.upsideDown ? 'pieces' : 'none'), box,
         imageW: bitmap.width, imageH: bitmap.height,
         // what each stage cost, so "screen reading is slow" can be answered with numbers rather
         // than with a guess about which model is the expensive one

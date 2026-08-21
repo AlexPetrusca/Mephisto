@@ -25,9 +25,35 @@
 import * as ort from '/lib/ort/ort.wasm.bundle.min.mjs';
 
 ort.env.wasm.wasmPaths = '/lib/ort/';
-ort.env.wasm.numThreads = (typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated)
-    ? Math.max(1, Math.min(6, Math.floor((navigator.hardwareConcurrency || 2) * 0.6)))
-    : 1;
+// ...and then OVERRULED by a budget, because that argument optimises the wrong thing. The numbers
+// above are ONE read in isolation; following a board runs that read over and over, and six threads
+// held for as long as it follows is half a machine to watch something that changes every few
+// seconds. What matters is not how fast one read is but how much of the machine the feature may
+// take -- so the ceiling is a COUNT OF CORES, set by the user, and the speed is whatever that buys
+// (user: "i want it fast but not more than 2 cores default changable via the settings"). Two
+// threads read in ~754ms against ~589ms at six: barely slower per read, a third of the cores.
+const VISION_THREADS_DEFAULT = 2;
+const isolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+// A sane value from the first instant: the stored one needs an await, and a session created before
+// that lands would silently keep whatever was set at the time.
+ort.env.wasm.numThreads = isolated ? VISION_THREADS_DEFAULT : 1;
 ort.env.wasm.proxy = false;
 
-export { ort };
+// THE THREAD COUNT IS READ ONCE PER DOCUMENT. onnxruntime's wasm backend initialises at the FIRST
+// InferenceSession.create with whatever the env said at that moment, so every session creator must
+// await this first -- and a changed setting only takes effect the next time this host starts.
+let envReady = null;
+function readyEnv() {
+    if (envReady) return envReady;
+    envReady = (async () => {
+        if (!isolated) return;
+        try {
+            const {vision_threads: raw} = await chrome.storage.local.get('vision_threads');
+            const n = parseInt(JSON.parse(raw ?? 'null'), 10);
+            if (Number.isFinite(n)) ort.env.wasm.numThreads = Math.max(1, Math.min(8, n));
+        } catch (e) { /* no storage here, or nothing stored -- the default above stands */ }
+    })();
+    return envReady;
+}
+
+export { ort, readyEnv, VISION_THREADS_DEFAULT };

@@ -414,6 +414,47 @@
                     </div>
                 </div>
 
+                <div class="set-row">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.vision_threads" class="tooltipped" data-position="right" data-tooltip="How many CPU cores the screen reader may use. It runs a large model on every read, and while it FOLLOWS a board it does that over and over -- so this is a budget, not a speed dial: two cores read a board in about three quarters of a second, six in about six tenths. Takes effect the next time the engine host starts."><span data-i18n="set.vision_threads">Screen Reader Cores</span></span></div>
+                    <div class="set-ctl">
+                        <input id="vision_threads_input" type="number" min="1" max="8" step="1" class="set-num">
+                    </div>
+                </div>
+
+                <div class="set-row set-toggle">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.safety_net" class="tooltipped" data-position="right" data-tooltip="For when the moves are yours. Instead of telling you the best move, it reports the SET of moves that keep the result -- and in its quiet mode it says nothing at all until that set gets small enough to be a warning. Needs Multiple Lines above 1, since the set is drawn from the lines the engine was asked for."><span data-i18n="set.safety_net">Playing with a Net</span></span></div>
+                    <div class="set-ctl">
+                        <input id="safety_net_checkbox" type="checkbox" class="set-cb">
+                        <label for="safety_net_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row" id="safety_net_mode_row">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.safety_net_mode" class="tooltipped" data-position="right" data-tooltip="Quiet: silent until only a few moves still hold, which is the moment you can throw the game away. Live: always shows the moves that keep the result while it is your turn."><span data-i18n="set.safety_net_mode">Net Mode</span></span></div>
+                    <div class="set-ctl">
+                        <select name="safety_net_mode" id="safety_net_mode_select">
+                            <option value="quiet" data-i18n="set.net_quiet">Quiet - only when it matters</option>
+                            <option value="live" data-i18n="set.net_live">Live - always show what holds</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="set-row" id="safety_net_drop_row">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.safety_net_drop" class="tooltipped" data-position="right" data-tooltip="How much of your winning chances a move may cost and still count as holding, in win% -- the same ruler the Game Review judges by, where 5 is an inaccuracy, 10 a mistake and 20 a blunder."><span data-i18n="set.safety_net_drop">Net Tolerance (win% drop)</span></span></div>
+                    <div class="set-ctl">
+                        <input id="safety_net_drop_input" type="number" min="1" max="50" step="1" class="set-num">
+                    </div>
+                </div>
+
+                <div class="set-row" id="safety_net_max_row">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.safety_net_max" class="tooltipped" data-position="right" data-tooltip="In quiet mode, how few moves must be left before it speaks. Three means: say nothing unless three or fewer moves still hold."><span data-i18n="set.safety_net_max">Warn When At Most</span></span></div>
+                    <div class="set-ctl">
+                        <input id="safety_net_max_input" type="number" min="1" max="5" step="1" class="set-num">
+                    </div>
+                </div>
+
                 <div class="set-row" id="threat_human_elo_row">
                     <div class="set-lbl"><span data-i18n-tip="set.tip.threat_human_elo" class="tooltipped" data-position="right" data-tooltip="The rating the human reply is predicted at: 600-2600, any value - Maia-3 is one net with a live rating dial, so nothing is snapped."><span data-i18n="set.threat_human_elo">Human Reply Rating</span></span></div>
                     <div class="set-ctl">

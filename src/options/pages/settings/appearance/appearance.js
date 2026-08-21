@@ -33,6 +33,7 @@ class AppearanceSettings extends SettingsPage {
             ['arrow_color_line5', '#9333ea'], ['arrow_color_forced_ours', '#d81b8c'],
             ['arrow_color_forced_theirs', '#00a693'], ['arrow_color_pv_walk', '#8f8f8f'],
             ['arrow_color_threat', '#bf0000'], ['arrow_color_book', '#14b8a6'],
+            ['arrow_color_human_reply', '#a8657f'], ['arrow_color_safety_net', '#4c9f70'],
         ];
         for (const [key, dflt] of ARROW_COLORS) {
             const el = this.registerFormElement(key, key + ':', 'input', '');

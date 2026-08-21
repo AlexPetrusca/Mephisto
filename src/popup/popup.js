@@ -434,6 +434,12 @@ async function initPanel(root, tabId) {
         // the HUMAN's likely reply beside the engine's best answer -- a different and usually more
         // useful prediction about the opponent actually being faced. Standard chess only (Maia).
         threat_human: JSON.parse(MephistoConfig.get('threat_human')) || false,
+        // Playing with a net: opt-in, and quiet by default -- it is meant to be the thing that says
+        // nothing until it matters, not another readout competing for attention.
+        safety_net: JSON.parse(MephistoConfig.get('safety_net')) || false,
+        safety_net_mode: JSON.parse(MephistoConfig.get('safety_net_mode')) || 'quiet',
+        safety_net_drop: JSON.parse(MephistoConfig.get('safety_net_drop')) || 10,
+        safety_net_max: JSON.parse(MephistoConfig.get('safety_net_max')) || 3,
         threat_human_elo: JSON.parse(MephistoConfig.get('threat_human_elo')) || 1500,
         simon_says_mode: JSON.parse(MephistoConfig.get('simon_says_mode')) || false,
         autoplay: (autoplay != null) ? autoplay : false,
@@ -1686,6 +1692,10 @@ const RESYNC_MIN_GAP_MS = 1500;   // one recovery per position change, not a sto
 // This cannot be repaired from here (the engine is mid-search on the wrong position), so treat it
 // as what it is: we are out of sync. Stop, and ask the page for the position it has right now.
 function engine_out_of_sync(best) {
+    // While the panel owns its position -- a pasted FEN, and above all the screen reader re-reading
+    // a board twice a second -- being a move behind is NORMAL: the next read supersedes this answer
+    // on its own. Refusing to draw the impossible move is still right; announcing it is not.
+    if (setup_fen) return;
     if (Date.now() - last_resync_at < RESYNC_MIN_GAP_MS) return;
     last_resync_at = Date.now();
     console.warn(`Mephisto: engine answered ${best}, impossible in ${last_eval.fen} -- re-syncing`);
@@ -1782,6 +1792,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
                 clear_annotations();
                 draw_threat();
                 draw_human_reply();
+                draw_safety_net();
             }
         }
         // Manual Mode plays on YOUR keypress and nothing else. It normally never reaches here because
@@ -1873,6 +1884,7 @@ function on_engine_best_move(best, threat, isTerminal=false) {
         if (config.threat_analysis) {
             draw_threat();
             draw_human_reply();
+            draw_safety_net();
         }
     }
 
@@ -2055,7 +2067,8 @@ const PV_WALK_COLOR = '#8f8f8f';
 // shades from the base, so one picker recolours a whole family and the depth-read survives.
 const ARROW_COLOR_KEYS = ['arrow_color_line1', 'arrow_color_line2', 'arrow_color_line3',
     'arrow_color_line4', 'arrow_color_line5', 'arrow_color_forced_ours',
-    'arrow_color_forced_theirs', 'arrow_color_pv_walk', 'arrow_color_threat', 'arrow_color_book'];
+    'arrow_color_forced_theirs', 'arrow_color_pv_walk', 'arrow_color_threat', 'arrow_color_book',
+    'arrow_color_human_reply', 'arrow_color_safety_net'];
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 function user_color(key, dflt) { const v = config && config[key]; return HEX_COLOR_RE.test(v || '') ? v : dflt; }
 function shade_hex(hex, f) {
@@ -3607,6 +3620,11 @@ function rotate_fen_180(fen) {
 // call rather than delaying it. This is the fastest a screen read can legally happen, so it is the
 // floor between reads -- not a pacing choice of ours.
 const SNAP_QUOTA_MS = 500;
+// HOW HARD FOLLOWING IS ALLOWED TO PUSH: as hard as Chrome's capture quota allows. Slowing this
+// down was the wrong lever -- what the machine actually spends is threads x duty cycle, and the
+// THREAD BUDGET (see ort-env.js, default 2 cores, settable) bounds that no matter how often a read
+// fires. Pacing on top of a budget just makes it late for no saving.
+const SNAP_FOLLOW_MS = SNAP_QUOTA_MS;
 let snap_follow_timer = null;
 let snap_follow_busy = false;
 
@@ -3640,7 +3658,7 @@ function snap_follow_start() {
         // Measured from the START of the last read, so a slow read costs nothing extra: if it
         // already took longer than the quota window, the next one fires immediately.
         const since = Date.now() - t0;
-        snap_follow_timer = setTimeout(loop, Math.max(0, SNAP_QUOTA_MS - since));
+        snap_follow_timer = setTimeout(loop, Math.max(0, SNAP_FOLLOW_MS - since));
     };
     snap_follow_timer = setTimeout(loop, 0);
     update_snap_follow_button();
@@ -3883,7 +3901,16 @@ async function snap_position(crop) {
     // The recogniser reports placement only: it cannot know whose move it is or the castling rights.
     // Assume white to move with no rights -- both are then correctable (the header king switch flips
     // the turn, and the FEN box is right there showing what was read).
-    const fen = `${res.placement} w - - 0 1`;
+    // TURN IT ROUND IF IT IS PLAINLY UPSIDE DOWN. An image carries no side to move, so the reader
+    // assumes White at the bottom -- and a board shown from Black's side comes out rotated, with
+    // every answer about it wrong until someone presses Flip. The recogniser only says so when the
+    // board's own coordinates say so, or failing that when the rules are lopsided about it.
+    let placement = res.placement, auto_flipped = false;
+    if (res.upsideDown) {
+        placement = rotate_fen_180(`${placement} w - - 0 1`).split(' ')[0];
+        auto_flipped = true;
+    }
+    const fen = `${placement} w - - 0 1`;
     if (!is_legal_position(fen)) {
         setup_fen_msg(i18n('panel.fen.illegal_read', 'Read a position that is not legal - try dragging a box around the board'));
         request_drag_select();
@@ -3901,14 +3928,17 @@ async function snap_position(crop) {
     // no way to act on it short of reading the whole board again. Each chip now applies the
     // model's second choice for that square, which is what a misread almost always is.
     render_unsure(res.low || [], res.unresolved || []);
+    // say it out loud: an automatic 180 is exactly the kind of thing that must never happen quietly
+    if (auto_flipped) setup_fen_msg(i18n('panel.fen.auto_flipped',
+        'Read from screen - Black was at the bottom, so the board was turned round. Flip board undoes it.'));
     last_eval.fen = ''; prev_ply_count = 0;
     opp_spend = opp_clock_mark = last_our_eval = null;
     explorer_out_of_book = false; explorer_data = null; explorer_empty_streak = 0;
     abandon_search();
     turn = 'w';
-    setup_view = null;          // a new capture has not been told which way up it is yet
-    snap_flipped = false;       // ...and neither has its follow loop
-    board.orientation('white');
+    setup_view = auto_flipped ? 'black' : null; // an auto-flip HAS been told which way up it is
+    snap_flipped = auto_flipped;                // ...and so has its follow loop
+    board.orientation(auto_flipped ? 'black' : 'white');
     on_new_pos(fen, fen, '');
 }
 
@@ -4885,7 +4915,8 @@ function readout_extras() {
     // Both labels return BARE text and the separator is added here. They used to carry their own
     // leading ' - ' / '·', so which punctuation started the line depended on which label happened to
     // be present -- and stripping it back off needed a regex that missed the em dash.
-    const extra = [puzzle_label(), tablebase_label(), move_confidence_label(), human_reply_label()].filter(Boolean).join(' · ');
+    const extra = [puzzle_label(), tablebase_label(), move_confidence_label(), human_reply_label(),
+                   safety_net_label()].filter(Boolean).join(' · ');
     return extra ? `<span class="line1-extra">${extra}</span>` : '';
 }
 
@@ -5769,6 +5800,76 @@ function win_percent(cp) {
 // Game Review uses since 3.1.251 -- the panel and the review MUST agree, or the same move gets two
 // verdicts depending on which screen you read it on (they were 30/20/10 here and in the review
 // before that release, so both moved together).
+// --- PLAYING WITH A NET -----------------------------------------------------------------------
+// Not "here is the best move". The question this answers is the one you actually have when the
+// moves are yours: am I about to throw this away, and what still holds if I am? So it reports a
+// SET -- every candidate whose win% is within a drop of the best one -- and in its quiet mode it
+// says nothing at all until that set is small enough to be a warning.
+//
+// The ruler is the win% the panel already judges moves by (win_percent + the published bands), so a
+// move this calls safe and a move the Game Review later calls a mistake cannot disagree.
+//
+// It can only ever see the lines the engine was asked for: with Multiple Lines at 1 there is no
+// set to report, and it says so rather than implying the one line is the only safe move.
+function safety_net_set() {
+    if (!config.safety_net) return null;
+    const lines = (last_eval.lines || []).filter(l => l && l.move && typeof l.score === 'number');
+    if (!lines.length) return null;
+    if (lines.length < 2) return {needMoreLines: true, moves: [], total: 0};
+    // scores are white-relative; the side to move is the one choosing, so flip for black
+    const sign = (turn === 'w') ? 1 : -1;
+    const wp = (l) => win_percent(sign * l.score);
+    const best = Math.max(...lines.map(wp));
+    const drop = Math.max(1, Math.min(50, Number(config.safety_net_drop) || 10));
+    const moves = lines.filter(l => best - wp(l) <= drop).map(l => l.move);
+    return {moves, total: lines.length, drop, needMoreLines: false};
+}
+
+// Quiet mode speaks only when the set is small -- that IS the warning. Live mode always shows it.
+function safety_net_showing() {
+    const set = safety_net_set();
+    if (!set || set.needMoreLines) return set;
+    if (config.safety_net_mode === 'live') return set;
+    const critical = Math.max(1, Math.min(5, Number(config.safety_net_max) || 3));
+    // a set that is everything we looked at is not a warning: the engine simply saw no danger
+    return (set.moves.length <= critical && set.moves.length < set.total) ? set : null;
+}
+
+// --- PLAYING WITH A NET -----------------------------------------------------------------------
+// Not "here is the best move". The question this answers is the one you actually have when the
+// moves are yours: am I about to throw this away, and what still holds if I am? So it reports a
+// SET -- every candidate whose win% is within a drop of the best one -- and in its quiet mode it
+// says nothing at all until that set is small enough to be a warning.
+//
+// The ruler is the win% the panel already judges moves by (win_percent + the published bands), so a
+// move this calls safe and a move the Game Review later calls a mistake cannot disagree.
+//
+// It can only ever see the lines the engine was asked for: with Multiple Lines at 1 there is no
+// set to report, and it says so rather than implying the one line is the only safe move.
+function safety_net_set() {
+    if (!config.safety_net) return null;
+    const lines = (last_eval.lines || []).filter(l => l && l.move && typeof l.score === 'number');
+    if (!lines.length) return null;
+    if (lines.length < 2) return {needMoreLines: true, moves: [], total: 0};
+    // scores are white-relative; the side to move is the one choosing, so flip for black
+    const sign = (turn === 'w') ? 1 : -1;
+    const wp = (l) => win_percent(sign * l.score);
+    const best = Math.max(...lines.map(wp));
+    const drop = Math.max(1, Math.min(50, Number(config.safety_net_drop) || 10));
+    const moves = lines.filter(l => best - wp(l) <= drop).map(l => l.move);
+    return {moves, total: lines.length, drop, needMoreLines: false};
+}
+
+// Quiet mode speaks only when the set is small -- that IS the warning. Live mode always shows it.
+function safety_net_showing() {
+    const set = safety_net_set();
+    if (!set || set.needMoreLines) return set;
+    if (config.safety_net_mode === 'live') return set;
+    const critical = Math.max(1, Math.min(5, Number(config.safety_net_max) || 3));
+    // a set that is everything we looked at is not a warning: the engine simply saw no danger
+    return (set.moves.length <= critical && set.moves.length < set.total) ? set : null;
+}
+
 function win_drop_label(drop) {
     if (drop >= 20) return 'blunder';
     if (drop >= 10) return 'mistake';
@@ -6681,6 +6782,7 @@ const LIVE_CONFIG_KEYS = [
     'explorer', 'book_play', 'explorer_db', 'help_mode', 'humanize', 'clock_mode', 'mirror_mode',
     'manual_mode', 'eval_bar', 'eval_history', 'live_stats', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
     'threat_human', 'threat_human_elo',
+    'safety_net', 'safety_net_mode', 'safety_net_drop', 'safety_net_max',
     'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode',
     'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'forced_lines', 'pv_walk', 'pv_walk_limit',
     'premove_confidence', 'premove_plies', 'move_time', 'move_variance', 'move_reason',
@@ -7025,7 +7127,10 @@ function book_arrow_specs(fen) {
 // landed last erase the other, and the book lookup always lands after the first engine depth.
 function push_hint_arrows() {
     const region = snap_region();
-    if (!config.help_mode && !region) return;
+    // HELP MODE OWNS THE ARROWS ON SCREEN, always. The screen reader used to be exempt -- drawing
+    // onto the region it was following even with Help Mode off -- on the reasoning that arrows are
+    // the whole point of following a board. They are, but the toggle is the toggle.
+    if (!config.help_mode) return;
     request_draw_hint([...engine_hint_arrows, ...book_arrow_specs()], region);
 }
 
@@ -7165,6 +7270,70 @@ function draw_human_reply() {
         draw_move(last_eval.humanReply.uci, user_color('arrow_color_human_reply', '#a8657f'),
                   PANEL_ROOT.getElementById('response-annotations'));
     }
+}
+
+// Drawn on OUR turn only: the whole point is the move being yours. Its own colour and the response
+// layer, so it never poses as the engine's best-move arrow -- these are not recommendations, they
+// are the moves that keep the result.
+function draw_safety_net() {
+    if (!our_turn_now()) return;
+    const set = safety_net_showing();
+    if (!set || set.needMoreLines || !set.moves.length) return;
+    const colour = user_color('arrow_color_safety_net', '#4c9f70');
+    const host = PANEL_ROOT.getElementById('response-annotations');
+    for (const uci of set.moves) draw_move(uci, colour, host, 0.14);
+}
+
+function safety_net_label() {
+    if (!config.safety_net || !our_turn_now()) return '';
+    const set = safety_net_showing();
+    if (!set) return '';
+    if (set.needMoreLines) return i18n('panel.msg.net_needs_lines', 'Safety net needs more than one line');
+    if (!set.moves.length) return '';
+    if (set.moves.length === 1) {
+        return i18n('panel.msg.net_only_one', 'Only one move holds: {move}',
+                    {move: notate(last_eval.fen, set.moves[0])});
+    }
+    return i18n('panel.msg.net_holds', '{n} moves hold: {moves}',
+                {n: set.moves.length, moves: set.moves.map(u => notate(last_eval.fen, u)).join(', ')});
+}
+
+// "Ours" without requiring Autoplay: the net is for when YOU are moving, which is precisely when
+// the panel is not playing for you.
+function our_turn_now() {
+    try { return String(turn === 'w' ? 'white' : 'black') === our_side(); } catch (e) { return false; }
+}
+
+// Drawn on OUR turn only: the whole point is the move being yours. Its own colour and the response
+// layer, so it never poses as the engine's best-move arrow -- these are not recommendations, they
+// are the moves that keep the result.
+function draw_safety_net() {
+    if (!our_turn_now()) return;
+    const set = safety_net_showing();
+    if (!set || set.needMoreLines || !set.moves.length) return;
+    const colour = user_color('arrow_color_safety_net', '#4c9f70');
+    const host = PANEL_ROOT.getElementById('response-annotations');
+    for (const uci of set.moves) draw_move(uci, colour, host, 0.14);
+}
+
+function safety_net_label() {
+    if (!config.safety_net || !our_turn_now()) return '';
+    const set = safety_net_showing();
+    if (!set) return '';
+    if (set.needMoreLines) return i18n('panel.msg.net_needs_lines', 'Safety net needs more than one line');
+    if (!set.moves.length) return '';
+    if (set.moves.length === 1) {
+        return i18n('panel.msg.net_only_one', 'Only one move holds: {move}',
+                    {move: notate(last_eval.fen, set.moves[0])});
+    }
+    return i18n('panel.msg.net_holds', '{n} moves hold: {moves}',
+                {n: set.moves.length, moves: set.moves.map(u => notate(last_eval.fen, u)).join(', ')});
+}
+
+// "Ours" without requiring Autoplay: the net is for when YOU are moving, which is precisely when
+// the panel is not playing for you.
+function our_turn_now() {
+    try { return String(turn === 'w' ? 'white' : 'black') === our_side(); } catch (e) { return false; }
 }
 
 function human_reply_label() {

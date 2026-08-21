@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.283-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.284-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -1003,7 +1003,34 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>83 features, newest first</summary>
+<summary>86 features, newest first</summary>
+
+- [x] **Playing with a net** (v3.1.284)
+  - For when the moves are yours. Instead of naming the best move, it reports the SET of moves that
+    keep the result -- and in its quiet mode it says nothing at all until that set gets small
+    enough to be a warning, which is the moment you can actually throw a game away.
+  - Opt-in and off by default, with the knobs that decide what it means: quiet or live, how much
+    win% a move may cost and still count as holding (the same ruler Game Review judges by), and how
+    few moves must be left before quiet mode speaks. Its arrows sit on their own layer in their own
+    colour, so they never pose as the engine's recommendation.
+
+- [x] **The screen reader turns a board that is upside down** (v3.1.284)
+  - An image carries no side to move, so a board shown from Black's side used to come out rotated
+    180 degrees, with every answer about it wrong until you pressed Flip.
+  - It reads the board's own coordinates to decide, and it does that WITHOUT OCR: among the glyphs
+    that can appear in a bottom corner, only the 8 has two enclosed holes, so counting holes is
+    enough and no font, model or training set is involved. Measured against real boards both ways
+    up: chess.com is decided by its labels; lichess declines (no readable glyph one way, fragments
+    the other) and falls back to a rules check on where the pieces sit. Declining is the designed
+    answer -- the previous attempt at this was reverted for guessing, and a wrong flip is worse
+    than none. An automatic turn always says so, and Flip board undoes it.
+
+- [x] **A budget for the screen reader, in cores** (v3.1.284)
+  - Following a board runs a large model over and over, and the old rule (0.6 x cores, capped at
+    six) was tuned for a single read -- so following could hold half a machine for as long as it
+    ran. It is now a budget you set: two cores by default, and the speed is whatever that buys.
+  - Arrows drawn onto a followed board now respect Help Mode like every other arrow; the screen
+    reader used to be exempt from that toggle.
 
 - [x] **The engine host reports its own state** (v3.1.283)
   - A panel can only ever describe its own half: "I asked for a search and heard nothing." That
