@@ -3,7 +3,7 @@
   "manifest_version": 3,
   "name": "Mephisto Chess Extension",
   "description": "Next best move analysis for your favorite chess websites",
-  "version": "3.1.284",
+  "version": "3.1.286",
   "homepage_url": "https://github.com/AlexPetrusca/Mephisto",
   "author": "Alex Petrusca",
   "icons": {
@@ -50,6 +50,7 @@
         "src/scripts/config-store.js",
         "src/i18n/i18n.js",
         "src/scripts/panel-board.js",
+        "src/scripts/bot-games.js",
         "src/popup/popup.js",
         "src/scripts/content-script.js"
       ]
@@ -93,7 +94,8 @@
     "open_in_tab": true
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; child-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:;"
   },
   "optional_host_permissions": [
     "https://github.com/IchNukeDichWeg/Mephisto/releases/download/*",
@@ -107,5 +109,10 @@
     "*://www.chess.com/*",
     "*://chess.com/*"
   ],
-  "default_locale": "en"
+  "default_locale": "en",
+  "sandbox": {
+    "pages": [
+      "src/options/ee-sandbox.html"
+    ]
+  }
 }

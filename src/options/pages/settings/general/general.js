@@ -29,8 +29,29 @@ const HUMANIZE_BANDS = [
     ['humanize_blunder', 'humanize_cp_blunder'],
 ];
 
+// The Bot Tricks game list, from the one place it is written down (src/scripts/bot-games.js). The
+// pasted-PGN entry is offered unconditionally: whether the paste below is usable is a question for
+// chess.js, which this page does not ask -- the panel does, and says so if it is not.
+function fill_bot_games() {
+    const sel = document.getElementById('bot_trick_game_select');
+    if (!sel || sel.options.length) return;
+    const add = (value, label) => { const o = document.createElement('option'); o.value = value; o.textContent = label; sel.appendChild(o); };
+    add('auto', 'Auto - fits the colour you were dealt');
+    // Same shape as the panel's own list, result included: a game is quoted by its result, and the
+    // drawn one is the entry where that matters most -- it ends the game and wins nothing.
+    for (const g of (self.MephistoBotGames || [])) {
+        const res = g.winner === 'white' ? '1-0' : g.winner === 'black' ? '0-1' : '\u00bd-\u00bd';
+        add(g.id, `${g.name} - ${Math.ceil(g.moves.length / 2)} moves (${res})`);
+    }
+    add('pgn', 'Your own game, pasted below');
+}
+
 class GeneralSettings extends SettingsPage {
     init() {
+        // The bot-game dropdown is built from the shared library BEFORE Materialize wraps the
+        // selects: it renders its own list from the options present at init time, so anything
+        // appended afterwards is stored correctly and simply never shown.
+        fill_bot_games();
         M.FormSelect.init(document.querySelectorAll('select'), {});
         M.Range.init(document.querySelectorAll('input[type=range]'), {});
         // tooltips are initialised centrally in SettingsPage.decorateTooltips()
@@ -98,7 +119,43 @@ class GeneralSettings extends SettingsPage {
         }
         this.registerFormElement('computer_evaluation', 'Show Computer Evaluation:', 'checkbox', true);
         this.registerFormElement('threat_analysis', 'Show Threat Analysis', 'checkbox', false);
-const threat_human = this.registerFormElement('threat_human', 'Human Reply (Maia):', 'checkbox', false);
+        // Playing with a net: the three knobs only mean anything while it is on, so they follow it
+        // (same treatment the search-budget rows and the human-reply rating already get).
+        const safety_net = this.registerFormElement('safety_net', 'Playing with a Net:', 'checkbox', false);
+        this.registerFormElement('safety_net_mode', 'Net Mode:', 'select', 'quiet');
+        this.registerFormElement('safety_net_drop', 'Net Tolerance (win% drop):', 'input', 10);
+        this.registerFormElement('safety_net_max', 'Warn When At Most:', 'input', 3);
+        const sync_safety_net_rows = () => {
+            const on = safety_net.getValue();
+            for (const id of ['safety_net_mode_row', 'safety_net_drop_row', 'safety_net_max_row']) {
+                const row = document.getElementById(id);
+                if (row) row.style.display = on ? '' : 'none';
+            }
+        };
+        safety_net.registerChangeListener(sync_safety_net_rows);
+        sync_safety_net_rows();
+
+        // Bot tricks. The delay and the PGN box mean nothing while the feature is off, so they
+        // follow it -- same treatment as the net's knobs above. `bot_trick_pgn` is registered as an
+        // 'input' against a <textarea>: FormElement only ever touches .value and the 'input' event,
+        // both of which a textarea has, so this needs no new type in the framework.
+        const bot_tricks = this.registerFormElement('bot_tricks', 'Bot Tricks (Play Computer):', 'checkbox', false);
+        this.registerFormElement('bot_trick_game', 'Bot Game:', 'select', 'auto');
+        this.registerFormElement('bot_trick_delay', 'Bot Move Delay (ms):', 'input', 500);
+        this.registerFormElement('bot_trick_pgn', 'Your Own Game (PGN):', 'input', '');
+        const sync_bot_trick_rows = () => {
+            const on = bot_tricks.getValue();
+            for (const id of ['bot_trick_game_row', 'bot_trick_delay_row', 'bot_trick_pgn_row']) {
+                const row = document.getElementById(id);
+                if (row) row.style.display = on ? '' : 'none';
+            }
+        };
+        bot_tricks.registerChangeListener(sync_bot_trick_rows);
+        sync_bot_trick_rows();
+
+        // a budget in cores, not a speed dial -- see the tooltip and ort-env.js
+        this.registerFormElement('vision_threads', 'Screen Reader Cores:', 'input', 2);
+        const threat_human = this.registerFormElement('threat_human', 'Human Reply (Maia):', 'checkbox', false);
         const threat_human_elo = this.registerFormElement('threat_human_elo', 'Human Reply Rating:', 'input', 1500);
         // the rating only means anything while the reply is on -- same treatment the search-budget
         // rows get above, so a control that does nothing is not sitting there inviting a change
@@ -274,10 +331,11 @@ const threat_human = this.registerFormElement('threat_human', 'Human Reply (Maia
             panic: 'Panic - hide the panel, stop the engine',
             redetect: 'Re-detect game',
             compact: 'Compact view', minimize: 'Minimize / restore panel',
+            bot_trick: 'Bot Tricks - play the chosen game at a bot',
         };
         const ORDER = ['manual_play', 'manual_mode', 'autoplay', 'premove', 'explorer', 'book_play',
             'help_mode', 'humanize', 'clock_mode', 'clock_pace', 'mirror_mode', 'eval_bar', 'eval_history', 'live_stats', 'tablebase', 'puzzle_mode',
-            'copy_fen', 'copy_pgn', 'copy_diagnostics', 'redetect', 'compact', 'minimize', 'panic'];
+            'copy_fen', 'copy_pgn', 'copy_diagnostics', 'redetect', 'compact', 'minimize', 'bot_trick', 'panic'];
         // same normalization as the content-script listener, so what we store matches what it compares
         const keyString = (e) => {
             const parts = [];

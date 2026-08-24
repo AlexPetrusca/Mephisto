@@ -19,6 +19,7 @@
     <script src="/src/i18n/i18n.js"></script>
     <!-- classic (not a module) so the same file also loads as a content script; `defer` keeps the
          post-parse timing the module had, so document.body exists when it boots the panel -->
+    <script src="/src/scripts/bot-games.js"></script>
     <script defer src="popup.js"></script>
 </head>
 
@@ -185,6 +186,20 @@
     <div class="qs-row qs-toggle">
         <input id="qs_puzzle" type="checkbox" class="qs-cb">
         <label for="qs_puzzle" data-i18n="panel.puzzle_mode" class="qs-label">Puzzle Mode</label>
+    </div>
+      <!-- Bot game. Hidden unless Bot Tricks is on AND this is chess.com's Play Computer page,
+     where the browser is the referee. Both buttons are refused anywhere else by the background,
+     which checks the tab's real url -- the panel hiding the row is convenience, not the gate. -->
+    <div class="qs-row" id="qs_bot_row" hidden>
+        <span data-i18n="panel.bot_game" class="qs-label">Bot game</span>
+        <select id="qs_bot_game" class="browser-default"
+                title="Which game to hand the bot. Every line here leaves the bot no turn - it ends in checkmate, or in a draw that gets claimed - because a game that merely stopped would leave the bot to move and it would then answer for real. Auto picks one that wins for the colour you were dealt."></select>
+        <div class="qs-bot-actions">
+            <button id="qs_bot_play" type="button"
+                    title="Play the chosen game against the bot, one move every half second or so. Only from the starting position of a fresh bot game.">Play</button>
+            <button id="qs_bot_draw" type="button"
+                    title="Accept a draw the bot never offered. Ends the game immediately, from any position.">Draw</button>
+        </div>
     </div>
       </div>
 

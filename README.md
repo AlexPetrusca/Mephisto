@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.1.284-3fb950)
+![Version](https://img.shields.io/badge/version-3.1.286-3fb950)
 ![Engines](https://img.shields.io/badge/engines-9-58a6ff)
 ![Sites](https://img.shields.io/badge/sites-5-8b949e)
 ![Languages](https://img.shields.io/badge/languages-14-f0883e)
@@ -1003,7 +1003,71 @@ veto for real blunders, and the clock rules above.
 ### Shipped
 
 <details>
-<summary>86 features, newest first</summary>
+<summary>88 features, newest first</summary>
+
+- [x] **Chess.com's own move classifier, running here** (v3.1.286)
+  - A third way to review a game, beside our own and the real chess.com Game Review. This is the
+    SMALL one: the post-game card you get free after every game -- Book / Best / Excellent /
+    Blunder, the accuracy figures and the coach's line -- not the full Game Review with its move-by
+    -move lesson. It runs entirely on this machine, and the game never leaves it.
+  - That card turns out to be wholly local already: measured on chess.com, zero engine work before
+    the game ends and 1,275 worker messages the moment it does, with not one server request
+    carrying any analysis. Four Stockfish workers at `go depth 10`, MultiPV 2, one position each,
+    feeding an "explanation engine" that returns the whole verdict as one JSON. We drive the same
+    two pieces the same way.
+  - ACCURACY, measured over ten games against their bots at sixteen moves a side (320 scored plies),
+    each reviewed by chess.com twice so the comparison has a ceiling: **96.2% of moves get the same
+    classification, and the accuracy figures land 0.32 points apart on average**. chess.com agrees
+    with ITSELF 94.1% -- their four workers share a position queue, so which positions share a
+    transposition table changes with the timing of the run and their own answer moves between runs.
+    Ours is deterministic, so it has no race to lose.
+  - Two optional downloads, both behind their own button and both kept afterwards: their classifier
+    (28.7 MB -- Chess.com's commercial Torch build, so it is fetched from them, never shipped with
+    the extension) and their exact Stockfish 18 Lite (7.3 MB, GPLv3). Without the second one the
+    classifier is fed our own Stockfish and the panel says so. After the downloads it all works with
+    chess.com unreachable -- verified with the network cut.
+
+- [x] **Bot tricks: hand a bot a whole game** (v3.1.285)
+  - A game against a bot on chess.com's Play Computer page is decided in the browser, not on a
+    server, and the board object there checks neither whose turn it is nor that a draw was ever
+    offered. So a whole game can be handed over move by move, and a draw can be accepted that
+    nobody proposed. Verified live: the Immortal Game played through in 13.6s and the site
+    recorded a win by checkmate, counting on the bot ladder.
+  - Opt-in, off by default, and the panel row does not exist until it is on AND you are on that
+    page -- the background re-checks both against the tab url Chrome authenticates, because the
+    same board element exists in LIVE games, where moving for the opponent is refused by the
+    server and worth somebody noticing.
+  - Eighteen games in the dropdown, every one replayed through chess.js in the suite. Two-move
+    mates up to a 122-move draw: Scholar's and Fool's Mate, three opening traps (Legal's, the
+    Blackburne Shilling, the Englund), the Opera Game, the Immortal, the Evergreen, Lasker's king
+    walk, the Peruvian Immortal, and Fischer's Game of the Century.
+  - Every line must END the game -- a mate, or a draw the client claims for itself. A game that
+    finished by resignation stops with the bot still to move and it then answers for real, so those
+    are refused with the reason said out loud. That rule is why the top ENGINE games needed work:
+    engines resign or get adjudicated and are never mated, so Deep Blue vs Kasparov (1996 and 1997),
+    two AlphaZero-Stockfish games and Carlsen's 2018 tie-break wins are each the real game up to the
+    point it was given up, with Stockfish 18 then playing both sides to mate. Their names say
+    "played to mate" for that reason.
+  - The exception is the one game nothing was done to. All twelve classical games of Carlsen-Caruana
+    2018 were drawn BY AGREEMENT, which is not a position and so cannot be claimed -- but a line may
+    also end by CLAIMING a draw after its last move, which is safe because the bot never gets a turn
+    at all. So game 9 is there move for move as they played it, and the panel claims the draw at the
+    end. Game 9 because it measured as the most engine-like of the twelve: 2.7 average centipawn
+    loss over Carlsen's 56 moves at depth 14, losses capped at 300cp. All twelve came out single
+    digit, 2.7 to 8.3.
+  - The same relaxation is what makes pasting your own games worth doing: a game that stops by
+    resignation or agreement is played in full and then drawn, rather than refused.
+  - Fires from the panel's Play button or from a hotkey -- W, for win. It is a one-shot action, not
+    a toggle, and it is inert unless the feature is on and you are on that page, so the key stays
+    the site's own everywhere else. T would have been better (for troll) but has been the Tablebase
+    key since long before this existed, and moving a binding people already have in their fingers
+    is the wrong trade.
+  - Auto picks a line that wins for whichever colour you were dealt, and paste any PGN to add your
+    own game: headers, clock and eval comments, nested variations, NAGs, glyphs, zeroed castling
+    and result markers are all stripped, because the bundled chess.js is a trimmed build with no
+    PGN parser at all. Move spacing is yours to set, jittered by a third either way -- chess.com
+    stores a clock time per move, and eighty moves at an exact interval is a pattern no human
+    produces.
 
 - [x] **Playing with a net** (v3.1.284)
   - For when the moves are yours. Instead of naming the best move, it reports the SET of moves that

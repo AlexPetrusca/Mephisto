@@ -701,6 +701,36 @@ html, body {
     margin-top: 10px;
 }
 /* Same pill as the detect button beside it, just wide enough for a word. */
+/* Bot game. The row stacks: label, dropdown, then the two actions side by side -- the dropdown is
+   a full-width .browser-default like every other select here, so the buttons cannot share its line.
+   They wear the same pill as Copy Diagnostics rather than a new shape of their own.
+
+   The [hidden] rule is not redundant. Giving the row a `display` of its own would otherwise BEAT the
+   user-agent's `[hidden] { display: none }`, and the row would stay on screen with the feature off
+   -- which is most of the time, since it is opt-in and chess.com-only. */
+#quick-settings #qs_bot_row[hidden] { display: none; }
+#quick-settings .qs-bot-actions { display: flex; gap: 6px; margin-top: 5px; }
+#quick-settings #qs_bot_play,
+#quick-settings #qs_bot_draw {
+    flex: 1 1 0;
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    line-height: 1;
+    background: #fff;
+    color: #000;
+    border: 1px solid #cfcfcf;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#quick-settings #qs_bot_play:hover,
+#quick-settings #qs_bot_draw:hover { background: #f0f0f0; }
+#quick-settings #qs_bot_play:disabled,
+#quick-settings #qs_bot_draw:disabled { opacity: .55; cursor: default; }
+/* The popped-open list is painted by the OS and does not inherit the panel's colours -- the same
+   reason the inline selects carry this rule. Without it the options are dark-on-dark. */
+#quick-settings #qs_bot_game option { background: var(--mp-bg); color: var(--mp-text); }
+
 #quick-settings #qs_copydiag {
     flex: 0 0 auto;
     height: 28px;
@@ -1187,6 +1217,10 @@ body.mephisto-dark #update-notice { color: #4dd0e1; }
 body.mephisto-dark #idle-reason { color: #e8c76a; background: rgba(232, 199, 106, 0.12); }
 body.mephisto-dark #quick-settings #qs_copydiag { background: #2a2b31; color: #e6e6e6; border-color: #43444d; }
 body.mephisto-dark #quick-settings #qs_copydiag:hover { background: #363740; }
+body.mephisto-dark #quick-settings #qs_bot_play,
+body.mephisto-dark #quick-settings #qs_bot_draw { background: #2a2b31; color: #e6e6e6; border-color: #43444d; }
+body.mephisto-dark #quick-settings #qs_bot_play:hover,
+body.mephisto-dark #quick-settings #qs_bot_draw:hover { background: #363740; }
 body.mephisto-dark #game-detection.unsupported { color: #ff7a70; }
 
 

@@ -610,6 +610,9 @@ input[type=range]::-moz-range-thumb {
     resize: vertical;
 }
 .rv-pgn:focus, .set-ta:focus { outline: none; border-color: var(--mp-on); }
+/* a row whose control is one of those boxes: .set-ctl is flex:0 0 auto for the narrow rail every
+   other control sits in, which would size a 100%-wide textarea to nothing. */
+.set-row .set-ctl:has(> .set-ta) { flex: 1 1 auto; min-width: 0; }
 
 /* a file is over the page and this box is where it lands -- same accent green as every focus ring */
 textarea.drop-ready { border-color: var(--mp-on) !important; box-shadow: 0 0 0 2px var(--mp-on-soft, rgba(63, 164, 91, .25)) !important; }

@@ -440,6 +440,11 @@ async function initPanel(root, tabId) {
         safety_net_mode: JSON.parse(MephistoConfig.get('safety_net_mode')) || 'quiet',
         safety_net_drop: JSON.parse(MephistoConfig.get('safety_net_drop')) || 10,
         safety_net_max: JSON.parse(MephistoConfig.get('safety_net_max')) || 3,
+        // Bot tricks: off until asked for, and the panel row does not exist while it is off.
+        bot_tricks: JSON.parse(MephistoConfig.get('bot_tricks')) || false,
+        bot_trick_game: JSON.parse(MephistoConfig.get('bot_trick_game')) || 'auto',
+        bot_trick_delay: JSON.parse(MephistoConfig.get('bot_trick_delay')) || 500,
+        bot_trick_pgn: JSON.parse(MephistoConfig.get('bot_trick_pgn')) || '',
         threat_human_elo: JSON.parse(MephistoConfig.get('threat_human_elo')) || 1500,
         simon_says_mode: JSON.parse(MephistoConfig.get('simon_says_mode')) || false,
         autoplay: (autoplay != null) ? autoplay : false,
@@ -698,6 +703,9 @@ async function initPanel(root, tabId) {
     request_fen();
     setInterval(function () {
         request_fen();
+        // chess.com is a single-page app: this script is not rebuilt when the user navigates from
+        // the bot list into a game, so the row's visibility has to be re-decided, not decided once.
+        sync_bot_row();
         // Re-assert the keep-alive tone. Chrome can SUSPEND an AudioContext in a hidden tab, and
         // nothing revived it -- the only other caller is visibilitychange, which by definition does
         // not fire while you are still away. Once the tone lapses the tab is throttled again and a
@@ -1238,6 +1246,19 @@ function init_quick_settings() {
             });
         });
     }
+    // Bot game. The row lives in the Play tab but only exists on chess.com's Play Computer page,
+    // so it is populated and shown by sync_bot_row() off the same slow poll that heals a missed
+    // position push -- chess.com is a single-page app and never reloads this script on a
+    // navigation, so a one-shot check at startup would show the row on the wrong page forever.
+    const botSel = PANEL_ROOT.getElementById('qs_bot_game');
+    if (botSel) botSel.addEventListener('change', () => {
+        config.bot_trick_game = botSel.value;
+        MephistoConfig.set('bot_trick_game', JSON.stringify(botSel.value));
+    });
+    const botPlay = PANEL_ROOT.getElementById('qs_bot_play');
+    if (botPlay) botPlay.addEventListener('click', () => run_bot_trick('mate'));
+    const botDraw = PANEL_ROOT.getElementById('qs_bot_draw');
+    if (botDraw) botDraw.addEventListener('click', () => run_bot_trick('draw'));
     const detectBtn = PANEL_ROOT.getElementById('qs_variant_detect');
     if (detectBtn) {
         detectBtn.addEventListener('click', () => {
@@ -3575,6 +3596,218 @@ let snap_flipped = false;
 function our_side() {
     if (setup_fen) return (turn === 'w') ? 'white' : 'black';
     return board.orientation();
+}
+
+// ---- bot-game tricks: the panel half ---------------------------------------------------------
+// The LIBRARY itself lives in src/scripts/bot-games.js, because the settings page offers the same
+// list and duplicating eight game names in two files is how they drift apart. Only the parts that
+// need chess.js and the translation layer are here.
+const BOT_GAMES = (typeof self !== 'undefined' && self.MephistoBotGames) || [];
+
+// PGN -> a plain list of SAN moves. The bundled chess.js is a trimmed build with no PGN support at
+// all (no loadPgn, no header parsing), so this does the extraction, and a real PGN carries far more
+// than moves: header tags, brace comments with clock and eval annotations on EVERY move, nested
+// variations, NAGs, glyph suffixes, and a result marker. Anything not a move is removed here rather
+// than fed to chess.js and caught as an error, because "your PGN is broken" is the wrong answer to
+// a perfectly ordinary chess.com export.
+function pgn_san_tokens(pgn) {
+    let t = String(pgn || '').replace(/\r/g, '\n');
+    t = t.replace(/^\s*%.*$/gm, ' ');            // escape-mechanism lines
+    t = t.replace(/^\s*\[[^\]\n]*\]\s*$/gm, ' ');// header tags, whole lines only
+    t = t.replace(/;[^\n]*/g, ' ');              // rest-of-line comments
+    t = t.replace(/\{[^}]*\}/g, ' ');            // brace comments -- PGN braces do not nest
+    // Variations DO nest, so one regex cannot do it: strip the innermost pair until none are left.
+    // Bounded rather than while(true) -- a PGN with an unbalanced '(' would otherwise spin forever.
+    for (let i = 0; i < 64 && /\([^()]*\)/.test(t); i++) t = t.replace(/\([^()]*\)/g, ' ');
+    t = t.replace(/[()]/g, ' ');                 // an unbalanced bracket left over
+    t = t.replace(/\$\d+/g, ' ');                // NAGs
+    // Result markers BEFORE castling is normalised: "1-0" and "0-1" must not survive to be read as
+    // a castle, and "1/2-1/2" must not leave a stray "1/2".
+    t = t.replace(/\b(?:1-0|0-1|1\/2-1\/2|½-½)\b|\*/g, ' ');
+    t = t.replace(/\d+\s*\.(?:\.\.)?/g, ' ');    // move numbers, with or without "..." and spacing
+    t = t.replace(/\be\.p\.?/gi, ' ');           // the optional en-passant marker
+    return t.split(/\s+/)
+        .map(tok => tok
+            .replace(/[!?]+$/, '')               // !, ?, !?, ?!, !!, ?? are commentary, not notation
+            .replace(/^0-0-0/, 'O-O-O')          // some sources write castling with zeroes
+            .replace(/^0-0/, 'O-O'))
+        .filter(tok => /^(?:[KQRBN][a-h1-8]?x?[a-h][1-8]|[a-h]x?[a-h]?[1-8](?:=[QRBN])?|O-O(?:-O)?)[+#]?$/.test(tok));
+}
+
+// The game's result, in the notation everybody reads it in. Derived from the winner rather than
+// stored beside it: two fields saying the same thing is one of them going stale.
+function bot_result(winner) {
+    return winner === 'white' ? '1-0' : winner === 'black' ? '0-1' : '\u00bd-\u00bd';
+}
+
+// A pasted game, checked the way the built-in lines are checked in the suite: replayed from the
+// starting position, and accepted only if every move is legal AND the game is over at the end.
+//
+// OVER, not won. A checkmate is the obvious case, but a stalemate, a threefold, a fifty-move or a
+// dead position all end a bot game just as completely -- chess.com's client claims those itself.
+// What is NOT allowed is a game that finished by resignation or on time: that stops with the bot
+// still to move, and it will then answer for real. Returns the reason rather than a line when it
+// fails, because "nothing happened" is the failure people report.
+function bot_pgn_line(pgn) {
+    const text = String(pgn || '').trim();
+    if (!text) return {error: i18n('panel.bot.pgn_empty', 'Paste a game into Settings first.')};
+    const moves = pgn_san_tokens(text);
+    if (!moves.length) return {error: i18n('panel.bot.pgn_unreadable', 'No moves found in that PGN.')};
+    const check = new Chess();
+    for (const san of moves) {
+        try { if (!check.move(san)) return {error: i18n('panel.bot.pgn_illegal', 'Illegal move in that PGN: {m}.', {m: san})}; }
+        catch (e) { return {error: i18n('panel.bot.pgn_illegal', 'Illegal move in that PGN: {m}.', {m: san})}; }
+    }
+    // A GAME THAT DOES NOT END ITSELF IS NO LONGER REFUSED. Most real games stop by resignation or
+    // by agreement, and neither is a position any client can claim -- which used to rule out almost
+    // every game anybody would want to paste. It is played out in full and then ended with a draw
+    // claim, the same way the built-in classical game is. The bot never gets a turn either way.
+    const mated = check.isCheckmate();
+    const ends = check.isGameOver();
+    return {id: 'pgn', name: i18n('panel.bot.pgn_name', 'Your pasted game'),
+            // A draw belongs to neither colour, so it plays from either side.
+            winner: mated ? (check.turn() === 'w' ? 'black' : 'white') : null,
+            endWith: ends ? null : 'draw', moves};
+}
+
+// The list the dropdown shows, pasted game included when there is one.
+function bot_game_choices() {
+    const out = BOT_GAMES.slice();
+    const custom = bot_pgn_line(config.bot_trick_pgn);
+    if (!custom.error) out.push(custom);
+    return out;
+}
+
+// Auto picks a line that WINS FOR US. our_side() is right on a live game (it is board.orientation()
+// there), but the page is the authority and disagrees on a board drawn the other way round, which is
+// why a wrong-colour answer retries rather than giving up.
+function bot_pick(id, side) {
+    const all = bot_game_choices();
+    if (id && id !== 'auto') return all.find(g => g.id === id) || null;
+    // Auto means WIN FOR ME, so a drawn line is not a candidate here however well it fits: it ends
+    // the game and takes nothing. Picking one explicitly still plays it, from either colour.
+    const fits = all.filter(g => g.winner === side);
+    const pool = fits.length ? fits : all;
+    // Shortest first is the wrong default -- that is the four-move mate every time. Pick at random
+    // among the ones that fit so a run of bots does not leave an identical game in every archive.
+    return pool[Math.floor(Math.random() * pool.length)] || null;
+}
+
+function on_computer_play_page() {
+    try {
+        return /(^|\.)chess\.com$/.test(location.hostname)
+            && /^\/play\/computer(\/|$)/.test(location.pathname);
+    } catch (e) { return false; }
+}
+
+// Fill the dropdown and show or hide the row. Cheap enough to run on the slow poll: it rebuilds the
+// options only when the list or the selection actually changed, so it is a string compare per tick.
+let bot_row_signature = null;
+function sync_bot_row() {
+    const row = PANEL_ROOT.getElementById('qs_bot_row');
+    if (!row) return;
+    const show = on_computer_play_page() && String(config.bot_tricks) === 'true';
+    row.hidden = !show;
+    if (!show) return;
+    const sel = PANEL_ROOT.getElementById('qs_bot_game');
+    if (!sel) return;
+    const games = bot_game_choices();
+    const want = config.bot_trick_game || 'auto';
+    const sig = want + '|' + games.map(g => g.id + ':' + g.moves.length).join(',');
+    if (sig === bot_row_signature) return;
+    bot_row_signature = sig;
+    sel.innerHTML = '';
+    const auto = document.createElement('option');
+    auto.value = 'auto';
+    // AN EMPTY DROPDOWN LOOKS BROKEN AND SAYS NOTHING. The library is a separate content script, so
+    // it can be absent for one real reason: the extension was updated without being reloaded, and
+    // the manifest's new file was never injected. Say that, rather than render a blank box.
+    auto.textContent = games.length
+        ? i18n('panel.bot.auto', 'Auto (fits your colour)')
+        : i18n('panel.bot.no_library', 'No games loaded - reload the extension');
+    sel.appendChild(auto);
+    for (const g of games) {
+        const o = document.createElement('option');
+        o.value = g.id;
+        // The move count is the useful half of the label -- it is how long this will take -- and the
+        // result after it, because a drawn line ends the game without winning it.
+        const n = Math.ceil(g.moves.length / 2);
+        o.textContent = i18n('panel.bot.opt', '{name} - {n} ({res})',
+            {name: g.name, n, res: bot_result(g.winner)});
+        sel.appendChild(o);
+    }
+    sel.value = games.some(g => g.id === want) ? want : 'auto';
+    const play = PANEL_ROOT.getElementById('qs_bot_play');
+    if (play) play.disabled = !games.length;   // Draw stays live: it needs no game at all
+}
+
+// One press. `retried` is the wrong-colour retry: our_side() is the board's orientation and the page
+// knows better, so a mismatched Auto pick is re-picked once against the colour the page reports
+// rather than reported as a failure the user has to fix by hand.
+function run_bot_trick(what, retried) {
+    const row = PANEL_ROOT.getElementById('qs_bot_row');
+    const btn = PANEL_ROOT.getElementById(what === 'draw' ? 'qs_bot_draw' : 'qs_bot_play');
+    const send = (req) => {
+        if (btn) btn.disabled = true;
+        chrome.runtime.sendMessage({botExploit: req}, (r) => {
+            if (btn) btn.disabled = false;
+            if (!chrome.runtime.lastError && r && !r.ok && r.why === 'wrong-colour' && r.side && !retried
+                && (config.bot_trick_game || 'auto') === 'auto') {
+                run_bot_trick(what, r.side);   // the page told us the colour; pick again for it
+                return;
+            }
+            set_idle_reason(bot_trick_message(what, r));
+        });
+    };
+    if (what === 'draw') { send({what: 'draw'}); return; }
+
+    const want = config.bot_trick_game || 'auto';
+    const game = bot_pick(want, retried || our_side());
+    if (!game) {
+        // The only way here is a chosen PGN that stopped parsing. Say which, not "nothing happened".
+        const custom = bot_pgn_line(config.bot_trick_pgn);
+        set_idle_reason(custom.error || i18n('panel.bot.no_game', 'No game to play - choose one first.'));
+        return;
+    }
+    if (row) row.dataset.playing = game.id;
+    send({what: 'mate', moves: game.moves, winner: game.winner, endWith: game.endWith || null,
+          delay: Math.max(0, Math.min(5000, Number(config.bot_trick_delay) || 500))});
+}
+
+// Every failure here is something the user can act on, so each one is named. The default branch
+// covers the shapes that all mean the same thing -- chess.com changed the board object under us --
+// and prints the raw reason with it, because that is the report worth having.
+function bot_trick_message(what, r) {
+    if (chrome.runtime.lastError || !r) return i18n('panel.bot.gone', 'Could not reach the page.');
+    if (r.ok) {
+        if (r.did === 'draw') return i18n('panel.bot.drawn', 'The bot accepted a draw it was never offered.');
+        return r.seconds > 3
+            ? i18n('panel.bot.playing_long', 'Playing {n} moves - about {s}s.', {n: Math.ceil(r.moves / 2), s: r.seconds})
+            : i18n('panel.bot.playing', 'Playing {n} moves.', {n: Math.ceil(r.moves / 2)});
+    }
+    switch (r.why) {
+        case 'not-computer-page':
+            return i18n('panel.bot.wrong_page', 'Bot tricks only work on the Play Computer page.');
+        case 'not-enabled':
+            return i18n('panel.bot.off', 'Turn Bot Tricks on in Settings first.');
+        case 'no-board':
+            return i18n('panel.bot.no_board', 'No bot game on this page yet - start one.');
+        case 'not-move-1':
+            return i18n('panel.bot.not_start', 'Only from the starting position - start a new bot game.');
+        case 'wrong-colour':
+            // Two whole sentences rather than one with the colour words substituted in. Slotting
+            // "white"/"black" into a template needs them as standalone lowercase strings, which
+            // reads badly in the languages that inflect them and worse in the ones that do not put
+            // the subject there at all.
+            return r.side === 'white'
+                ? i18n('panel.bot.wrong_colour_white', 'That game is a win for black, and you are playing white.')
+                : i18n('panel.bot.wrong_colour_black', 'That game is a win for white, and you are playing black.');
+        case 'no-side':
+            return i18n('panel.bot.no_side', 'Could not tell which colour you are playing.');
+        default:
+            return i18n('panel.bot.refused', 'The page refused it ({why}) - chess.com may have closed this.',
+                {why: String(r.why || '?')});
+    }
 }
 
 function rotate_fen_180(fen) {
@@ -6033,6 +6266,17 @@ function do_hotkey(action) {
         return true;
     }
     if (action === 'redetect') { PANEL_ROOT.getElementById('recheck')?.click(); return true; }
+    // Bot Tricks. Returns FALSE anywhere the row is not showing, so the key stays the site's own on
+    // every other page rather than being swallowed by a feature that is switched off -- the same
+    // contract Manual Mode's Space has.
+    if (action === 'bot_trick') {
+        if (!on_computer_play_page() || String(config.bot_tricks) !== 'true') return false;
+        run_bot_trick('mate');
+        return true;
+    }
+    // The two title-bar buttons. Compact is the panel's own state; minimize is the overlay's chrome
+    // and lives in the content script, so it is asked rather than done here (same as panic).
+
     // The two title-bar buttons. Compact is the panel's own state; minimize is the overlay's chrome
     // and lives in the content script, so it is asked rather than done here (same as panic).
     if (action === 'compact') { toggle_compact(); return true; }
@@ -6783,6 +7027,7 @@ const LIVE_CONFIG_KEYS = [
     'manual_mode', 'eval_bar', 'eval_history', 'live_stats', 'puzzle_mode', 'simon_says_mode', 'threat_analysis',
     'threat_human', 'threat_human_elo',
     'safety_net', 'safety_net_mode', 'safety_net_drop', 'safety_net_max',
+    'bot_tricks', 'bot_trick_game', 'bot_trick_delay', 'bot_trick_pgn',
     'computer_evaluation', 'multiple_lines', 'compute_time', 'compute_depth', 'search_mode',
     'arrow_opacity', 'arrow_rank', 'arrow_labels', 'board_animation', 'move_notation', 'forced_lines', 'pv_walk', 'pv_walk_limit',
     'premove_confidence', 'premove_plies', 'move_time', 'move_variance', 'move_reason',

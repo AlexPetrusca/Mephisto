@@ -323,6 +323,47 @@
                         <button id="rv_ccr_ticket" class="set-btn hidden" type="button">Copy error &amp; open ticket</button>
                     </div>
                 </div>
+                <!-- The third way to review: chess.com's OWN classifier, run on this machine. Their
+                     explanation engine is 28.7 MB and is their commercial Torch build, so it is not
+                     shipped with the extension -- it is downloaded from chess.com on request and
+                     cached. Nothing about the game leaves the machine either way. -->
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span class="tooltipped" data-position="right"
+                              data-tooltip="chess.com's own move classifier -- the one behind the Book/Best/Excellent
+                                            card you get after a game -- running HERE, offline. Our engine does the
+                                            searching at their settings (depth 10, 2 lines) and their explanation
+                                            engine decides the verdicts, so the labels and the accuracy match theirs
+                                            rather than ours. Their engine is a 28.7 MB download from chess.com the
+                                            first time, kept afterwards; the game itself never leaves this machine.">
+                            Chess.com classifier (local) <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl rv-oneline">
+                        <button id="rv_ee_get" class="set-btn" type="button">Download engine (28.7 MB)</button>
+                        <button id="rv_ee_run" class="set-btn set-btn-go" type="button" disabled>Classify like chess.com</button>
+                        <button id="rv_ee_forget" class="set-btn hidden" type="button">Remove engine</button>
+                    </div>
+                </div>
+                <div id="rv_ee_status" class="rv-status"></div>
+
+                <!-- Their SEARCH engine, separate and separately optional. Without it we search with
+                     our own closest build and a few moves a game land in a neighbouring class;
+                     with it, every input to the classifier is chess.com's own. -->
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span class="tooltipped" data-position="right"
+                              data-tooltip="chess.com's own Stockfish 18 Lite - the exact engine their review searches with. Optional: without it the classifier is fed our Stockfish 18 Small instead, which agrees on most moves but differs by 30-60 centipawns here and there, and that is enough to move a move between Good and Excellent. With it, both halves of the review are theirs. 7.3 MB from chess.com, kept afterwards. GPLv3.">
+                            Chess.com search engine <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl rv-oneline">
+                        <button id="rv_sf_get" class="set-btn" type="button">Download Stockfish (7.3 MB)</button>
+                        <button id="rv_sf_forget" class="set-btn hidden" type="button">Remove</button>
+                    </div>
+                </div>
+                <div id="rv_sf_status" class="rv-status"></div>
+
                 <div id="rv_ccr_status" class="rv-status"></div>
                 <pre id="rv_ccr_out" class="rv-ccr-out hidden"></pre>
 

@@ -79,6 +79,12 @@
             // The two title-bar buttons, which had no keys. 'm' and 'c' were long gone (Mirror Time,
             // Clock Mode), so: v for compact VIEW, i for mInImize.
             compact: 'v', minimize: 'i',
+            // Bot Tricks -- a ONE-SHOT action, not a toggle: it plays the chosen game once, and it
+            // does nothing at all unless the feature is on and you are on the Play Computer page.
+            // Plain t (for troll) has been the Tablebase key since long before this existed, and
+            // moving a binding people already have in their fingers to make room for a new one is
+            // the wrong trade, so w (for win). j, q and s were the other letters still free.
+            bot_trick: 'w',
             panic: 'x',   // everything away, NOW: hide the panel, clear the arrows, stop the search
         },
         // the effective bindings: defaults overlaid with whatever the user saved in config.hotkeys

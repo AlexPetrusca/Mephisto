@@ -440,7 +440,20 @@ html.dark .rv-ev-strong  { color: #d15050; }
    -/+ stepper, or a toggle) fills the same fixed block, so their edges line up and read as the same
    size; the row is capped tighter so the control sits next to its label, not a screen away. The
    button rows (Run, the chess.com review) are excluded - they carry several buttons of their own. */
-#rv-analysis .set-row:not(.set-wide) { max-width: 560px; }
+/* ONE RIGHT EDGE FOR THE WHOLE PAGE. This section used to cap its rows at 560px while the Game
+   section above ran to the standard 720px and every heading rule ran the full 988px -- three
+   different right edges stacked down one page, which is what "why does this work on the normal
+   settings but not here" was about. The rows now inherit the same 720px cap every .set-row on every
+   settings page has, and the section furniture is capped WITH them so a rule never overhangs the
+   rows beneath it. Measured, not eyeballed.
+
+   What is NOT reverted is the uniform control column below: the controls staying one fixed block
+   wide, right-aligned, is the thing that fixed the ragged right edge in the first place. */
+#rv-game > .set-h, #rv-analysis > .set-h, #rv-report > .set-h,
+#rv-analysis > .rv-progress-wrap,
+#rv-analysis > .rv-status,
+#rv-game > .rv-status,
+#rv-analysis > .rv-ccr-out { max-width: 720px; }
 /* every control row EXCEPT the ones carrying their own buttons (Run, chess.com review) */
 #rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) { flex: 0 0 234px; justify-content: flex-end; gap: 7px; }
 #rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > select { flex: 1 1 auto; min-width: 0; max-width: 100%; }

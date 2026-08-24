@@ -661,6 +661,41 @@
                         </label>
                     </div>
                 </div>
+                <div class="set-row set-toggle">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.bot_tricks" class="tooltipped" data-position="right" data-tooltip="Adds a Bot game row to the panel on chess.com's Play Computer page. A game against a bot there is decided in the browser, not on a server, so the page will accept a whole game handed to it move by move - and will accept a draw nobody offered. Off everywhere else, and the row does not exist while this is off."><span data-i18n="set.bot_tricks">Bot Tricks (Play Computer)</span></span></div>
+                    <div class="set-ctl">
+                        <input id="bot_tricks_checkbox" type="checkbox" class="set-cb">
+                        <label for="bot_tricks_checkbox" class="set-tgl">
+                            <span data-i18n="ui.on" class="set-on">On</span><span data-i18n="ui.off" class="set-off">Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="set-row" id="bot_trick_game_row">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.bot_trick_game" class="tooltipped" data-position="right" data-tooltip="Which game to hand the bot. Every line here ends the game -- a checkmate, or a draw the client claims itself -- because a game that ended in resignation would stop with the bot still to move and it would then answer for real. Auto picks one that wins for whichever colour you were dealt. The panel's own dropdown sets the same thing."><span data-i18n="set.bot_trick_game">Bot Game</span></span></div>
+                    <div class="set-ctl">
+                        <select name="bot_trick_game" id="bot_trick_game_select"></select>
+                    </div>
+                </div>
+
+                <div class="set-row" id="bot_trick_delay_row">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.bot_trick_delay" class="tooltipped" data-position="right" data-tooltip="Roughly how long between the handed-over moves, in milliseconds. Jittered by about a third either way on purpose: chess.com keeps a per-move clock time in the game archive, and eighty moves at exactly the same interval is a pattern no human produces. 0 plays the whole game at once."><span data-i18n="set.bot_trick_delay">Bot Move Delay (ms)</span></span></div>
+                    <div class="set-ctl">
+                        <span class="set-step">
+                            <button type="button" class="set-step-btn" data-step="-1">&minus;</button>
+                            <input id="bot_trick_delay_input" type="number" min="0" max="5000" step="50">
+                            <button type="button" class="set-step-btn" data-step="1">+</button>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="set-row set-wide" id="bot_trick_pgn_row">
+                    <div class="set-lbl"><span data-i18n-tip="set.tip.bot_trick_pgn" class="tooltipped" data-position="right" data-tooltip="Paste a PGN to add your own game to the dropdown - one of your own from chess.com, or any game you like. It has to end in checkmate or a draw: a game that finished by resignation stops with the bot still to move, and it will then answer for real. The panel says so rather than half-playing it."><span data-i18n="set.bot_trick_pgn">Your Own Game (PGN)</span></span></div>
+                    <div class="set-ctl">
+                        <textarea id="bot_trick_pgn_input" rows="4" class="set-ta" spellcheck="false"
+                                  placeholder="1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7#"></textarea>
+                    </div>
+                </div>
             </section>
 
             <!-- ===================== BEYOND THE ENGINE ===================== -->

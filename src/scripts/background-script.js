@@ -228,6 +228,12 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     chesscomAnalyze(msg.chesscomAnalyze).then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
   }
+  // Bot-game tricks. Runs on the sender's own tab, and only on Play Computer -- see botExploit.
+  if (msg.botExploit) {
+    botExploit(sender.tab, msg.botExploit).then(sendResponse)
+      .catch(e => sendResponse({ok: false, why: String(e)}));
+    return true; // async sendResponse
+  }
   if (msg.tablebaseLookup) {
     tablebaseLookup(msg.tablebaseLookup).then(sendResponse).catch(e => sendResponse({error: String(e)}));
     return true; // async sendResponse
@@ -1031,6 +1037,111 @@ async function chesscomAnalyze({game}) {
     // close ONLY a tab we opened; one the user already had stays put.
     if (found.spawned) { try { await chrome.tabs.remove(tab.id); } catch (e) { /* */ } }
   }
+}
+
+// ---- bot-game tricks (chess.com Play Computer) --------------------------------------------------
+// A game against a bot on /play/computer is refereed by the BROWSER. No server adjudicates it, and
+// the board element's own game object checks neither whose turn it is nor that a draw was ever
+// offered -- so the page will take moves for BOTH sides and accept an offer nobody made. Nothing
+// here computes a chess move: the move list arrives already validated from the panel, which is the
+// side that has chess.js, and this only hands it to the page's own methods.
+//
+// INJECTED ON DEMAND rather than declared as a MAIN-world content script. Until the button is
+// pressed there is nothing of this in the page to find -- the same reasoning that put the panel in
+// a closed shadow root.
+// /play/computer ONLY, and measured rather than assumed: the url stays /play/computer for the whole
+// game -- picking a bot, playing, and a resumed game that was left unfinished. chess.com moves to
+// /game/computer/<id> when the game ENDS, and that page is the finished-game view with nothing left
+// to do, so widening the gate to cover it would only add surface. Someone who presses the button
+// there is told to go back, which is the right answer.
+const BOT_PAGE_RE = /^https?:\/\/(www\.)?chess\.com\/play\/computer(\/|$|[?#])/;
+
+async function botExploit(tab, req) {
+  // sender.tab.url is authenticated by Chrome; a message-supplied url is not (issue #36 SS1). This
+  // gate matters more than most: `wc-chess-board` exists in LIVE games too, where moving for the
+  // opponent is refused by the server, desyncs the client, and is worth somebody noticing.
+  if (!tab || !tab.id || !BOT_PAGE_RE.test(tab.url || '')) return {ok: false, why: 'not-computer-page'};
+  // Second gate on the stored opt-in. The panel already hides the row, but the panel is not the
+  // trust boundary -- this is the only check that holds if a message arrives any other way.
+  const st = await chrome.storage.local.get('bot_tricks');
+  if (String(st.bot_tricks) !== 'true') return {ok: false, why: 'not-enabled'};
+
+  const [r] = await chrome.scripting.executeScript({
+    target: {tabId: tab.id}, world: 'MAIN', args: [req],
+    func: (req) => {
+      const board = document.querySelector('wc-chess-board');
+      const game = board && board.game;
+      if (!game) return {ok: false, why: 'no-board'};
+
+      // WHICH COLOUR ARE WE. Read before anything else, because every failure below is more useful
+      // to the panel with it attached -- an Auto pick that guessed wrong retries on this value.
+      let side = null;
+      try {
+        const p = game.getPlayingAs();
+        side = (p === 1) ? 'white' : (p === 2) ? 'black' : null;
+      } catch (e) { /* different board build; fall through to the orientation */ }
+      if (!side) { try { side = game.getOptions().flipped ? 'black' : 'white'; } catch (e) { /* */ } }
+
+      if (req.what === 'draw') {
+        if (typeof game.agreeDraw !== 'function') return {ok: false, why: 'no-agreedraw', side};
+        game.agreeDraw();
+        return {ok: true, did: 'draw', side};
+      }
+
+      if (typeof game.move !== 'function' || typeof game.getFEN !== 'function') {
+        return {ok: false, why: 'no-move-api', side};
+      }
+      const before = String(game.getFEN() || '');
+      const f = before.split(' ');
+      // Every line in the library is an opening, so anything past the first move is a different
+      // position and the moves would simply be refused one at a time.
+      if (f[1] !== 'w' || Number(f[5]) > 1) return {ok: false, why: 'not-move-1', side, fen: before};
+      if (!side) return {ok: false, why: 'no-side'};
+      // Never played on a hunch: the wrong colour's line hands the mate to the bot instead. A line
+      // that ends in a DRAW has no winner and is fine from either side.
+      if (req.winner != null && req.winner !== side) return {ok: false, why: 'wrong-colour', side};
+
+      // WHY THE WHOLE GAME CAN BE HANDED OVER AT ONCE. Measured: the bot does not answer a move made
+      // through game.move() -- whatever kicks its engine hangs off the page's own input handling, not
+      // off the move itself. So there is no race with a thinking opponent, and the loop below never
+      // has to wait for anything.
+      // A LINE MAY ALSO END WITH A CLAIMED DRAW. That is what lets a real game be replayed move for
+      // move without touching it: most games stop by resignation or agreement, neither of which is a
+      // position, and the alternative was inventing a finish. Safe only because of the measurement
+      // below -- the bot never gets a turn, so there is no race between the last move and the claim.
+      const claimDraw = req.endWith === 'draw';
+      const moves = Array.isArray(req.moves) ? req.moves : [];
+      if (!moves.length) return {ok: false, why: 'no-moves', side};
+
+      try { game.move(moves[0]); } catch (e) { return {ok: false, why: 'move-rejected', at: moves[0], side}; }
+      // ORACLE, not an assumption. game.move() reports a refusal by doing nothing rather than by
+      // throwing, so an unchanged position after the first move is the one reliable sign that
+      // chess.com has closed this. Checked here, before the rest is committed to.
+      if (String(game.getFEN() || '') === before) return {ok: false, why: 'no-effect', side};
+
+      // THE REST PLAYS IN THE PAGE, DELIBERATELY NOT AWAITED. A long game is minutes of wall clock
+      // and an MV3 worker sleeps; awaiting it here would tie the whole line to a worker that is
+      // allowed to die halfway through. Everything diagnosable was checked above, so what is left
+      // is replaying moves already known to be legal from this position.
+      const mean = Math.max(0, Math.min(5000, Number(req.delay) || 0));
+      (async () => {
+        for (let i = 1; i < moves.length; i++) {
+          // Jittered, not a metronome. chess.com keeps a per-move clock time in the game archive,
+          // and 80 moves at exactly 500ms apart is a signature no human produces.
+          await new Promise(r => setTimeout(r, mean * (0.7 + Math.random() * 0.6)));
+          try { game.move(moves[i]); } catch (e) { return; }
+        }
+        // The claim goes in here, at the end of the same detached loop, so it lands after the last
+        // move rather than 90 moves before it. No pause before it: one was added on the theory that
+        // the page needed its own move to settle first, and removing it again changed nothing --
+        // the failure that prompted it was a stale extension, not a race. Measured both ways.
+        if (claimDraw) { try { game.agreeDraw(); } catch (e) { /* nothing left to end */ } }
+      })();
+      return {ok: true, did: 'mate', side, moves: moves.length,
+              seconds: Math.round((moves.length - 1) * mean / 1000)};
+    },
+  });
+  return (r && r.result) || {ok: false, why: 'no-result'};
 }
 
 async function tablebaseLookup({fen, variant}) {
