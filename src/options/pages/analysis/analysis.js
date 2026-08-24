@@ -163,6 +163,21 @@ class AnalysisPage extends SettingsPage {
         $('an_engine2_select')?.addEventListener('change', () => reloadEngine2());
         for (const id of ['an_lines_input', 'an_threads_input', 'an_hash_input'])
             $(id)?.addEventListener('change', () => reloadEngine());
+        // The -/+ boxes beside those three. SettingsPage.initSteppers does this for the settings
+        // pages, but this page is not one of them -- same behaviour, wired here.
+        for (const btn of document.querySelectorAll('.an-grid .set-step-btn')) {
+            btn.addEventListener('click', () => {
+                const input = btn.parentElement.querySelector('input[type=number]');
+                if (!input) return;
+                const step = +input.step || 1;
+                let val = (+input.value || 0) + (+btn.dataset.step) * step;
+                if (input.min !== '') val = Math.max(+input.min, val);
+                if (input.max !== '') val = Math.min(+input.max, val);
+                input.value = val;
+                input.dispatchEvent(new Event('input', {bubbles: true}));
+                input.dispatchEvent(new Event('change', {bubbles: true}));
+            });
+        }
         // a number the machine cannot honour gets one amber sentence, live as it is typed
         const anWarn = () => refreshLimitWarnings($('an_limits_warn'), $('an_threads_input')?.value, $('an_hash_input')?.value);
         $('an_threads_input')?.addEventListener('input', anWarn);
@@ -215,6 +230,18 @@ function onKey(e) {
     if (!$('an_board') || /input|textarea|select/i.test(e.target?.tagName || '')) return;
     if (e.key === 'ArrowLeft') { go(cursor - 1); e.preventDefault(); }
     else if (e.key === 'ArrowRight') { go(cursor + 1); e.preventDefault(); }
+    // Space plays the engine's first choice. Read off the rendered row rather than the last
+    // evaluation object: the rows are already filtered to moves that are legal HERE, so a stale
+    // line arriving from the previous position cannot be played by accident. Default is prevented
+    // only when there was a move to play, so space still scrolls while the engine is thinking.
+    else if (e.key === ' ' || e.code === 'Space') {
+        const uci = topEngineUci();
+        if (uci) { playMove(uci.slice(0, 2), uci.slice(2, 4), uci[4]); e.preventDefault(); }
+    }
+}
+
+function topEngineUci() {
+    return $('an_engine_lines')?.querySelector('.an-lrow[data-uci]')?.dataset.uci || '';
 }
 
 function fillSelects() {
@@ -1109,10 +1136,15 @@ function renderEval(pos, ev) {
     const top = (ev?.lines || []).find(l => legalHere(pos.fen, l.pv?.[0]));
     const cp = top?.cp;
     const fill = $('an_evalfill'), label = $('an_evallabel');
-    const pct = cp == null ? 50 : Core.clamp(50 + 50 * Math.tanh(cp / 400), 2, 98);
+    const mated = cp != null && Core.isMateScore(cp);
+    // A mate fills the bar OUTRIGHT. The 2..98 clamp exists so a huge but finite eval still shows a
+    // sliver of the losing side; a mate is not huge-but-finite, and leaving 2% for the mated player
+    // reads as "still something there".
+    const pct = cp == null ? 50 : mated ? (cp > 0 ? 100 : 0)
+        : Core.clamp(50 + 50 * Math.tanh(cp / 400), 2, 98);
     if (fill) fill.style.height = `${pct}%`;
     if (label) {
-        label.textContent = cp == null ? '' : (Core.isMateScore(cp) ? (cp > 0 ? 'M' : '-M') : (cp / 100).toFixed(1));
+        label.textContent = cp == null ? '' : (mated ? (cp > 0 ? 'M' : '-M') + (Core.MATE_CP - Math.abs(cp)) : (cp / 100).toFixed(1));
         // the number rides the filled side of the bar so it is always readable
         label.classList.toggle('an-num-top', pct < 50);
     }
@@ -1171,9 +1203,13 @@ function renderEngineLines(pos, ev) {
     const lines = (ev?.lines || []).filter(l => legalHere(pos.fen, l.pv?.[0]))
         .slice(0, Math.max(1, +cfg('an_lines')));
     host.innerHTML = lines.length ? lines.map((l, i) => {
-        const cp = l.cp * (pos.turn === 'w' ? 1 : -1);
-        const val = Core.isMateScore(l.cp) ? (cp > 0 ? '#' : '-#') : (cp / 100).toFixed(2);
-        const pct = Core.clamp(Core.winPercent(l.cp * (pos.turn === 'w' ? 1 : -1)), 2, 100);
+        // White's perspective, always. l.cp is ALREADY white-relative -- engines.js stores
+        // Core.toWhiteCp() when it parses the info line -- so multiplying by the side to move here
+        // flipped it back and every eval on the page changed sign on black's turn while the bar
+        // under the board, which never flipped, disagreed with it.
+        const cp = l.cp;
+        const val = Core.isMateScore(cp) ? (cp > 0 ? '#' : '-#') : (cp / 100).toFixed(2);
+        const pct = Core.clamp(Core.winPercent(cp), 2, 100);
         return lineRow(i, RANK_COLOURS[Math.min(i, 4)], sanOf(pos.fen, l.pv?.[0]),
                        pvText(pos.fen, l.pv, 4), val, pct, l.pv?.[0] || '');
     }).join('') : '<div class="an-lrow"><span></span><span class="an-lval">thinking…</span><span></span></div>';
@@ -1194,9 +1230,13 @@ function renderEngine2Lines(pos, ev) {
     const lines = (ev?.lines || []).filter(l => legalHere(pos.fen, l.pv?.[0]))
         .slice(0, Math.max(1, +cfg('an_lines')));
     host.innerHTML = lines.length ? lines.map((l, i) => {
-        const cp = l.cp * (pos.turn === 'w' ? 1 : -1);
-        const val = Core.isMateScore(l.cp) ? (cp > 0 ? '#' : '-#') : (cp / 100).toFixed(2);
-        const pct = Core.clamp(Core.winPercent(l.cp * (pos.turn === 'w' ? 1 : -1)), 2, 100);
+        // White's perspective, always. l.cp is ALREADY white-relative -- engines.js stores
+        // Core.toWhiteCp() when it parses the info line -- so multiplying by the side to move here
+        // flipped it back and every eval on the page changed sign on black's turn while the bar
+        // under the board, which never flipped, disagreed with it.
+        const cp = l.cp;
+        const val = Core.isMateScore(cp) ? (cp > 0 ? '#' : '-#') : (cp / 100).toFixed(2);
+        const pct = Core.clamp(Core.winPercent(cp), 2, 100);
         return lineRow(i, RANK_COLOURS_B[Math.min(i, 4)], sanOf(pos.fen, l.pv?.[0]),
                        pvText(pos.fen, l.pv, 4), val, pct, l.pv?.[0] || '');
     }).join('') : '<div class="an-lrow"><span></span><span class="an-lval">thinking…</span><span></span></div>';
@@ -1221,9 +1261,15 @@ function renderArrows(pos, ev, hum) {
     const svg = $('an_arrows');
     if (!svg) return;
     const inner = $('an_board')?.querySelector('.board-b72b1');
-    if (inner) {
-        svg.style.left = `${inner.offsetLeft + 2}px`;
-        svg.style.top = `${inner.offsetTop + 2}px`;
+    if (inner && inner.clientWidth) {
+        // Measured against the WRAPPER, not via offsetTop. offsetTop resolves against the nearest
+        // POSITIONED ancestor, and on a return visit the page's stylesheet has not been applied yet
+        // -- .an-board-wrap is still `static`, so the offset came back in document coordinates
+        // (7847px) and the overlay parked itself two screens below the board. That stale box also
+        // set the document height, which is the "long empty page with a floating arrow" bug.
+        const wb = svg.parentElement.getBoundingClientRect(), ib = inner.getBoundingClientRect();
+        svg.style.left = `${ib.left - wb.left + 2}px`;
+        svg.style.top = `${ib.top - wb.top + 2}px`;
         svg.style.width = `${inner.clientWidth}px`;
         svg.style.height = `${inner.clientHeight}px`;
     }

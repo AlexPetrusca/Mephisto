@@ -1,7 +1,7 @@
 import {define} from "../../framework/require.js";
 import {wirePgnDrop} from "../../util/dragdrop.js";
 import {refreshLimitWarnings} from "../../util/limits.js";
-import {EE_VERSION, EE_CLASS, eeCached, eeDownload, eeForget, eeRun, eeCommands, SF_BUILD, sfCached, sfDownload, sfForget, sfSearch} from "./ee-host.js";
+import {EE_VERSION, EE_CLASS, eeCached, eeDownload, eeForget, eeRun, eeCommands, eeVersion, eeNewer, eeCheckUpdate, eeUpdate, SF_BUILD, sfCached, sfDownload, sfForget, sfSearch} from "./ee-host.js";
 
 // Game Review: analyse a finished game on THIS page, in the background, with the extension's own
 // engines. Nothing is uploaded -- the PGN stays in the tab, the engine runs in the offscreen
@@ -418,6 +418,16 @@ async function lookupOpening(positions) {
 
 // Fold the raw searches into the move table the whole report is drawn from.
 function assemble(game, positions, moves, book, opts) {
+    // A finished position gets no engine line -- there is nothing to search -- so the eval bar and
+    // the score readout sat empty on the very last position of every decisive game, which is the
+    // one a review is most often opened to look at. The rules already say what it is worth, and
+    // chess.com's own review reports it the same way (mate 0 on the mating move). No `mate` field:
+    // scoreText reads the distance out of the cp, so the sign survives and a black mate prints #-0.
+    for (const p of positions) {
+        if (p.lines?.length) continue;
+        if (p.over === 'mate') p.lines = [{cp: p.turn === 'w' ? -Core.MATE_CP : Core.MATE_CP, mate: null, pv: []}];
+        else if (p.over === 'draw') p.lines = [{cp: 0, mate: null, pv: []}];
+    }
     for (const m of moves) {
         const before = positions[m.ply];
         const after = positions[m.ply + 1];
@@ -547,7 +557,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
     ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 
 function scoreText(cp, mate) {
-    if (mate != null) return (mate > 0 ? '#' : '#-') + Math.abs(mate);
+    // >= 0, not > 0: chess.com reports mate 0 on the mating move itself, and `mate > 0` sent that
+    // through the losing branch as "#-0".
+    if (mate != null) return (mate >= 0 ? '#' : '#-') + Math.abs(mate);
     // No mate field to hand (the move table keeps one number per move): the distance is still in
     // there, because that is exactly how toWhiteCp encodes it. `#` with no number reads as a bug.
     if (Core.isMateScore(cp)) {
@@ -712,25 +724,33 @@ function renderTimeCards() {
 // The eval graph: white's advantage over the game, clamped so one mate score cannot flatten
 // everything else into a straight line. Clicking it jumps the board to that move.
 function renderGraph() {
-    const svg = buildGraphSvg(true);
+    const host = $('rv_graph');
+    const r = host.getBoundingClientRect();
+    const svg = buildGraphSvg(true, {w: r.width, h: r.height});
     if (!svg) return;
-    $('rv_graph').innerHTML = svg;
-    const el = $('rv_graph').querySelector('svg');
+    host.innerHTML = svg;
+    const el = host.querySelector('svg');
+    // The viewBox tracks the panel, so a resize has to rebuild it or the picture distorts again.
+    if (!renderGraph.onResize) {
+        let t;
+        renderGraph.onResize = () => { clearTimeout(t); t = setTimeout(() => { if (report) { renderGraph(); setGraphCursor(); } }, 150); };
+        addEventListener('resize', renderGraph.onResize);
+    }
     el.addEventListener('click', (e) => {
         const r = el.getBoundingClientRect();
         showPly(Math.round(((e.clientX - r.left) / r.width) * (report.positions.length - 1)));
     });
-    $('rv_graph_legend').innerHTML = Core.CLASS_ORDER
-        .filter(k => report.counts.w[k] || report.counts.b[k])
-        .map(k => `<span class="rv-c-${k}">${CLASS_LABEL[k]} - white ${report.counts.w[k]}, black ${report.counts.b[k]}</span>`)
-        .join('');
-}
+    }
 
 // The eval graph. `live` uses the page's CSS variables (so it follows dark mode and the cursor line
 // is there to move); the export needs the same picture with literal colours and no cursor, since it
 // carries no stylesheet of ours and runs no script.
-function buildGraphSvg(live) {
-    const W = 1000, H = 150, MID = H / 2;
+function buildGraphSvg(live, box) {
+    // Sized 1:1 with its panel on the live page. preserveAspectRatio="none" means every mismatch
+    // between the viewBox and the box IS a distortion: a fixed 1000x150 viewBox squeezed into the
+    // 510x210 summary panel crushed the x axis to half its width and stretched y by 1.4.
+    // The export has no panel and keeps the old fixed canvas.
+    const W = Math.round(box?.w) || 1000, H = Math.round(box?.h) || 150, MID = H / 2;
     const pts = report.positions.map(p => p.lines?.[0]?.cp ?? 0);
     if (!pts.length) return '';
     const col = live
@@ -776,6 +796,15 @@ function buildGraphSvg(live) {
     </svg>`;
 }
 
+// Read the width back off the viewBox: it is the panel's pixel width now, not a fixed 1000.
+function setGraphCursor() {
+    const line = $('rv_graph_cursor');
+    if (!line || !report) return;
+    const W = +(line.ownerSVGElement?.getAttribute('viewBox') || '0 0 1000 150').split(' ')[2];
+    const x = (cursor / Math.max(1, report.positions.length - 1)) * W;
+    line.setAttribute('x1', x); line.setAttribute('x2', x);
+}
+
 function moveLabel(m) {
     return `${Math.floor(m.ply / 2) + 1}${m.color === 'w' ? '.' : '...'} ${m.san}`;
 }
@@ -803,7 +832,11 @@ function renderMoves() {
 function moveCell(m) {
     if (!m) return '<div class="rv-mcell"></div>';
     const k = m.klass || 'good';
-    const loss = (m.cpLoss == null || m.cpLoss < 1) ? '' : `−${Math.round(m.cpLoss)}`;
+    // White's perspective, like every other number on the page: cpLoss is stored as a magnitude for
+    // whoever moved, so a black mistake is white GAINING and reads +N. It used to print -N for both
+    // colours, which said "someone lost something" without saying who.
+    const swing = (m.cpLoss == null || m.cpLoss < 1) ? null : Math.round(m.cpLoss) * (m.color === 'w' ? -1 : 1);
+    const loss = swing == null ? '' : (swing > 0 ? `+${swing}` : `−${Math.abs(swing)}`);
     return `<div class="rv-mcell rv-c-${k}" data-ply="${m.ply}" title="${esc(CLASS_LABEL[k])}">
         ${classIcon(k)}<span class="rv-san">${esc(m.san)}</span>
         <span class="rv-loss">${loss}</span></div>`;
@@ -1084,7 +1117,32 @@ function ensureBoard() {
     });
 }
 
+// Black on top, white at the bottom -- unless the board is flipped, in which case they swap with it.
+// Title, name and rating, which playerName/playerLine already assemble from the PGN tags.
+function renderPlayers() {
+    const top = $('rv_player_top'), bottom = $('rv_player_bottom');
+    if (!top || !bottom) return;
+    const flipped = board && board.orientation && board.orientation() === 'black';
+    const strip = (color) => {
+        const t = report.game.tags;
+        const title = color === 'w' ? t.WhiteTitle : t.BlackTitle;
+        const elo = color === 'w' ? t.WhiteElo : t.BlackElo;
+        const name = (color === 'w' ? t.White : t.Black) || (color === 'w' ? 'White' : 'Black');
+        return `<span class="rv-p-dot"></span>`
+            + (title && title !== '-' ? `<span class="rv-p-title">${esc(title)}</span>` : '')
+            + `<span class="rv-p-name">${esc(name)}</span>`
+            + (elo ? `<span class="rv-p-elo">${esc(String(elo))}</span>` : '');
+    };
+    // The strip above the board belongs to whoever is playing from the far side.
+    const topColor = flipped ? 'w' : 'b';
+    top.className = 'rv-player rv-p-' + (topColor === 'w' ? 'white' : 'black');
+    bottom.className = 'rv-player rv-p-' + (topColor === 'w' ? 'black' : 'white');
+    top.innerHTML = strip(topColor);
+    bottom.innerHTML = strip(topColor === 'w' ? 'b' : 'w');
+}
+
 function showPly(ply) {
+    renderPlayers();
     if (!report) return;
     cursor = Core.clamp(ply, 0, report.positions.length - 1);
     const pos = report.positions[cursor];
@@ -1093,11 +1151,7 @@ function showPly(ply) {
     drawArrows(pos, played);
     renderEvalBar(pos);
     renderDetail(pos, played);
-    const line = $('rv_graph_cursor');
-    if (line) {
-        const x = (cursor / Math.max(1, report.positions.length - 1)) * 1000;
-        line.setAttribute('x1', x); line.setAttribute('x2', x);
-    }
+    setGraphCursor();
     document.querySelectorAll('.rv-mcell.rv-sel').forEach(el => el.classList.remove('rv-sel'));
     const sel = document.querySelector(`.rv-mcell[data-ply="${cursor - 1}"]`);
     if (sel) {
@@ -1111,15 +1165,21 @@ function showPly(ply) {
 function renderEvalBar(pos) {
     const fill = $('rv_evalfill'), label = $('rv_evallabel');
     if (!fill && !label) return;
-    // chess.com reviews carry no centipawn eval, so there is nothing for the bar to show -- hide it.
-    const bar = (fill || label)?.closest('.rv-bar');
-    if (bar) bar.classList.toggle('hidden', !!report?.ccr);
-    if (report?.ccr) return;
+    // chess.com's reviews DO carry a centipawn eval -- it is a zigzag varint in the protobuf, which
+    // read as an unsigned magnitude and so looked like nonsense. Decoded, the bar works on this path
+    // too; it only hides when a position genuinely has no line.
     const cp = pos?.lines?.[0]?.cp;
-    const pct = cp == null ? 50 : Core.clamp(50 + 50 * Math.tanh(cp / 400), 2, 98);
+    const bar = (fill || label)?.closest('.rv-bar');
+    if (bar) bar.classList.remove('hidden');
+    const mated = cp != null && Core.isMateScore(cp);
+    // A mate fills the bar OUTRIGHT. The 2..98 clamp exists so a huge but finite eval still shows a
+    // sliver of the losing side; a mate is not huge-but-finite, and leaving 2% for the mated player
+    // reads as "still something there".
+    const pct = cp == null ? 50 : mated ? (cp > 0 ? 100 : 0)
+        : Core.clamp(50 + 50 * Math.tanh(cp / 400), 2, 98);
     if (fill) fill.style.height = `${pct}%`;
     if (label) {
-        label.textContent = cp == null ? '' : (Core.isMateScore(cp) ? (cp > 0 ? 'M' : '-M') : (cp / 100).toFixed(1));
+        label.textContent = cp == null ? '' : (mated ? (cp > 0 ? 'M' : '-M') + (Core.MATE_CP - Math.abs(cp)) : (cp / 100).toFixed(1));
         label.classList.toggle('rv-num-top', pct < 50);   // the number rides the filled side
     }
 }
@@ -1133,9 +1193,15 @@ function drawArrows(pos, played) {
     // wrapper's box. Take the overlay's geometry from the board element itself rather than from the
     // wrapper, or every arrow lands a few pixels off its square.
     const inner = $('rv_board')?.querySelector('.board-b72b1');
-    if (inner) {
-        svg.style.left = `${inner.offsetLeft + 2}px`;
-        svg.style.top = `${inner.offsetTop + 2}px`;
+    if (inner && inner.clientWidth) {
+        // Measured against the WRAPPER, not via offsetTop. offsetTop resolves against the nearest
+        // POSITIONED ancestor, and on a return visit the page's stylesheet has not been applied yet
+        // -- .rv-board-wrap is still `static`, so the offset came back in document coordinates
+        // (7847px) and the overlay parked itself two screens below the board. That stale box also
+        // set the document height, which is the "long empty page with a floating arrow" bug.
+        const wb = svg.parentElement.getBoundingClientRect(), ib = inner.getBoundingClientRect();
+        svg.style.left = `${ib.left - wb.left + 2}px`;
+        svg.style.top = `${ib.top - wb.top + 2}px`;
         svg.style.width = `${inner.clientWidth}px`;
         svg.style.height = `${inner.clientHeight}px`;
     }
@@ -1349,9 +1415,12 @@ function renderDetail(pos, played) {
     }
     const lines = (pos.lines || []).slice(0, report.opts.multipv);
     $('rv_lines').innerHTML = lines.map((l, i) => {
-        const stm = pos.turn;
-        const shown = l.cp * (stm === 'w' ? 1 : -1); // from the side to move, like every engine UI
-        return `<div class="rv-line"><span class="rv-score">${esc(scoreText(shown, l.mate))}</span>
+        // White's perspective, always (user call 2026-08-24), matching the eval bar and the graph.
+        // It used to flip to the side to move "like every engine UI", which meant the same position
+        // read +0.4 on the bar and -0.39 in the line list. `mate` still arrives raw from UCI, so it
+        // needs the flip that cp already had applied when engines.js parsed it.
+        const mate = l.mate == null ? null : (pos.turn === 'w' ? l.mate : -l.mate);
+        return `<div class="rv-line"><span class="rv-score">${esc(scoreText(l.cp, mate))}</span>
             <span class="rv-pv">${esc(pvToSan(pos.fen, l.pv).join(' '))}</span></div>`;
     }).join('');
 }
@@ -1692,13 +1761,24 @@ function renderCcrReview(r, pgnText) {
 // indicators sit out; what chess.com DOES give -- per-move classification, coach commentary, accuracy,
 // opening -- lands on exactly the widgets the engine review uses for those same things. Positions come
 // from replaying the PGN (chess.com sends from/to squares, not FENs), zipped by ply with the review.
+// One line per position, in the shape the bar, the graph and the PV list already read. Mate is
+// re-encoded the way toWhiteCp does it so isMateScore/scoreText print "M3" rather than a raw number.
+function ccrLines(rm) {
+    if (!rm) return [];
+    if (rm.mateIn != null) {
+        const cp = rm.mateIn >= 0 ? Core.MATE_CP - rm.mateIn : -(Core.MATE_CP + rm.mateIn);
+        return [{cp, mate: rm.mateIn, pv: []}];
+    }
+    return rm.cp == null ? [] : [{cp: rm.cp, mate: null, pv: []}];
+}
+
 function buildCcrReport(review, pgnText) {
     const parsed = Core.parsePgn(pgnText)[0];
     if (!parsed || !parsed.moves.length) return null;
     const t = parsed.tags || {};
     let chess;
     try { chess = new Chess('chess', parsed.startFen || undefined); } catch (e) { return null; }
-    const positions = [{fen: chess.fen()}];
+    const positions = [{fen: chess.fen(), lines: ccrLines(review.moves[0])}];
     const moves = [];
     parsed.moves.forEach((rec, i) => {
         const san = typeof rec === 'string' ? rec : rec.san;
@@ -1715,7 +1795,10 @@ function buildCcrReport(review, pgnText) {
             commentary: rm.commentary || '',
             cpLoss: 0,
         });
-        positions.push({fen: chess.fen()});
+        // chess.com's score for the move it just played IS the evaluation of the position that move
+        // leads to, white-relative, so it lands on the position we are about to push. That gives the
+        // eval bar and the graph real numbers on this path instead of a flat line.
+        positions.push({fen: chess.fen(), lines: ccrLines(rm)});
     });
     if (!moves.length) return null;
     const counts = (color) => {
@@ -1811,7 +1894,6 @@ function renderCcrReport(strengthLabel) {
     report.ccrStrength = strengthLabel || null;
     $('rv-report').classList.remove('hidden');
     $('rv_export').disabled = true;                                    // no engine export
-    document.querySelector('.rv-graph-wrap')?.classList.add('hidden'); // no eval graph
     $('rv-indicators')?.classList.add('hidden');                       // engine-only readings
     $('rv-strength')?.classList.add('hidden');
     $('rv-human')?.classList.add('hidden');
@@ -1819,6 +1901,7 @@ function renderCcrReport(strengthLabel) {
     $('rv_time_wrap')?.classList.add('hidden');
     renderHeader();
     renderCards();
+    renderGraph();
     renderMoves();
     ensureBoard();
     showPly(report.moves.length);
@@ -2003,17 +2086,47 @@ class ReviewPage {
         // ---- chess.com's classifier, locally -----------------------------------------------
         // Three buttons and one rule: nothing downloads until asked. See ee-host.js.
         const eeSay = (t, bad) => { const el = $('rv_ee_status'); if (el) { el.textContent = t; el.classList.toggle('rv-bad', !!bad); } };
+        // The version actually installed, which an update can move past the one we ship against.
+        let eeInstalled = EE_VERSION, eeFound = '';
         const eeSync = async () => {
             const have = await eeCached();
-            const get = $('rv_ee_get'), run = $('rv_ee_run'), forget = $('rv_ee_forget');
+            const get = $('rv_ee_get'), run = $('rv_ee_run'), forget = $('rv_ee_forget'), upd = $('rv_ee_update');
             if (!get || !run) return;
             get.classList.toggle('hidden', !!have);
             forget?.classList.toggle('hidden', !have);
+            upd?.classList.toggle('hidden', !have);
+            if (upd) upd.textContent = eeFound ? `Update to v${eeFound}` : 'Check for update';
             run.disabled = !have;
-            if (have) eeSay(`Engine ready (${(have.bytes / 1048576).toFixed(1)} MB, v${EE_VERSION}, kept on this machine).`);
+            if (have) eeSay(`Engine ready (${(have.bytes / 1048576).toFixed(1)} MB, v${eeInstalled}, kept on this machine).`
+                + (eeFound ? ` v${eeFound} is available.` : ''));
             return have;
         };
-        eeSync();
+        eeVersion().then(v => { eeInstalled = v; eeSync(); });
+        // Two jobs, one button: check first, then download what the check found.
+        $('rv_ee_update')?.addEventListener('click', async () => {
+            const btn = $('rv_ee_update');
+            btn.disabled = true;
+            try {
+                if (!eeFound) {
+                    eeSay('Asking chess.com for a newer build\u2026');
+                    const latest = await eeCheckUpdate(eeInstalled);
+                    if (!eeNewer(eeInstalled, latest)) { eeFound = ''; eeSay(`v${eeInstalled} is the newest build chess.com is serving.`); return; }
+                    eeFound = latest;
+                    await eeSync();
+                    return;
+                }
+                const target = eeFound;
+                await eeUpdate(target, (got, total) => {
+                    const mb = (got / 1048576).toFixed(1);
+                    eeSay(total ? `Updating to v${target}\u2026 ${mb} MB of ${(total / 1048576).toFixed(1)} MB` : `Updating\u2026 ${mb} MB`);
+                });
+                eeInstalled = target;
+                eeFound = '';
+                await eeSync();
+            } catch (e) {
+                eeSay(`Could not update: ${e.message || e}`, true);
+            } finally { btn.disabled = false; }
+        });
         $('rv_ee_get')?.addEventListener('click', async () => {
             const btn = $('rv_ee_get');
             btn.disabled = true;
@@ -2260,6 +2373,17 @@ class ReviewPage {
         bindNumber('rv_maia3_elo', 'rv_maia3_elo');
         bindSteppers();
         bindHumanUi();
+
+        // Which of the three reviews is on screen. Registered here like every other setting -- a
+        // control that renders but is never wired reads as working and silently forgets itself.
+        const rvModeSync = () => {
+            const m = cfg('rv_mode') || 'own';
+            const sel = $('rv_mode');
+            if (sel && sel.value !== m) sel.value = m;
+            document.querySelectorAll('.rv-mode').forEach(el => el.classList.toggle('hidden', el.dataset.mode !== m));
+        };
+        $('rv_mode')?.addEventListener('change', () => { setCfg('rv_mode', $('rv_mode').value); rvModeSync(); });
+        rvModeSync();
 
         for (const key of ['rv_book', 'rv_human_report', 'rv_strength', 'rv_batch']) {
             const el = $(key);

@@ -864,6 +864,15 @@ const ccrSubs = (b, f) => (b ? ccrWalk(b).filter(x => x.f === f && x.w === 2).ma
 const ccrNum = (b, f) => { const e = b && ccrWalk(b).find(x => x.f === f && (x.w === 0 || x.w === 5)); return e ? e.v : null; };
 const ccrStr = (b, f) => { const v = ccrSub(b, f); return v ? new TextDecoder().decode(v) : null; };
 const ccrAlg = (n) => (n >= 1 && n <= 64) ? 'abcdefgh'[(n - 1) % 8] + (Math.floor((n - 1) / 8) + 1) : null;
+// The score is a zigzag varint (sint32), which is why it was mistaken for an unsigned magnitude:
+// 109 is not +1.09, it is -0.55. VALIDATED against our own engine over the Immortal Game -- 45
+// plies, mean |difference| 0.28 pawns with the sign matching everywhere, and the raw reading would
+// have made every ply positive in a game our engine scores at -0.6 through the King's Gambit.
+const ccrZig = (v) => (v == null) ? null : ((v >>> 1) ^ -(v & 1));
+// Mate distance is a PLAIN varint, not zigzag: plies 39-44 of that game decode to 3,2,2,1,1,0,
+// matching our engine's M3,M2,M2,M1,M1 exactly (zigzag would have read the first as -2).
+// Only White mates appear in the capture, so a negative (Black) mate is inferred, not measured.
+const ccrSigned = (v) => (v == null) ? null : (v > 0x7fffffff ? v - 0x100000000 : v);
 
 function ccrIsMsg(b) {
   try {
@@ -906,12 +915,18 @@ function ccrDecodeReview(outer) {
   const moves = ccrSubs(md, 3).map((e) => {
     const a = ccrSub(e, 2);
     const ft = ccrSub(a, 1);
+    // a.f4 is the score of the move that was PLAYED, i.e. the evaluation of the position it leads
+    // to. a.f4.f1 is a oneof: field 1 = centipawns (zigzag, white-relative), field 2 = mate in N.
+    // a.f4.f3 is a constant 13 on every ply and carries nothing.
+    const score = ccrSub(ccrSub(a, 4), 1);
     return {
       from: ccrAlg(ccrNum(ft, 1)),
       to: ccrAlg(ccrNum(ft, 2)),
-      // the played move's classification is a.f3 (a.f4.f3 is a constant book/eval tag -- 13 -- not this)
+      // the played move's classification is a.f3
       classification: ccrNum(a, 3),
       commentary: ccrText(ccrSub(a, 5)),
+      cp: ccrZig(ccrNum(score, 1)),
+      mateIn: ccrSigned(ccrNum(score, 2)),
     };
   });
   return {

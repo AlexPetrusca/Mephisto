@@ -87,9 +87,12 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 
 .rv-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-    margin-bottom: 22px;
+    /* Narrower and no longer full-bleed: these two cards were taking a screen's width and a third
+       of the height for eleven numbers, and pushing the board -- the thing you actually read -- off
+       the fold. */
+    grid-template-columns: repeat(auto-fit, minmax(190px, 260px));
+    gap: 10px;
+    margin-bottom: 14px;
 }
 .rv-card {
     padding: 12px 14px;
@@ -106,6 +109,44 @@ html.dark .rv-status.rv-bad { color: #d15050; }
     color: var(--mp-mute);
 }
 .rv-big { font-size: 26px; font-weight: 600; line-height: 1.1; }
+
+/* The two accuracy cards, tightened. They were 302px tall for eleven numbers and pushed the board
+   -- the thing being read -- under the fold on a 1200px window. Scoped to #rv_cards so the strength
+   and human-likeness cards, which carry a curve and a table, keep their spacing. */
+/* Cards and the eval graph share one band. The cards take what they need and the graph takes the
+   rest, so the row is full and the summary is one band tall instead of two. */
+/* The paste box and the Load row underneath it are one control in two halves, so they get the same
+   width -- the box was a narrow column with a much wider row of buttons beneath it. */
+#rv-game .set-ctl.rv-wide, #rv-game .set-ctl.rv-btns { flex: 0 0 440px; }
+#rv-game .set-ctl.rv-wide > #rv_pgn { width: 100%; }
+#rv-game .set-ctl.rv-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+#rv-game .set-ctl.rv-btns > .set-btn { flex: 0 1 auto; white-space: nowrap; }
+
+.rv-summary {
+    display: grid;
+    /* An explicit track, not `auto`: against the graph's 1fr the auto column collapsed to a sliver
+       and the card labels were clipped down to their numbers. */
+    grid-template-columns: minmax(300px, 430px) minmax(280px, 1fr);
+    gap: 12px;
+    align-items: stretch;
+    margin-bottom: 14px;
+}
+.rv-summary #rv_cards { margin-bottom: 0; grid-template-columns: repeat(2, minmax(150px, 205px)); }
+/* The graph is taken out of flow so the row is sized by the CARDS alone. In flow it fed back on
+   itself: the viewBox now tracks the panel, an SVG with only a viewBox takes its intrinsic height
+   from that ratio, and that height then sized the row -- so a wide window blew the summary up to
+   395px (and further on each resize) with the cards stretched into empty space beneath their text.
+   Out of flow the row is the cards' own height and the graph fills exactly that. */
+.rv-summary .rv-graph-wrap { margin: 0; min-width: 0; position: relative; }
+.rv-summary #rv_graph { position: absolute; inset: 0; }
+.rv-summary #rv_graph svg { display: block; height: 100%; width: 100%; }
+@media (max-width: 1000px) { .rv-summary { grid-template-columns: 1fr; } }
+
+#rv_cards .rv-card { padding: 9px 11px; }
+#rv_cards .rv-card h4 { margin: 0 0 4px; font-size: 11px; }
+#rv_cards .rv-big { font-size: 21px; }
+#rv_cards .rv-sub { font-size: 11.5px; margin-top: 1px; margin-bottom: 6px; }
+#rv_cards .rv-kv { font-size: 12px; padding: 0; line-height: 1.45; }
 .rv-sub { color: var(--mp-dim); font-size: 12.5px; margin-top: 2px; }
 
 /* the likelihood curve behind the strength estimate: a sharp peak and a flat line are very different
@@ -197,18 +238,54 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 /* THE PAGE LEADS WITH THE BOARD (user call 2026-08-15). It used to split the width evenly with the
    move list, which made the board the smaller half of a page whose subject is the board. The board
    column now takes what it can up to 620px and the move list narrows down the side. */
-.rv-main {
-    display: grid;
-    grid-template-columns: minmax(360px, 620px) minmax(240px, 340px);
-    gap: 24px;
-    align-items: start;
-}
-/* 900, not 1100: the exported file renders around 1180 wide and should keep both columns. */
-@media (max-width: 900px) { .rv-main { grid-template-columns: 1fr; } }
+/* The report column lives inside the board grid, not beside it, so it can share the board's ROW.
+   As a sibling column it started at the top player strip and ran past the board's bottom edge.
+   Its narrow-window override lives at the END of this file: a media query adds no specificity, so
+   the base .rv-right placement further down was winning over it. */
 
-/* board + eval bar. The bar is on the RIGHT (user call 2026-08-15) and is wide enough to read the
-   number inside it; white fills from the bottom, the way every eval bar is read. */
-.rv-boardrow { display: grid; grid-template-columns: 1fr 26px; gap: 10px; align-items: stretch; }
+/* board + eval bar. The bar is on the LEFT (user call 2026-08-24, moved from the right) and is wide
+   enough to read the number inside it; white fills from the bottom, the way every eval bar is read.
+   It spans the board ONLY, not the player strips, so its midpoint lines up with the board's. */
+.rv-boardrow {
+    display: grid;
+    grid-template-columns: 34px minmax(300px, 1fr) 290px;
+    grid-template-rows: auto auto auto;   /* strip / board / strip */
+    gap: 6px 10px;
+    align-items: stretch;
+}
+/* The bar sits in the BOARD's row, so its middle is the board's middle and not the whole block's --
+   it read as off-centre against the position otherwise. */
+#rv_player_top    { grid-column: 2; grid-row: 1; }
+.rv-bar           { grid-column: 1; grid-row: 2; }
+.rv-board-wrap    { grid-column: 2; grid-row: 2; }
+#rv_player_bottom { grid-column: 2; grid-row: 3; }
+/* Same row as the board, so its top edge IS the board's top edge. The column is absolutely
+   positioned inside an empty grid cell rather than being the grid item itself: as a normal item its
+   content sized the row, and a 22-move list stretched the row to 874px against a 660px board --
+   which stretched the board wrapper with it and left a slab of dead space under the position.
+   Out of flow it contributes no height, so the row stays the board's own aspect-ratio height and
+   the move list scrolls inside it. */
+.rv-rightcell     { grid-column: 3; grid-row: 2; position: relative; }
+.rv-right         { position: absolute; inset: 0; }
+
+/* Black on top, white at the bottom -- name, title and rating, the caption every board has. */
+.rv-player {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 20px;
+    font-size: 13px;
+    color: var(--mp-text);
+}
+.rv-player .rv-p-title { font-size: 11px; font-weight: 700; color: #c9a227; letter-spacing: .3px; }
+.rv-player .rv-p-name { font-weight: 600; }
+.rv-player .rv-p-elo { color: var(--mp-dim); font-size: 12px; }
+.rv-player .rv-p-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 1px solid var(--mp-line); flex: 0 0 auto;
+}
+.rv-player.rv-p-white .rv-p-dot { background: #f0f0ea; }
+.rv-player.rv-p-black .rv-p-dot { background: #2b2b2b; }
 .rv-bar { position: relative; border: 1px solid var(--mp-line); border-radius: 4px; background: #2b2b2b; overflow: hidden; }
 .rv-bar-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 50%; background: #e8e8e2; transition: height .18s ease; }
 .rv-bar-num {
@@ -240,6 +317,10 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 .rv-nav .set-btn { min-width: 42px; }
 
 .rv-detail {
+    /* Never shrink: as a flex item in a column that is exactly the board's height it was squeezed
+       below its own text, and the border cut through the last line of the commentary. The move
+       list below it takes the shrink instead. */
+    flex: 0 0 auto;
     margin-top: 12px;
     padding: 10px 12px;
     border: 1px solid var(--mp-line);
@@ -250,7 +331,7 @@ html.dark .rv-status.rv-bad { color: #d15050; }
 }
 .rv-detail .rv-klass { font-weight: 600; color: var(--rv-c); }
 
-.rv-lines { margin-top: 10px; }
+.rv-lines { flex: 0 0 auto; margin-top: 10px; }
 .rv-line {
     display: flex;
     gap: 10px;
@@ -274,16 +355,23 @@ html.dark .rv-status.rv-bad { color: #d15050; }
     white-space: nowrap;
 }
 
+/* The move list takes whatever the detail card and its lines leave of the board's height.
+   min-height:0 on both, or the flex item refuses to shrink below its content and scrolls nothing. */
+.rv-right { display: flex; flex-direction: column; min-height: 0; }
+.rv-right #rv_moves { flex: 1 1 auto; min-height: 0; }
+
 .rv-moves {
-    /* as tall as the board beside it, so the two columns end together */
-    max-height: 660px;
+    max-height: none;
+    font-size: 12.5px;
     overflow-y: auto;
+    overflow-x: hidden;
     border: 1px solid var(--mp-line);
     border-radius: 4px;
 }
 .rv-mrow {
     display: grid;
-    grid-template-columns: 44px 1fr 1fr;
+    grid-template-columns: 34px 1fr 1fr;
+    min-width: 0;
     border-top: 1px solid var(--mp-hair);
 }
 .rv-mrow:first-child { border-top: none; }
@@ -449,13 +537,26 @@ html.dark .rv-ev-strong  { color: #d15050; }
 
    What is NOT reverted is the uniform control column below: the controls staying one fixed block
    wide, right-aligned, is the thing that fixed the ragged right edge in the first place. */
-#rv-game > .set-h, #rv-analysis > .set-h, #rv-report > .set-h,
-#rv-analysis > .rv-progress-wrap,
-#rv-analysis > .rv-status,
-#rv-game > .rv-status,
-#rv-analysis > .rv-ccr-out { max-width: 720px; }
+/* No section cap any more: the rows fill the column, so there is nothing beside them to leave a
+   strip. The report keeps the same column, which is where the board is. */
 /* every control row EXCEPT the ones carrying their own buttons (Run, chess.com review) */
-#rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) { flex: 0 0 234px; justify-content: flex-end; gap: 7px; }
+/* the uniform control block lives in options.css now, for every page and every width */
 #rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > select { flex: 1 1 auto; min-width: 0; max-width: 100%; }
 #rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > .set-step { flex: 1 1 auto; }
 #rv-analysis .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > label.set-tgl { flex: 1 1 auto; min-width: 0; justify-content: center; }
+
+/* Every cell clips rather than widening the row. `min-width: 0` matters: a grid item defaults to
+   min-content, which is exactly what let one long move push the whole column past its container. */
+.rv-mrow > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Too narrow for three columns: the report drops below the board and the move list goes wide
+   rather than tall. At the END of the file on purpose -- a media query carries no extra
+   specificity, so placed above the base rules these would simply lose to them. */
+@media (max-width: 1100px) {
+    .rv-boardrow { grid-template-columns: 26px 1fr; }
+    .rv-rightcell { grid-column: 1 / -1; grid-row: 4; position: static; }
+    .rv-right { position: static; }
+    /* single column, not two: multicol under a max-height spills into columns the container has
+       to scroll sideways to reach, and overflow-x:hidden then simply CUTS the tail of the game. */
+    .rv-moves { max-height: 420px; }
+}

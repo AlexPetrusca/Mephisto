@@ -44,11 +44,46 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* The sidebar is Materialize's own 300px. Narrowed here rather than in its width, so nothing that
-   positions against .sidenav-fixed has to be found and matched -- the nav keeps its width and the
-   content simply starts sooner. */
-header, main, footer { padding-left: 300px; }
-main > .container, nav > .container, footer > .container { width: 100% !important; }
+/* The sidebar was Materialize's own 300px, which is most of a hand's width of empty space beside
+   seven short words. Narrowed to 210 in BOTH places -- the nav's own width and the content's inset
+   -- because leaving the nav at 300 and only moving the content just moves the gap inside the nav. */
+header, main, footer { padding-left: 210px; }
+ul.sidenav.sidenav-fixed { width: 210px; }
+header .container, main .container, footer .container, nav .container {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    /* The inset for the whole page, put on the container so the header title, the content column
+       and the footer all share one left edge. It does NOT belong on .mp-page: that class only
+       wraps the header title and the footer copyright, never the page content, so padding there
+       moved two lines of chrome and left the actual sections where they were. */
+    padding-left: 30px;
+    padding-right: 4px;
+}
+
+/* The page column is full width. It used to be a 10-of-12 Materialize column with a 1-column
+   offset, which left a twelfth of the window empty to the RIGHT of the section nav -- dead space
+   that grew with the window. */
+
+/* Air between the last control and the section nav. They were flush, so a select and the nav's
+   first entry read as one column. The nav also stops wasting the tail of the window: it is pinned
+   to a readable width instead of taking a full quarter of a wide one. */
+.sticky-top { padding-left: 34px; }
+/* Pinned to 250px and floated to the right edge rather than taking a twelfth-based 25%: a quarter
+   of a wide row was mostly empty air to the right of the labels, and that air came out of the
+   content column -- which on Analysis and Review is the board. float:right also puts the nav hard
+   against the window edge on the prose pages, whose narrower reading column leaves a gap. */
+@media (min-width: 992px) {
+    /* .col.sticky-top, not .sticky-top: Materialize's own width is `.row .col.xl3`, three classes,
+       which outranks a two-class selector -- float and margin applied while the width silently
+       lost, leaving the nav overlapping the content column by 67px. */
+    main .row > .col.sticky-top { width: 250px; float: right; margin-left: 0; }
+    main .row > .col.m9 { width: calc(100% - 250px); }
+}
+.sticky-top ul.table-of-contents { max-width: none; }
+
+
 
 #content { min-height: calc(100vh - 171px); }
 
@@ -223,14 +258,22 @@ h3.set-h {
     padding: 9px 2px;
     border-bottom: 1px solid var(--mp-hair);
     min-height: 46px;
-    /* THE GAP NEXT TO THE TEXT. The label takes all the free space and the control is pushed to the
-       far edge, so on a wide window a checkbox sat a screen's width from the thing it belongs to and
-       the eye had to travel to pair them up. Capped so a row stays a readable line-length whatever
-       the window does; below the cap nothing changes at all. */
-    max-width: 720px;
+    /* NO CAP. The row uses the whole column between the sidebar and the section nav. The gap this
+       used to guard against -- a control a screen's width from its label -- is handled by the
+       uniform control column instead, which keeps every control in one fixed right-aligned block. */
 }
 /* the wide blocks -- the humanize table, the puzzle-database prose -- are not label/control rows and
    keep the full column */
+/* ONE CONTROL COLUMN, every settings section on every page. Fixed width and right-aligned, so the
+   controls line up down the page and a wide row does not stretch a select to arm's length. */
+.set-sec .set-ctl:not(.rv-oneline):not(:has(> .set-btn)):not(:has(> .set-ta)) {
+    flex: 0 0 234px;
+    justify-content: flex-end;
+    gap: 7px;
+}
+.set-sec .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > select,
+.set-sec .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > .set-step,
+.set-sec .set-ctl:not(.rv-oneline):not(:has(> .set-btn)) > label.set-tgl { flex: 1 1 auto; min-width: 0; }
 .set-row.set-wide, .set-row.set-mix { max-width: none; }
 .set-row:last-of-type { border-bottom: 0; }
 
@@ -651,3 +694,33 @@ html.dark .limit-warn { color: #d8a628; }
 }
 .set-filter input:focus { border-color: var(--mp-on) !important; outline: none; box-shadow: none !important; }
 .filter-hidden { display: none !important; }
+
+/* ---------------------------------------------------------------- narrow windows
+   The layout is three bands -- sidebar, content, section nav -- and each one gives way in turn as
+   the window shrinks, rather than everything staying put and something falling off the edge.  */
+
+/* Materialize un-pins the sidenav below 992, so the inset that reserved space for it has to go too;
+   otherwise the content keeps a 210px margin against nothing. */
+@media (max-width: 992px) {
+    header, main, footer { padding-left: 0; }
+    header .container, main .container, footer .container, nav .container {
+        padding-left: 14px;
+        padding-right: 4px;
+    }
+}
+
+/* The control block is 234px because that is what fits a select and a stepper. On a narrow window
+   that is most of the row, so it gives ground before the label does. */
+@media (max-width: 1100px) {
+    .set-sec .set-ctl:not(.rv-oneline):not(:has(> .set-btn)):not(:has(> .set-ta)) { flex-basis: 200px; }
+}
+/* Past this there is no room for two columns at all: the control drops under its own label rather
+   than squeezing both into something neither can use. */
+@media (max-width: 760px) {
+    .set-row { flex-wrap: wrap; gap: 4px 16px; }
+    .set-sec .set-ctl:not(.rv-oneline):not(:has(> .set-btn)):not(:has(> .set-ta)) {
+        flex: 1 1 100%;
+        justify-content: flex-start;
+    }
+    .set-lbl { flex: 1 1 100%; }
+}

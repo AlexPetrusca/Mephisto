@@ -60,6 +60,7 @@ const CFG_DEFAULTS = {
     rv_strength: false,      // the maximum-likelihood rating estimate; a pass per rating band
 
     rv_batch: false,
+    rv_mode: 'own',          // which of the three reviews the page shows: own | local | online
 };
 
 // A game whose clocks and blunders make the whole report show something. Deliberately a famous

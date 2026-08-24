@@ -13,7 +13,7 @@
        - data-i18n / data-i18n-tip: 14 languages read these. Long explanatory paragraphs are
          deliberately English-only and fall back through i18n's English default. -->
 <div class="row">
-    <div class="col s12 m11 offset-m1 xl10 offset-xl1">
+    <div class="col s12 m9 xl9">
         <div class="big-section">
 
             <!-- ============================== GAME =============================== -->
@@ -281,6 +281,30 @@
                     </div>
                 </div>
 
+                <!-- Three ways to review, one at a time. They used to sit stacked as three rows of
+                     buttons with three status lines under them, which read as one dense block of
+                     unrelated controls; the selector shows only the one in use. -->
+                <div class="set-row">
+                    <div class="set-lbl">
+                        <span class="tooltipped" data-position="right"
+                              data-tooltip="Which review to run. Mephisto's own engine is fully configurable and
+                                            offline. chess.com's classifier reproduces their post-game card on this
+                                            machine, also offline, after a one-time engine download. chess.com Game
+                                            Review is the real thing from their site and is the only one that sends
+                                            the game off this machine.">
+                            Review with <i class="material-icons info-tooltip">info</i>
+                        </span>
+                    </div>
+                    <div class="set-ctl">
+                        <select id="rv_mode" class="rv-select browser-default">
+                            <option value="own">Mephisto's engine - offline, configurable</option>
+                            <option value="local">chess.com's classifier - offline, on this machine</option>
+                            <option value="online">chess.com Game Review - sends the game to chess.com</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="rv-mode" data-mode="own">
                 <div class="set-row">
                     <div class="set-lbl"><span data-i18n="rv.run">Run</span></div>
                     <div class="set-ctl rv-btns">
@@ -294,7 +318,9 @@
                     <div class="rv-progress"><div id="rv_progress_bar"></div></div>
                     <div id="rv_progress_text" class="rv-status"></div>
                 </div>
+                </div>
 
+                <div class="rv-mode hidden" data-mode="online">
                 <!-- chess.com's own review of the loaded game: runs in a chess.com tab (borrowed or
                      opened in the background) so it uses your own session, and renders on the board
                      below. Copy/Save keep the raw protobuf. Strings here are not data-i18n'd yet. -->
@@ -323,6 +349,9 @@
                         <button id="rv_ccr_ticket" class="set-btn hidden" type="button">Copy error &amp; open ticket</button>
                     </div>
                 </div>
+                </div>
+
+                <div class="rv-mode hidden" data-mode="local">
                 <!-- The third way to review: chess.com's OWN classifier, run on this machine. Their
                      explanation engine is 28.7 MB and is their commercial Torch build, so it is not
                      shipped with the extension -- it is downloaded from chess.com on request and
@@ -342,6 +371,7 @@
                     <div class="set-ctl rv-oneline">
                         <button id="rv_ee_get" class="set-btn" type="button">Download engine (28.7 MB)</button>
                         <button id="rv_ee_run" class="set-btn set-btn-go" type="button" disabled>Classify like chess.com</button>
+                        <button id="rv_ee_update" class="set-btn hidden" type="button">Check for update</button>
                         <button id="rv_ee_forget" class="set-btn hidden" type="button">Remove engine</button>
                     </div>
                 </div>
@@ -363,9 +393,12 @@
                     </div>
                 </div>
                 <div id="rv_sf_status" class="rv-status"></div>
+                </div>
 
-                <div id="rv_ccr_status" class="rv-status"></div>
-                <pre id="rv_ccr_out" class="rv-ccr-out hidden"></pre>
+                <div class="rv-mode hidden" data-mode="online">
+                    <div id="rv_ccr_status" class="rv-status"></div>
+                    <pre id="rv_ccr_out" class="rv-ccr-out hidden"></pre>
+                </div>
 
                 <!-- one-time caution gate before the first chess.com review: 10s before Accept is live -->
                 <div id="rv_ccr_consent" class="ccr-modal hidden">
@@ -388,12 +421,13 @@
                 <h3 data-i18n="rv.report" class="set-h">Report</h3>
 
                 <div id="rv_header" class="rv-header"></div>
-                <div id="rv_cards" class="rv-cards"></div>
 
-                <div class="rv-graph-wrap">
-                    <div id="rv_graph"></div>
-                    <div id="rv_graph_legend" class="rv-legend"></div>
-                    <div id="rv_turning" class="rv-turning hidden"></div>
+                <div class="rv-summary">
+                    <div id="rv_cards" class="rv-cards"></div>
+                    <div class="rv-graph-wrap">
+                        <div id="rv_graph"></div>
+                        <div id="rv_turning" class="rv-turning hidden"></div>
+                    </div>
                 </div>
 
                 <div id="rv_time_wrap" class="hidden">
@@ -403,13 +437,22 @@
                 <div class="rv-main">
                     <div class="rv-left">
                         <div class="rv-boardrow">
+                            <div id="rv_player_top" class="rv-player"></div>
+                            <div class="rv-bar" title="Evaluation">
+                                <div id="rv_evalfill" class="rv-bar-fill"></div>
+                                <span id="rv_evallabel" class="rv-bar-num">0.0</span>
+                            </div>
                             <div class="rv-board-wrap">
                                 <div id="rv_board" class="rv-board"></div>
                                 <svg id="rv_arrows" class="rv-arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
                             </div>
-                            <div class="rv-bar" title="Evaluation">
-                                <div id="rv_evalfill" class="rv-bar-fill"></div>
-                                <span id="rv_evallabel" class="rv-bar-num">0.0</span>
+                            <div id="rv_player_bottom" class="rv-player"></div>
+                            <div class="rv-rightcell">
+                                <div class="rv-right">
+                                    <div id="rv_move_detail" class="rv-detail"></div>
+                                    <div id="rv_lines" class="rv-lines"></div>
+                                    <div id="rv_moves" class="rv-moves"></div>
+                                </div>
                             </div>
                         </div>
                         <div class="rv-nav">
@@ -419,11 +462,6 @@
                             <button id="rv_last" class="set-btn" type="button" title="End">&raquo;</button>
                             <button id="rv_flip" class="set-btn" type="button" data-i18n="rv.flip">Flip</button>
                         </div>
-                        <div id="rv_move_detail" class="rv-detail"></div>
-                        <div id="rv_lines" class="rv-lines"></div>
-                    </div>
-                    <div class="rv-right">
-                        <div id="rv_moves" class="rv-moves"></div>
                     </div>
                 </div>
             </section>
@@ -469,7 +507,7 @@
         </div>
     </div>
 
-    <div class="col hide-on-med-and-down xl1">
+    <div class="col hide-on-small-only m3 xl3 sticky-top">
         <ul id="toc" class="section table-of-contents">
             <li><a href="#rv-game" data-i18n="rv.game">Game</a></li>
             <li><a href="#rv-analysis" data-i18n="rv.analysis">Analysis</a></li>

@@ -15,8 +15,11 @@
 // extension page may not have 'unsafe-eval'. A sandboxed page may -- and its own default CSP has
 // `child-src 'self'`, which blocks the blob worker, so the manifest widens that too. Both blocks
 // were hit in that order; neither is optional.
+// The build we ship against. A newer one found by eeCheckUpdate() overrides it and is remembered,
+// so EE_VERSION is the FLOOR, not necessarily what is installed -- read eeVersion() for that.
 const EE_VERSION = '1.124.57';
-const EE_BASE = `https://www.chess.com/r2/assets-chess-engine/explanation-engine/${EE_VERSION}/default/`;
+let eeVer = EE_VERSION;
+const eeBase = (v = eeVer) => `https://www.chess.com/r2/assets-chess-engine/explanation-engine/${v}/default/`;
 const EE_DB = 'mephisto-ee';
 const EE_STORE = 'assets';
 
@@ -53,8 +56,9 @@ function eeIdb(mode, fn) {
 
 // Keyed by version: a newer engine on chess.com is a different classifier, and quietly reusing the
 // old one would make our answer disagree with theirs for a reason nobody could see.
-const kJs = () => `js:${EE_VERSION}`;
-const kWasm = () => `wasm:${EE_VERSION}`;
+const kJs = () => `js:${eeVer}`;
+const kWasm = () => `wasm:${eeVer}`;
+const K_VER = 'installed-version';
 
 const kSfJs = () => `sfjs:${SF_BUILD}`;
 const kSfWasm = () => `sfwasm:${SF_BUILD}`;
@@ -98,6 +102,74 @@ async function sfForget() {
     } catch (e) { /* nothing cached */ }
 }
 
+// Which build is actually installed. Read once at startup: the version is stored beside the blobs
+// so an update survives a reload, and the cache keys are version-scoped so the two can never drift.
+async function eeVersion() {
+    try {
+        const v = await eeIdb('readonly', s => s.get(K_VER));
+        if (typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v)) eeVer = v;
+    } catch (e) { /* first run */ }
+    return eeVer;
+}
+
+// Is `b` newer than `a`? Field by field -- '1.125.0' string-compares BELOW '1.124.57'.
+function eeNewer(a, b) {
+    const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+    for (let i = 0; i < 3; i++) { if ((pb[i] || 0) !== (pa[i] || 0)) return (pb[i] || 0) > (pa[i] || 0); }
+    return false;
+}
+
+async function eeExists(v) {
+    try { return (await fetch(eeBase(v) + 'explanation-engine.js', {method: 'HEAD'})).ok; }
+    catch (e) { return false; }
+}
+
+// Look for a newer build. chess.com publishes no directory listing and no `latest` alias -- both
+// 404 -- so the only way to learn about one is to ask for it by name. MEASURED 2026-08-24 against
+// the live CDN: 1.124.57 is up, 1.124.58 and 1.124.60 are 404, and 1.125.0 IS up. So they roll the
+// MINOR and walk the patch inside it, which is exactly what this probes: a few more patches of the
+// installed minor, then newer minors and the patch run inside the newest live one. Ten HEAD
+// requests at most, and only when the user presses the button.
+const EE_PROBE_MISSES = 3;
+
+async function eeCheckUpdate(from) {
+    const cur = from || eeVer;
+    const [maj, min, pat] = cur.split('.').map(Number);
+    if (![maj, min, pat].every(Number.isFinite)) return cur;
+    let best = cur;
+    for (let p = pat + 1, miss = 0; miss < EE_PROBE_MISSES; p++) {
+        if (await eeExists(`${maj}.${min}.${p}`)) { best = `${maj}.${min}.${p}`; miss = 0; } else miss++;
+    }
+    for (let m = min + 1, miss = 0; miss < EE_PROBE_MISSES; m++) {
+        if (!await eeExists(`${maj}.${m}.0`)) { miss++; continue; }
+        miss = 0;
+        best = `${maj}.${m}.0`;
+        for (let p = 1, pm = 0; pm < EE_PROBE_MISSES; p++) {
+            if (await eeExists(`${maj}.${m}.${p}`)) { best = `${maj}.${m}.${p}`; pm = 0; } else pm++;
+        }
+    }
+    return eeNewer(cur, best) ? best : cur;
+}
+
+// Switch to `v` and fetch it. The OLD blobs are dropped only after the new ones are safely stored,
+// so a failed update leaves the working engine in place rather than no engine at all.
+async function eeUpdate(v, onProgress) {
+    const old = eeVer;
+    eeVer = v;
+    try {
+        await eeDownload(onProgress);
+    } catch (e) {
+        eeVer = old;
+        throw e;
+    }
+    await eeIdb('readwrite', s => s.put(v, K_VER));
+    if (old !== v) {
+        try { await eeIdb('readwrite', s => s.delete(`js:${old}`)); } catch (e) { /* nothing to drop */ }
+        try { await eeIdb('readwrite', s => s.delete(`wasm:${old}`)); } catch (e) { /* nothing to drop */ }
+    }
+    return v;
+}
+
 async function eeCached() {
     try {
         const js = await eeIdb('readonly', s => s.get(kJs()));
@@ -110,11 +182,11 @@ async function eeCached() {
 // from a hang, which is the whole reason this is behind a button rather than automatic.
 async function eeDownload(onProgress) {
     const say = (n, total, what) => { try { onProgress(n, total, what); } catch (e) { /* caller's problem */ } };
-    const jsRes = await fetch(EE_BASE + 'explanation-engine.js');
+    const jsRes = await fetch(eeBase() + 'explanation-engine.js');
     if (!jsRes.ok) throw new Error(`explanation-engine.js: HTTP ${jsRes.status}`);
     const js = await jsRes.text();
 
-    const res = await fetch(EE_BASE + 'explanation-engine.wasm');
+    const res = await fetch(eeBase() + 'explanation-engine.wasm');
     if (!res.ok) throw new Error(`explanation-engine.wasm: HTTP ${res.status}`);
     const total = Number(res.headers.get('content-length')) || 0;
     const chunks = [];
@@ -244,9 +316,11 @@ function sfSearch(assets, positions, {depth = 10, multipv = 2, uciMoves = null, 
                         const mp = l.match(/multipv (\d+)/), dp = l.match(/depth (\d+)/);
                         const sc = l.match(/score (cp|mate) (-?\d+)/), pv = l.match(/ pv (.*)$/);
                         if (!mp || !dp || !sc || !pv || Number(dp[1]) !== depth) return;
-                        const raw = sc[1] === 'cp' ? Number(sc[2])
-                            : (Number(sc[2]) > 0 ? EE_SCORE_CAP : -EE_SCORE_CAP);
-                        best[Number(mp[1])] = {cp: raw, pv: pv[1].split(' ')};
+                        best[Number(mp[1])] = {
+                            cp: sc[1] === 'cp' ? Number(sc[2]) : null,
+                            mate: sc[1] === 'mate' ? Number(sc[2]) : null,
+                            pv: pv[1].split(' '),
+                        };
                     };
                     // THE FULL HISTORY, not a bare FEN -- chess.com sends `position fen <start>
                     // moves e2e4 e7e5 ...` for every position, and so must we. A bare FEN gives the
@@ -260,10 +334,15 @@ function sfSearch(assets, positions, {depth = 10, multipv = 2, uciMoves = null, 
                     collect = null;
                     bump();
                     // Their scores are side-to-move relative, as raw UCI always is. Everything
-                    // downstream expects white-relative, which is what our own transport stores.
-                    const sign = p.turn === 'w' ? 1 : -1;
+                    // downstream expects white-relative, which is what our own transport stores --
+                    // and toWhiteCp is the same encoding, so a mate keeps its DISTANCE here instead
+                    // of being flattened to the wire cap. The cap belongs on the wire only; a
+                    // flattened score reached the eval bar as a literal "300." where it should read
+                    // M3, and mate-in-1 and mate-in-9 were the same number.
+                    const Core = self.MephistoReviewCore;
                     p.lines = [1, 2].filter(k => best[k]).slice(0, multipv)
-                        .map(k => ({cp: best[k].cp * sign, pv: best[k].pv}));
+                        .map(k => ({cp: Core.toWhiteCp(best[k].cp, best[k].mate, p.turn),
+                                    mate: best[k].mate, pv: best[k].pv}));
                     p.depth = depth;
                     if (onProgress) { try { onProgress((i + 1) / positions.length, i + 1, positions.length); } catch (e) { /* */ } }
                 }
@@ -297,9 +376,13 @@ function sfSearch(assets, positions, {depth = 10, multipv = 2, uciMoves = null, 
 // which kills the whole run with no verdict. Our own mate scores are +/-(100000 - distance), so any
 // game containing a mate crashed it. Binary-searched against the real engine rather than guessed.
 //
-// ponytail: mate DISTANCE is flattened here -- every mate reads as +/-30000, so mate-in-1 and
-// mate-in-9 are the same number. That is fine for classification, which only reads the gap between
-// the best move and the played one, and both are decisive. Encode the distance if a caller ever
+// The 30000 clamp is applied HERE, on the wire, by eeScore() -- not upstream in the search. The
+// stored line keeps the real +/-(100000 - distance), because the eval bar and the PV list read the
+// same field and need the distance to print M3. Flattening it at the source made every mate show
+// as "300." on the bar. What the classifier sees is unchanged: it only reads the gap between the
+// best move and the played one, and both ends are decisive at the cap.
+//
+// ponytail: the classifier still cannot tell mate-in-1 from mate-in-9 -- both arrive as 30000.
 // needs mates ordered against each other.
 const EE_SCORE_CAP = 30000;
 
@@ -348,4 +431,4 @@ const EE_CLASS = {
     inaccuracy: 'inaccuracy', mistake: 'mistake', miss: 'miss', blunder: 'blunder',
 };
 
-export {EE_VERSION, EE_BASE, EE_CLASS, EE_SCORE_CAP, eeScore, SF_BUILD, sfCached, sfDownload, sfForget, sfSearch, eeCached, eeDownload, eeForget, eeRun, eeCommands};
+export {EE_VERSION, eeBase, eeVersion, eeNewer, eeCheckUpdate, eeUpdate, EE_CLASS, EE_SCORE_CAP, eeScore, SF_BUILD, sfCached, sfDownload, sfForget, sfSearch, eeCached, eeDownload, eeForget, eeRun, eeCommands};

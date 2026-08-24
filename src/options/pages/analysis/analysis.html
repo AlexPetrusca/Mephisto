@@ -2,7 +2,7 @@
      shape the analysis sit ABOVE the board (user call 2026-08-15) so nothing has to be scrolled
      past to reach them, and the board itself is the largest thing on the page. -->
 <div class="row">
-    <div class="col s12 m12 xl9">
+    <div class="col s12 m9 xl9">
         <div id="an-form" class="big-section">
 
             <section id="an-setup" class="set-sec scrollspy">
@@ -20,11 +20,11 @@
                     <label class="an-f an-f-band" id="an_band_row"><span data-i18n-tip="an.tip.band" class="tooltipped" data-position="top" data-tooltip="Which rating the human model plays at. Maia 1 has a net per band; Maia 3 is one net with a dial."><span data-i18n="an.band">Rating</span></span>
                         <select id="an_band_select" class="browser-default"></select></label>
                     <label class="an-f an-f-num"><span data-i18n-tip="an.tip.lines" class="tooltipped" data-position="top" data-tooltip="How many engine lines to list and draw on the board."><span data-i18n="an.lines">Lines</span></span>
-                        <input id="an_lines_input" type="number" min="1" max="5" step="1"></label>
+                        <span class="set-step"><button type="button" class="set-step-btn" data-step="-1">&minus;</button><input id="an_lines_input" type="number" min="1" max="5" step="1"><button type="button" class="set-step-btn" data-step="1">+</button></span></label>
                     <label class="an-f an-f-num"><span data-i18n-tip="an.tip.threads" class="tooltipped" data-position="top" data-tooltip="CPU threads the analysis engine may use."><span data-i18n="an.threads">Threads</span></span>
-                        <input id="an_threads_input" type="number" min="1" max="16" step="1"></label>
+                        <span class="set-step"><button type="button" class="set-step-btn" data-step="-1">&minus;</button><input id="an_threads_input" type="number" min="1" max="16" step="1"><button type="button" class="set-step-btn" data-step="1">+</button></span></label>
                     <label class="an-f an-f-num"><span data-i18n-tip="an.tip.hash" class="tooltipped" data-position="top" data-tooltip="Hash memory for the analysis engine. More helps a long search on one position."><span data-i18n="an.hash">Hash (MB)</span></span>
-                        <input id="an_hash_input" type="number" min="16" max="1024" step="16"></label>
+                        <span class="set-step"><button type="button" class="set-step-btn" data-step="-1">&minus;</button><input id="an_hash_input" type="number" min="16" max="1024" step="16"><button type="button" class="set-step-btn" data-step="1">+</button></span></label>
                     <label class="an-f an-f-check"><span data-i18n-tip="an.tip.wdl" class="tooltipped" data-position="top" data-tooltip="Show the engine's win, draw and loss percentages beside the board."><span data-i18n="an.wdl">Win / draw / loss</span></span>
                         <input id="an_wdl_checkbox" type="checkbox" class="set-cb">
                         <label for="an_wdl_checkbox" class="set-tgl">
@@ -66,6 +66,19 @@
 
                 <div class="an-main">
                     <div class="an-left">
+                        <!-- Above the board, not below it: the whole board and the engine columns
+                             under it then fit on one screen without this strip between them. -->
+                        <div class="an-topbar">
+                            <div class="an-topbar-info">
+                                <div id="an_wdl_line" class="an-wdl"></div>
+                                <div class="an-extras"><span id="an_opening"></span><span id="an_tb"></span></div>
+                            </div>
+                            <div class="an-topbar-btns">
+                                <button id="an_copy_fen" class="set-btn" type="button" data-i18n="an.copy_fen">Copy FEN</button>
+                                <button id="an_copy_pgn" class="set-btn" type="button" data-i18n="an.copy_pgn">Copy PGN</button>
+                                <button id="an_export" class="set-btn" type="button" data-i18n="an.export">Export…</button>
+                            </div>
+                        </div>
                         <div id="an_pocket_top" class="an-pocket hidden"></div>
                         <div class="an-boardrow">
                             <div class="an-bar an-bar-eval" title="Evaluation">
@@ -76,21 +89,18 @@
                                 <div id="an_board" class="an-board"></div>
                                 <svg id="an_arrows" class="an-arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
                             </div>
+                            <div class="an-movescell">
+                                <div id="an_moves" class="an-moves"></div>
+                            </div>
+                            <div class="an-nav">
+                                <button id="an_first" class="set-btn" type="button" title="Start">&laquo;</button>
+                                <button id="an_prev" class="set-btn" type="button" title="Previous">&lsaquo;</button>
+                                <button id="an_next" class="set-btn" type="button" title="Next">&rsaquo;</button>
+                                <button id="an_last" class="set-btn" type="button" title="End">&raquo;</button>
+                                <button id="an_flip" class="set-btn" type="button" data-i18n="an.flip">Flip</button>
+                            </div>
                         </div>
                         <div id="an_pocket_bottom" class="an-pocket hidden"></div>
-                        <div class="an-nav">
-                            <button id="an_first" class="set-btn" type="button" title="Start">&laquo;</button>
-                            <button id="an_prev" class="set-btn" type="button" title="Previous">&lsaquo;</button>
-                            <button id="an_next" class="set-btn" type="button" title="Next">&rsaquo;</button>
-                            <button id="an_last" class="set-btn" type="button" title="End">&raquo;</button>
-                            <button id="an_flip" class="set-btn" type="button" data-i18n="an.flip">Flip</button>
-                            <span class="an-nav-gap"></span>
-                            <button id="an_copy_fen" class="set-btn" type="button" data-i18n="an.copy_fen">Copy FEN</button>
-                            <button id="an_copy_pgn" class="set-btn" type="button" data-i18n="an.copy_pgn">Copy PGN</button>
-                            <button id="an_export" class="set-btn" type="button" data-i18n="an.export">Export…</button>
-                        </div>
-                        <div id="an_wdl_line" class="an-wdl"></div>
-                        <div class="an-extras"><span id="an_opening"></span><span id="an_tb"></span></div>
                         <div class="an-cols">
                             <div class="an-col">
                                 <div class="an-col-h"><span id="an_human_title">Human moves</span><span class="an-col-sub" data-i18n="an.prob">Probability</span></div>
@@ -114,15 +124,12 @@
                             <div id="an_book_lines" class="an-lines"></div>
                         </div>
                     </div>
-                    <div class="an-right">
-                        <div id="an_moves" class="an-moves"></div>
-                    </div>
                 </div>
             </section>
         </div>
     </div>
 
-    <div class="col hide-on-small-only m2 xl3 sticky-top">
+    <div class="col hide-on-small-only m3 xl3 sticky-top">
         <div class="toc-wrapper pin-top">
             <ul id="toc" class="section table-of-contents">
                 <li><a data-i18n="an.setup" href="#an-setup">Setup</a></li>
